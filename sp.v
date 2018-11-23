@@ -46,48 +46,101 @@ Inductive SPTo : Network -> Network -> Prop :=
  (* misses S_Sel *)
 .
 
-Fixpoint merge (B1:Behaviour) (B2:Behaviour) : option Behaviour.
-apply (
+Definition is_defined (A:Type) (o:option A) : bool :=
+match o with
+ | Some a => true
+ | None => false
+end.
+
+Fixpoint merge (B1:Behaviour) (B2:Behaviour) : option Behaviour :=
 match (B1, B2) with
  | (Send p e B, Send p' e' B') =>
-    if (Nat.eqb p p') && (eqexpr e e') && ((merge B B') <> None) then Some( Send p e (merge B B') )
+    if (eqpid p p') && (eqexpr e e') then
+      match (merge B B') with
+       | Some Bm => Some( Send p e Bm )
+       | _ => None
+      end
     else None
+ | (Recv p B, Recv p' B') =>
+    if (eqpid p p') then
+      match (merge B B') with
+       | Some Bm => Some( Recv p Bm )
+       | _ => None
+      end
+    else None
+ | (Cond p B1 B2, Cond p' B1' B2') =>
+    if (eqpid p p') then
+      match (merge B1 B1') with
+       | Some B1m => match (merge B2 B2') with | Some B2m => Some( Cond p B1m B2m ) | _ => None end
+       | _ => None
+      end
+    else None
+ | (End, End) => Some End
  | (_, _) => None
-end
-).
+end.
 
-Fixpoint bproj (C:Choreography) (p:Pid) : Behaviour.
+Definition bproj_buildB (constructor:Behaviour -> Behaviour) (cont:option Behaviour) : option Behaviour :=
+match cont with
+| Some B => Some(constructor B)
+| _ => None
+end.
+
+Definition bproj_buildbiB (biconstructor:Behaviour -> Behaviour -> Behaviour) (cont1:option Behaviour) (cont2:option Behaviour): option Behaviour :=
+match cont1 with
+| Some B1 => bproj_buildB (biconstructor B1) (cont2)
+| _ => None
+end.
+
+Fixpoint bproj (C:Choreography) (p:Pid) : option Behaviour.
 destruct C.
-apply End.
+apply (Some End).
 destruct e.
 case_eq (Nat.eqb p p0).
 intro.
-apply (Send p1 e (bproj C p)).
+apply (bproj_buildB (Send p1 e) (bproj C p)).
 intro.
 case_eq (Nat.eqb p p1).
 intro.
-apply (Recv p0 (bproj C p)).
+apply (bproj_buildB (Recv p0) (bproj C p)).
 intro.
 apply (bproj C p).
 case_eq (Nat.eqb p p0).
 intro.
-apply (Sel p1 l (bproj C p)).
+apply (bproj_buildB (Sel p1 l) (bproj C p)).
 intro.
 case_eq (Nat.eqb p p1).
 intro.
-apply End. (*(Branching p0 (bproj C p)).*)
+apply (Some End). (*(Branching p0 (bproj C p)).*)
 intro.
 apply (bproj C p).
 case_eq (Nat.eqb p p0).
 intro.
-apply (Cond p1 (bproj C1 p) (bproj C2 p)).
+apply (bproj_buildbiB (Cond p1) (bproj C1 p) (bproj C2 p)).
 intro.
 case_eq (Nat.eqb p p1).
 intro.
-apply (Send p0 this (End)). (* merging here *)
+apply (bproj_buildB (Send p0 this)
+                    ( match ((bproj C1 p), (bproj C2 p)) with
+                      | (Some B1, Some B2) => (merge B1 B2)
+                      | (_, _) => None
+                      end
+                    )
+      ).
 intro.
-apply End. (* merging here *)
+apply ( match ((bproj C1 p), (bproj C2 p)) with
+                      | (Some B1, Some B2) => (merge B1 B2)
+                      | (_, _) => None
+                      end
+                    ).
 Defined.
+
+Fixpoint epp (C:Choreography) (pids:list Pid): option Network :=
+match pids with
+| nil => Some( Empty )
+| cons p l => match (bproj C p) Some( Par( bproj
+end.
+
+
 
 Print bproj.
 
