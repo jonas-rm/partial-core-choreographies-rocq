@@ -2,6 +2,7 @@ Require Import Bool.
 Require Import List.
 Require Import Coq.Lists.ListSet.
 Require Import Arith.
+Require Import Sorting.Permutation.
 Load MC.
 Local Open Scope nat_scope.
 
@@ -201,7 +202,8 @@ Fixpoint epp_list (conf:Configuration) (pids:list Pid) (WF:WellFormedConf conf) 
 match conf with (C,s) =>
   match pids with
   | nil => Some( Empty )
-  | cons p l => match ((bproj C p), (epp_list conf l WF)) with (Some B, Some N) => Some( Par ( Process p (s p) B ) N ) | (_, _) => None end
+  | cons p l => match ((bproj C p), (epp_list conf l WF)) with | (Some B, Some N) => Some( Par ( Process p (s p) B ) N )
+                                                               | (_, _) => None end
   end
 end.
 
@@ -210,33 +212,74 @@ Fixpoint epp (conf:Configuration) (WF:WellFormedConf conf) : option Network := m
 Fixpoint SPpn (N:Network) : list Pid :=
 match N with
 | Empty => nil
-| Process p v B => (cons p nil)
-| Par N N' => (set_union_pid (SPpn N) (SPpn N'))
+| Process p v B => (p :: nil)
+| Par N N' => (SPpn N) ++ (SPpn N')
 end
 .
 
 Definition WellFormedNetwork (N:Network) : Prop := NoDup(SPpn N).
+(* Enrich with no self-communications *)
 
-Definition pidseteq (s:set Pid) (s':set Pid) : Prop := (set_inter_pid s s') = nil.
+Definition pidseteq (s:set Pid) (s':set Pid) : Prop := Permutation s s'.
 
-Lemma epp_preserves_pids (conf:Configuration) : forall (C:Choreography) (s:State) (N:Network) (WF:WellFormedConf conf), conf = (C,s) -> (epp conf WF) = Some N -> (pidseteq (pn C) (SPpn N)).
+Lemma set_union_whatever : forall (p p':Pid) (P:set Pid),
+  {In p P /\ In p' P /\ (set_union_pid (p::p'::nil) P) = P} + 
+  {In p P /\ ~In p' P /\ (set_union_pid (p::p'::nil) P) = (p::P)} + 
+  {~In p P /\ In p' P /\ (set_union_pid (p::p'::nil) P) = (p::P)} + 
+  {~In p P /\ ~In p' P /\ (set_union_pid (p::p'::nil) P) = (p::p'::P)}.
+intros.
+elim (In_dec eq_nat_dec p P); elim (In_dec eq_nat_dec p' P); intros.
+(* 1/4 *)
+repeat left; repeat split; auto; simpl.
+induction P; simpl; auto.
+inversion a.
+
+
+Lemma epp_preserves_pids (conf:Configuration) :
+  forall (C:Choreography) (s:State) (N:Network) (WF:WellFormedConf conf),
+  conf = (C,s) -> (epp conf WF) = Some N -> (pidseteq (pn C) (SPpn N)).
 Proof.
 intros.
-rewrite -> H in H0.
-induction .
+subst.
+simpl in WF.
+revert N H0.
+induction C; intros.
+
 (* End *)
+simpl in H0.
 simpl.
-reflexivity.
-destruct e.
-rewrite -> H in IHC.
+inversion H0.
+simpl.
+apply perm_nil.
+
+(* Interaction *)
+induction e.
+inversion_clear WF.
+simpl in H0.
+
+
+
+set (H3 := (IHC H1 N)).
+revert H0.
+simpl.
+unfold set_union_pid.
+intro.
+red.
+unfold set_inter_pid.
+Print set_inter.
+
+
+simpl.
+simpl in H0.
+unfold set_union_pid, set_union in H0.
+simpl in H0.
+unfold epp_list in H0.
+simpl in H0.
 unfold epp in H0.
 unfold epp_list in H0.
-unfold pn.
-unfold SPpn.
-(* Interaction *)
-destruct e.
+simpl in H0.
+simpl in H0.
 (* Com *)
-rewrite -> H in IHC
 Qed.
 
 Lemma epp_preserves_wellformedness (conf:Configuration) (WF:WellFormedConf conf) : forall N, (epp conf WF) = Some N -> WellFormedNetwork N.
