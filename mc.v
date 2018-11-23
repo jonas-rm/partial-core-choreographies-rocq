@@ -16,6 +16,23 @@ Inductive Expr : Type :=
  | succ_this : Expr
 .
 
+(* Not needed for now.
+Definition eqexpr_dec : forall (e e' : Expr), { e = e' } + { e <> e' }.
+Proof.
+decide equality.
+Defined.
+*)
+
+Definition eqexpr (e:Expr) (e':Expr) : bool :=
+match (e, e') with
+ | (this, this) => true
+ | (zero, zero) => true
+ | (succ_this, succ_this) => true
+ | (_, _) => false
+end.
+
+(* Notation "e == e'" := (eqexpr e e') (at level 60). *)
+
 Definition Pid := nat.
 
 Inductive Eta : Type :=
@@ -157,9 +174,9 @@ exists (HeadTo C s H).
 apply HeadTo_Soundness.
 Qed.
 
-Inductive MCToStar : Configuration -> Configuration -> Prop :=
+(* Inductive MCToStar : Configuration -> Configuration -> Prop :=
  | ToRefl conf : MCToStar conf conf
  | 
-
+ *)
 
 End Semantics.
