@@ -35,6 +35,8 @@ end.
 
 Definition Pid := nat.
 
+Definition eqpid := Nat.eqb.
+
 Inductive Eta : Type :=
  | Com : Pid -> Expr -> Pid -> Eta
  | Sel : Pid -> Pid -> Label -> Eta
