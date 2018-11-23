@@ -2,7 +2,7 @@ Require Import Bool.
 Require Import List.
 Require Import Coq.Lists.ListSet.
 Require Import Arith.
-Load mc.
+Load MC.
 Local Open Scope nat_scope.
 
 Module StatefulProcesses.
@@ -153,6 +153,7 @@ end
 .
 
 Definition set_union_pid := set_union eq_nat_dec.
+Definition set_inter_pid := set_inter eq_nat_dec.
 
 Fixpoint pn (C:Choreography) : list Pid :=
 match C with
@@ -194,15 +195,54 @@ inversion_clear H1; auto.
 apply NoDup_nil.
 Qed.
 
-Fixpoint epp_list (conf:Configuration) (pids:list Pid): option Network :=
+Definition WellFormedConf (conf:Configuration) : Prop := match conf with (C,s) => WellFormed C end.
+
+Fixpoint epp_list (conf:Configuration) (pids:list Pid) (WF:WellFormedConf conf) : option Network :=
 match conf with (C,s) =>
   match pids with
   | nil => Some( Empty )
-  | cons p l => match ((bproj C p), (epp_list (C,s) l)) with (Some B, Some N) => Some( Par ( Process p (s p) B ) N ) | (_, _) => None end
+  | cons p l => match ((bproj C p), (epp_list conf l WF)) with (Some B, Some N) => Some( Par ( Process p (s p) B ) N ) | (_, _) => None end
   end
 end.
 
+Fixpoint epp (conf:Configuration) (WF:WellFormedConf conf) : option Network := match conf with (C,s) => (epp_list conf (pn C) WF) end.
 
-Print bproj.
+Fixpoint SPpn (N:Network) : list Pid :=
+match N with
+| Empty => nil
+| Process p v B => (cons p nil)
+| Par N N' => (set_union_pid (SPpn N) (SPpn N'))
+end
+.
+
+Definition WellFormedNetwork (N:Network) : Prop := NoDup(SPpn N).
+
+Definition pidseteq (s:set Pid) (s':set Pid) : Prop := (set_inter_pid s s') = nil.
+
+Lemma epp_preserves_pids (conf:Configuration) : forall (C:Choreography) (s:State) (N:Network) (WF:WellFormedConf conf), conf = (C,s) -> (epp conf WF) = Some N -> (pidseteq (pn C) (SPpn N)).
+Proof.
+intros.
+rewrite -> H in H0.
+induction .
+(* End *)
+simpl.
+reflexivity.
+destruct e.
+rewrite -> H in IHC.
+unfold epp in H0.
+unfold epp_list in H0.
+unfold pn.
+unfold SPpn.
+(* Interaction *)
+destruct e.
+(* Com *)
+rewrite -> H in IHC
+Qed.
+
+Lemma epp_preserves_wellformedness (conf:Configuration) (WF:WellFormedConf conf) : forall N, (epp conf WF) = Some N -> WellFormedNetwork N.
+Proof.
+intros.
+destruct conf.
+Qed.
 
 End Syntax.
