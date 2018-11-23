@@ -130,10 +130,6 @@ apply (C1, s).
 apply (C2, s).
 Defined.
 
-Print HeadTo.
-
-Print bool_rect.
-
 Lemma HeadTo_Soundness : forall C s HC, MCTo (C, s) (HeadTo C s HC).
 Proof.
 induction C; intros.

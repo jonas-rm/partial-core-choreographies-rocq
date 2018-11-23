@@ -1,4 +1,7 @@
 Require Import Bool.
+Require Import List.
+Require Import Coq.Lists.ListSet.
+Require Import Arith.
 Load mc.
 Local Open Scope nat_scope.
 
@@ -134,12 +137,70 @@ apply ( match ((bproj C1 p), (bproj C2 p)) with
                     ).
 Defined.
 
-Fixpoint epp (C:Choreography) (pids:list Pid): option Network :=
-match pids with
-| nil => Some( Empty )
-| cons p l => match (bproj C p) Some( Par( bproj
+Fixpoint WellFormed (C:Choreography) : Prop :=
+match C with
+| CoreChoreographies.End => True
+| eta; C' => match eta with Com p _ q => p <> q /\ WellFormed C'
+                          | CoreChoreographies.Sel p q _ => p <> q /\ WellFormed C' end
+| CoreChoreographies.Cond p q C1 C2 => p <> q /\ WellFormed C1 /\ WellFormed C2
 end.
 
+Fixpoint pn_eta (e:Eta) : list Pid :=
+match e with
+| Com p _ q => (cons p (cons q nil))
+| CoreChoreographies.Sel p q _ => (cons p (cons q nil))
+end
+.
+
+Definition set_union_pid := set_union eq_nat_dec.
+
+Fixpoint pn (C:Choreography) : list Pid :=
+match C with
+| CoreChoreographies.End => nil
+| eta; C' => (set_union_pid (pn_eta eta) (pn C'))
+| CoreChoreographies.Cond p q C1 C2 => (set_union_pid (set_union_pid (cons p (cons q nil)) (pn C1)) (pn C2))
+end
+.
+
+Lemma pn_is_set (C:Choreography) : WellFormed C -> NoDup(pn C).
+Proof.
+induction C; intros.
+(* End *)
+apply NoDup_nil.
+(* e; C *)
+simpl.
+apply set_union_nodup.
+simpl in H.
+induction e; inversion_clear H.
+(* Com *)
+simpl; repeat apply NoDup_cons; simpl; auto.
+intro.
+inversion_clear H; auto.
+apply NoDup_nil.
+(* Sel *)
+simpl; repeat apply NoDup_cons; simpl; auto.
+intro.
+inversion_clear H; auto.
+apply NoDup_nil.
+induction e; inversion H; auto.
+(* Cond *)
+inversion H.
+inversion_clear H1.
+simpl.
+repeat apply set_union_nodup; auto.
+simpl; repeat apply NoDup_cons; simpl; auto.
+intro.
+inversion_clear H1; auto.
+apply NoDup_nil.
+Qed.
+
+Fixpoint epp_list (conf:Configuration) (pids:list Pid): option Network :=
+match conf with (C,s) =>
+  match pids with
+  | nil => Some( Empty )
+  | cons p l => match ((bproj C p), (epp_list (C,s) l)) with (Some B, Some N) => Some( Par ( Process p (s p) B ) N ) | (_, _) => None end
+  end
+end.
 
 
 Print bproj.
