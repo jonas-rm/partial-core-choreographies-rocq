@@ -16,7 +16,26 @@ Inductive Expr : Type :=
  | succ_this : Expr
 .
 
+(* Not needed for now.
+Definition eqexpr_dec : forall (e e' : Expr), { e = e' } + { e <> e' }.
+Proof.
+decide equality.
+Defined.
+*)
+
+Definition eqexpr (e:Expr) (e':Expr) : bool :=
+match (e, e') with
+ | (this, this) => true
+ | (zero, zero) => true
+ | (succ_this, succ_this) => true
+ | (_, _) => false
+end.
+
+(* Notation "e == e'" := (eqexpr e e') (at level 60). *)
+
 Definition Pid := nat.
+
+Definition eqpid := Nat.eqb.
 
 Inductive Eta : Type :=
  | Com : Pid -> Expr -> Pid -> Eta
