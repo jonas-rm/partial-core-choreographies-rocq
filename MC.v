@@ -1,4 +1,6 @@
+Require Import Nat.
 Require Import EqNat.
+Require Import PeanoNat.
 Local Open Scope nat_scope.
 
 Module CoreChoreographies.
@@ -66,8 +68,8 @@ Inductive Choreography : Type :=
 
 End Syntax.
 
-Notation "p '-->' q '[' l ']'" := (Sel p q l) (at level 57).
-Notation "p '$' e '-->' q" := (Com p e q) (at level 57).
+(* Notation "p '-->' q '[' l ']'" := (Sel p q l) (at level 57). *)
+(* Notation "p '$' e '-->' q" := (Com p e q) (at level 57). *)
 Notation "eta ';' C" := (Interaction eta C) (at level 60, right associativity).
 Notation "'If' p '==' q 'Then' C1 'Else' C2" := (Cond p q C1 C2) (at level 60).
 
@@ -108,7 +110,7 @@ match e with
 end.
 
 Definition update (s:State) (p:Pid) (v:Value) : State :=
-fun (q:Pid) => if (Nat.eqb p q) then v else (s q)
+fun (q:Pid) => if (p =? q) then v else (s q)
 .
 
 Lemma read_after_update : forall (s:State) (p:Pid) (v:Value),
@@ -121,41 +123,26 @@ induction p; auto.
 rewrite G; trivial.
 Qed.
 
-Lemma eqb_S : forall n m, Nat.eqb m n = Nat.eqb (S m) (S n).
-Proof.
-intros.
-simpl.
-trivial.
-Qed.
-
-Lemma eqb_eq : forall n m, Nat.eqb n m = true <-> n = m.
-Proof.
-induction n.
-induction m.
-split; trivial.
-split; discriminate.
-induction m.
-split; discriminate.
-simpl.
-assert (Eq_S : forall p q, p = q <-> (S p) = (S q)).
-intros; split; auto.
-rewrite <- Eq_S.
-apply IHn.
-Qed.
-
-(* Lemma neqb_neq : forall n m, Nat.eqb n m = false <-> n <> m. *)
-
-(*Lemma local_update : forall (s:State) (p q:Pid) (v:Value),
+Lemma local_update : forall (s:State) (p q:Pid) (v:Value),
   p <> q -> update s p v q = s q.
 Proof.
 intros.
 unfold update.
-pose proof eqb_eq p q as E.
-
+pose proof Nat.eqb_eq p q as E.
+pose proof Nat.eq_dec p q as D.
+case_eq (p =? q).
+rewrite E; intros; contradiction.
+trivial.
 Qed.
 
-Lemma last_update : forall (s:State) (p:Pid) (v1 v2:Value),
-  update (update s p v2) p v1 = update s p v1.*)
+Lemma last_update : forall (s:State) (p:Pid) (v1 v2:Value) (q : Pid),
+  update (update s p v2) p v1 q = update s p v1 q.
+Proof.
+intros.
+unfold update.
+case_eq (p =? q); trivial.
+Qed.
+
 
 Definition Configuration : Type := Choreography * State.
 
@@ -247,7 +234,8 @@ Inductive MCToStar : Configuration -> Configuration -> Prop :=
  | ToTran c1 c2 c3 (P1:MCToStar c1 c2) (P2:MCToStar c2 c3) : MCToStar c1 c3
 .
 
-(*Example MCToStar_sanity_check : forall p e q s C, 
+(*
+Example MCToStar_sanity_check : forall p e q s C, 
 MCToStar (Com p e q ; Com p zero q ; C, s) (C, update s q 0).
 Proof.
 intros.
