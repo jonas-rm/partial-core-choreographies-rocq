@@ -1,3 +1,4 @@
+Require Import FunctionalExtensionality.
 Require Import Nat.
 Require Import EqNat.
 Require Import PeanoNat.
@@ -118,9 +119,7 @@ Lemma read_after_update : forall (s:State) (p:Pid) (v:Value),
 Proof.
 intros.
 unfold update.
-assert (G : (Nat.eqb p p) = true).
-induction p; auto.
-rewrite G; trivial.
+rewrite <- beq_nat_refl; auto.
 Qed.
 
 Lemma local_update : forall (s:State) (p q:Pid) (v:Value),
@@ -128,21 +127,21 @@ Lemma local_update : forall (s:State) (p q:Pid) (v:Value),
 Proof.
 intros.
 unfold update.
-pose proof Nat.eqb_eq p q as E.
-pose proof Nat.eq_dec p q as D.
-case_eq (p =? q).
-rewrite E; intros; contradiction.
-trivial.
+case_eq (p =? q); auto.
+intro.
+generalize (beq_nat_true _ _ H0); intros.
+elim H; auto.
 Qed.
 
-Lemma last_update : forall (s:State) (p:Pid) (v1 v2:Value) (q : Pid),
-  update (update s p v2) p v1 q = update s p v1 q.
+Lemma last_update : forall (s:State) (p:Pid) (v1 v2:Value),
+  update (update s p v2) p v1 = update s p v1.
 Proof.
 intros.
 unfold update.
+apply FunctionalExtensionality.functional_extensionality.
+unfold update; intro q.
 case_eq (p =? q); trivial.
 Qed.
-
 
 Definition Configuration : Type := Choreography * State.
 
@@ -169,21 +168,28 @@ elim H; apply terminated_iff_end; auto.
 destruct e.
 apply (c, update s p0 (evaluate e s p)).
 apply (c, s).
-elim (Nat.eqb (s p) (s p0)).
-apply (c1, s).
-apply (c2, s).
+apply (if ((s p) =? (s p0)) then (c1, s) else (c2, s)).
 Defined.
 
 Definition HeadTo' (C:Choreography) (s:State) : C <> End -> Configuration :=
 HeadTo (C,s).
 
-Example foo : forall p e q C s HC, 
+Example HeadTo_Com : forall p e q C s HC, 
 HeadTo (Com p e q ; C, s) HC = (C, update s q (evaluate e s p)).
 Proof.
 intros.
 simpl.
 trivial.
 Qed.
+
+Example HeadTo_Sel : forall p q l C s HC, 
+HeadTo (Sel p q l; C, s) HC = (C, s).
+Proof.
+intros.
+simpl.
+trivial.
+Qed.
+
 
 Lemma HeadTo_Soundness : forall c Hc, MCTo c (HeadTo c Hc).
 Proof.
@@ -192,9 +198,8 @@ induction c.
 elim Hc; apply terminated_iff_end; trivial.
 induction e.
 apply C_Com.
-apply ( C_Sel p p0 l c s ).
-unfold HeadTo.
-unfold bool_rect.
+apply C_Sel.
+simpl.
 case_eq (Nat.eqb (s p) (s p0)); intros.
 apply C_Then.
 apply beq_nat_true; auto.
@@ -202,6 +207,7 @@ apply C_Else.
 apply beq_nat_false; auto.
 Qed.
 
+(*
 Theorem progress : forall C s, C <> End -> exists C' s', MCTo (C, s) (C', s').
 Proof.
 intros.
@@ -220,8 +226,9 @@ repeat eapply ex_intro.
 apply C_Else.
 apply beq_nat_false; auto.
 Qed.
+*)
 
-Theorem progress_cool : forall c, ~(terminated c) -> exists c', MCTo c c'.
+Theorem progress : forall c, ~(terminated c) -> exists c', MCTo c c'.
 Proof.
 intros.
 exists (HeadTo c H).
@@ -234,51 +241,87 @@ Inductive MCToStar : Configuration -> Configuration -> Prop :=
  | ToTran c1 c2 c3 (P1:MCToStar c1 c2) (P2:MCToStar c2 c3) : MCToStar c1 c3
 .
 
-(*
 Example MCToStar_sanity_check : forall p e q s C, 
 MCToStar (Com p e q ; Com p zero q ; C, s) (C, update s q 0).
 Proof.
 intros.
 set (c0 := (Com p e q ; Com p zero q ; C, s)).
+pose proof terminated_iff_end as T.
 assert (NTc0 : not (terminated c0)).
-unfold terminated; unfold fst; discriminate.
+rewrite T. discriminate.
 set (c1 := HeadTo c0 NTc0).
-apply ToTran with c1.
-apply To; apply HeadTo_Soundness.
+apply ToTran with c1. apply To. apply HeadTo_Soundness.
 assert (NTc1 : not (terminated c1)).
-unfold terminated; unfold fst; discriminate.
+rewrite T. discriminate.
 set (c2 := HeadTo c1 NTc1).
 set (c3 := (C, update s q 0)).
-assert (EqS : snd c2 = snd c3).
-simpl.
-unfold update.
-assert (EqC2C3 : c2 = c3).
-unfold c2; unfold c3; repeat simpl.
-unfold update.
+assert (E : c2 = c3).
+unfold c2,c3; repeat simpl.
+rewrite last_update. trivial.
+rewrite <- E.
+apply To. apply HeadTo_Soundness.
+Qed.
 
-Qed.*)
-
-
-(*Theorem termination : forall c1, exists c2, terminated c2 /\ MCToStar c1 c2.
+Theorem termination : forall C s, exists c', MCToStar (C,s) c' /\ terminated c'.
 Proof.
-intro c1.
-destruct c1 as (C1,s1).
-induction C1.
-exists (End,s1).
-split.
-apply terminated_iff_end; trivial.
-apply ToRefl.
-
-
-
-elim H; intros.
-destruct H0.
-exists x.
-split.
-inversion e.
-apply ToTran with (HeadTo (e;c,b) ).
-
-unfold terminated; trivial.
-Qed.*)
+pose proof terminated_iff_end as T.
+induction C; intro s.
+(* End *)
+* exists (End, s). split. 
+  + apply ToRefl.
+  + rewrite T. trivial.
+(* Eta *)
+* set (c0 := (e;C,s)).
+  assert (NTc0 : not (terminated c0)).
+  rewrite T. discriminate.
+  set (c1 := HeadTo c0 NTc0).
+  assert (c1 = (HeadTo c0 NTc0)); auto.
+  induction c1 as (C1, s1).
+  elim (IHC s1); intros c' Hc'.
+  inversion_clear c'; exists c'; split; auto.
+  inversion_clear Hc'. 
+  apply ToTran with (C,s1); auto.
+  replace C with C1.
+  apply To.
+  rewrite H.
+  apply HeadTo_Soundness.
+  unfold c0 in H; induction e; simpl in H; inversion H; auto.
+  inversion_clear Hc'. auto.
+(* If *)
+* rename C1 into CT, C2 into CE.
+  set (c0 := (If p == p0 Then CT Else CE, s)).
+  assert (NTc0 : not (terminated c0)).
+  rewrite T. discriminate.
+  set (c1 := HeadTo c0 NTc0).
+  assert (c1 = (HeadTo c0 NTc0)); auto.
+  induction c1 as (C1, s1).
+  case_eq (Nat.eqb (s p) (s p0)); intro G.
+  + elim (IHC1 s1); intros c' Hc'.
+    inversion_clear c'; exists c'; split; auto.
+    inversion_clear Hc'. 
+    apply ToTran with (CT,s1); auto.
+    replace CT with C1.
+    apply To.
+    rewrite H.
+    apply HeadTo_Soundness.
+    unfold c0 in H.
+    simpl in H.
+    rewrite G in H.
+    inversion H. auto.
+    inversion_clear Hc'. auto.
+  + elim (IHC2 s1); intros c' Hc'.
+    inversion_clear c'; exists c'; split; auto.
+    inversion_clear Hc'. 
+    apply ToTran with (CE,s1); auto.
+    replace CE with C1.
+    apply To.
+    rewrite H.
+    apply HeadTo_Soundness.
+    unfold c0 in H.
+    simpl in H.
+    rewrite G in H.
+    inversion H. auto.
+    inversion_clear Hc'. auto.
+Qed.
 
 End Semantics.
