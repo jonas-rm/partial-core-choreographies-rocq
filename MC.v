@@ -69,8 +69,8 @@ Inductive Choreography : Type :=
 
 End Syntax.
 
-(* Notation "p '-->' q '[' l ']'" := (Sel p q l) (at level 57). *)
-(* Notation "p '$' e '-->' q" := (Com p e q) (at level 57). *)
+Notation "p --> q [ l ]" := (Sel p q l) (at level 57, format "p '-->' q [ l ]").
+Notation "p ( e ) --> q" := (Com p e q) (at level 57, format "p ( e ) '-->' q").
 Notation "eta ';' C" := (Interaction eta C) (at level 60, right associativity).
 Notation "'If' p '==' q 'Then' C1 'Else' C2" := (Cond p q C1 C2) (at level 60).
 
@@ -158,6 +158,13 @@ Inductive MCTo : Configuration -> Configuration -> Prop :=
  | C_Struct C1 C1' C2 C2' s1 s2 : Precongr C1 C1' -> Precongr C2' C2 -> MCTo (C1', s1) (C2', s2) -> MCTo (C1, s1) (C2, s2)
 .
 
+
+Inductive MCToStar : Configuration -> Configuration -> Prop :=
+ | ToRefl c : MCToStar c c
+ | ToSingle c1 c2 (P:MCTo c1 c2) : MCToStar c1 c2
+ | ToTran c1 c2 c3 (P1:MCToStar c1 c2) (P2:MCToStar c2 c3) : MCToStar c1 c3
+.
+
 Definition terminated (c:Configuration) : Prop :=
  fst c = End.
 
@@ -176,8 +183,8 @@ apply (c, s).
 apply (if ((s p) =? (s p0)) then (c1, s) else (c2, s)).
 Defined.
 
-Definition HeadTo' (C:Choreography) (s:State) : C <> End -> Configuration :=
-HeadTo (C,s).
+(*Definition HeadTo' (C:Choreography) (s:State) : C <> End -> Configuration :=
+HeadTo (C,s).*)
 
 Example HeadTo_Com : forall p e q C s HC, 
 HeadTo (Com p e q ; C, s) HC = (C, update s q (evaluate e s p)).
@@ -195,7 +202,6 @@ simpl.
 trivial.
 Qed.
 
-
 Lemma HeadTo_Soundness : forall c Hc, MCTo c (HeadTo c Hc).
 Proof.
 destruct c; intros.
@@ -210,6 +216,28 @@ apply C_Then.
 apply beq_nat_true; auto.
 apply C_Else.
 apply beq_nat_false; auto.
+Qed.
+
+
+Example MCToStar_sanity_check : forall p e q s C, 
+MCToStar (Com p e q ; Com p zero q ; C, s) (C, update s q 0).
+Proof.
+intros.
+set (c0 := (Com p e q ; Com p zero q ; C, s)).
+pose proof terminated_iff_end as T.
+assert (NTc0 : not (terminated c0)).
+rewrite T. discriminate.
+set (c1 := HeadTo c0 NTc0).
+apply ToTran with c1. apply ToSingle. apply HeadTo_Soundness.
+assert (NTc1 : not (terminated c1)).
+rewrite T. discriminate.
+set (c2 := HeadTo c1 NTc1).
+set (c3 := (C, update s q 0)).
+assert (E : c2 = c3).
+unfold c2,c3; repeat simpl.
+rewrite update_update. trivial.
+rewrite <- E.
+apply ToSingle. apply HeadTo_Soundness.
 Qed.
 
 (*
@@ -240,33 +268,6 @@ exists (HeadTo c H).
 apply HeadTo_Soundness.
 Qed.
 
-Inductive MCToStar : Configuration -> Configuration -> Prop :=
- | ToRefl c : MCToStar c c
- | To c1 c2 (P:MCTo c1 c2) : MCToStar c1 c2
- | ToTran c1 c2 c3 (P1:MCToStar c1 c2) (P2:MCToStar c2 c3) : MCToStar c1 c3
-.
-
-Example MCToStar_sanity_check : forall p e q s C, 
-MCToStar (Com p e q ; Com p zero q ; C, s) (C, update s q 0).
-Proof.
-intros.
-set (c0 := (Com p e q ; Com p zero q ; C, s)).
-pose proof terminated_iff_end as T.
-assert (NTc0 : not (terminated c0)).
-rewrite T. discriminate.
-set (c1 := HeadTo c0 NTc0).
-apply ToTran with c1. apply To. apply HeadTo_Soundness.
-assert (NTc1 : not (terminated c1)).
-rewrite T. discriminate.
-set (c2 := HeadTo c1 NTc1).
-set (c3 := (C, update s q 0)).
-assert (E : c2 = c3).
-unfold c2,c3; repeat simpl.
-rewrite update_update. trivial.
-rewrite <- E.
-apply To. apply HeadTo_Soundness.
-Qed.
-
 Theorem termination : forall C s, exists c', MCToStar (C,s) c' /\ terminated c'.
 Proof.
 pose proof terminated_iff_end as T.
@@ -287,7 +288,7 @@ induction C; intro s.
   inversion_clear Hc'. 
   apply ToTran with (C,s1); auto.
   replace C with C1.
-  apply To.
+  apply ToSingle.
   rewrite H.
   apply HeadTo_Soundness.
   unfold c0 in H; induction e; simpl in H; inversion H; auto.
@@ -306,7 +307,7 @@ induction C; intro s.
     inversion_clear Hc'. 
     apply ToTran with (CT,s1); auto.
     replace CT with C1.
-    apply To.
+    apply ToSingle.
     rewrite H.
     apply HeadTo_Soundness.
     unfold c0 in H.
@@ -319,7 +320,7 @@ induction C; intro s.
     inversion_clear Hc'. 
     apply ToTran with (CE,s1); auto.
     replace CE with C1.
-    apply To.
+    apply ToSingle.
     rewrite H.
     apply HeadTo_Soundness.
     unfold c0 in H.
