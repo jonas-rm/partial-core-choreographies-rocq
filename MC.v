@@ -103,6 +103,11 @@ Definition Value := nat.
 
 Definition State := Pid -> Value.
 
+(*
+Definition eq_state (s s':State) := forall p, s p = s' p.
+Notation "s0 ':=:' s1" := eq_state s0 s1.
+*)
+
 Definition evaluate (e:Expr) (s:State) (p:Pid) : Value :=
 match e with
  | zero => 0
@@ -114,15 +119,15 @@ Definition update (s:State) (p:Pid) (v:Value) : State :=
 fun (q:Pid) => if (p =? q) then v else (s q)
 .
 
-Lemma read_after_update : forall (s:State) (p:Pid) (v:Value),
+Lemma update_read : forall (s:State) (p:Pid) (v:Value),
   update s p v p = v.
 Proof.
-intros.
-unfold update.
-rewrite <- beq_nat_refl; auto.
+  intros.
+  unfold update.
+  rewrite <- beq_nat_refl; auto.
 Qed.
 
-Lemma local_update : forall (s:State) (p q:Pid) (v:Value),
+Lemma update_monotonicity : forall (s:State) (p q:Pid) (v:Value),
   p <> q -> update s p v q = s q.
 Proof.
 intros.
@@ -133,7 +138,7 @@ generalize (beq_nat_true _ _ H0); intros.
 elim H; auto.
 Qed.
 
-Lemma last_update : forall (s:State) (p:Pid) (v1 v2:Value),
+Lemma update_update : forall (s:State) (p:Pid) (v1 v2:Value),
   update (update s p v2) p v1 = update s p v1.
 Proof.
 intros.
@@ -257,7 +262,7 @@ set (c2 := HeadTo c1 NTc1).
 set (c3 := (C, update s q 0)).
 assert (E : c2 = c3).
 unfold c2,c3; repeat simpl.
-rewrite last_update. trivial.
+rewrite update_update. trivial.
 rewrite <- E.
 apply To. apply HeadTo_Soundness.
 Qed.
