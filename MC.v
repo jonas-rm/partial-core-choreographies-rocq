@@ -101,25 +101,25 @@ Qed.
 
 Definition Value := nat.
 
-Definition State := Pid -> Value.
+Definition Store := Pid -> Value.
 
 (*
-Definition eq_state (s s':State) := forall p, s p = s' p.
-Notation "s0 ':=:' s1" := eq_state s0 s1.
+Definition eq_Store (s s':Store) := forall p, s p = s' p.
+Notation "s0 ':=:' s1" := eq_Store s0 s1.
 *)
 
-Definition evaluate (e:Expr) (s:State) (p:Pid) : Value :=
+Definition evaluate (e:Expr) (s:Store) (p:Pid) : Value :=
 match e with
  | zero => 0
  | this => s p
  | succ_this => S (s p)
 end.
 
-Definition update (s:State) (p:Pid) (v:Value) : State :=
+Definition update (s:Store) (p:Pid) (v:Value) : Store :=
 fun (q:Pid) => if (p =? q) then v else (s q)
 .
 
-Lemma update_read : forall (s:State) (p:Pid) (v:Value),
+Lemma update_read : forall (s:Store) (p:Pid) (v:Value),
   update s p v p = v.
 Proof.
   intros.
@@ -127,7 +127,7 @@ Proof.
   rewrite <- beq_nat_refl; auto.
 Qed.
 
-Lemma update_monotonicity : forall (s:State) (p q:Pid) (v:Value),
+Lemma update_monotonicity : forall (s:Store) (p q:Pid) (v:Value),
   p <> q -> update s p v q = s q.
 Proof.
 intros.
@@ -138,7 +138,7 @@ generalize (beq_nat_true _ _ H0); intros.
 elim H; auto.
 Qed.
 
-Lemma update_update : forall (s:State) (p:Pid) (v1 v2:Value),
+Lemma update_update : forall (s:Store) (p:Pid) (v1 v2:Value),
   update (update s p v2) p v1 = update s p v1.
 Proof.
 intros.
@@ -148,7 +148,7 @@ unfold update; intro q.
 case_eq (p =? q); trivial.
 Qed.
 
-Definition Configuration : Type := Choreography * State.
+Definition Configuration : Type := Choreography * Store.
 
 Inductive MCTo : Configuration -> Configuration -> Prop :=
  | C_Com p e q C s : MCTo ( Com p e q; C, s ) ( C, (update s q (evaluate e s p)) )
@@ -157,6 +157,27 @@ Inductive MCTo : Configuration -> Configuration -> Prop :=
  | C_Else p q C1 C2 s : (s p <> s q) -> MCTo ( If p == q Then C1 Else C2, s ) ( C2, s )
  | C_Struct C1 C1' C2 C2' s1 s2 : Precongr C1 C1' -> Precongr C2' C2 -> MCTo (C1', s1) (C2', s2) -> MCTo (C1, s1) (C2, s2)
 .
+
+Definition terminated (c:Configuration) : Prop :=
+ Precongr (fst c) End
+.
+
+Example terminated_iff_end : forall c:Configuration, terminated c <-> fst c = End.
+Proof.
+intro c.
+destruct c as (C,s).
+split; unfold terminated; simpl;intro H.
+* induction H.
++
++
++
++
++
++
++
++
+*
+Qed.
 
 
 Inductive MCToStar : Configuration -> Configuration -> Prop :=
@@ -183,7 +204,7 @@ apply (c, s).
 apply (if ((s p) =? (s p0)) then (c1, s) else (c2, s)).
 Defined.
 
-(*Definition HeadTo' (C:Choreography) (s:State) : C <> End -> Configuration :=
+(*Definition HeadTo' (C:Choreography) (s:Store) : C <> End -> Configuration :=
 HeadTo (C,s).*)
 
 Example HeadTo_Com : forall p e q C s HC, 
