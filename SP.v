@@ -3,12 +3,9 @@ Require Import List.
 Require Import Coq.Lists.ListSet.
 Require Import Arith.
 Require Import Sorting.Permutation.
-Load MC.
-Load Basics.
+Require Import Basics.
 
 Local Open Scope nat_scope.
-
-Module StatefulProcesses.
 
 Section Syntax.
 
@@ -24,7 +21,8 @@ Inductive Behaviour : Type :=
 Inductive Network : Type :=
  | Empty : Network
  | Process : Pid -> Value -> Behaviour -> Network
- | Par : Network -> Network -> Network.
+ | Par : Network -> Network -> Network
+.
 
 Definition sp_evaluate (e:Expr) (v:Value) : Value :=
 match e with
@@ -142,24 +140,24 @@ Defined.
 
 Fixpoint WellFormed (C:Choreography) : Prop :=
 match C with
-| CoreChoreographies.End => True
+| MC.End => True
 | eta; C' => match eta with Com p _ q => p <> q /\ WellFormed C'
-                          | CoreChoreographies.Sel p q _ => p <> q /\ WellFormed C' end
-| CoreChoreographies.Cond p q C1 C2 => p <> q /\ WellFormed C1 /\ WellFormed C2
+                          | MC.Sel p q _ => p <> q /\ WellFormed C' end
+| MC.Cond p q C1 C2 => p <> q /\ WellFormed C1 /\ WellFormed C2
 end.
 
 Fixpoint pn_eta (e:Eta) : list Pid :=
 match e with
 | Com p _ q => (cons p (cons q nil))
-| CoreChoreographies.Sel p q _ => (cons p (cons q nil))
+| MC.Sel p q _ => (cons p (cons q nil))
 end
 .
 
 Fixpoint pn (C:Choreography) : list Pid :=
 match C with
-| CoreChoreographies.End => nil
+| MC.End => nil
 | eta; C' => (set_union_pid (pn_eta eta) (pn C'))
-| CoreChoreographies.Cond p q C1 C2 => (set_union_pid (set_union_pid (cons p (cons q nil)) (pn C1)) (pn C2))
+| MC.Cond p q C1 C2 => (set_union_pid (set_union_pid (cons p (cons q nil)) (pn C1)) (pn C2))
 end
 .
 
@@ -195,18 +193,16 @@ inversion_clear H1; auto.
 apply NoDup_nil.
 Qed.
 
-Definition WellFormedConf (conf:Configuration) : Prop := match conf with (C,s) => WellFormed C end.
+Definition WellFormedConf (conf:Configuration) : Prop := WellFormed( fst conf ).
 
 Fixpoint epp_list (conf:Configuration) (pids:list Pid) (WF:WellFormedConf conf) : option Network :=
-match conf with (C,s) =>
-  match pids with
-  | nil => Some( Empty )
-  | cons p l => match ((bproj C p), (epp_list conf l WF)) with | (Some B, Some N) => Some( Par ( Process p (s p) B ) N )
-                                                               | (_, _) => None end
-  end
+match pids with
+| nil => Some( Empty )
+| cons p l => match ((bproj (fst conf) p), (epp_list conf l WF)) with | (Some B, Some N) => Some( Par ( Process p (snd conf p) B ) N )
+                                                             | (_, _) => None end
 end.
 
-Fixpoint epp (conf:Configuration) (WF:WellFormedConf conf) : option Network := match conf with (C,s) => (epp_list conf (pn C) WF) end.
+Fixpoint epp (conf:Configuration) (WF:WellFormedConf conf) : option Network := epp_list conf (pn (fst conf)) WF.
 
 Fixpoint SPpn (N:Network) : list Pid :=
 match N with
