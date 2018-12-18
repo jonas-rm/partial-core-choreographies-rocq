@@ -4,6 +4,12 @@ Import VectorNotations.
 
 Section to_be_moved.
 
+Lemma hd_tl : forall {A} {n} (v:t A (S n)), v = hd v :: tl v.
+intros.
+revert n v; refine (@caseS _ _ _).
+simpl; auto.
+Qed.
+
 Fixpoint map_inv {A} {B} {n} (f:t (A->B) n) (x:A) : t B n :=
   match f with
   | [] => []
@@ -67,13 +73,11 @@ destruct f; intros.
   apply (map_inv (map_inv (map (eval_opt _) f0) steps) ns).
 
 (* Recursion *)
-+ inversion ns; clear H n.                           (* getting the first element *)
-  destruct h; [idtac 1 | apply None].                (* is there an argument? *)
-  induction n.                                       (* finally *)
-  apply (eval_opt _ f1 steps H0).                    (* f x1...xn *)
++ elim (hd ns); [idtac 1 | apply None].              (* is there an argument? *)
+  intro n; induction n.                              (* finally *)
+  apply (eval_opt _ f1 steps (tl ns)).               (* f x1...xn *)
   destruct IHn; [rename n0 into x | apply None].
-  apply (eval_opt _ f2 steps).
-  apply (Some n :: Some x :: H0).
+  apply (eval_opt _ f2 steps (Some n :: Some x :: tl ns)).
 
 (* Minimization *)
 + destruct steps.
@@ -127,7 +131,7 @@ intros; unfold eval; simpl.
 apply nth_map'.
 Qed.
 
-Lemma Composition_correct: forall k m (g:PRFunction m) (f:t (PRFunction k) m) (ns:t nat k) (ms:t nat m) steps,
+Lemma Composition_correct : forall k m (g:PRFunction m) (f:t (PRFunction k) m) (ns:t nat k) (ms:t nat m) steps,
   (forall Hi, eval (nth f Hi) steps ns = Some (nth ms Hi)) -> eval g steps ms = eval (Composition g f) steps ns.
 intros; unfold eval; simpl.
 replace (map Some ms) with (map_inv (map_inv (map eval_opt f) steps) (map Some ns)); auto.
@@ -143,6 +147,38 @@ replace (map_inv (map eval_opt f) steps)[@p1] with ((map eval_opt f)[@p1] steps)
 replace (map eval_opt f)[@p1] with (eval_opt f[@p1]).
 2: symmetry; apply nth_map'.
 auto.
+Qed.
+
+Lemma Recursion_correct_base : forall k (g:PRFunction k) (h:PRFunction (2+k)) (ns:t nat (1+k)) steps,
+  hd ns = 0 -> eval (Recursion g h) steps ns = eval g steps (tl ns).
+intros; unfold eval.
+revert k ns g h H; refine (@caseS _ _ _).
+simpl; intros; rewrite H; auto.
+Qed.
+
+Lemma Recursion_correct_step : forall k (g:PRFunction k) (h:PRFunction (2+k)) (ns:t nat (1+k)) steps x y,
+  hd ns = S x -> (eval (Recursion g h) steps (x :: tl ns)) = Some y ->
+  eval (Recursion g h) steps ns = eval h steps (x :: y :: tl ns).
+intros.
+revert k ns g h x H y H0; refine (@caseS _ _ _).
+simpl; intros.
+unfold eval; rewrite H.
+unfold eval in H0.
+simpl (map Some (S x :: t)).
+simpl (map Some (x :: y :: t)).
+simpl (map Some (x :: t)) in H0.
+simpl; simpl in H0; rewrite H0; auto.
+Qed.
+
+(* OMG *)
+Lemma add_correct : forall m n steps, eval PR_add steps [m; n] = Some (m + n).
+intros; induction m.
+simpl; auto.
+unfold PR_add.
+rewrite Recursion_correct_step with (x:=m) (y:=m+n); auto.
+unfold eval; simpl.
+replace (m+n+1) with (S (m+n)); auto.
+rewrite (plus_comm (m+n) 1); auto with arith.
 Qed.
 
 End Sanity_Checks.
