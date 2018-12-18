@@ -4,8 +4,6 @@ Require Import EqNat.
 Require Import PeanoNat.
 Local Open Scope nat_scope.
 
-Module CoreChoreographies.
-
 Section Syntax.
 
 Inductive Label : Type :=
@@ -26,6 +24,7 @@ decide equality.
 Defined.
 *)
 
+(* Don't know if needed *)
 Definition eqexpr (e:Expr) (e':Expr) : bool :=
 match (e, e') with
  | (this, this) => true
@@ -186,13 +185,42 @@ Inductive MCToStar : Configuration -> Configuration -> Prop :=
  | ToTran c1 c2 c3 (P1:MCToStar c1 c2) (P2:MCToStar c2 c3) : MCToStar c1 c3
 .
 
-Definition terminated (c:Configuration) : Prop :=
- fst c = End.
+Definition terminated (c:Configuration) : Prop := Precongr (fst c) End.
 
-Example terminated_iff_end : forall c:Configuration, terminated c <-> fst c = End.
-Proof.
+Lemma eq_expr_dec : forall (e e':Expr), { e = e' } + { e <> e' }.
+decide equality.
+Qed.
+
+Lemma eq_eta_dec : forall (eta eta':Eta), { eta = eta' } + { eta <> eta' }.
+decide equality; try apply Nat.eq_dec.
+apply eq_expr_dec.
+decide equality.
+Qed.
+
+Lemma eq_chor_dec : forall (C C':Choreography), { C = C' } + { C <> C' }.
+decide equality; try apply Nat.eq_dec.
+apply eq_eta_dec.
+Qed.
+
+Lemma not_end_precongr : forall (C C':Choreography), C <> End -> C' = End -> ~ Precongr C C'.
+intros; intro.
+induction H1; auto; try inversion H0.
+Qed.
+
+Lemma not_end_precongr' : forall C:Choreography, Precongr C End -> C = End.
 intros.
-unfold iff; split; unfold terminated; unfold fst; trivial.
+elim (eq_chor_dec C End); auto.
+intro.
+elim not_end_precongr with C End; auto.
+Qed.
+
+Lemma terminated_iff_end : forall c:Configuration, terminated c <-> fst c = End.
+Proof.
+destruct c; unfold terminated; simpl; clear s.
+split.
+apply not_end_precongr'.
+intro; rewrite H.
+constructor.
 Qed.
 
 Definition HeadTo (c:Configuration) : ~ (terminated c) -> Configuration.
