@@ -22,9 +22,7 @@ Definition eqexpr_dec : forall (e e' : Expr), { e = e' } + { e <> e' }.
 Proof.
 decide equality.
 Defined.
-*)
 
-(* Don't know if needed *)
 Definition eqexpr (e:Expr) (e':Expr) : bool :=
 match (e, e') with
  | (this, this) => true
@@ -33,16 +31,26 @@ match (e, e') with
  | (_, _) => false
 end.
 
-(* Notation "e == e'" := (eqexpr e e') (at level 60). *)
+Notation "e == e'" := (eqexpr e e') (at level 60). *)
 
 Definition Pid := nat.
 
-Definition eqpid := Nat.eqb.
+Lemma eq_pid_dec : forall (p p':Pid), { p = p' } + { p <> p' }.
+Proof.
+decide equality.
+Qed.
+
+(* Definition eqpid := Nat.eqb. *)
 
 Inductive Eta : Type :=
  | Com : Pid -> Expr -> Pid -> Eta
  | Sel : Pid -> Pid -> Label -> Eta
 .
+
+Lemma eq_eta_dec : forall (eta eta':Eta), { eta = eta' } + { eta <> eta' }.
+Proof.
+repeat decide equality.
+Qed.
 
 Definition disjoint (p q r s:Pid) :=  p <> r /\ p <> s /\ q <> r /\ q <> s.
 
@@ -66,12 +74,20 @@ Inductive Choreography : Type :=
  | Cond : Pid -> Pid -> Choreography -> Choreography -> Choreography
 .
 
+Lemma eq_chor_dec : forall (C C':Choreography), { C = C' } + { C <> C' }.
+Proof.
+repeat decide equality.
+Qed.
+
 End Syntax.
 
-Notation "p --> q [ l ]" := (Sel p q l) (at level 57, format "p '-->' q [ l ]").
-Notation "p ( e ) --> q" := (Com p e q) (at level 57, format "p ( e ) '-->' q").
+Notation "p # e --> q" := (Com p e q) (at level 50, e at level 9, format "p # e --> q").
+Notation "p --> q [ l ]" := (Sel p q l) (at level 50, format "p --> q [ l ]").
 Notation "eta ';' C" := (Interaction eta C) (at level 60, right associativity).
 Notation "'If' p '==' q 'Then' C1 'Else' C2" := (Cond p q C1 C2) (at level 60).
+
+(* Check (1-->2[left]). *)
+(* Check (1#this--> 2). *)
 
 Section Semantics.
 
@@ -87,6 +103,9 @@ Inductive Precongr : Choreography -> Choreography -> Prop :=
  | CtxCond p q C1 C2 C3 C4 : Precongr C1 C2 -> Precongr C3 C4 -> Precongr (If p == q Then C1 Else C3) (If p == q Then C2 Else C4)
 .
 
+Notation "C1 ≼ C2" := (Precongr C1 C2) (at level 50, left associativity).
+Notation "C1 ⋠ C2" := (not (C1 ≼ C2)) (at level 50).
+
 Example sanity_check : Precongr ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 3; End) Else (Com 3 zero 2; End) )
                                 ( If 2 == 3 Then (Com 0 this 1; Com 4 succ_this 3; End) Else (Com 3 zero 2; Com 0 this 1; End) ).
 Proof.
@@ -101,11 +120,6 @@ Qed.
 Definition Value := nat.
 
 Definition Store := Pid -> Value.
-
-(*
-Definition eq_Store (s s':Store) := forall p, s p = s' p.
-Notation "s0 ':=:' s1" := eq_Store s0 s1.
-*)
 
 Definition evaluate (e:Expr) (s:Store) (p:Pid) : Value :=
 match e with
@@ -142,7 +156,7 @@ Lemma update_update : forall (s:Store) (p:Pid) (v1 v2:Value),
 Proof.
 intros.
 unfold update.
-apply FunctionalExtensionality.functional_extensionality.
+apply FunctionalExtensionality.functional_extensionality. (* TODO avoid this *)
 unfold update; intro q.
 case_eq (p =? q); trivial.
 Qed.
@@ -157,27 +171,6 @@ Inductive MCTo : Configuration -> Configuration -> Prop :=
  | C_Struct C1 C1' C2 C2' s1 s2 : Precongr C1 C1' -> Precongr C2' C2 -> MCTo (C1', s1) (C2', s2) -> MCTo (C1, s1) (C2, s2)
 .
 
-Definition terminated (c:Configuration) : Prop :=
- Precongr (fst c) End
-.
-
-Example terminated_iff_end : forall c:Configuration, terminated c <-> fst c = End.
-Proof.
-intro c.
-destruct c as (C,s).
-split; unfold terminated; simpl;intro H.
-* induction H.
-+
-+
-+
-+
-+
-+
-+
-+
-*
-Qed.
-
 
 Inductive MCToStar : Configuration -> Configuration -> Prop :=
  | ToRefl c : MCToStar c c
@@ -185,22 +178,11 @@ Inductive MCToStar : Configuration -> Configuration -> Prop :=
  | ToTran c1 c2 c3 (P1:MCToStar c1 c2) (P2:MCToStar c2 c3) : MCToStar c1 c3
 .
 
+Notation "c --> c'" := (MCTo c c') (at level 50, left associativity).
+Notation "c -->* c'" := (MCToStar c c') (at level 50, left associativity).
+
+
 Definition terminated (c:Configuration) : Prop := Precongr (fst c) End.
-
-Lemma eq_expr_dec : forall (e e':Expr), { e = e' } + { e <> e' }.
-decide equality.
-Qed.
-
-Lemma eq_eta_dec : forall (eta eta':Eta), { eta = eta' } + { eta <> eta' }.
-decide equality; try apply Nat.eq_dec.
-apply eq_expr_dec.
-decide equality.
-Qed.
-
-Lemma eq_chor_dec : forall (C C':Choreography), { C = C' } + { C <> C' }.
-decide equality; try apply Nat.eq_dec.
-apply eq_eta_dec.
-Qed.
 
 Lemma not_end_precongr : forall (C C':Choreography), C <> End -> C' = End -> ~ Precongr C C'.
 intros; intro.
@@ -232,9 +214,6 @@ apply (c, s).
 apply (if ((s p) =? (s p0)) then (c1, s) else (c2, s)).
 Defined.
 
-(*Definition HeadTo' (C:Choreography) (s:Store) : C <> End -> Configuration :=
-HeadTo (C,s).*)
-
 Example HeadTo_Com : forall p e q C s HC, 
 HeadTo (Com p e q ; C, s) HC = (C, update s q (evaluate e s p)).
 Proof.
@@ -251,7 +230,7 @@ simpl.
 trivial.
 Qed.
 
-Lemma HeadTo_Soundness : forall c Hc, MCTo c (HeadTo c Hc).
+Lemma HeadTo_Soundness : forall c Hc, c --> (HeadTo c Hc).
 Proof.
 destruct c; intros.
 induction c.
@@ -267,9 +246,8 @@ apply C_Else.
 apply beq_nat_false; auto.
 Qed.
 
-
 Example MCToStar_sanity_check : forall p e q s C, 
-MCToStar (Com p e q ; Com p zero q ; C, s) (C, update s q 0).
+(Com p e q ; Com p zero q ; C, s) -->* (C, update s q 0).
 Proof.
 intros.
 set (c0 := (Com p e q ; Com p zero q ; C, s)).
@@ -310,14 +288,14 @@ apply beq_nat_false; auto.
 Qed.
 *)
 
-Theorem progress : forall c, ~(terminated c) -> exists c', MCTo c c'.
+Theorem progress : forall c, ~(terminated c) -> exists c', c --> c'.
 Proof.
 intros.
 exists (HeadTo c H).
 apply HeadTo_Soundness.
 Qed.
 
-Theorem termination : forall C s, exists c', MCToStar (C,s) c' /\ terminated c'.
+Theorem termination : forall C s, exists c', (C,s) -->* c' /\ terminated c'.
 Proof.
 pose proof terminated_iff_end as T.
 induction C; intro s.
