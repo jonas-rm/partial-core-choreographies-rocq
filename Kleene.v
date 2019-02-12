@@ -1,22 +1,27 @@
 Require Import Arith.
 Require Import Vector.
+Require Import Bool.
+
 Import VectorNotations.
 
 Section to_be_moved.
 
 (** Random stuff about natural numbers. *)
 Lemma minus_S : forall m n, n - S m = pred (n - m).
+Proof.
 double induction m n; simpl; auto.
 intros; rewrite minus_n_O; auto.
 Qed.
 
 Lemma minus_is_S : forall m n, m < n -> exists k, n - m = S k.
+Proof.
 induction n; intros.
 + inversion H.
 + exists (n-m); rewrite minus_Sn_m; auto with arith.
 Qed.
 
 Lemma not_lt_minus_0 n m : ~ m < n -> n - m = 0.
+Proof.
 induction n; intros; auto.
 assert (S n <= m).
 + apply not_gt; auto.
@@ -26,10 +31,94 @@ assert (S n <= m).
 Qed.
 
 (** Random stuff about vectors to be placed elsewhere. *)
+
+(* Equality. *)
 Lemma eq_nth_iff' {A} {n} (v1 v2:t A n) : (forall (p:Fin.t n), v1[@p] = v2[@p]) <-> v1 = v2.
+Proof.
 split.
 intro; apply eq_nth_iff; intros; rewrite H0; auto.
 intros; apply eq_nth_iff; auto.
+Qed.
+
+(* Characterization results. *)
+
+Lemma vector_1_equal : forall {A} (x y:A), x = y -> forall Hi, [x][@Hi] = [y][@Hi].
+Proof.
+intros; rewrite H; auto.
+Qed.
+
+Lemma vector_2_equal : forall {A} (x x' y y':A), x = x' -> y = y' -> forall Hi, [x; y][@Hi] = [x'; y'][@Hi].
+Proof.
+intros; rewrite H, H0; auto.
+Qed.
+
+Lemma vector_3_equal : forall {A} (x x' y y' z z':A), x = x' -> y = y' -> z = z' ->
+  forall Hi, [x; y; z][@Hi] = [x'; y'; z'][@Hi].
+Proof.
+intros; rewrite H, H0, H1; auto.
+Qed.
+
+Lemma vector_0_inv : forall {A} (v:t A 0), [] = v.
+Proof.
+intro; apply (case0 (fun x => []=x)); auto.
+Qed.
+
+Lemma vector_1_inv : forall {A} (v:t A 1), [hd v] = v.
+Proof.
+intros; rewrite (eta v); simpl.
+replace (tl v) with (nil A); auto.
+apply vector_0_inv.
+Qed.
+
+Lemma vector_2_inv : forall {A} (v:t A 2), [hd v; hd (tl v)] = v.
+Proof.
+intros; rewrite (eta v); simpl.
+replace (tl v) with [hd (tl v)]; auto.
+apply vector_1_inv.
+Qed.
+
+Lemma vector_3_inv : forall {A} (v:t A 3), [hd v; hd (tl v); hd (tl (tl v))] = v.
+Proof.
+intros; rewrite (eta v); simpl.
+replace (tl v) with [hd (tl v); hd (tl (tl v))]; auto.
+apply vector_2_inv.
+Qed.
+
+(* On heads and tails. *)
+Lemma nth_hd : forall {A} {n} (v:t A (S n)), v[@Fin.F1] = hd v.
+Proof.
+intros.
+rewrite (eta v); simpl; auto.
+Qed.
+
+Lemma nth_hd' : forall {A} (v:t A 1) Hi, v[@Hi] = hd v.
+Proof.
+intros.
+replace v with (const (hd v) 1) at 1.
++ rewrite const_nth; auto.
++ simpl; apply vector_1_inv.
+Qed.
+
+Lemma nth_tl : forall {A} {n} (v:t A (S n)) Hi, v[@Fin.FS Hi] = (tl v)[@Hi].
+Proof.
+induction n; simpl.
++ intros; inversion Hi.
++ intros; rewrite (eta v).
+  simpl; auto.
+Qed.
+
+Require Import Coq.Program.Equality.
+Lemma eta_elim : forall {A} {n} (v:t A (S n)) x Hi, v[@Hi] = x -> hd v = x \/ exists Hi', (tl v)[@Hi'] = x.
+dependent induction Hi; intros.
+- left; rewrite nth_hd in H; auto.
+- right; rewrite nth_tl in H; eauto.
+Qed.
+
+Lemma map_shiftin : forall {A} {B} {n} (f:A->B) (v:t A n) x, map f (shiftin x v) = shiftin (f x) (map f v).
+Proof.
+induction v; simpl; auto.
+intro.
+rewrite IHv; auto.
 Qed.
 
 Fixpoint map_inv {A} {B} {n} (f:t (A->B) n) (x:A) : t B n :=
@@ -39,32 +128,28 @@ Fixpoint map_inv {A} {B} {n} (f:t (A->B) n) (x:A) : t B n :=
   end.
 
 Lemma nth_map' {A B} (f: A -> B) {n} v (p: Fin.t n) : (map f v) [@p] = f (v [@p]).
+Proof.
 apply nth_map; auto.
 Qed.
 
 Lemma nth_map_inv {A} {B} {n} (f:t (A->B) n) v (p1 p2: Fin.t n) (eq: p1 = p2) :
   (map_inv f v) [@ p1] = f[@ p2] v.
+Proof.
 subst p2; induction p1.
-  revert n f; refine (@caseS _ _ _); now simpl.
-  revert n f p1 IHp1; refine (@caseS _  _ _); now simpl.
++ revert n f; refine (@caseS _ _ _); now simpl.
++ revert n f p1 IHp1; refine (@caseS _  _ _); now simpl.
 Qed.
 
 Lemma nth_map_inv' {A} {B} {n} (f:t (A->B) n) v (p: Fin.t n) : (map_inv f v) [@p] = f[@p] v.
+Proof.
 apply nth_map_inv; auto.
 Qed.
 
-Lemma vector_one_equal : forall {A} (x y:A), x = y -> forall Hi, [x][@Hi] = [y][@Hi].
-intros; rewrite H; auto.
-Qed.
-
-Lemma vector_two_equal : forall {A} (x x' y y':A), x = x' -> y = y' -> forall Hi, [x; y][@Hi] = [x'; y'][@Hi].
-intros; rewrite H, H0; auto.
-Qed.
-
-Lemma vector_three_equal : forall {A} (x x' y y' z z':A), x = x' -> y = y' -> z = z' ->
-  forall Hi, [x; y; z][@Hi] = [x'; y'; z'][@Hi].
-intros; rewrite H, H0, H1; auto.
-Qed.
+Fixpoint vmax {n} (v:t nat n) :=
+  match v with
+  | [] => 0
+  | x :: xs => max x (vmax xs)
+end.
 
 (* Sanity check.
 Definition f0 (n:nat) := 2*n.
@@ -100,11 +185,59 @@ Fixpoint eval_opt {m} (f:PRFunction m) (steps:nat) (ns:t (option nat) m) : optio
  -- does not work because it doesn't know Successor is PRFunction 1.
 *)
 
-(* Auxiliary function for minimization. *)
+(* Auxiliary functions for minimization. *)
+Fixpoint all_defined {n} (v:t (option nat) n) : bool :=
+  match v with
+  | []             => true
+  | (Some _) :: v' => all_defined v'
+  | None :: _      => false
+end.
+
+Lemma all_defined_map_Some : forall n v, all_defined (n:=n) (map Some v) = true.
+Proof.
+induction n; simpl; intros.
++ replace v with (nil nat); [auto | apply vector_0_inv].
++ rewrite (eta v); simpl; auto.
+Qed.
+
+Lemma all_defined_false : forall n v, all_defined (n:=n) v = false -> exists Hi, v[@Hi] = None.
+Proof.
+induction n; simpl; intros.
++ replace v with (nil (option nat)) in H; [inversion H | apply vector_0_inv].
++ rewrite (eta v) in H; simpl in H.
+  revert H; case_eq (hd v); intros.
+  - elim (IHn _ H0); intros.
+    exists (Fin.FS x).
+    rewrite nth_tl; auto.
+  - exists (Fin.F1).
+    rewrite nth_hd; auto.
+Qed.
+
+Lemma all_defined_true : forall n v, all_defined (n:=n) v = true -> forall Hi, v[@Hi] <> None.
+Proof.
+intros; intro.
+induction n.
++ inversion Hi.
++ rewrite (eta v) in H.
+  revert H; case_eq (hd v); intros.
+  - generalize (IHn _ H1); clear IHn H1; intros.
+    elim (eta_elim _ _ _ H0); intros.
+    * rewrite H2 in H; inversion H.
+    * elim H2; eapply H1; assumption.
+  - inversion H1.
+Qed.
+
+Lemma all_defined_false' : forall n v Hi, v[@Hi] = None ->  all_defined (n:=n) v = false.
+intros.
+case_eq (all_defined v); intros; auto.
+generalize (all_defined_true _ _ H0); intros.
+elim (H1 Hi); auto.
+Qed.
+
 Fixpoint find_zero_from {k} (f:t (option nat) (1+k) -> option nat) (ns:t (option nat) k) (init:nat) (steps:nat) : option nat :=
   match steps with
   | O   => None
-  | S m => match f ((Some init) :: ns) with
+  | S m => match f (shiftin (Some init) ns) with
            | None       => None
            | Some O     => Some init
            | Some (S _) => find_zero_from f ns (S init) m
@@ -117,25 +250,25 @@ destruct f; intros.
 
 (* Zero *)
 + apply
-  match (nth ns (Fin.of_nat_lt (Nat.lt_succ_diag_r 0))) with
+  match (hd ns) with
     | Some x => Some 0
     | None => None
     end.
 
 (* Successor *)
 + apply
-    match (nth ns (Fin.of_nat_lt (Nat.lt_succ_diag_r 0))) with
+    match (hd ns) with
     | Some x => Some (x + 1)
     | None => None
     end.
 
 (* Projection *)
-+ apply (nth ns (Fin.of_nat_lt l)).
++ apply
+  (if (all_defined ns) then (nth ns (Fin.of_nat_lt l)) else None).
 
 (* Composition *)
-+ apply (eval_opt _ f).
-  apply steps.
-  apply (map_inv (map_inv (map (eval_opt _) fs) steps) ns).
++ set (ms := (map_inv (map_inv (map (eval_opt _) fs) steps) ns)).
+  apply (if (all_defined ms) && (all_defined ns) then (eval_opt _ f steps ms) else None).
 
 (* Recursion *)
 + elim (hd ns); [idtac 1 | apply None].              (* is there an argument? *)
@@ -152,6 +285,44 @@ Defined.
 
 (* This is the one we actually want to use. *)
 Definition eval {m} (f:PRFunction m) (steps:nat) (ns:t nat m) : option nat := eval_opt f steps (map Some ns).
+
+Lemma eval_opt_inv : forall m (f:PRFunction m) steps ns Hi, ns[@Hi] = None -> eval_opt f steps ns = None.
+induction f; intros.
++ simpl.
+  replace (hd ns) with (None (A:=nat)); auto.
+  rewrite <- H; rewrite <- (vector_1_inv ns) at 1.
+  rewrite nth_hd'; auto.
++ simpl.
+  replace (hd ns) with (None (A:=nat)); auto.
+  rewrite <- H; rewrite <- (vector_1_inv ns) at 1.
+  rewrite nth_hd'; auto.
++ simpl.
+  case_eq (all_defined ns); intro; auto.
+  rewrite (all_defined_false' _ _ _ H) in H0; inversion H0.
++ simpl.
+  replace (all_defined ns) with false.
+  rewrite andb_false_r; auto.
+  symmetry; apply all_defined_false' with Hi; auto.
++ case_eq (hd ns); intros.
+  2: simpl; rewrite H0; auto.
+  elim (eta_elim _ _ _ H); intro.
+  - rewrite H1 in H0; inversion H0.
+  - inversion_clear H1.
+    clear H Hi; revert ns H0 x H2.
+    induction n; intros; simpl.
+    * rewrite H0; simpl.
+      apply IHf1 with x; auto.
+    * rewrite H0; simpl.
+      generalize (IHn (Some n :: tl ns) (eq_refl _) x H2); clear IHn; intros.
+      simpl in H; rewrite H; auto.
++ case_eq steps; intros; auto.
+  clear H0 steps; simpl.
+  case_eq n; intros; simpl; auto.
+  rewrite <- H0.
+  rewrite <- (shiftin_nth _ (Some 0) _ ns _ _ (eq_refl Hi)) in H.
+  set (ms := shiftin (Some 0) ns).
+  generalize (IHf n ms _ H); clear IHf H H0 Hi; clearbody ms; intros.
+Abort.
 
 End Definitions.
 
@@ -170,25 +341,33 @@ Qed.
 
 Lemma Projection_correct : forall m k (Hkm: k<m) n steps, eval (Projection Hkm) steps n = Some (nth n (Fin.of_nat_lt Hkm)).
 intros; unfold eval; simpl.
+rewrite all_defined_map_Some.
 apply nth_map'.
 Qed.
 
 Lemma Composition_correct : forall k m (g:PRFunction m) (f:t (PRFunction k) m) (ns:t nat k) (ms:t nat m) steps,
   (forall Hi, eval (nth f Hi) steps ns = Some (nth ms Hi)) -> eval g steps ms = eval (Composition g f) steps ns.
 intros; unfold eval; simpl.
-replace (map Some ms) with (map_inv (map_inv (map eval_opt f) steps) (map Some ns)); auto.
-apply eq_nth_iff; intros.
-rewrite <- H0; clear H0 p2.
-transitivity (Some ms[@p1]).
-2: symmetry; apply nth_map'.
-rewrite <- H; clear H.
-transitivity ((map_inv (map eval_opt f) steps)[@p1] (map Some ns)).
-apply nth_map_inv'.
-replace (map_inv (map eval_opt f) steps)[@p1] with ((map eval_opt f)[@p1] steps).
-2: symmetry; apply nth_map_inv'.
-replace (map eval_opt f)[@p1] with (eval_opt f[@p1]).
-2: symmetry; apply nth_map'.
-auto.
+set (T := all_defined (map_inv (map_inv (map eval_opt f) steps) (map Some ns))).
+assert (T = all_defined (map_inv (map_inv (map eval_opt f) steps) (map Some ns))); auto.
+destruct T.
++ replace (all_defined (map Some ns)) with true.
+  - simpl.
+  replace (map Some ms) with (map_inv (map_inv (map eval_opt f) steps) (map Some ns)); auto.
+  apply eq_nth_iff; intros.
+  rewrite <- H1; clear H1 p2.
+  rewrite nth_map'.
+  rewrite <- H; clear H.
+  repeat rewrite nth_map_inv'.
+  rewrite nth_map'; auto.
+  - symmetry; apply all_defined_map_Some.
++ exfalso.
+  symmetry in H0.
+  elim (all_defined_false _ _ H0); intros.
+  repeat rewrite nth_map_inv' in H1; rewrite nth_map' in H1.
+  generalize (H x); intro.
+  unfold eval in H2; rewrite H2 in H1.
+  inversion H1.
 Qed.
 
 Lemma Recursion_correct_base : forall k (g:PRFunction k) (h:PRFunction (2+k)) (ns:t nat (1+k)) steps,
@@ -213,12 +392,12 @@ simpl; simpl in H0; rewrite H0; auto.
 Qed.
 
 Lemma find_zero_from_correct : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
-  f ((Some m) :: ns) = Some O /\ forall n, init <= n < m -> exists val, f ((Some n) :: ns) = Some (S val).
+  f (shiftin (Some m) ns) = Some O /\ forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
 induction steps; intros.
 + inversion H.
 + revert H; simpl.
-  set (x := f (Some init :: ns)).
-  assert (x = f (Some init :: ns)); auto; clearbody x.
+  set (x := f (shiftin (Some init) ns)).
+  assert (x = f (shiftin (Some init)ns)); auto; clearbody x.
   destruct x.
   destruct n; intros.
   - inversion H0; split.
@@ -233,16 +412,39 @@ induction steps; intros.
   - intro; inversion H0.
 Qed.
 
+Lemma find_zero_min : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
+  forall n, f (shiftin (Some n) ns) = Some 0 -> n < init \/ m <= n.
+intros.
+elim (le_lt_dec m n); auto; intro.
+elim (le_lt_dec init n); auto; intro.
+elim (find_zero_from_correct _ _ _ _ _ H); intros.
+exfalso.
+elim (H2 n); auto; intros.
+rewrite H3 in H0; inversion H0.
+Qed.
+
 Lemma Minimization_correct : forall k (h:PRFunction (1+k)) (ns:t nat k) steps n,
   eval (Minimization h) steps ns = (Some n) ->
-  exists s, eval h s (n::ns) = (Some 0) /\ forall m, m < n -> exists n', eval h s (m::ns) = (Some (S n')).
+  exists s, eval h s (shiftin n ns) = (Some 0) /\ forall m, m < n -> exists n', eval h s (shiftin m ns) = (Some (S n')).
 intros; revert H; unfold eval.
 induction steps.
 + simpl; intros; inversion H.
 + simpl; intro.
-  elim (find_zero_from_correct _ _ _ _ _ H); intros; exists steps; split; auto.
-  intros; apply H1; split; auto with arith.
+  elim (find_zero_from_correct _ _ _ _ _ H); intros; exists steps.
+  rewrite map_shiftin; split; auto.
+  intros; rewrite map_shiftin; apply H1; split; auto with arith.
 Qed.
+
+(*
+Lemma Minimization_correct' : forall k (h:PRFunction (1+k)) (ns:t nat k) steps n,
+  eval (Minimization h) steps ns = (Some n) -> forall m, eval h steps (shiftin m ns) = (Some 0) -> n <= m.
+intros.
+elim (Minimization_correct _ _ _ _ _ H); intros; clear H.
+inversion_clear H1.
+elim (le_lt_dec n m); auto; intro.
+elim (H2 _ b); clear H2; intros.
+rewrite 
+*)
 
 End Sanity_Checks.
 
@@ -251,19 +453,19 @@ End Sanity_Checks.
 Ltac prove_composition_1 := intros;
                             do 2 rewrite <- nth_map';
                             do 2 rewrite <- nth_map_inv';
-                            apply vector_one_equal;
+                            apply vector_1_equal;
                             auto.
 
 Ltac prove_composition_2 := intros;
                             do 2 rewrite <- nth_map';
                             do 2 rewrite <- nth_map_inv';
-                            apply vector_two_equal;
+                            apply vector_2_equal;
                             auto.
 
 Ltac prove_composition_3 := intros;
                             do 2 rewrite <- nth_map';
                             do 2 rewrite <- nth_map_inv';
-                            apply vector_three_equal;
+                            apply vector_3_equal;
                             auto.
 
 Section Examples.
@@ -538,28 +740,87 @@ split.
 Qed.
 
 (* Finally: subtraction. *)
-Definition PR_sub := Minimization (Composition PR_diff [Composition PR_add [Projection aux23; Projection aux33]; Projection aux13]).
+Definition PR_sub_aux := Composition PR_diff [Composition PR_add [Projection aux23; Projection aux33]; Projection aux13].
+Definition PR_sub := Minimization PR_sub_aux.
 
-(* AGH: in the paper, we're minimizing on the last argument, not the first.
-Also, typo in the definition of sub in the paper.
-Lemma sub_correct : forall m n steps k, eval PR_sub steps [m; n] = Some k -> n <= m /\ k = n - m.
+(* Typo in the definition of sub in the paper. *)
+
+Lemma sub_aux_correct : forall m n k steps, eval PR_sub_aux steps [m; n; k] = Some 0 <-> m = n + k.
+intros; unfold PR_sub_aux.
+rewrite <- Composition_correct with (ms := [k+n; m]).
+- rewrite <- diff_correct_0.
+  rewrite plus_comm; split; auto.
+- prove_composition_2.
+  * rewrite <- Composition_correct with (ms := [n; k]).
+    + rewrite plus_comm; apply add_correct.
+    + prove_composition_2.
+Qed.
+
+Lemma sub_correct_1 : forall m n steps k, eval PR_sub steps [m; n] = Some k -> k = m - n.
 intros.
 unfold PR_sub in H.
 generalize (Minimization_correct _ _ _ _ _ H); intro.
+simpl shiftin in H0.
 elim H0; clear H H0 steps; intros steps Hsteps; inversion_clear Hsteps.
-assert (k = n-m).
-+ clear H0.
-  rewrite <- Composition_correct with (ms := [m+n; k]) in H.
-  - rewrite <- diff_correct_0 in H.
-    apply plus_minus.
-  - prove_composition_2.
-    * rewrite <- Composition_correct with (ms := [
-split.
-+ clear H.
+clear H0.
+rewrite sub_aux_correct in H.
+apply plus_minus; auto.
+Qed.
 
-*)
+Lemma sub_correct_2 : forall m n steps k, eval PR_sub steps [m; n] = Some k -> n <= m.
+intros.
+generalize (sub_correct_1 _ _ _ _ H); intro; revert H.
+destruct steps.
+- intro; inversion H.
+- change ((find_zero_from (eval_opt PR_sub_aux steps) [Some m; Some n] 0 steps) = Some k -> n <= m).
+  intro.
+  elim (le_lt_dec n m); intro; auto.
+  elim (find_zero_from_correct _ _ _ _ _ H); intros.
+  clear H H2; change (eval PR_sub_aux steps [m; n; k] = Some 0) in H1.
+  rewrite sub_aux_correct in H1.
+  rewrite not_le_minus_0 in H0; auto with arith.
+  rewrite H0 in H1; rewrite plus_comm in H1.
+  rewrite H1; auto with arith.
+Qed.
 
 End Examples.
+
+Fixpoint depth {m} (f:PRFunction m) : nat :=
+  match f with
+  | Zero             => 0
+  | Successor        => 0
+  | Projection _     => 0
+  | Composition g fs => 1 + max (depth g) (vmax (map depth fs))
+  | Recursion g h    => 1 + max (depth g) (depth h)
+  | Minimization h   => 1 + depth h
+end.
+
+(*
+Lemma eval_opt_inj : forall d m (f:PRFunction m) s s' ns m m', depth f <= d ->
+  eval_opt f s ns = Some m -> eval_opt f s' ns = Some m' -> m = m'.
+induction d; intros m f.
+- induction f; intros; try (inversion H; fail); revert H0 H1.
+  + simpl; replace ns with [hd ns]; [intros | apply vector_1_inv].
+    inversion H1; inversion H0; auto.
+  + replace ns with [hd ns]; [idtac | apply vector_1_inv].
+    set (x := hd ns); destruct x; simpl; intros; inversion H1; inversion H0; auto.
+  + simpl.
+    set (x := ns[@Fin.of_nat_lt l]); destruct x; simpl; intros; inversion H1; inversion H0; transitivity n; auto.
+- induction f; intros; revert H0 H1.
+  (* the first three cases are the same *)
+  + simpl; replace ns with [hd ns]; [intros | apply vector_1_inv].
+    inversion H1; inversion H0; auto.
+  + replace ns with [hd ns]; [idtac | apply vector_1_inv].
+    set (x := hd ns); destruct x; simpl; intros; inversion H1; inversion H0; auto.
+  + simpl.
+    set (x := ns[@Fin.of_nat_lt l]); destruct x; simpl; intros; inversion H1; inversion H0; transitivity n; auto.
+  + simpl in H; apply le_S_n in H.
+    generalize (Nat.max_lub_l _ _ _ H); generalize (Nat.max_lub_r _ _ _ H); clear H.
+    simpl; intros.
+    replace (map_inv (map_inv (map eval_opt fs) s) ns) with (map_inv (map_inv (map eval_opt fs) s') ns) in H1.
+(* requires all calls to be defined *)
+
+
 
 (* Ongoing. *)
 
@@ -620,4 +881,28 @@ induction f; intros.
   rewrite nth_map'.
   Abort.
 
+Lemma eval_opt_inj : forall m (f:PRFunction m) s s' ns m m', eval_opt f s ns = Some m -> eval_opt f s' ns = Some m' -> m = m'.
+induction f; intros; revert H H0.
++ simpl; replace ns with [hd ns]; [intros | apply vector_1_inv].
+  inversion H; inversion H0; auto.
++ replace ns with [hd ns]; [idtac | apply vector_1_inv].
+  set (x := hd ns); destruct x; simpl; intros; inversion H; inversion H0; auto.
++ simpl.
+  set (x := ns[@Fin.of_nat_lt l]); destruct x; simpl; intros; inversion H; inversion H0; transitivity n; auto.
++ simpl.
+  apply IHf.
+
+Lemma eval_inj : forall m (f:PRFunction m) s s' ns m m', eval f s ns = Some m -> eval f s' ns = Some m' -> m = m'.
+induction f; simpl; intros; revert H H0.
++ replace ns with [hd ns]; [repeat rewrite Zero_correct | apply vector_1_inv].
+  intros; inversion H; inversion H0; auto.
++ replace ns with [hd ns]; [repeat rewrite Successor_correct | apply vector_1_inv].
+  intros; inversion H; inversion H0; auto.
++ repeat rewrite Projection_correct; intros.
+  rewrite H in H0; inversion H0; auto.
++ rewrite Composition_correct with (ms := (map_inv (map_inv (map eval_opt fs) s) (map Some ns))).
+
+
+
 End Incomplete.
+*)
