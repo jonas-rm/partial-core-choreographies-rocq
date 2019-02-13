@@ -39,22 +39,20 @@ Inductive Network : Type :=
 
 End Syntax.
 
-Notation "N | N'" := (Par N N') (at level 50, left associativity).
-Notation "p , v |> B" := (Process p v B) (at level 50, left associativity).
-Notation "'send' p e ; B" := (Send p e B) (at level 50, left associativity).
-Notation "'recv' p ; B" := (Recv p B) (at level 50, left associativity).
-Notation "'sel' p l ; B" := (Sel p l B) (at level 50, left associativity).
-Notation "'branch' p f" := (Branching p f) (at level 50, left associativity).
+Notation "N | N'" := (Par N N') (at level 60, right associativity).
+Notation "p , v |> B" := (Process p v B) (at level 60, no associativity).
+Notation "p ! e ; B" := (Send p e B) (at level 60, e at level 9, right associativity).
+Notation "p ? ; B" := (Recv p B) (at level 60, right associativity).
+Notation "p + l ; B" := (Sel p l B) (at level 60, l at level 9, right associativity).
+Notation "p & f" := (Branching p f) (at level 60, no associativity).
 Notation "'PIf' p 'PThen' B1 'PElse' B2" := (Cond p B1 B2) (at level 60).
-Notation "'bnil'" := End (at level 50).
+Notation "'bnil'" := (End).
 
-Check Empty | Empty.
-
+(* Check (Empty | Empty).
 Check 0, 1 |> bnil.
-
-Check (proc p 0 sel r left; send r this; bnil).
-
-Check (proc p 0 (PIf q PThen (sel r left; send r this; bnil) PElse (sel r right; recv r; bnil))).
+Check Empty | 0, 1 |> bnil.
+Check 0!zero; 0?; 1 + left; bnil.
+ *)
 
 Section Semantics.
 

@@ -381,10 +381,10 @@ forall N, (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_Wel
           SPTo
           N
           (
-            (Process 0 0 (Sel 2 left (Send 2 this End)))
-            par
+            0, 0 |> 2+left; 2!this; bnil
+            |
             (Process 1 0 End)
-            par
+            |
             (Process 2 0 (Branching 0 (fun l : Label => match l with
                                                         | left => inl (Recv 0 End)
                                                         | right => inl (Send 0 this End)
