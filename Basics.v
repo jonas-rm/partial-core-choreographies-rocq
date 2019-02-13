@@ -211,3 +211,4 @@ apply Permutation_app_comm.
 apply Permutation_NoDup with (P ++ Q); auto.
 apply Permutation_app_comm.
 Qed.
+

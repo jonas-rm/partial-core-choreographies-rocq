@@ -11,13 +11,14 @@ Inductive Label : Type :=
  | right : Label
 .
 
+Definition eqlabel l l' := match l, l' with left, left => true | right, right => true | _,_ => false end.
+
 Inductive Expr : Type :=
  | this : Expr
  | zero : Expr
  | succ_this : Expr
 .
 
-(* Not needed for now.
 Definition eqexpr_dec : forall (e e' : Expr), { e = e' } + { e <> e' }.
 Proof.
 decide equality.
@@ -31,7 +32,9 @@ match (e, e') with
  | (_, _) => false
 end.
 
-Notation "e == e'" := (eqexpr e e') (at level 60). *)
+Notation "e == e'" := (eqexpr e e') (at level 60).
+
+Definition eqpid := Nat.eqb.
 
 Definition Pid := nat.
 
@@ -39,8 +42,6 @@ Lemma eq_pid_dec : forall (p p':Pid), { p = p' } + { p <> p' }.
 Proof.
 decide equality.
 Qed.
-
-(* Definition eqpid := Nat.eqb. *)
 
 Inductive Eta : Type :=
  | Com : Pid -> Expr -> Pid -> Eta
