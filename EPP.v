@@ -374,13 +374,13 @@ forall N, (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_Wel
           SPTo
           N
           (
-            0 [0, 2+left; (2!this; bnil)]
+            p [0, r+left; (r!this; bnil)]
             |
-            1 [0, bnil]
+            q [0, bnil]
             |
-            2 [0, 0 & (fun l : Label => match l with
-                                                        | left => inl (0?; bnil)
-                                                        | right => inl (0!this; bnil)
+            r [0, p & (fun l : Label => match l with
+                                                        | left => inl (p?; bnil)
+                                                        | right => inl (p!this; bnil)
                                                         end)]
             |
             Empty
@@ -388,36 +388,38 @@ forall N, (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_Wel
 .
 intros.
 simpl in H.
-apply (Some_eq (Process p (sigma p) (Cond q (Sel r left (Send r this End)) (Sel r right (Recv r End)))
-       par (Process q (sigma q) (Send p this End)
-            par (Process r (sigma r) (Branching p (fun l : Label => match l with
-                                                                    | left => inl (Recv p End)
-                                                                    | right => inl (Send p this End)
-                                                                    end)) par Empty))) N) in H.
 symmetry in H.
-unfold p, q, r in H.
+apply Some_eq in H.
+(* unfold p, q, r in H. *)
 rewrite H.
 unfold sigma.
-set (ParH := (S_Par
-        (
-          (Process 0 0 (Cond 1 (Sel 2 left (Send 2 this End)) (Sel 2 right (Recv 2 End))))
-          par
-          (Process 1 0 (Send 0 this End))
-        )
-        (
-          (Process 2 0 (Branching 0 (fun l : Label => match l with
-                                                        | left => inl (Recv 0 End)
-                                                        | right => inl (Send 0 this End)
-                                                        end)))
-          par Empty
-        )
-        (
-          (Process 0 0 (Sel 2 left (Send 2 this End)))
-          par
-          (Process 1 0 End)
-        )
-      )).
-apply 
+set (p_then_B := (r + left; (r ! this; bnil))%SP).
+set (p_else_B := (r + right; (r ? ; bnil))%SP).
+set (pProc := (p [0, If q Then p_then_B Else p_else_B])%SP).
+set (qProc := (q [0, 0 ! this; bnil])%SP).
+set (rProc := (
+          r [0, p & (fun l : Label => match l with
+                                                         | left => inl (p ? ; bnil)%SP
+                                                         | right => inl (p ! this; bnil)%SP
+                                                         end)] | Empty
+        )%SP).
+set (pProc' := (p [0, r + left; (r ! this; bnil)])%SP).
+set (qProc' := (q [0, bnil])%SP).
+set (ParH := (S_Par (pProc | qProc) (rProc | Empty) (pProc' | qProc'))).
+set (ThenH := ((S_Then q 0 p 0 this bnil p_then_B p_else_B) sp_evaluate_0_0)).
+set (ThenHrev := (S_Struct (pProc | qProc) (qProc | pProc) (qProc' | pProc') (pProc' | qProc'))).
+set (ThenHrev' := (ThenHrev (Sym pProc qProc)) ThenH (Sym qProc' pProc')).
+set (ParH' := ParH ThenHrev').
+unfold pProc, qProc, rProc, qProc', pProc' in ParH'.
+unfold pProc, qProc, rProc, qProc', pProc'.
+unfold p, q, r in ParH'.
+unfold p, q, r.
+apply ParH'. (* Need associativity but otherwise done.. need to find a more succint way of doing these proofs. Probably defining everything *before* the lemma in local definitions/notations is better. :-) *)
+unfold p, q, r in ThenH.
+set (HH := (ParH ThenH)).
+inversion in ThenH.
+ sp_evaluate_0_0 in ThenH.
+apply (S_Then (sp_evaluate_0_0)) in ParH.
 apply
   (
     (S_Then 0 0 1 0 this (Sel 2 left (Send 2 this End)) (Sel 2 right (Recv 2 End)) (Sel 2 left (Send 2 this End)))
