@@ -6,6 +6,7 @@ Require Import Sorting.Permutation.
 Require Import Basic.
 Require Import Common.
 Require Import FunInd.
+Require Import MC.
 Require Import SP.
 
 Local Open Scope nat_scope.
@@ -106,14 +107,14 @@ Fixpoint bproj (C:Choreography) (r:Pid) : option Behaviour :=
 match C with
 | MC.End => (Some End)
 | eta;C' => match eta with
-            | p # e --> q => if (eqpid p r)
+            | p # e --> q => if (eqb_pid p r)
                                then bproj_buildB (Send q e) (bproj C' r)
-                               else if (eqpid q r)
+                               else if (eqb_pid q r)
                                       then (bproj_buildB (Recv p) (bproj C' r))
                                       else (bproj C' r)
-            | p --> q [ l ] => if (eqpid p r)
+            | p --> q [ l ] => if (eqb_pid p r)
                                then bproj_buildB (Sel q l) (bproj C' r)
-                               else if (eqpid q r)
+                               else if (eqb_pid q r)
                                       then match (bproj C' r) with
                                            | Some BC => Some (Branching p
                                                                (fun l' => match l, l' with
@@ -124,9 +125,9 @@ match C with
                                            end
                                       else (bproj C' r)
             end
-| If p == q Then C1 Else C2 => if (eqpid p r)
+| If p == q Then C1 Else C2 => if (eqb_pid p r)
                                then bproj_buildbiB (Cond q) (bproj C1 r) (bproj C2 r)
-                               else if (eqpid q r)
+                               else if (eqb_pid q r)
                                       then bproj_buildB (Send p this)
                                              ( match ((bproj C1 r), (bproj C2 r)) with
                                                | (Some B1, Some B2) => (merge B1 B2)
@@ -223,8 +224,9 @@ Definition WellFormedConf (conf:Configuration) : Prop := WellFormed( fst conf ).
 Fixpoint epp_list (conf:Configuration) (pids:list Pid) (WF:WellFormedConf conf) : option Network :=
 match pids with
 | nil => Some( Empty )
-| cons p l => match ((bproj (fst conf) p), (epp_list conf l WF)) with | (Some B, Some N) => Some( Par ( Process p (snd conf p) B ) N )
-                                                             | (_, _) => None end
+| cons p l => match (bproj (fst conf) p), (epp_list conf l WF) with
+              | Some B, Some N => Some( Par ( Process p (snd conf p) B ) N )
+              | _, _ => None end
 end.
 
 Fixpoint epp (conf:Configuration) (WF:WellFormedConf conf) : option Network := epp_list conf (pn (fst conf)) WF.
@@ -329,32 +331,22 @@ Qed.
 
 (* Eval compute in epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_WellFormed. *)
 
+Local Definition p_then_B := (r + left; (r ! this; bnil))%SP.
+Local Definition p_else_B := (r + right; (r ? ; bnil))%SP.
+Local Definition P := (p [0, If q Then p_then_B Else p_else_B])%SP.
+Local Definition Q := (q [0, 0 ! this; bnil])%SP.
+Local Definition R := (
+  r [0, p & (fun l : Label => match l with
+                              | left => inl (p ? ; bnil)%SP
+                              | right => inl (p ! this; bnil)%SP
+                              end)]
+)%SP.
+
 Proposition PaperExample1_C'_Configuration_epp :
 (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_WellFormed) =
-Some
-         (Par (Process 0 0 (Cond 1 (Sel 2 left (Send 2 this End)) (Sel 2 right (Recv 2 End))))
-            (Par (Process 1 0 (Send 0 this End))
-               (Par (Process 2 0 (Branching 0 (fun l : Label => match l with
-                                                                | left => inl (Recv 0 End)
-                                                                | right => inl (Send 0 this End)
-                                                                end))) Empty)))
+Some (P | Q | R | nnil)%SP
 .
 reflexivity.
-Qed.
-
-Eval compute in (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_WellFormed).
-
-Proposition PaperExample1_C'_Configuration_epp_readable_version :
-(epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_WellFormed) = Some (
-  (0 [0, If 1 Then 2 + left; (2 ! this; bnil) Else 2 + right; (2 ? ; bnil)]
-          | 1 [0, 0 ! this; bnil] | 2 [0, 0 & (fun l : Label => match l with
-                                                                | left => inl (0 ? ; bnil)
-                                                                | right => inl (0 ! this; bnil)
-                                                                end)] | Empty)%SP
-)
-.
-simpl.
-easy.
 Qed.
 
 (* Should be generalised *)
@@ -369,65 +361,31 @@ simpl.
 trivial.
 Qed.
 
+Local Definition P' := (p [0, r + left; (r ! this; bnil)])%SP.
+Local Definition Q' := (q [0, bnil])%SP.
+
 Example PaperExample1_C'_Configuration_epp_FirstRed :
 forall N, (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_WellFormed) = Some N
           ->
-          SPTo
-          N
-          (
-            p [0, r+left; (r!this; bnil)]
-            |
-            q [0, bnil]
-            |
-            r [0, p & (fun l : Label => match l with
-                                                        | left => inl (p?; bnil)
-                                                        | right => inl (p!this; bnil)
-                                                        end)]
-            |
-            Empty
-          )%SP
+          SPTo N (P' | Q' | R | nnil)%SP
 .
 intros.
 simpl in H.
 symmetry in H.
 apply Some_eq in H.
-(* unfold p, q, r in H. *)
-rewrite H.
+rewrite H; clear.
 unfold sigma.
-set (p_then_B := (r + left; (r ! this; bnil))%SP).
-set (p_else_B := (r + right; (r ? ; bnil))%SP).
-set (pProc := (p [0, If q Then p_then_B Else p_else_B])%SP).
-set (qProc := (q [0, 0 ! this; bnil])%SP).
-set (rProc := (
-          r [0, p & (fun l : Label => match l with
-                                                         | left => inl (p ? ; bnil)%SP
-                                                         | right => inl (p ! this; bnil)%SP
-                                                         end)] | Empty
-        )%SP).
-set (pProc' := (p [0, r + left; (r ! this; bnil)])%SP).
-set (qProc' := (q [0, bnil])%SP).
-set (ParH := (S_Par (pProc | qProc) (rProc | Empty) (pProc' | qProc'))).
+(* set (ParH := (S_Par (pProc | qProc) (rProc | Empty) (pProc' | qProc'))).*)
 set (ThenH := ((S_Then q 0 p 0 this bnil p_then_B p_else_B) sp_evaluate_0_0)).
-set (ThenHrev := (S_Struct (pProc | qProc) (qProc | pProc) (qProc' | pProc') (pProc' | qProc'))).
-set (ThenHrev' := (ThenHrev (Sym pProc qProc)) ThenH (Sym qProc' pProc')).
-set (ParH' := ParH ThenHrev').
-unfold pProc, qProc, rProc, qProc', pProc' in ParH'.
-unfold pProc, qProc, rProc, qProc', pProc'.
-unfold p, q, r in ParH'.
-unfold p, q, r.
-apply ParH'. (* Need associativity but otherwise done.. need to find a more succint way of doing these proofs. Probably defining everything *before* the lemma in local definitions/notations is better. :-) *)
-unfold p, q, r in ThenH.
-set (HH := (ParH ThenH)).
-inversion in ThenH.
- sp_evaluate_0_0 in ThenH.
-apply (S_Then (sp_evaluate_0_0)) in ParH.
-apply
-  (
-    (S_Then 0 0 1 0 this (Sel 2 left (Send 2 this End)) (Sel 2 right (Recv 2 End)) (Sel 2 left (Send 2 this End)))
-    ((sp_evaluate_0_0))
-  )
-  in ParH.
+set (PQred := (S_Struct (P | Q) (Q | P) (Q' | P') (P' | Q') (Sym P Q) ThenH (Sym Q' P'))).
+apply (S_Struct (P|Q|R|nnil) ((P|Q)|R|nnil) ((P'|Q')|R|nnil) (P'|Q'|R|nnil)).
+(* P | (Q | (R |nnil)) <= P | ( *)
+apply (AssocL P Q (R | nnil)).
+constructor.
+apply PQred.
+apply AssocR.
 Qed.
+
 End PaperExample1.
 
 
@@ -440,6 +398,7 @@ end
 .
 
 Definition WellFormedNetwork (N:Network) : Prop := NoDup(SPpn N).
+
 (* Enrich with no self-communications *)
 
 (* Lemma set_union_whatever : forall (p p':Pid) (P:set Pid),

@@ -54,6 +54,7 @@ Notation "p + l ; B" := (Sel p l B) (at level 49, l at level 9, right associativ
 Notation "p & f" := (Branching p f) (at level 60, no associativity) : SP_scope.
 Notation "'If' p 'Then' B1 'Else' B2" := (Cond p B1 B2) (at level 60) : SP_scope.
 Notation "'bnil'" := (End) : SP_scope.
+Notation "'nnil'" := (Empty) : SP_scope.
 
 Check (Empty | Empty)%SP.
 Check (0 [1, bnil])%SP.
@@ -73,6 +74,10 @@ end.
 Inductive Precongr : Network -> Network -> Prop :=
  | Refl N : Precongr N N
  | Sym N1 N2 : Precongr (N1 | N2) (N2 | N1)
+ | AssocL N1 N2 N3 : Precongr (N1|(N2|N3)) ((N1|N2)|N3)
+ | AssocR N1 N2 N3 : Precongr ((N1|N2)|N3) (N1|(N2|N3))
+ | CtxL N1 N2 N3 (P1:Precongr N1 N2) : Precongr (N1 | N3) (N2 | N3)
+ | CtxR N1 N2 N3 (P1:Precongr N2 N3) : Precongr (N1 | N2) (N1 | N3)
  | Trans N1 N2 N3 (P1:Precongr N1 N2) (P2:Precongr N2 N3) : Precongr N1 N3
  | PZero p v : Precongr (Process p v End) Empty
  | NZero N : Precongr (Par N Empty) N
