@@ -3,7 +3,7 @@ Require Import List.
 Require Import Coq.Lists.ListSet.
 Require Import Arith.
 Require Import Sorting.Permutation.
-Require Import Basics.
+Require Import Basic.
 Require Import FunInd.
 Require Import SP.
 
