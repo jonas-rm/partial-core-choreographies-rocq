@@ -3,6 +3,8 @@ Require Import List.
 Require Import Coq.Lists.ListSet.
 Require Import Arith.
 Require Import Sorting.Permutation.
+Require Import Common.
+Require Import MC.
 Require Import Basics.
 Require Import FunInd.
 

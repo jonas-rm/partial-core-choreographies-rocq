@@ -1,48 +1,12 @@
-Require Import FunctionalExtensionality.
 Require Import Nat.
 Require Import EqNat.
 Require Import PeanoNat.
+Require Import List.
+Require Import Coq.Lists.ListSet.
+Require Export Common.
 Local Open Scope nat_scope.
 
 Section Syntax.
-
-Inductive Label : Type :=
- | left : Label
- | right : Label
-.
-
-Definition eqlabel l l' := match l, l' with left, left => true | right, right => true | _,_ => false end.
-
-Inductive Expr : Type :=
- | this : Expr
- | zero : Expr
- | succ_this : Expr
-.
-
-Definition eqexpr_dec : forall (e e' : Expr), { e = e' } + { e <> e' }.
-Proof.
-decide equality.
-Defined.
-
-Definition eqexpr (e:Expr) (e':Expr) : bool :=
-match (e, e') with
- | (this, this) => true
- | (zero, zero) => true
- | (succ_this, succ_this) => true
- | (_, _) => false
-end.
-
-Notation "e == e'" := (eqexpr e e') (at level 60).
-
-Definition eqpid := Nat.eqb.
-
-Definition Pid := nat.
-
-Lemma eq_pid_dec : forall (p p':Pid), { p = p' } + { p <> p' }.
-Proof.
-decide equality.
-Qed.
-
 Inductive Eta : Type :=
  | Com : Pid -> Expr -> Pid -> Eta
  | Sel : Pid -> Pid -> Label -> Eta
@@ -78,6 +42,61 @@ Inductive Choreography : Type :=
 Lemma eq_chor_dec : forall (C C':Choreography), { C = C' } + { C <> C' }.
 Proof.
 repeat decide equality.
+Qed.
+
+Fixpoint WellFormed (C:Choreography) : Prop :=
+match C with
+| End => True
+| Interaction eta C' => match eta with Com p _ q => p <> q /\ WellFormed C'
+                          | Sel p q _ => p <> q /\ WellFormed C' end
+| Cond p q C1 C2 => p <> q /\ WellFormed C1 /\ WellFormed C2
+end.
+
+Fixpoint pn_eta (e:Eta) : list Pid :=
+match e with
+| Com p _ q => (cons p (cons q nil))
+| Sel p q _ => (cons p (cons q nil))
+end
+.
+
+Fixpoint pn (C:Choreography) : list Pid :=
+match C with
+| End => nil
+| Interaction eta C' => (set_union_pid (pn_eta eta) (pn C'))
+| Cond p q C1 C2 => (set_union_pid (set_union_pid (cons p (cons q nil)) (pn C1)) (pn C2))
+end
+.
+
+Lemma pn_is_set (C:Choreography) : WellFormed C -> NoDup(pn C).
+Proof.
+induction C; intros.
+(* End *)
+apply NoDup_nil.
+(* e; C *)
+simpl.
+apply set_union_nodup.
+simpl in H.
+induction e; inversion_clear H.
+(* Com *)
+simpl; repeat apply NoDup_cons; simpl; auto.
+intro.
+inversion_clear H; auto.
+apply NoDup_nil.
+(* Sel *)
+simpl; repeat apply NoDup_cons; simpl; auto.
+intro.
+inversion_clear H; auto.
+apply NoDup_nil.
+induction e; inversion H; auto.
+(* Cond *)
+inversion H.
+inversion_clear H1.
+simpl.
+repeat apply set_union_nodup; auto.
+simpl; repeat apply NoDup_cons; simpl; auto.
+intro.
+inversion_clear H1; auto.
+apply NoDup_nil.
 Qed.
 
 End Syntax.
@@ -118,51 +137,9 @@ Proof.
  split; auto.
 Qed.
 
-Definition Value := nat.
-
-Definition Store := Pid -> Value.
-
-Definition evaluate (e:Expr) (s:Store) (p:Pid) : Value :=
-match e with
- | zero => 0
- | this => s p
- | succ_this => S (s p)
-end.
-
-Definition update (s:Store) (p:Pid) (v:Value) : Store :=
-fun (q:Pid) => if (p =? q) then v else (s q)
-.
-
-Lemma update_read : forall (s:Store) (p:Pid) (v:Value),
-  update s p v p = v.
-Proof.
-  intros.
-  unfold update.
-  rewrite <- beq_nat_refl; auto.
-Qed.
-
-Lemma update_monotonicity : forall (s:Store) (p q:Pid) (v:Value),
-  p <> q -> update s p v q = s q.
-Proof.
-intros.
-unfold update.
-case_eq (p =? q); auto.
-intro.
-generalize (beq_nat_true _ _ H0); intros.
-elim H; auto.
-Qed.
-
-Lemma update_update : forall (s:Store) (p:Pid) (v1 v2:Value),
-  update (update s p v2) p v1 = update s p v1.
-Proof.
-intros.
-unfold update.
-apply FunctionalExtensionality.functional_extensionality. (* TODO avoid this *)
-unfold update; intro q.
-case_eq (p =? q); trivial.
-Qed.
-
 Definition Configuration : Type := Choreography * Store.
+
+Definition WellFormedConf (conf:Configuration) : Prop := WellFormed( fst conf ).
 
 Inductive MCTo : Configuration -> Configuration -> Prop :=
  | C_Com p e q C s : MCTo ( Com p e q; C, s ) ( C, (update s q (evaluate e s p)) )
