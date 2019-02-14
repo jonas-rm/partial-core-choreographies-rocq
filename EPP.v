@@ -4,6 +4,7 @@ Require Import Coq.Lists.ListSet.
 Require Import Arith.
 Require Import Sorting.Permutation.
 Require Import Basic.
+Require Import Common.
 Require Import FunInd.
 Require Import SP.
 
@@ -14,28 +15,28 @@ Section EPP.
 Fixpoint merge (B1:Behaviour) (B2:Behaviour) : option Behaviour :=
 match B1, B2 with
  | Send p e B, Send p' e' B' =>
-    if (eqpid p p') && (eqexpr e e') then
+    if (eqb_pid p p') && (eqb_expr e e') then
       match (merge B B') with
        | Some Bm => Some( Send p e Bm )
        | _ => None
       end
     else None
  | Recv p B, Recv p' B' =>
-    if (eqpid p p') then
+    if (eqb_pid p p') then
       match (merge B B') with
        | Some Bm => Some( Recv p Bm )
        | _ => None
       end
     else None
  | Sel p l B, Sel p' l' B' =>
-    if (eqpid p p') && (eqlabel l l') then
+    if (eqb_pid p p') && (eqb_label l l') then
       match (merge B B') with
        | Some Bm => Some( Sel p l Bm )
        | _ => None
       end
     else None
  | Branching p f, Branching p' f' =>
-    if (eqpid p p') then
+    if (eqb_pid p p') then
       match
         match (f left, f' left) with
         | (inl B, inl B') => match (merge B B') with Some B'' => Some (inl B'') | None => None end
@@ -62,7 +63,7 @@ match B1, B2 with
       (* match merge_branches f f' with Some f'' => Some (Branching p f'') | None => None end *)
     else None
  | Cond p B1 B2, Cond p' B1' B2' =>
-    if (eqpid p p') then
+    if (eqb_pid p p') then
       match (merge B1 B1') with
        | Some B1m => match (merge B2 B2') with | Some B2m => Some( Cond p B1m B2m ) | _ => None end
        | _ => None
