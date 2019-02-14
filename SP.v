@@ -39,20 +39,25 @@ Inductive Network : Type :=
 
 End Syntax.
 
-Notation "N | N'" := (Par N N') (at level 60, right associativity).
-Notation "p , v |> B" := (Process p v B) (at level 60, no associativity).
-Notation "p ! e ; B" := (Send p e B) (at level 60, e at level 9, right associativity).
-Notation "p ? ; B" := (Recv p B) (at level 60, right associativity).
-Notation "p + l ; B" := (Sel p l B) (at level 60, l at level 9, right associativity).
-Notation "p & f" := (Branching p f) (at level 60, no associativity).
-Notation "'PIf' p 'PThen' B1 'PElse' B2" := (Cond p B1 B2) (at level 60).
-Notation "'bnil'" := (End).
+Delimit Scope SP_scope with SP.
 
-(* Check (Empty | Empty).
-Check 0, 1 |> bnil.
-Check Empty | 0, 1 |> bnil.
-Check 0!zero; 0?; 1 + left; bnil.
- *)
+Bind Scope SP_scope with Behaviour.
+Bind Scope SP_scope with Network.
+
+Notation "N | N'" := (Par N N') (at level 202, right associativity) : SP_scope.
+Notation "p [ v , B ]" := (Process p v B) (at level 201, v at level 9, no associativity) : SP_scope.
+Notation "p ! e ; B" := (Send p e B) (at level 60, e at level 9, right associativity) : SP_scope.
+Notation "p ? ; B" := (Recv p B) (at level 60, right associativity) : SP_scope.
+Notation "p + l ; B" := (Sel p l B) (at level 49, l at level 9, right associativity) : SP_scope.
+Notation "p & f" := (Branching p f) (at level 60, no associativity) : SP_scope.
+Notation "'If' p 'Then' B1 'Else' B2" := (Cond p B1 B2) (at level 60) : SP_scope.
+Notation "'bnil'" := (End) : SP_scope.
+
+Check (Empty | Empty)%SP.
+Check (0 [1, bnil])%SP.
+Check (Empty | 0 [1, bnil])%SP.
+Check (If 0 Then bnil Else bnil)%SP.
+Check (0!zero; 0?; 1+left; bnil)%SP.
 
 Section Semantics.
 
@@ -71,8 +76,8 @@ Inductive Precongr : Network -> Network -> Prop :=
 .
 
 Inductive SPTo : Network -> Network -> Prop :=
- | S_Com p v q u e B B' : SPTo ( Par (Process p v (Send q e B)) (Process q u (Recv p B')) )
-                               ( Par (Process p v B) (Process q (sp_evaluate e v) B') )
+ | S_Com p v q u e B B' : SPTo ( p [v, q!e;B] | q [u, p?;B'] )%SP
+                               ( p [v, B] | q [(sp_evaluate e v), B'] )%SP
  | S_Sel p v q u l B f {B':Behaviour}: (f l = inl B') -> SPTo ( Par (Process p v (Sel q l B)) (Process q u (Branching p f)) )
                                ( Par (Process p v B) (Process q u B') )
  | S_Then p v q u e B1 B2 B : ((sp_evaluate e v) = u) -> SPTo ( Par (Process p v (Send q e B)) (Process q u (Cond p B1 B2)) )
@@ -81,7 +86,6 @@ Inductive SPTo : Network -> Network -> Prop :=
                                ( Par (Process p v B) (Process q u B2) )
  | S_Par N M N' : SPTo N N' -> SPTo (Par N M) (Par N' M)
  | S_Struct N1 N1' N2 N2' : Precongr N1 N1' -> Precongr N2' N2 -> SPTo N1' N2' -> SPTo N1 N2
- (* misses S_Sel *)
 .
 
 Inductive SPToStar : Network -> Network -> Prop :=

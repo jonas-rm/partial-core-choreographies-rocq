@@ -341,27 +341,20 @@ Some
 reflexivity.
 Qed.
 
+Eval compute in (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_WellFormed).
+
 Proposition PaperExample1_C'_Configuration_epp_readable_version :
 (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_WellFormed) = Some (
-  (proc p 0 (PIf q PThen (sel r left; send r this; End) PElse (sel r right; recv r; End)
-  par
-  (proc q 0 send p this; End
-  par
-  (proc r 0 branch p (fun l : Label => match l with
-                                                                | left => inl (Recv 0 End)
-                                                                | right => inl (Send 0 this End)
-                                                                end)
-  (par
-  Empty (* TODO: Why do we have this Empty? Check epp. *)
-  )))
-))
+  (0 [0, If 1 Then 2 + left; (2 ! this; bnil) Else 2 + right; (2 ? ; bnil)]
+          | 1 [0, 0 ! this; bnil] | 2 [0, 0 & (fun l : Label => match l with
+                                                                | left => inl (0 ? ; bnil)
+                                                                | right => inl (0 ! this; bnil)
+                                                                end)] | Empty)%SP
+)
 .
 simpl.
 easy.
 Qed.
-
-
-Print PaperExample1_C'.
 
 (* Should be generalised *)
 Local Theorem Some_eq : forall a b : Network, Some a = Some b -> a = b.
@@ -381,17 +374,17 @@ forall N, (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_Wel
           SPTo
           N
           (
-            0, 0 |> 2+left; 2!this; bnil
+            0 [0, 2+left; (2!this; bnil)]
             |
-            (Process 1 0 End)
+            1 [0, bnil]
             |
-            (Process 2 0 (Branching 0 (fun l : Label => match l with
-                                                        | left => inl (Recv 0 End)
-                                                        | right => inl (Send 0 this End)
-                                                        end)))
-            par
+            2 [0, 0 & (fun l : Label => match l with
+                                                        | left => inl (0?; bnil)
+                                                        | right => inl (0!this; bnil)
+                                                        end)]
+            |
             Empty
-          )
+          )%SP
 .
 intros.
 simpl in H.

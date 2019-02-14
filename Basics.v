@@ -9,7 +9,6 @@ Definition set_add_pid := set_add eq_nat_dec.
 Definition set_union_pid := set_union eq_nat_dec.
 Definition set_inter_pid := set_inter eq_nat_dec.
 
-
 Definition pidseteq (s:set Pid) (s':set Pid) : Prop := Permutation s s'.
 
 (** De Morgan law *)
