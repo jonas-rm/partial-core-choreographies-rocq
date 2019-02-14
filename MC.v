@@ -1,6 +1,8 @@
 Require Import Nat.
 Require Import EqNat.
 Require Import PeanoNat.
+Require Import List.
+Require Import Coq.Lists.ListSet.
 Require Export Common.
 Local Open Scope nat_scope.
 
@@ -43,6 +45,62 @@ Proof.
 repeat decide equality.
 Qed.
 
+
+Fixpoint WellFormed (C:Choreography) : Prop :=
+match C with
+| End => True
+| Interaction eta C' => match eta with Com p _ q => p <> q /\ WellFormed C'
+                          | Sel p q _ => p <> q /\ WellFormed C' end
+| Cond p q C1 C2 => p <> q /\ WellFormed C1 /\ WellFormed C2
+end.
+
+Fixpoint pn_eta (e:Eta) : list Pid :=
+match e with
+| Com p _ q => (cons p (cons q nil))
+| Sel p q _ => (cons p (cons q nil))
+end
+.
+
+Fixpoint pn (C:Choreography) : list Pid :=
+match C with
+| End => nil
+| Interaction eta C' => (set_union_pid (pn_eta eta) (pn C'))
+| Cond p q C1 C2 => (set_union_pid (set_union_pid (cons p (cons q nil)) (pn C1)) (pn C2))
+end
+.
+
+Lemma pn_is_set (C:Choreography) : WellFormed C -> NoDup(pn C).
+Proof.
+induction C; intros.
+(* End *)
+apply NoDup_nil.
+(* e; C *)
+simpl.
+apply set_union_nodup.
+simpl in H.
+induction e; inversion_clear H.
+(* Com *)
+simpl; repeat apply NoDup_cons; simpl; auto.
+intro.
+inversion_clear H; auto.
+apply NoDup_nil.
+(* Sel *)
+simpl; repeat apply NoDup_cons; simpl; auto.
+intro.
+inversion_clear H; auto.
+apply NoDup_nil.
+induction e; inversion H; auto.
+(* Cond *)
+inversion H.
+inversion_clear H1.
+simpl.
+repeat apply set_union_nodup; auto.
+simpl; repeat apply NoDup_cons; simpl; auto.
+intro.
+inversion_clear H1; auto.
+apply NoDup_nil.
+Qed.
+
 End Syntax.
 
 Notation "p # e --> q" := (Com p e q) (at level 50, e at level 9, format "p # e --> q").
@@ -82,6 +140,8 @@ Proof.
 Qed.
 
 Definition Configuration : Type := Choreography * Store.
+
+Definition WellFormedConf (conf:Configuration) : Prop := WellFormed( fst conf ).
 
 Inductive MCTo : Configuration -> Configuration -> Prop :=
  | C_Com p e q C s : MCTo ( Com p e q; C, s ) ( C, (update s q (evaluate e s p)) )

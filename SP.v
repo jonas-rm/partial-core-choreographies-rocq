@@ -3,6 +3,8 @@ Require Import List.
 Require Import Coq.Lists.ListSet.
 Require Import Arith.
 Require Import Sorting.Permutation.
+Require Import Common.
+Require Import MC.
 Require Import Basics.
 
 Local Open Scope nat_scope.
@@ -59,21 +61,21 @@ end.
 Fixpoint merge (B1:Behaviour) (B2:Behaviour) : option Behaviour :=
 match (B1, B2) with
  | (Send p e B, Send p' e' B') =>
-    if (eqpid p p') && (eqexpr e e') then
+    if (eqb_pid p p') && (eqb_expr e e') then
       match (merge B B') with
        | Some Bm => Some( Send p e Bm )
        | _ => None
       end
     else None
  | (Recv p B, Recv p' B') =>
-    if (eqpid p p') then
+    if (eqb_pid p p') then
       match (merge B B') with
        | Some Bm => Some( Recv p Bm )
        | _ => None
       end
     else None
  | (Cond p B1 B2, Cond p' B1' B2') =>
-    if (eqpid p p') then
+    if (eqb_pid p p') then
       match (merge B1 B1') with
        | Some B1m => match (merge B2 B2') with | Some B2m => Some( Cond p B1m B2m ) | _ => None end
        | _ => None
@@ -138,63 +140,6 @@ apply ( match ((bproj C1 p), (bproj C2 p)) with
                     ).
 Defined.
 
-Fixpoint WellFormed (C:Choreography) : Prop :=
-match C with
-| MC.End => True
-| eta; C' => match eta with Com p _ q => p <> q /\ WellFormed C'
-                          | MC.Sel p q _ => p <> q /\ WellFormed C' end
-| MC.Cond p q C1 C2 => p <> q /\ WellFormed C1 /\ WellFormed C2
-end.
-
-Fixpoint pn_eta (e:Eta) : list Pid :=
-match e with
-| Com p _ q => (cons p (cons q nil))
-| MC.Sel p q _ => (cons p (cons q nil))
-end
-.
-
-Fixpoint pn (C:Choreography) : list Pid :=
-match C with
-| MC.End => nil
-| eta; C' => (set_union_pid (pn_eta eta) (pn C'))
-| MC.Cond p q C1 C2 => (set_union_pid (set_union_pid (cons p (cons q nil)) (pn C1)) (pn C2))
-end
-.
-
-Lemma pn_is_set (C:Choreography) : WellFormed C -> NoDup(pn C).
-Proof.
-induction C; intros.
-(* End *)
-apply NoDup_nil.
-(* e; C *)
-simpl.
-apply set_union_nodup.
-simpl in H.
-induction e; inversion_clear H.
-(* Com *)
-simpl; repeat apply NoDup_cons; simpl; auto.
-intro.
-inversion_clear H; auto.
-apply NoDup_nil.
-(* Sel *)
-simpl; repeat apply NoDup_cons; simpl; auto.
-intro.
-inversion_clear H; auto.
-apply NoDup_nil.
-induction e; inversion H; auto.
-(* Cond *)
-inversion H.
-inversion_clear H1.
-simpl.
-repeat apply set_union_nodup; auto.
-simpl; repeat apply NoDup_cons; simpl; auto.
-intro.
-inversion_clear H1; auto.
-apply NoDup_nil.
-Qed.
-
-Definition WellFormedConf (conf:Configuration) : Prop := WellFormed( fst conf ).
-
 Fixpoint epp_list (conf:Configuration) (pids:list Pid) (WF:WellFormedConf conf) : option Network :=
 match pids with
 | nil => Some( Empty )
@@ -243,9 +188,11 @@ induction P; simpl; auto.
 inversion a.
  *)
 
+(*
 Lemma epp_preserves_pids (conf:Configuration) :
-  forall (C:Choreography) (s:State) (N:Network) (WF:WellFormedConf conf),
-  conf = (C,s) -> (epp conf WF) = Some N -> (pidseteq (pn C) (SPpn N)).
+  forall (C:Choreography) (s:Store) (N:Network) (WF:WellFormedConf conf),
+  conf = (C,s) -> (epp conf WF) = Some N -> (eq_pidset (pn C) (SPpn N)).
+Proof.
 Proof.
 intros.
 subst.
@@ -279,5 +226,6 @@ Proof.
 intros.
 destruct conf.
 Qed.
+*)
 
 End Syntax.
