@@ -7,7 +7,6 @@ Require Export Common.
 Local Open Scope nat_scope.
 
 Section Syntax.
-
 Inductive Eta : Type :=
  | Com : Pid -> Expr -> Pid -> Eta
  | Sel : Pid -> Pid -> Label -> Eta
@@ -44,7 +43,6 @@ Lemma eq_chor_dec : forall (C C':Choreography), { C = C' } + { C <> C' }.
 Proof.
 repeat decide equality.
 Qed.
-
 
 Fixpoint WellFormed (C:Choreography) : Prop :=
 match C with
@@ -125,8 +123,8 @@ Inductive Precongr : Choreography -> Choreography -> Prop :=
  | CtxCond p q C1 C2 C3 C4 : Precongr C1 C2 -> Precongr C3 C4 -> Precongr (If p == q Then C1 Else C3) (If p == q Then C2 Else C4)
 .
 
-Notation "C1 ≼ C2" := (Precongr C1 C2) (at level 50, left associativity).
-Notation "C1 ⋠ C2" := (not (C1 ≼ C2)) (at level 50).
+Notation "C1 \u227c C2" := (Precongr C1 C2) (at level 50, left associativity).
+Notation "C1 \u22e0 C2" := (not (C1 \u227c C2)) (at level 50).
 
 Example sanity_check : Precongr ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 3; End) Else (Com 3 zero 2; End) )
                                 ( If 2 == 3 Then (Com 0 this 1; Com 4 succ_this 3; End) Else (Com 3 zero 2; Com 0 this 1; End) ).

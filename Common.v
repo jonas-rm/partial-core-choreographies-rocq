@@ -43,8 +43,6 @@ match (e, e') with
  | (_, _) => false
 end.
 
-End Expressions.
-
 Section Pids.
 
 Definition Pid := nat.
@@ -61,7 +59,6 @@ Definition set_union_pid := set_union eq_nat_dec.
 Definition set_inter_pid := set_inter eq_nat_dec.
 
 Definition eq_pidset (s:set Pid) (s':set Pid) : Prop := Permutation s s'.
-
 
 (* Lemma set_union_pid_el : forall (p:Pid) (P:set Pid), ~(In p P) -> set_add eq_nat_dec p (P ++ nil) = (P ++ p::nil).
 Proof.
