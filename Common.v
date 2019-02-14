@@ -43,6 +43,8 @@ match (e, e') with
  | (_, _) => false
 end.
 
+End Expressions.
+
 Section Pids.
 
 Definition Pid := nat.
