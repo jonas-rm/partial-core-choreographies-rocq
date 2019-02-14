@@ -17,17 +17,16 @@ Inductive Label : Type :=
  | left : Label
  | right : Label
 .
-
 Lemma eq_label_dec : forall (l l' : Label), { l = l' } + { l <> l' }.
 Proof.
 decide equality.
 Qed.
 
-Definition eqb_label (l:Label) (l':Label) : bool :=
-match (l, l') with
- | (left, left) => true
- | (right, right) => true
- | (_, _) => false
+Definition eqb_label (l l':Label) : bool :=
+match l, l' with
+ | left, left => true
+ | right, right => true
+ | _, _ => false
 end.
 
 End Labels.
@@ -48,11 +47,11 @@ decide equality.
 Qed.
 
 Definition eqb_expr (e:Expr) (e':Expr) : bool :=
-match (e, e') with
- | (this, this) => true
- | (zero, zero) => true
- | (succ_this, succ_this) => true
- | (_, _) => false
+match e, e' with
+ | this, this => true
+ | zero, zero => true
+ | succ_this, succ_this => true
+ | _, _ => false
 end.
 
 End Expressions.

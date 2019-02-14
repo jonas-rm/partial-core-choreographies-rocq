@@ -5,7 +5,7 @@ Require Import Arith.
 Require Import Sorting.Permutation.
 Require Import Common.
 Require Import MC.
-Require Import Basics.
+Require Import Basic.
 Require Import FunInd.
 
 Local Open Scope nat_scope.
