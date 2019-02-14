@@ -17,6 +17,10 @@ Inductive Label : Type :=
  | left : Label
  | right : Label
 .
+Lemma eq_label_dec : forall (l l' : Label), { l = l' } + { l <> l' }.
+Proof.
+decide equality.
+Qed.
 
 Definition eqb_label (l l':Label) : bool :=
 match l, l' with
@@ -55,6 +59,8 @@ End Expressions.
 Section Pids.
 
 Definition Pid := nat.
+
+Definition eq_pid := Nat.eq.
 
 Definition eqb_pid := Nat.eqb.
 
