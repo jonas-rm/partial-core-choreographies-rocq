@@ -1,27 +1,79 @@
+Require Import FunctionalExtensionality.
 Require Import Bool.
 Require Import List.
 Require Import Coq.Lists.ListSet.
 Require Import Arith.
 Require Import Sorting.Permutation.
-Require Export MC.
+Require Import Nat.
+Require Import EqNat.
+Require Import PeanoNat.
+Local Open Scope nat_scope.
+
+Require Import Basic.
+
+Section Labels.
+
+Inductive Label : Type :=
+ | left : Label
+ | right : Label
+.
+Lemma eq_label_dec : forall (l l' : Label), { l = l' } + { l <> l' }.
+Proof.
+decide equality.
+Qed.
+
+Definition eqb_label (l l':Label) : bool :=
+match l, l' with
+ | left, left => true
+ | right, right => true
+ | _, _ => false
+end.
+
+End Labels.
+
+Section Expressions.
+
+Definition Value := nat.
+
+Inductive Expr : Type :=
+ | this : Expr
+ | zero : Expr
+ | succ_this : Expr
+.
+
+Lemma eq_expr_dec : forall (e e' : Expr), { e = e' } + { e <> e' }.
+Proof.
+decide equality.
+Qed.
+
+Definition eqb_expr (e:Expr) (e':Expr) : bool :=
+match e, e' with
+ | this, this => true
+ | zero, zero => true
+ | succ_this, succ_this => true
+ | _, _ => false
+end.
+
+End Expressions.
+
+Section Pids.
+
+Definition Pid := nat.
+
+Definition eq_pid := Nat.eq.
+
+Definition eqb_pid := Nat.eqb.
+
+Lemma eq_pid_dec : forall (p p':Pid), { p = p' } + { p <> p' }.
+Proof.
+decide equality.
+Qed.
 
 Definition set_add_pid := set_add eq_nat_dec.
 Definition set_union_pid := set_union eq_nat_dec.
 Definition set_inter_pid := set_inter eq_nat_dec.
 
-
-Definition pidseteq (s:set Pid) (s':set Pid) : Prop := Permutation s s'.
-
-(** De Morgan law *)
-Theorem deMorganNotOr : forall P Q : Prop,
-  ~(P \/ Q) -> ~P /\ ~Q.
-Proof.
-  unfold not.
-  intros P Q PorQ_imp_false.
-  split.
-  - intros P_holds. apply PorQ_imp_false. left. assumption.
-  - intros Q_holds. apply PorQ_imp_false. right. assumption.
-Qed.
+Definition eq_pidset (s:set Pid) (s':set Pid) : Prop := Permutation s s'.
 
 (* Lemma set_union_pid_el : forall (p:Pid) (P:set Pid), ~(In p P) -> set_add eq_nat_dec p (P ++ nil) = (P ++ p::nil).
 Proof.
@@ -45,15 +97,6 @@ induction Nat.eq_dec.
 symmetry in a0.
 contradiction.
 trivial.
-Qed.
-
-Lemma or_over_impl : forall (a b c:Prop), ((a \/ b) -> c) -> ((a -> c) /\ (b -> c)).
-Proof.
-intros a b c.
-intros H.
-split.
-tauto.
-tauto.
 Qed.
 
 Lemma not_in_rev_pid : forall (p:Pid) (P:set Pid), ~(In p P) -> ~(In p (rev P)).
@@ -96,7 +139,7 @@ Qed.
 
 Lemma pidseteq_perm :
   forall (p q:Pid) (P:set Pid),
-  pidseteq (p :: P ++ q :: nil) (q :: p :: P).
+  eq_pidset (p :: P ++ q :: nil) (q :: p :: P).
 Proof.
 intros.
 red.
@@ -114,7 +157,7 @@ Qed.
 
 Lemma set_union_pid_el :
   forall (p:Pid) (P:set Pid),
-  ~(In p P) -> (pidseteq (set_add_pid p P) (p::P)).
+  ~(In p P) -> (eq_pidset (set_add_pid p P) (p::P)).
 Proof.
 intros.
 induction P.
@@ -175,31 +218,16 @@ inversion_clear H1; rewrite IHQ; auto.
 rewrite set_add_pid_char; auto.
 rewrite app_assoc; auto.
 apply NoDup_remove_2.
-apply (Permutation_NoDup (l := P ++ a :: Q) (l' := P ++ a :: rev Q)); auto.
+apply (Permutation_NoDup Pid (P ++ a :: Q) (P ++ a :: rev Q)); auto.
 apply Permutation_app_head.
 apply Permutation_cons; auto.
 apply Permutation_rev.
 apply NoDup_remove_1 with a; auto.
 Qed.
 
-Lemma Permutation_NoDup : forall A, forall P Q: list A, Permutation P Q ->
-                                                        NoDup P -> NoDup Q.
-intros.
-induction H; auto.
-inversion_clear H0; apply NoDup_cons; auto.
-intro; apply H1; apply Permutation_in with l'; auto.
-apply Permutation_sym; auto.
-inversion_clear H0; inversion_clear H1.
-apply NoDup_cons.
-intro; inversion_clear H1; auto.
-apply H; left; auto.
-apply NoDup_cons; auto.
-intro; apply H; right; auto.
-Qed.
-
 Lemma set_union_pid_sets : forall (P Q:set Pid),
   (NoDup (P ++ Q)) ->
-  (pidseteq (set_union_pid P Q) (set_union_pid Q P)).
+  (eq_pidset (set_union_pid P Q) (set_union_pid Q P)).
 Proof.
 intros.
 repeat rewrite set_union_pid_char; auto.
@@ -211,3 +239,51 @@ apply Permutation_app_comm.
 apply Permutation_NoDup with (P ++ Q); auto.
 apply Permutation_app_comm.
 Qed.
+
+End Pids.
+
+Section Store.
+
+Definition Store := Pid -> Value.
+
+Definition evaluate (e:Expr) (s:Store) (p:Pid) : Value :=
+match e with
+ | zero => 0
+ | this => s p
+ | succ_this => S (s p)
+end.
+
+Definition update (s:Store) (p:Pid) (v:Value) : Store :=
+fun (q:Pid) => if (p =? q) then v else (s q)
+.
+
+Lemma update_read : forall (s:Store) (p:Pid) (v:Value),
+  update s p v p = v.
+Proof.
+  intros.
+  unfold update.
+  rewrite <- beq_nat_refl; auto.
+Qed.
+
+Lemma update_monotonicity : forall (s:Store) (p q:Pid) (v:Value),
+  p <> q -> update s p v q = s q.
+Proof.
+intros.
+unfold update.
+case_eq (p =? q); auto.
+intro.
+generalize (beq_nat_true _ _ H0); intros.
+elim H; auto.
+Qed.
+
+Lemma update_update : forall (s:Store) (p:Pid) (v1 v2:Value),
+  update (update s p v2) p v1 = update s p v1.
+Proof.
+intros.
+unfold update.
+apply FunctionalExtensionality.functional_extensionality. (* TODO avoid this *)
+unfold update; intro q.
+case_eq (p =? q); trivial.
+Qed.
+
+End Store.
