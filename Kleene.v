@@ -148,8 +148,17 @@ Qed.
 Fixpoint vmax {n} (v:t nat n) :=
   match v with
   | [] => 0
-  | x :: xs => max x (vmax xs)
+  | x :: xs => Nat.max x (vmax xs)
 end.
+
+Lemma vmax_leq : forall n v x, vmax (n:=n) v <= x -> forall p, v[@p] <= x.
+Proof.
+induction p.
+* revert n v H; refine (@caseS _ _ _); simpl; intros.
+  eapply Nat.max_lub_l; exact H.
+* revert n v H p IHp; refine (@caseS _ _ _); simpl; intros.
+  apply IHp; eapply Nat.max_lub_r; exact H.
+Qed.
 
 (* Sanity check.
 Definition f0 (n:nat) := 2*n.
@@ -321,8 +330,12 @@ induction f; intros.
   rewrite <- H0.
   rewrite <- (shiftin_nth _ (Some 0) _ ns _ _ (eq_refl Hi)) in H.
   set (ms := shiftin (Some 0) ns).
-  generalize (IHf n ms _ H); clear IHf H H0 Hi; clearbody ms; intros.
-Abort.
+  case_eq (eval_opt f n ms); simpl; intros; rewrite H1; auto.
+  exfalso.
+  clear H0 n0; revert H1.
+  rewrite IHf with (Hi := Fin.L_R 1 Hi); auto.
+  intro; inversion H1.
+Qed.
 
 End Definitions.
 
@@ -348,21 +361,17 @@ Qed.
 Lemma Composition_correct : forall k m (g:PRFunction m) (f:t (PRFunction k) m) (ns:t nat k) (ms:t nat m) steps,
   (forall Hi, eval (nth f Hi) steps ns = Some (nth ms Hi)) -> eval g steps ms = eval (Composition g f) steps ns.
 intros; unfold eval; simpl.
-set (T := all_defined (map_inv (map_inv (map eval_opt f) steps) (map Some ns))).
-assert (T = all_defined (map_inv (map_inv (map eval_opt f) steps) (map Some ns))); auto.
-destruct T.
+case_eq (all_defined (map_inv (map_inv (map eval_opt f) steps) (map Some ns))); simpl; intro.
 + replace (all_defined (map Some ns)) with true.
-  - simpl.
-  replace (map Some ms) with (map_inv (map_inv (map eval_opt f) steps) (map Some ns)); auto.
-  apply eq_nth_iff; intros.
-  rewrite <- H1; clear H1 p2.
-  rewrite nth_map'.
-  rewrite <- H; clear H.
-  repeat rewrite nth_map_inv'.
-  rewrite nth_map'; auto.
+  - replace (map Some ms) with (map_inv (map_inv (map eval_opt f) steps) (map Some ns)); auto.
+    apply eq_nth_iff; intros.
+    rewrite <- H1; clear H1 p2.
+    rewrite nth_map'.
+    rewrite <- H; clear H.
+    repeat rewrite nth_map_inv'.
+    rewrite nth_map'; auto.
   - symmetry; apply all_defined_map_Some.
 + exfalso.
-  symmetry in H0.
   elim (all_defined_false _ _ H0); intros.
   repeat rewrite nth_map_inv' in H1; rewrite nth_map' in H1.
   generalize (H x); intro.
@@ -391,25 +400,33 @@ simpl (map Some (x :: t)) in H0.
 simpl; simpl in H0; rewrite H0; auto.
 Qed.
 
-Lemma find_zero_from_correct : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
-  f (shiftin (Some m) ns) = Some O /\ forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
+Lemma find_zero_from_correct' : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
+  m < init + steps /\ f (shiftin (Some m) ns) = Some O /\ forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
 induction steps; intros.
 + inversion H.
 + revert H; simpl.
-  set (x := f (shiftin (Some init) ns)).
-  assert (x = f (shiftin (Some init)ns)); auto; clearbody x.
-  destruct x.
+  case_eq (f (shiftin (Some init) ns)).
   destruct n; intros.
-  - inversion H0; split.
+  - inversion H0; repeat split.
+    * rewrite plus_comm; simpl; auto with arith.
     * rewrite <- H2; auto.
     * intros; elim (lt_irrefl m).
       inversion_clear H1; apply le_lt_trans with n; auto.
-  - elim (IHsteps _ _ _ _ _ H0); intros; split; auto.
-    intros; inversion_clear H3.
-    elim (le_lt_eq_dec _ _ H4); intro.
-    * apply H2; auto with arith.
-    * exists n; rewrite <- b; auto.
-  - intro; inversion H0.
+  - elim (IHsteps _ _ _ _ _ H0); intros; split.
+    * rewrite plus_comm; simpl; rewrite plus_comm; auto with arith.
+    * inversion_clear H2; split; auto.
+      intros; inversion_clear H2.
+      elim (le_lt_eq_dec _ _ H5); intro.
+      ++ apply H4; auto with arith.
+      ++ exists n; rewrite <- b; auto.
+  - intros; inversion H0.
+Qed.
+
+(* TODO: split this lemma. *)
+Lemma find_zero_from_correct : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
+  f (shiftin (Some m) ns) = Some O /\ forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
+intros.
+elim (find_zero_from_correct' steps f ns init m); auto.
 Qed.
 
 Lemma find_zero_min : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
@@ -785,43 +802,6 @@ Qed.
 
 End Examples.
 
-Fixpoint depth {m} (f:PRFunction m) : nat :=
-  match f with
-  | Zero             => 0
-  | Successor        => 0
-  | Projection _     => 0
-  | Composition g fs => 1 + max (depth g) (vmax (map depth fs))
-  | Recursion g h    => 1 + max (depth g) (depth h)
-  | Minimization h   => 1 + depth h
-end.
-
-(*
-Lemma eval_opt_inj : forall d m (f:PRFunction m) s s' ns m m', depth f <= d ->
-  eval_opt f s ns = Some m -> eval_opt f s' ns = Some m' -> m = m'.
-induction d; intros m f.
-- induction f; intros; try (inversion H; fail); revert H0 H1.
-  + simpl; replace ns with [hd ns]; [intros | apply vector_1_inv].
-    inversion H1; inversion H0; auto.
-  + replace ns with [hd ns]; [idtac | apply vector_1_inv].
-    set (x := hd ns); destruct x; simpl; intros; inversion H1; inversion H0; auto.
-  + simpl.
-    set (x := ns[@Fin.of_nat_lt l]); destruct x; simpl; intros; inversion H1; inversion H0; transitivity n; auto.
-- induction f; intros; revert H0 H1.
-  (* the first three cases are the same *)
-  + simpl; replace ns with [hd ns]; [intros | apply vector_1_inv].
-    inversion H1; inversion H0; auto.
-  + replace ns with [hd ns]; [idtac | apply vector_1_inv].
-    set (x := hd ns); destruct x; simpl; intros; inversion H1; inversion H0; auto.
-  + simpl.
-    set (x := ns[@Fin.of_nat_lt l]); destruct x; simpl; intros; inversion H1; inversion H0; transitivity n; auto.
-  + simpl in H; apply le_S_n in H.
-    generalize (Nat.max_lub_l _ _ _ H); generalize (Nat.max_lub_r _ _ _ H); clear H.
-    simpl; intros.
-    replace (map_inv (map_inv (map eval_opt fs) s) ns) with (map_inv (map_inv (map eval_opt fs) s') ns) in H1.
-(* requires all calls to be defined *)
-
-
-
 (* Ongoing. *)
 
 (* Define:
@@ -832,77 +812,278 @@ induction d; intros m f.
 
 Section Incomplete.
 
-Lemma eval_mon_comp : forall {k m:nat} (g:PRFunction m) (fs:t (PRFunction k) m) steps ns,
-  eval_opt (Composition g fs) steps ns = (Some k) ->
-  exists Hi, exists k', eval_opt fs[@Hi] steps ns = (Some k').
-intros.
-simpl in H.
-induction g; simpl in H.
-+ repeat rewrite nth_map_inv' in H; rewrite nth_map' in H.
-  exists (Fin.F1 (n:=0)).
-  set (x := eval_opt fs[@Fin.F1] steps ns).
-  fold x in H.
-  induction x.
-  exists a; auto.
-  inversion H.
-+ repeat rewrite nth_map_inv' in H; rewrite nth_map' in H.
-  exists (Fin.F1 (n:=0)).
-  set (x := eval_opt fs[@Fin.F1] steps ns).
-  fold x in H.
-  induction x.
-  exists a; auto.
-  inversion H.
-+ repeat rewrite nth_map_inv' in H; rewrite nth_map' in H.
-  exists (Fin.of_nat_lt l).
-  set (x := eval_opt fs[@Fin.of_nat_lt l] steps ns).
-  fold x in H.
-  induction x.
-  exists a; auto.
-  inversion H.
-+ Abort.
+Fixpoint depth {m} (f:PRFunction m) : nat :=
+  match f with
+  | Zero             => 0
+  | Successor        => 0
+  | Projection _     => 0
+  | Composition g fs => 1 + Nat.max (depth g) (vmax (map depth fs))
+  | Recursion g h    => 1 + Nat.max (depth g) (depth h)
+  | Minimization h   => 1 + depth h
+end.
 
-(* Hmmm. *)
+(**
+  * We need to do induction on the depth in order to get an induction hypothesis that works
+    for composition.
+*)
+Lemma eval_opt_inj_lemma : forall d n (f:PRFunction n) s s' ns m m', depth f <= d ->
+  eval_opt f s ns = Some m -> eval_opt f s' ns = Some m' -> m = m'.
+induction d; intros m f.
+- induction f; intros; try (inversion H; fail); revert H0 H1;
+    simpl; intros; rewrite H0 in H1; inversion H1; auto.
+- induction f; intros; revert H0 H1.
+  (* the first three cases are the same *)
+  + simpl; intros; rewrite H0 in H1; inversion H1; auto.
+  + simpl; intros; rewrite H0 in H1; inversion H1; auto.
+  + simpl; intros; rewrite H0 in H1; inversion H1; auto.
+  + simpl in H; apply le_S_n in H.
+    generalize (Nat.max_lub_l _ _ _ H); generalize (Nat.max_lub_r _ _ _ H); clear H.
+    simpl; do 2 intro.
+    case_eq (all_defined (map_inv (map_inv (map eval_opt fs) s) ns)); intro; simpl.
+    2: intros; inversion H2.
+    case_eq (all_defined (map_inv (map_inv (map eval_opt fs) s') ns)); intro; simpl.
+    2: intros; inversion H4.
+    case_eq (all_defined ns); intro; simpl.
+    2: intros; inversion H4.
+    replace (map_inv (map_inv (map eval_opt fs) s) ns) with (map_inv (map_inv (map eval_opt fs) s') ns).
+    apply IHf; auto.
+    apply eq_nth_iff'; intros.
+    repeat rewrite nth_map_inv'; rewrite nth_map'; auto.
+    generalize (all_defined_true _ _ H1 p); clear H1; intro.
+    repeat rewrite nth_map_inv' in H1.
+    rewrite nth_map' in H1.
+    generalize (all_defined_true _ _ H2 p); clear H2; intro.
+    repeat rewrite nth_map_inv' in H2.
+    rewrite nth_map' in H2.
+    case_eq (eval_opt fs[@p] s ns); intro.
+    2: elim H1; auto.
+    case_eq (eval_opt fs[@p] s' ns); intro.
+    2: elim H2; auto.
+    intros; replace n with n0; auto.
+    revert H4 H5; apply IHd; auto. (* HERE *)
+    rewrite <- nth_map'; apply vmax_leq; auto.
+  + simpl in H.
+    assert (depth f1 <= d).
+    etransitivity; [apply Nat.le_max_l | apply le_S_n; exact H].
+    assert (depth f2 <= d).
+    etransitivity; [apply Nat.le_max_r | apply le_S_n; exact H].
+    clear H.
+    rewrite (eta ns).
+    case_eq (hd ns); do 2 intro.
+    2: inversion H2.
+    revert m m' ns H; induction n; do 4 intro.
+    * simpl.
+      apply IHf1; auto.
+    * case_eq (eval_opt (Recursion f1 f2) s (Some n :: tl ns)); do 2 intro.
+      rename n0 into f1x.
+      case_eq (eval_opt (Recursion f1 f2) s' (Some n :: tl ns)); do 2 intro.
+      rename n0 into f1x'.
+      replace (eval_opt (Recursion f1 f2) s (Some (S n) :: tl ns)) with (eval_opt f2 s (Some n :: Some f1x :: tl ns)).
+      replace (eval_opt (Recursion f1 f2) s' (Some (S n) :: tl ns)) with (eval_opt f2 s' (Some n :: Some f1x' :: tl ns)).
+      ++ rewrite (IHn f1x f1x' (Some n::tl ns) (eq_refl _) H2 H3).
+         apply IHf2; auto.
+      ++ simpl; simpl in H3; rewrite H3; auto.
+      ++ simpl; simpl in H2; rewrite H2; auto.
+      ++ intros.
+         simpl in H5; simpl in H3.
+         rewrite H3 in H5; inversion H5.
+      ++ intros.
+         simpl in H2; simpl in H3.
+         rewrite H2 in H3; inversion H3.
+  + case_eq s; intros; inversion H1; clear H0 H1.
+    revert H2; case_eq s'; intros; inversion H2; clear H0 H2.
+    rename n0 into n'.
+    simpl in H.
+    generalize (le_S_n _ _ H); clear H; intro Hf.
+    elim (find_zero_from_correct _ _ _ _ _ H4); clear H4; intros.
+    elim (find_zero_from_correct _ _ _ _ _ H3); clear H3; intros. 
+    elim (le_lt_dec m m'); intro.
+    * inversion a; auto.
+      elim (H2 m); intros.
+      generalize (IHf _ _ _ _ _ (le_S _ _ Hf) H H5); intro; inversion H6.
+      split; auto with arith.
+      rewrite <- H4; auto with arith.
+    * elim (H0 m'); intros.
+      generalize (IHf _ _ _ _ _ (le_S _ _ Hf) H1 H3); intro; inversion H4.
+      split; auto with arith.
+Qed.
+
+Lemma eval_opt_inj : forall n (f:PRFunction n) s s' ns m m',
+  eval_opt f s ns = Some m -> eval_opt f s' ns = Some m' -> m = m'.
+do 7 intro.
+apply eval_opt_inj_lemma with (depth f); auto.
+Qed.
+
+Lemma find_zero_from_None : forall steps {k} f (ns:t (option nat) k) init,
+  find_zero_from f ns init steps = None ->
+  { exists n, init <= n < init + steps /\ f (shiftin (Some n) ns) = None /\
+              forall k, init <= k < n -> exists val, f (shiftin (Some k) ns) = Some (S val)} +
+  { forall n, init <= n < init + steps -> exists val, f (shiftin (Some n) ns) = Some (S val) }.
+induction steps; intros.
++ right; simpl; intros.
+  inversion_clear H0.
+  elim (lt_irrefl n).
+  apply lt_le_trans with init; auto.
+  replace init with (init + 0); auto.
++ revert H; simpl.
+  case_eq (f (shiftin (Some init) ns)); intros.
+  revert H0; case_eq n; intros.
+  inversion H1.
+  rewrite H0 in H; clear H0 n; rename n0 into n.
+  elim (IHsteps _ _ _ _ H1); clear IHsteps H1; intros.
+  - left; inversion_clear a.
+    inversion_clear H0; inversion_clear H1; inversion_clear H2.
+    exists x; repeat split; auto with arith.
+    * replace (init + S steps) with (S init + steps); auto with arith.
+      rewrite (plus_comm init (S steps)); simpl; auto with arith.
+    * intros; inversion_clear H2.
+      inversion H5; [exists n; rewrite <- H2 | apply H4]; repeat split; auto with arith.
+      rewrite H7; auto.
+  - right; intros.
+    inversion_clear H0.
+    replace (init + S (steps)) with (S (steps + init)) in H2.
+    2: rewrite (plus_comm init (S steps)); simpl; auto with arith.
+    inversion H1.
+    * exists n; rewrite <- H0; auto.
+    * apply b; split; auto with arith.
+      rewrite H3; rewrite plus_comm in H2; simpl; auto with arith.
+  - left; exists init; repeat split; auto with arith.
+    * rewrite (plus_comm init (S steps)); simpl; auto with arith.
+    * intros; elim (lt_irrefl init); apply le_lt_trans with k0; inversion_clear H1; auto.
+Qed.
+
+Lemma eval_opt_mon_lemma : forall d m (f : PRFunction m), depth f <= d -> forall s ns k,
+    eval_opt f s ns = Some k -> forall s', s' > s -> eval_opt f s' ns = Some k.
+induction d; intros m f.
+- induction f; intros; auto; inversion H.
+- induction f; intros; auto; revert H0.
+  + simpl in H; apply le_S_n in H.
+    generalize (Nat.max_lub_l _ _ _ H); generalize (Nat.max_lub_r _ _ _ H); clear H.
+    simpl; do 2 intro.
+    case_eq (all_defined (map_inv (map_inv (map eval_opt fs) s) ns)); intro; simpl.
+    2: intros; inversion H3.
+    case_eq (all_defined ns); intro; simpl.
+    2: intros; inversion H4.
+    case_eq (all_defined (map_inv (map_inv (map eval_opt fs) s') ns)); intro; simpl.
+    * replace (map_inv (map_inv (map eval_opt fs) s) ns) with (map_inv (map_inv (map eval_opt fs) s') ns).
+      intro; apply IHf with s; auto.
+      apply eq_nth_iff'; intros.
+      repeat rewrite nth_map_inv'; rewrite nth_map'; auto.
+      generalize (all_defined_true _ _ H4 p); clear H4; intro.
+      repeat rewrite nth_map_inv' in H4.
+      rewrite nth_map' in H4.
+      generalize (all_defined_true _ _ H2 p); clear H2; intro.
+      repeat rewrite nth_map_inv' in H2.
+      rewrite nth_map' in H2.
+      case_eq (eval_opt fs[@p] s ns); intro.
+      2: elim H2; auto.
+      case_eq (eval_opt fs[@p] s' ns); intro.
+      2: elim H4; auto.
+      intros; replace n with n0; auto.
+      revert H5 H6; apply eval_opt_inj; auto.
+    * elim (all_defined_false _ _ H4); intros.
+      elim (all_defined_true _ _ H2 x); intros.
+      revert H5; repeat rewrite nth_map_inv'; rewrite nth_map'; intro.
+      case_eq (eval_opt fs[@x] s ns); auto; intros.
+      assert (depth fs[@x] <= d).
+      rewrite <- nth_map'; apply vmax_leq; auto.
+      rewrite (IHd _ _ H8 _ _ _ H7) in H5; auto with arith; inversion H5.
+  + simpl in H.
+    assert (depth f1 <= d).
+    etransitivity; [apply Nat.le_max_l | apply le_S_n; exact H].
+    assert (depth f2 <= d).
+    etransitivity; [apply Nat.le_max_r | apply le_S_n; exact H].
+    clear H.
+    rewrite (eta ns).
+    case_eq (hd ns); do 2 intro.
+    2: inversion H3.
+    revert k0 ns H; induction n; do 3 intro.
+    * simpl; intros.
+      apply IHf1 with s; auto.
+    * case_eq (eval_opt (Recursion f1 f2) s (Some n :: tl ns)); do 2 intro.
+      rename n0 into f1x.
+      generalize (IHn _ (Some n :: tl ns) (eq_refl _) H3); intro.
+      replace (Some n :: tl (Some n :: tl ns)) with (Some n :: tl ns) in H4; auto.
+      replace (eval_opt (Recursion f1 f2) s (Some (S n) :: tl ns)) with (eval_opt f2 s (Some n :: Some f1x :: tl ns)).
+      replace (eval_opt (Recursion f1 f2) s' (Some (S n) :: tl ns)) with (eval_opt f2 s' (Some n :: Some f1x :: tl ns)).
+      ++ intro; apply IHf2 with s; auto.
+      ++ simpl; simpl in H4; rewrite H4; auto.
+      ++ simpl; simpl in H3; rewrite H3; auto.
+      ++ simpl in H3; simpl in H4.
+         rewrite H3 in H4; inversion H4.
+  + case_eq s; intros; [inversion H2 | simpl in H2].
+    rewrite H0 in H1; clear H0 s.
+    case_eq s'; simpl; intros.
+    rewrite H0 in H1; inversion H1.
+    rename n0 into n'.
+    rewrite H0 in H1; clear H0 s'; red in H1.
+    set (T := eval_opt).  (* WHAAAAAAAT ?! ?! ?! *)
+    set (W := find_zero_from (T f n') ns 0 n').
+    case_eq W; unfold W, T; clear W T; intros.
+    * elim (find_zero_from_correct _ _ _ _ _ H2); clear H2; intros.
+      elim (find_zero_from_correct _ _ _ _ _ H0); clear H0; intros.
+      rename k0 into m; rename n0 into m'.
+      elim (le_lt_dec m m'); intro.
+      ++ inversion a; auto.
+         elim (H4 m); intros.
+         2: rewrite <- H6; split; auto with arith.
+         generalize (eval_opt_inj _ _ _ _ _ _ _ H2 H7); intro; inversion H6.
+         inversion H8.
+      ++ elim (H3 m'); intros.
+         2: split; auto with arith.
+         generalize (eval_opt_inj _ _ _ _ _ _ _ H0 H5); intro; inversion H6.
+    * elim (find_zero_from_correct' _ _ _ _ _ H2); clear H2; intros.
+      inversion_clear H3.
+      simpl in H; generalize (le_S_n _ _ H); clear H; intro.
+      generalize (lt_S_n _ _ H1); clear H1; intro.
+      elim (find_zero_from_None _ _ _ _ H0); clear H0; simpl; intros.
+      ** inversion_clear a; inversion_clear H0; inversion_clear H6; inversion_clear H3.
+         elim (lt_eq_lt_dec k0 x); intro.
+         inversion_clear a.
+         ++ elim (H7 k0); intros.
+            2: split; auto with arith.
+            assert (0 = S x0).
+            2: inversion H10.
+            apply (eval_opt_inj _ _ _ _ _ _ _ H4 H9); auto.
+         ++ rewrite <- H3 in H0.
+            generalize (IHd _ _ H _ _ _ H4 _ H1); intro.
+            rewrite H9 in H0; inversion H0.
+         ++ elim (H5 x); intros.
+            2: split; auto with arith.
+            assert (0 = S k0).
+            2: inversion H9.
+            generalize (IHd _ _ H _ _ _ H3 _ H1); intro.
+            rewrite H0 in H9; inversion H9.
+      ** elim (b k0); intros.
+         2: split; auto with arith; transitivity n; auto.
+         generalize (eval_opt_inj _ _ _ _ _ _ _ H4 H0); intro; inversion H3.
+Qed.
+
+Lemma eval_opt_mon : forall m (f : PRFunction m) s ns k,
+    eval_opt f s ns = Some k -> forall s', s' > s -> eval_opt f s' ns = Some k.
+intros; apply eval_opt_mon_lemma with (depth f) s; auto.
+Qed.
+
+Lemma eval_opt_mon' : forall d m (f:PRFunction m) s ns, depth f <= d ->
+  eval_opt f s ns = None -> forall s', s' <= s -> eval_opt f s' ns = None.
+intros.
+case_eq (eval_opt f s' ns); auto.
+intros.
+inversion H1.
++ rewrite H3 in H2; rewrite H2 in H0; auto.
++ rewrite (eval_opt_mon _ _ _ _ _ H2) in H0; auto.
+  red; apply le_lt_trans with m0; auto; rewrite <- H4; auto with arith.
+Qed.
+
 Lemma eval_mon : forall m (f:PRFunction m) steps ns k, eval f steps ns = (Some k) ->
   forall s', s' > steps -> eval f s' ns = (Some k).
-unfold eval.
-assert
-  (forall (m : nat) (f : PRFunction m) (steps : nat) (ns : t (option nat) m) (k : nat),
-    eval_opt f steps ns = Some k -> forall s' : nat, s' > steps -> eval_opt f s' ns = Some k).
-2: intros; apply H with steps; auto.
-induction f; intros.
-+ simpl; auto.
-+ simpl; auto.
-+ simpl; auto.
-+ simpl; simpl in H.
-  apply IHf with steps; auto.
-  replace (map_inv (map_inv (map eval_opt fs) s') ns) with (map_inv (map_inv (map eval_opt fs) steps) ns); auto.
-  apply eq_nth_iff'; intros.
-  repeat rewrite nth_map_inv'.
-  rewrite nth_map'.
-  Abort.
-
-Lemma eval_opt_inj : forall m (f:PRFunction m) s s' ns m m', eval_opt f s ns = Some m -> eval_opt f s' ns = Some m' -> m = m'.
-induction f; intros; revert H H0.
-+ simpl; replace ns with [hd ns]; [intros | apply vector_1_inv].
-  inversion H; inversion H0; auto.
-+ replace ns with [hd ns]; [idtac | apply vector_1_inv].
-  set (x := hd ns); destruct x; simpl; intros; inversion H; inversion H0; auto.
-+ simpl.
-  set (x := ns[@Fin.of_nat_lt l]); destruct x; simpl; intros; inversion H; inversion H0; transitivity n; auto.
-+ simpl.
-  apply IHf.
+intros.
+apply eval_opt_mon with steps; auto.
+Qed.
 
 Lemma eval_inj : forall m (f:PRFunction m) s s' ns m m', eval f s ns = Some m -> eval f s' ns = Some m' -> m = m'.
-induction f; simpl; intros; revert H H0.
-+ replace ns with [hd ns]; [repeat rewrite Zero_correct | apply vector_1_inv].
-  intros; inversion H; inversion H0; auto.
-+ replace ns with [hd ns]; [repeat rewrite Successor_correct | apply vector_1_inv].
-  intros; inversion H; inversion H0; auto.
-+ repeat rewrite Projection_correct; intros.
-  rewrite H in H0; inversion H0; auto.
-+ rewrite Composition_correct with (ms := (map_inv (map_inv (map eval_opt fs) s) (map Some ns))).
-
-
+intros.
+rewrite (eval_opt_inj _ _ _ _ _ _ _ H H0); auto.
+Qed.
 
 End Incomplete.
-*)
