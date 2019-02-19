@@ -930,12 +930,11 @@ induction d; intros m f.
     generalize (find_zero_from_value _ _ _ _ _ H4); clear H4; intros Hfn0 Hfn_lt.
     generalize (find_zero_from_middle _ _ _ _ _ H3);
     generalize (find_zero_from_value _ _ _ _ _ H3); clear H3; intros Hfn'0 Hfn'_lt.
-    elim (le_lt_dec m m'); intro.
-    * inversion a; auto.
+    elim (lt_eq_lt_dec m m'); intro.
+    * inversion_clear a; auto.
       elim (Hfn'_lt m); intros.
-      generalize (IHf _ _ _ _ _ (le_S _ _ Hf) Hfn0 H1); intro exf; inversion exf.
+      generalize (IHf _ _ _ _ _ (le_S _ _ Hf) Hfn0 H0); intro exf; inversion exf.
       split; auto with arith.
-      rewrite <- H0; auto with arith.
     * elim (Hfn_lt m'); intros.
       generalize (IHf _ _ _ _ _ (le_S _ _ Hf) Hfn'0 H); intro exf; inversion exf.
       split; auto with arith.
@@ -1020,11 +1019,11 @@ induction d; intros m f.
       generalize (find_zero_from_value _ _ _ _ _ H2); clear H2; intros fn_m fn_lt.
       generalize (find_zero_from_middle _ _ _ _ _ H0);
       generalize (find_zero_from_value _ _ _ _ _ H0); clear H0; intros fn'_m' fn'_lt.
-      elim (le_lt_dec m m'); intro.
-      ++ inversion a; auto.
+      elim (lt_eq_lt_dec m m'); intro.
+      ++ inversion_clear a; auto.
          elim (fn'_lt m); intros.
-         2: rewrite <- H2; split; auto with arith.
-         generalize (eval_opt_inj _ _ _ _ _ _ _ fn_m H3); intro exf; inversion exf.
+         2: split; auto with arith.
+         generalize (eval_opt_inj _ _ _ _ _ _ _ fn_m H2); intro exf; inversion exf.
       ++ elim (fn_lt m'); intros.
          2: split; auto with arith.
          generalize (eval_opt_inj _ _ _ _ _ _ _ fn'_m' H0); intro exf; inversion exf.
