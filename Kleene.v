@@ -5,6 +5,8 @@ Import VectorNotations.
 Section to_be_moved.
 End to_be_moved.
 
+(** * Definitions
+    Our class of partial recursive functions, together with their semantics. *)
 Section Definitions.
 
 Inductive PRFunction : nat -> Set :=
@@ -16,21 +18,10 @@ Inductive PRFunction : nat -> Set :=
   | Minimization : forall {k:nat} (h:PRFunction (1+k)), PRFunction k
 .
 
-(*
-Fixpoint eval_opt {m} (f:PRFunction m) (steps:nat) (ns:t (option nat) m) : option nat :=
-  match f with
-  | Zero      => Some 0
-  | Successor => match (nth ns (Fin.of_nat_lt (Nat.lt_succ_diag_r 0))) with
-                 | Some x => Some (x + 1)
-                 | None   => None
-                 end
-  | _ => None
-  end.
-
- -- does not work because it doesn't know Successor is PRFunction 1.
-*)
-
-(* Auxiliary functions for minimization. *)
+(** Kleene is imprecise about how e.g. composition should behave on undefined arguments:
+    does should (Composition g fs) be undefined if one of the fs is undefined, even if
+    its value is never used? We believe the second approach to be the case (it is what 
+    is assumed in typical proofs of Turing completeness). *)
 Fixpoint all_defined {n} (v:t (option nat) n) : bool :=
   match v with
   | []             => true
@@ -38,6 +29,70 @@ Fixpoint all_defined {n} (v:t (option nat) n) : bool :=
   | None :: _      => false
 end.
 
+(** Auxiliary function for minimization: we need to specify how many computation steps we
+    want to allow, as all Coq functions must be total. We do a &dlquote;diagonal&urquote;
+    search. *)
+Fixpoint find_zero_from {k} (f:t (option nat) (1+k) -> option nat) (ns:t (option nat) k) (init:nat) (steps:nat) : option nat :=
+  match steps with
+  | O   => None
+  | S m => match f (shiftin (Some init) ns) with
+           | None       => None
+           | Some O     => Some init
+           | Some (S _) => find_zero_from f ns (S init) m
+end end.
+
+(** We'd love a readable definition of evaluation, but the dependent type of f makes it
+    tricky to write. So... *)
+(** First we define the fixpoint construction over the option type, to cater for undefinedness. *)
+Fixpoint eval_opt {m} (f:PRFunction m) : forall (steps:nat) (ns:t (option nat) m), option nat.
+destruct f; intros.
+
+(* Zero *)
++ apply
+  match (hd ns) with
+    | Some x => Some 0
+    | None => None
+    end.
+
+(* Successor *)
++ apply
+    match (hd ns) with
+    | Some x => Some (x + 1)
+    | None => None
+    end.
+
+(* Projection *)
++ apply
+  (if (all_defined ns) then (nth ns (Fin.of_nat_lt l)) else None).
+
+(* Composition *)
++ set (ms := (map_inv (map_inv (map (eval_opt _) fs) steps) ns)).
+  apply (if (all_defined ms) && (all_defined ns) then (eval_opt _ f steps ms) else None).
+
+(* Recursion *)
++ elim (hd ns); [idtac 1 | apply None].              (* is there an argument? *)
+  intro n; induction n.                              (* finally *)
+  apply (eval_opt _ f1 steps (tl ns)).               (* f x1...xn *)
+  destruct IHn; [rename n0 into x | apply None].
+  apply (eval_opt _ f2 steps (Some n :: Some x :: tl ns)).
+
+(* Minimization *)
++ destruct steps.
+  - apply None.
+  - apply (find_zero_from (eval_opt _ f steps) ns 0 steps).
+Defined.
+
+(** This is the evaluation function we actually want to use. *)
+Definition eval {m} (f:PRFunction m) (steps:nat) (ns:t nat m) : option nat := eval_opt f steps (map Some ns).
+
+End Definitions.
+
+(** ª Sanity checks
+    Our first goal is to prove that evaluation works as expected.
+    This requires some preliminary properties about the auxiliary functions. *)
+Section Auxiliary_Lemmas.
+
+(** Predicate all_defined works as expected. *)
 Lemma all_defined_map_Some : forall n v, all_defined (n:=n) (map Some v) = true.
 Proof.
 induction n; simpl; intros.
@@ -79,62 +134,104 @@ generalize (all_defined_true _ _ H0); intros.
 elim (H1 Hi); auto.
 Qed.
 
-Fixpoint find_zero_from {k} (f:t (option nat) (1+k) -> option nat) (ns:t (option nat) k) (init:nat) (steps:nat) : option nat :=
-  match steps with
-  | O   => None
-  | S m => match f (shiftin (Some init) ns) with
-           | None       => None
-           | Some O     => Some init
-           | Some (S _) => find_zero_from f ns (S init) m
-end end.
+(** If find_zero_from returns a value (Some n), then we know that f(n)=0,
+    but also that f is positive for all values between the initial one and n.
+    Furthermore, the number of values we tested is bounded by the first parameter. *)
+Lemma find_zero_from_Some : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
+  m < init + steps /\ f (shiftin (Some m) ns) = Some O /\ forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
+induction steps; intros.
++ inversion H.
++ revert H; simpl.
+  case_eq (f (shiftin (Some init) ns)).
+  destruct n; intros.
+  - inversion H0; repeat split.
+    * rewrite plus_comm; simpl; auto with arith.
+    * rewrite <- H2; auto.
+    * intros; elim (lt_irrefl m).
+      inversion_clear H1; apply le_lt_trans with n; auto.
+  - elim (IHsteps _ _ _ _ _ H0); intros; split.
+    * rewrite plus_comm; simpl; rewrite plus_comm; auto with arith.
+    * inversion_clear H2; split; auto.
+      intros; inversion_clear H2.
+      elim (le_lt_eq_dec _ _ H5); intro.
+      ++ apply H4; auto with arith.
+      ++ exists n; rewrite <- b; auto.
+  - intros; inversion H0.
+Qed.
 
-(* We'd love a readable definition, but the dependent type of f makes it tricky to write. So... *)
-(* First we define the fixpoint construction over the option type, to cater for undefinedness. *)
-Fixpoint eval_opt {m} (f:PRFunction m) : forall (steps:nat) (ns:t (option nat) m), option nat.
-destruct f; intros.
+(** For convenience, we split these properties in separate lemmas. *)
+Lemma find_zero_from_bound : forall steps {k} f (ns:t (option nat) k) init m,
+  find_zero_from f ns init steps = Some m -> m < init + steps.
+intros; elim (find_zero_from_Some steps f ns init m); auto.
+Qed.
 
-(* Zero *)
-+ apply
-  match (hd ns) with
-    | Some x => Some 0
-    | None => None
-    end.
+Lemma find_zero_from_value : forall steps {k} f (ns:t (option nat) k) init m,
+  find_zero_from f ns init steps = Some m -> f (shiftin (Some m) ns) = Some O.
+intros; elim (find_zero_from_Some steps f ns init m); intros; auto.
+inversion H1; auto.
+Qed.
 
-(* Successor *)
-+ apply
-    match (hd ns) with
-    | Some x => Some (x + 1)
-    | None => None
-    end.
+Lemma find_zero_from_middle : forall steps {k} f (ns:t (option nat) k) init m,
+  find_zero_from f ns init steps = Some m -> forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
+intros; elim (find_zero_from_Some steps f ns init m); intros; auto.
+inversion_clear H2; auto.
+Qed.
 
-(* Projection *)
-+ apply
-  (if (all_defined ns) then (nth ns (Fin.of_nat_lt l)) else None).
+(** Furthermore, if f has other zeros, they must lie outside the range we tested. *)
+Lemma find_zero_from_min : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
+  forall n, f (shiftin (Some n) ns) = Some 0 -> n < init \/ m <= n.
+intros.
+elim (le_lt_dec m n); auto; intro.
+elim (le_lt_dec init n); auto; intro.
+generalize (find_zero_from_middle _ _ _ _ _ H); intros.
+elim (H1 n); auto; intros.
+rewrite H2 in H0; inversion H0.
+Qed.
 
-(* Composition *)
-+ set (ms := (map_inv (map_inv (map (eval_opt _) fs) steps) ns)).
-  apply (if (all_defined ms) && (all_defined ns) then (eval_opt _ f steps ms) else None).
+(** The negative counterpart: if find_zero returns None, then f is either undefined at least once
+    in the range tested (for the given number of steps), or it is always positive. *)
+Lemma find_zero_from_None : forall steps {k} f (ns:t (option nat) k) init,
+  find_zero_from f ns init steps = None ->
+  { exists n, init <= n < init + steps /\ f (shiftin (Some n) ns) = None /\
+              forall k, init <= k < n -> exists val, f (shiftin (Some k) ns) = Some (S val)} +
+  { forall n, init <= n < init + steps -> exists val, f (shiftin (Some n) ns) = Some (S val) }.
+induction steps; intros.
++ right; simpl; intros.
+  inversion_clear H0.
+  elim (lt_irrefl n).
+  apply lt_le_trans with init; auto.
+  replace init with (init + 0); auto.
++ revert H; simpl.
+  case_eq (f (shiftin (Some init) ns)); intros.
+  revert H0; case_eq n; intros.
+  inversion H1.
+  rewrite H0 in H; clear H0 n; rename n0 into n.
+  elim (IHsteps _ _ _ _ H1); clear IHsteps H1; intros.
+  - left; inversion_clear a.
+    inversion_clear H0; inversion_clear H1; inversion_clear H2.
+    exists x; repeat split; auto with arith.
+    * replace (init + S steps) with (S init + steps); auto with arith.
+      rewrite (plus_comm init (S steps)); simpl; auto with arith.
+    * intros; inversion_clear H2.
+      inversion H5; [exists n; rewrite <- H2 | apply H4]; repeat split; auto with arith.
+      rewrite H7; auto.
+  - right; intros.
+    inversion_clear H0.
+    replace (init + S (steps)) with (S (steps + init)) in H2.
+    2: rewrite (plus_comm init (S steps)); simpl; auto with arith.
+    inversion H1.
+    * exists n; rewrite <- H0; auto.
+    * apply b; split; auto with arith.
+      rewrite H3; rewrite plus_comm in H2; simpl; auto with arith.
+  - left; exists init; repeat split; auto with arith.
+    * rewrite (plus_comm init (S steps)); simpl; auto with arith.
+    * intros; elim (lt_irrefl init); apply le_lt_trans with k0; inversion_clear H1; auto.
+Qed.
 
-(* Recursion *)
-+ elim (hd ns); [idtac 1 | apply None].              (* is there an argument? *)
-  intro n; induction n.                              (* finally *)
-  apply (eval_opt _ f1 steps (tl ns)).               (* f x1...xn *)
-  destruct IHn; [rename n0 into x | apply None].
-  apply (eval_opt _ f2 steps (Some n :: Some x :: tl ns)).
+End Auxiliary_Lemmas.
 
-(* Minimization *)
-+ destruct steps.
-  - apply None.
-  - apply (find_zero_from (eval_opt _ f steps) ns 0 steps).
-Defined.
-
-(* This is the one we actually want to use. *)
-Definition eval {m} (f:PRFunction m) (steps:nat) (ns:t nat m) : option nat := eval_opt f steps (map Some ns).
-
-End Definitions.
-
+(** Since our definition of eval is very indirect, we now prove that it behaves as expected. *)
 Section Sanity_Checks.
-(** Since our definition of eval is very indirect, we prove that it behaves as expected. *)
 
 Lemma Zero_correct : forall n steps, eval Zero steps [n] = Some 0.
 compute; auto.
@@ -194,93 +291,6 @@ simpl (map Some (x :: t)) in H0.
 simpl; simpl in H0; rewrite H0; auto.
 Qed.
 
-Lemma find_zero_from_correct : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
-  m < init + steps /\ f (shiftin (Some m) ns) = Some O /\ forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
-induction steps; intros.
-+ inversion H.
-+ revert H; simpl.
-  case_eq (f (shiftin (Some init) ns)).
-  destruct n; intros.
-  - inversion H0; repeat split.
-    * rewrite plus_comm; simpl; auto with arith.
-    * rewrite <- H2; auto.
-    * intros; elim (lt_irrefl m).
-      inversion_clear H1; apply le_lt_trans with n; auto.
-  - elim (IHsteps _ _ _ _ _ H0); intros; split.
-    * rewrite plus_comm; simpl; rewrite plus_comm; auto with arith.
-    * inversion_clear H2; split; auto.
-      intros; inversion_clear H2.
-      elim (le_lt_eq_dec _ _ H5); intro.
-      ++ apply H4; auto with arith.
-      ++ exists n; rewrite <- b; auto.
-  - intros; inversion H0.
-Qed.
-
-Lemma find_zero_from_bound : forall steps {k} f (ns:t (option nat) k) init m,
-  find_zero_from f ns init steps = Some m -> m < init + steps.
-intros; elim (find_zero_from_correct steps f ns init m); auto.
-Qed.
-
-Lemma find_zero_from_value : forall steps {k} f (ns:t (option nat) k) init m,
-  find_zero_from f ns init steps = Some m -> f (shiftin (Some m) ns) = Some O.
-intros; elim (find_zero_from_correct steps f ns init m); intros; auto.
-inversion H1; auto.
-Qed.
-
-Lemma find_zero_from_middle : forall steps {k} f (ns:t (option nat) k) init m,
-  find_zero_from f ns init steps = Some m -> forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
-intros; elim (find_zero_from_correct steps f ns init m); intros; auto.
-inversion_clear H2; auto.
-Qed.
-
-Lemma find_zero_from_min : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
-  forall n, f (shiftin (Some n) ns) = Some 0 -> n < init \/ m <= n.
-intros.
-elim (le_lt_dec m n); auto; intro.
-elim (le_lt_dec init n); auto; intro.
-generalize (find_zero_from_middle _ _ _ _ _ H); intros.
-elim (H1 n); auto; intros.
-rewrite H2 in H0; inversion H0.
-Qed.
-
-Lemma find_zero_from_None : forall steps {k} f (ns:t (option nat) k) init,
-  find_zero_from f ns init steps = None ->
-  { exists n, init <= n < init + steps /\ f (shiftin (Some n) ns) = None /\
-              forall k, init <= k < n -> exists val, f (shiftin (Some k) ns) = Some (S val)} +
-  { forall n, init <= n < init + steps -> exists val, f (shiftin (Some n) ns) = Some (S val) }.
-induction steps; intros.
-+ right; simpl; intros.
-  inversion_clear H0.
-  elim (lt_irrefl n).
-  apply lt_le_trans with init; auto.
-  replace init with (init + 0); auto.
-+ revert H; simpl.
-  case_eq (f (shiftin (Some init) ns)); intros.
-  revert H0; case_eq n; intros.
-  inversion H1.
-  rewrite H0 in H; clear H0 n; rename n0 into n.
-  elim (IHsteps _ _ _ _ H1); clear IHsteps H1; intros.
-  - left; inversion_clear a.
-    inversion_clear H0; inversion_clear H1; inversion_clear H2.
-    exists x; repeat split; auto with arith.
-    * replace (init + S steps) with (S init + steps); auto with arith.
-      rewrite (plus_comm init (S steps)); simpl; auto with arith.
-    * intros; inversion_clear H2.
-      inversion H5; [exists n; rewrite <- H2 | apply H4]; repeat split; auto with arith.
-      rewrite H7; auto.
-  - right; intros.
-    inversion_clear H0.
-    replace (init + S (steps)) with (S (steps + init)) in H2.
-    2: rewrite (plus_comm init (S steps)); simpl; auto with arith.
-    inversion H1.
-    * exists n; rewrite <- H0; auto.
-    * apply b; split; auto with arith.
-      rewrite H3; rewrite plus_comm in H2; simpl; auto with arith.
-  - left; exists init; repeat split; auto with arith.
-    * rewrite (plus_comm init (S steps)); simpl; auto with arith.
-    * intros; elim (lt_irrefl init); apply le_lt_trans with k0; inversion_clear H1; auto.
-Qed.
-
 Lemma Minimization_correct : forall k (h:PRFunction (1+k)) (ns:t nat k) steps n,
   eval (Minimization h) steps ns = (Some n) ->
   exists s, eval h s (shiftin n ns) = (Some 0) /\ forall m, m < n -> exists n', eval h s (shiftin m ns) = (Some (S n')).
@@ -296,7 +306,7 @@ Qed.
 
 End Sanity_Checks.
 
-(* Tactics for dealing with proofs involving composition. *)
+(** Tactics for dealing with proofs involving composition. *)
 
 Ltac prove_composition_1 := intros;
                             do 2 rewrite <- nth_map';
@@ -316,10 +326,11 @@ Ltac prove_composition_3 := intros;
                             apply vector_3_equal;
                             auto.
 
+(** * Examples
+    We now recover the examples from the submitted journal paper. *)
 Section Examples.
-(** We recover the examples from the submitted journal paper. *)
 
-(* These lemmas are used to define projections. Their names seem inconsistent, but they refer to the usual convention for naming projections. *)
+(** These lemmas are used to define projections. Their names seem inconsistent, but they refer to the usual convention for naming projections. *)
 Lemma aux11 : 0 < 1.
 auto with arith.
 Qed.
@@ -344,7 +355,7 @@ Lemma aux33 : 2 < 3.
 auto with arith.
 Qed.
 
-(* Addition. *)
+(** ** Addition. *)
 Definition PR_add := Recursion (Projection aux11) (Composition Successor [Projection aux23]).
 
 Eval compute in (eval PR_add 0 [2; 3]).
@@ -361,8 +372,9 @@ intros; induction m.
   rewrite (plus_comm (m+n) 1); auto with arith.
 Qed.
 
-(* Multiplication. *)
+(** ** Multiplication. *)
 Definition PR_mult := Recursion Zero (Composition PR_add [Projection aux33; Projection aux23]).
+
 Eval compute in (eval PR_mult 0 [2; 3]).
 Eval compute in (eval PR_mult 0 [5; 7]).
 
@@ -376,7 +388,7 @@ intros; induction m.
   - prove_composition_2.
 Qed.
 
-(* Sign function. *)
+(** ** Sign function. *)
 Definition PR_sign := Composition
   (Recursion Zero(Composition Successor [Composition Zero [Projection aux23]]))
   [Projection aux11; Projection aux11].
@@ -396,7 +408,7 @@ revert IHn; unfold eval; simpl; intro.
 rewrite IHn; auto.
 Qed.
 
-(* Predecessor. *)
+(** ** Predecessor. *)
 Definition PR_pred := Composition (Recursion Zero (Projection aux13)) [Projection aux11; Zero].
 
 Eval compute in (eval PR_pred 0 [32]).
@@ -411,7 +423,7 @@ rewrite <- Composition_correct with (ms := [n; 0]).
 + prove_composition_2.
 Qed.
 
-(* Natural (total) subtraction. *)
+(** ** Natural (total) subtraction. *)
 Definition PR_minus := Composition (Recursion (Projection aux11) (Composition PR_pred [Projection aux23]))
   [Projection aux22; Projection aux12].
 
@@ -433,7 +445,7 @@ rewrite <- Composition_correct with (ms := [m; n]).
 * prove_composition_2.
 Qed.
 
-(* Less than. *)
+(** ** Greater than. *)
 Definition PR_gt := Composition PR_sign [PR_minus].
 
 Lemma gt_correct_true : forall m n steps, n > m -> eval PR_gt steps [n; m] = Some 1.
@@ -470,7 +482,7 @@ split.
   inversion H.
 Qed.
 
-(* Less or equal. *)
+(** ** Less or equal. *)
 Definition PR_le := Composition PR_minus [Composition Successor [Composition Zero [Projection aux12]]; PR_gt].
 
 Lemma le_correct_true : forall m n steps, m <= n -> eval PR_le steps [m; n] = Some 1.
@@ -505,7 +517,7 @@ split.
   inversion H.
 Qed.
 
-(* Equality. *)
+(** ** Equality. *)
 Definition PR_equal := Composition PR_mult [PR_le; Composition PR_le [Projection aux22; Projection aux12]].
 
 Lemma equal_correct_true : forall m n steps, m = n -> eval PR_equal steps [m; n] = Some 1.
@@ -546,7 +558,7 @@ split.
   inversion H.
 Qed.
 
-(* Inequality. *)
+(** ** Inequality. *)
 Definition PR_diff := Composition PR_add [PR_gt; Composition PR_gt [Projection aux22; Projection aux12]].
 
 Lemma diff_correct_true : forall m n steps, m <> n -> eval PR_diff steps [m; n] = Some 1.
@@ -587,11 +599,12 @@ split.
   inversion H.
 Qed.
 
-(* Finally: subtraction. *)
+(** ** Subtraction.
+    (Finally.) *)
 Definition PR_sub_aux := Composition PR_diff [Composition PR_add [Projection aux23; Projection aux33]; Projection aux13].
 Definition PR_sub := Minimization PR_sub_aux.
 
-(* Typo in the definition of sub in the paper. *)
+(** By the way, there is a typo in the definition of sub in the paper... *)
 
 Lemma sub_aux_correct : forall m n k steps, eval PR_sub_aux steps [m; n; k] = Some 0 <-> m = n + k.
 intros; unfold PR_sub_aux.
@@ -633,9 +646,10 @@ Qed.
 
 End Examples.
 
-Section Evaluation.
+(** * Evaluation
+    Here we include several lemmas about evaluation. *)
 
-(* Here we include several lemmas about evaluation. *)
+Section Evaluation.
 
 Lemma eval_opt_on_None : forall m (f:PRFunction m) steps ns Hi, ns[@Hi] = None -> eval_opt f steps ns = None.
 induction f; intros.
@@ -679,6 +693,8 @@ induction f; intros.
   intro; inversion H1.
 Qed.
 
+(** We need to do induction on the depth in order to get an induction hypothesis that works
+    for composition. All lemmas are thereafter generalized so that this premise is removed. *)
 Fixpoint depth {m} (f:PRFunction m) : nat :=
   match f with
   | Zero             => 0
@@ -689,10 +705,11 @@ Fixpoint depth {m} (f:PRFunction m) : nat :=
   | Minimization h   => 1 + depth h
 end.
 
-(**
-  * We need to do induction on the depth in order to get an induction hypothesis that works
-    for composition.
-*)
+(** Properties:
+    - evaluation is injective (it cannot return two different values)
+    - if evaluation returns a value, this is preserved when the maximum number of steps
+      is increased
+    - if evaluation does not return a value (yet), then neither does it for less steps. *)
 Lemma eval_opt_inj_lemma : forall d n (f:PRFunction n) s s' ns m m', depth f <= d ->
   eval_opt f s ns = Some m -> eval_opt f s' ns = Some m' -> m = m'.
 induction d; intros m f.
@@ -932,6 +949,8 @@ Qed.
 
 End Evaluation.
 
+(** * Computation
+    Finally we can define the computed value :-) *)
 Section Convergence.
 
 Definition converges {k} (f:PRFunction k) ns y := exists steps, eval f steps ns = Some y.
