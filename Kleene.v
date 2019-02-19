@@ -295,48 +295,6 @@ Defined.
 (* This is the one we actually want to use. *)
 Definition eval {m} (f:PRFunction m) (steps:nat) (ns:t nat m) : option nat := eval_opt f steps (map Some ns).
 
-Lemma eval_opt_inv : forall m (f:PRFunction m) steps ns Hi, ns[@Hi] = None -> eval_opt f steps ns = None.
-induction f; intros.
-+ simpl.
-  replace (hd ns) with (None (A:=nat)); auto.
-  rewrite <- H; rewrite <- (vector_1_inv ns) at 1.
-  rewrite nth_hd'; auto.
-+ simpl.
-  replace (hd ns) with (None (A:=nat)); auto.
-  rewrite <- H; rewrite <- (vector_1_inv ns) at 1.
-  rewrite nth_hd'; auto.
-+ simpl.
-  case_eq (all_defined ns); intro; auto.
-  rewrite (all_defined_false' _ _ _ H) in H0; inversion H0.
-+ simpl.
-  replace (all_defined ns) with false.
-  rewrite andb_false_r; auto.
-  symmetry; apply all_defined_false' with Hi; auto.
-+ case_eq (hd ns); intros.
-  2: simpl; rewrite H0; auto.
-  elim (eta_elim _ _ _ H); intro.
-  - rewrite H1 in H0; inversion H0.
-  - inversion_clear H1.
-    clear H Hi; revert ns H0 x H2.
-    induction n; intros; simpl.
-    * rewrite H0; simpl.
-      apply IHf1 with x; auto.
-    * rewrite H0; simpl.
-      generalize (IHn (Some n :: tl ns) (eq_refl _) x H2); clear IHn; intros.
-      simpl in H; rewrite H; auto.
-+ case_eq steps; intros; auto.
-  clear H0 steps; simpl.
-  case_eq n; intros; simpl; auto.
-  rewrite <- H0.
-  rewrite <- (shiftin_nth _ (Some 0) _ ns _ _ (eq_refl Hi)) in H.
-  set (ms := shiftin (Some 0) ns).
-  case_eq (eval_opt f n ms); simpl; intros; rewrite H1; auto.
-  exfalso.
-  clear H0 n0; revert H1.
-  rewrite IHf with (Hi := Fin.L_R 1 Hi); auto.
-  intro; inversion H1.
-Qed.
-
 End Definitions.
 
 Section Sanity_Checks.
@@ -400,7 +358,7 @@ simpl (map Some (x :: t)) in H0.
 simpl; simpl in H0; rewrite H0; auto.
 Qed.
 
-Lemma find_zero_from_correct' : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
+Lemma find_zero_from_correct : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
   m < init + steps /\ f (shiftin (Some m) ns) = Some O /\ forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
 induction steps; intros.
 + inversion H.
@@ -422,22 +380,69 @@ induction steps; intros.
   - intros; inversion H0.
 Qed.
 
-(* TODO: split this lemma. *)
-Lemma find_zero_from_correct : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
-  f (shiftin (Some m) ns) = Some O /\ forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
-intros.
-elim (find_zero_from_correct' steps f ns init m); auto.
+Lemma find_zero_from_bound : forall steps {k} f (ns:t (option nat) k) init m,
+  find_zero_from f ns init steps = Some m -> m < init + steps.
+intros; elim (find_zero_from_correct steps f ns init m); auto.
 Qed.
 
-Lemma find_zero_min : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
+Lemma find_zero_from_value : forall steps {k} f (ns:t (option nat) k) init m,
+  find_zero_from f ns init steps = Some m -> f (shiftin (Some m) ns) = Some O.
+intros; elim (find_zero_from_correct steps f ns init m); intros; auto.
+inversion H1; auto.
+Qed.
+
+Lemma find_zero_from_middle : forall steps {k} f (ns:t (option nat) k) init m,
+  find_zero_from f ns init steps = Some m -> forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
+intros; elim (find_zero_from_correct steps f ns init m); intros; auto.
+inversion_clear H2; auto.
+Qed.
+
+Lemma find_zero_from_min : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
   forall n, f (shiftin (Some n) ns) = Some 0 -> n < init \/ m <= n.
 intros.
 elim (le_lt_dec m n); auto; intro.
 elim (le_lt_dec init n); auto; intro.
-elim (find_zero_from_correct _ _ _ _ _ H); intros.
-exfalso.
-elim (H2 n); auto; intros.
-rewrite H3 in H0; inversion H0.
+generalize (find_zero_from_middle _ _ _ _ _ H); intros.
+elim (H1 n); auto; intros.
+rewrite H2 in H0; inversion H0.
+Qed.
+
+Lemma find_zero_from_None : forall steps {k} f (ns:t (option nat) k) init,
+  find_zero_from f ns init steps = None ->
+  { exists n, init <= n < init + steps /\ f (shiftin (Some n) ns) = None /\
+              forall k, init <= k < n -> exists val, f (shiftin (Some k) ns) = Some (S val)} +
+  { forall n, init <= n < init + steps -> exists val, f (shiftin (Some n) ns) = Some (S val) }.
+induction steps; intros.
++ right; simpl; intros.
+  inversion_clear H0.
+  elim (lt_irrefl n).
+  apply lt_le_trans with init; auto.
+  replace init with (init + 0); auto.
++ revert H; simpl.
+  case_eq (f (shiftin (Some init) ns)); intros.
+  revert H0; case_eq n; intros.
+  inversion H1.
+  rewrite H0 in H; clear H0 n; rename n0 into n.
+  elim (IHsteps _ _ _ _ H1); clear IHsteps H1; intros.
+  - left; inversion_clear a.
+    inversion_clear H0; inversion_clear H1; inversion_clear H2.
+    exists x; repeat split; auto with arith.
+    * replace (init + S steps) with (S init + steps); auto with arith.
+      rewrite (plus_comm init (S steps)); simpl; auto with arith.
+    * intros; inversion_clear H2.
+      inversion H5; [exists n; rewrite <- H2 | apply H4]; repeat split; auto with arith.
+      rewrite H7; auto.
+  - right; intros.
+    inversion_clear H0.
+    replace (init + S (steps)) with (S (steps + init)) in H2.
+    2: rewrite (plus_comm init (S steps)); simpl; auto with arith.
+    inversion H1.
+    * exists n; rewrite <- H0; auto.
+    * apply b; split; auto with arith.
+      rewrite H3; rewrite plus_comm in H2; simpl; auto with arith.
+  - left; exists init; repeat split; auto with arith.
+    * rewrite (plus_comm init (S steps)); simpl; auto with arith.
+    * intros; elim (lt_irrefl init); apply le_lt_trans with k0; inversion_clear H1; auto.
 Qed.
 
 Lemma Minimization_correct : forall k (h:PRFunction (1+k)) (ns:t nat k) steps n,
@@ -447,21 +452,11 @@ intros; revert H; unfold eval.
 induction steps.
 + simpl; intros; inversion H.
 + simpl; intro.
-  elim (find_zero_from_correct _ _ _ _ _ H); intros; exists steps.
+  generalize (find_zero_from_value _ _ _ _ _ H); intros.
+  generalize (find_zero_from_middle _ _ _ _ _ H); intros; exists steps.
   rewrite map_shiftin; split; auto.
   intros; rewrite map_shiftin; apply H1; split; auto with arith.
 Qed.
-
-(*
-Lemma Minimization_correct' : forall k (h:PRFunction (1+k)) (ns:t nat k) steps n,
-  eval (Minimization h) steps ns = (Some n) -> forall m, eval h steps (shiftin m ns) = (Some 0) -> n <= m.
-intros.
-elim (Minimization_correct _ _ _ _ _ H); intros; clear H.
-inversion_clear H1.
-elim (le_lt_dec n m); auto; intro.
-elim (H2 _ b); clear H2; intros.
-rewrite 
-*)
 
 End Sanity_Checks.
 
@@ -792,8 +787,8 @@ destruct steps.
 - change ((find_zero_from (eval_opt PR_sub_aux steps) [Some m; Some n] 0 steps) = Some k -> n <= m).
   intro.
   elim (le_lt_dec n m); intro; auto.
-  elim (find_zero_from_correct _ _ _ _ _ H); intros.
-  clear H H2; change (eval PR_sub_aux steps [m; n; k] = Some 0) in H1.
+  generalize (find_zero_from_value _ _ _ _ _ H); intros.
+  clear H; change (eval PR_sub_aux steps [m; n; k] = Some 0) in H1.
   rewrite sub_aux_correct in H1.
   rewrite not_le_minus_0 in H0; auto with arith.
   rewrite H0 in H1; rewrite plus_comm in H1.
@@ -802,15 +797,51 @@ Qed.
 
 End Examples.
 
-(* Ongoing. *)
+Section Evaluation.
 
-(* Define:
- - f ns converges_to x -> exists steps, eval f ns steps = x
- - diverges -> negation
- - sanity: f ns converges_to x and x' -> x = x'.
-*)
+(* Here we include several lemmas about evaluation. *)
 
-Section Incomplete.
+Lemma eval_opt_on_None : forall m (f:PRFunction m) steps ns Hi, ns[@Hi] = None -> eval_opt f steps ns = None.
+induction f; intros.
++ simpl.
+  replace (hd ns) with (None (A:=nat)); auto.
+  rewrite <- H; rewrite <- (vector_1_inv ns) at 1.
+  rewrite nth_hd'; auto.
++ simpl.
+  replace (hd ns) with (None (A:=nat)); auto.
+  rewrite <- H; rewrite <- (vector_1_inv ns) at 1.
+  rewrite nth_hd'; auto.
++ simpl.
+  case_eq (all_defined ns); intro; auto.
+  rewrite (all_defined_false' _ _ _ H) in H0; inversion H0.
++ simpl.
+  replace (all_defined ns) with false.
+  rewrite andb_false_r; auto.
+  symmetry; apply all_defined_false' with Hi; auto.
++ case_eq (hd ns); intros.
+  2: simpl; rewrite H0; auto.
+  elim (eta_elim _ _ _ H); intro.
+  - rewrite H1 in H0; inversion H0.
+  - inversion_clear H1.
+    clear H Hi; revert ns H0 x H2.
+    induction n; intros; simpl.
+    * rewrite H0; simpl.
+      apply IHf1 with x; auto.
+    * rewrite H0; simpl.
+      generalize (IHn (Some n :: tl ns) (eq_refl _) x H2); clear IHn; intros.
+      simpl in H; rewrite H; auto.
++ case_eq steps; intros; auto.
+  clear H0 steps; simpl.
+  case_eq n; intros; simpl; auto.
+  rewrite <- H0.
+  rewrite <- (shiftin_nth _ (Some 0) _ ns _ _ (eq_refl Hi)) in H.
+  set (ms := shiftin (Some 0) ns).
+  case_eq (eval_opt f n ms); simpl; intros; rewrite H1; auto.
+  exfalso.
+  clear H0 n0; revert H1.
+  rewrite IHf with (Hi := Fin.L_R 1 Hi); auto.
+  intro; inversion H1.
+Qed.
 
 Fixpoint depth {m} (f:PRFunction m) : nat :=
   match f with
@@ -895,16 +926,18 @@ induction d; intros m f.
     rename n0 into n'.
     simpl in H.
     generalize (le_S_n _ _ H); clear H; intro Hf.
-    elim (find_zero_from_correct _ _ _ _ _ H4); clear H4; intros.
-    elim (find_zero_from_correct _ _ _ _ _ H3); clear H3; intros. 
+    generalize (find_zero_from_middle _ _ _ _ _ H4);
+    generalize (find_zero_from_value _ _ _ _ _ H4); clear H4; intros Hfn0 Hfn_lt.
+    generalize (find_zero_from_middle _ _ _ _ _ H3);
+    generalize (find_zero_from_value _ _ _ _ _ H3); clear H3; intros Hfn'0 Hfn'_lt.
     elim (le_lt_dec m m'); intro.
     * inversion a; auto.
-      elim (H2 m); intros.
-      generalize (IHf _ _ _ _ _ (le_S _ _ Hf) H H5); intro; inversion H6.
+      elim (Hfn'_lt m); intros.
+      generalize (IHf _ _ _ _ _ (le_S _ _ Hf) Hfn0 H1); intro exf; inversion exf.
       split; auto with arith.
-      rewrite <- H4; auto with arith.
-    * elim (H0 m'); intros.
-      generalize (IHf _ _ _ _ _ (le_S _ _ Hf) H1 H3); intro; inversion H4.
+      rewrite <- H0; auto with arith.
+    * elim (Hfn_lt m'); intros.
+      generalize (IHf _ _ _ _ _ (le_S _ _ Hf) Hfn'0 H); intro exf; inversion exf.
       split; auto with arith.
 Qed.
 
@@ -912,44 +945,6 @@ Lemma eval_opt_inj : forall n (f:PRFunction n) s s' ns m m',
   eval_opt f s ns = Some m -> eval_opt f s' ns = Some m' -> m = m'.
 do 7 intro.
 apply eval_opt_inj_lemma with (depth f); auto.
-Qed.
-
-Lemma find_zero_from_None : forall steps {k} f (ns:t (option nat) k) init,
-  find_zero_from f ns init steps = None ->
-  { exists n, init <= n < init + steps /\ f (shiftin (Some n) ns) = None /\
-              forall k, init <= k < n -> exists val, f (shiftin (Some k) ns) = Some (S val)} +
-  { forall n, init <= n < init + steps -> exists val, f (shiftin (Some n) ns) = Some (S val) }.
-induction steps; intros.
-+ right; simpl; intros.
-  inversion_clear H0.
-  elim (lt_irrefl n).
-  apply lt_le_trans with init; auto.
-  replace init with (init + 0); auto.
-+ revert H; simpl.
-  case_eq (f (shiftin (Some init) ns)); intros.
-  revert H0; case_eq n; intros.
-  inversion H1.
-  rewrite H0 in H; clear H0 n; rename n0 into n.
-  elim (IHsteps _ _ _ _ H1); clear IHsteps H1; intros.
-  - left; inversion_clear a.
-    inversion_clear H0; inversion_clear H1; inversion_clear H2.
-    exists x; repeat split; auto with arith.
-    * replace (init + S steps) with (S init + steps); auto with arith.
-      rewrite (plus_comm init (S steps)); simpl; auto with arith.
-    * intros; inversion_clear H2.
-      inversion H5; [exists n; rewrite <- H2 | apply H4]; repeat split; auto with arith.
-      rewrite H7; auto.
-  - right; intros.
-    inversion_clear H0.
-    replace (init + S (steps)) with (S (steps + init)) in H2.
-    2: rewrite (plus_comm init (S steps)); simpl; auto with arith.
-    inversion H1.
-    * exists n; rewrite <- H0; auto.
-    * apply b; split; auto with arith.
-      rewrite H3; rewrite plus_comm in H2; simpl; auto with arith.
-  - left; exists init; repeat split; auto with arith.
-    * rewrite (plus_comm init (S steps)); simpl; auto with arith.
-    * intros; elim (lt_irrefl init); apply le_lt_trans with k0; inversion_clear H1; auto.
 Qed.
 
 Lemma eval_opt_mon_lemma : forall d m (f : PRFunction m), depth f <= d -> forall s ns k,
@@ -1015,48 +1010,51 @@ induction d; intros m f.
     rewrite H0 in H1; clear H0 s.
     case_eq s'; simpl; intros.
     rewrite H0 in H1; inversion H1.
-    rename n0 into n'.
+    rename n0 into n'; rename k0 into m.
     rewrite H0 in H1; clear H0 s'; red in H1.
     set (T := eval_opt).  (* WHAAAAAAAT ?! ?! ?! *)
     set (W := find_zero_from (T f n') ns 0 n').
     case_eq W; unfold W, T; clear W T; intros.
-    * elim (find_zero_from_correct _ _ _ _ _ H2); clear H2; intros.
-      elim (find_zero_from_correct _ _ _ _ _ H0); clear H0; intros.
-      rename k0 into m; rename n0 into m'.
+    * rename n0 into m'.
+      generalize (find_zero_from_middle _ _ _ _ _ H2);
+      generalize (find_zero_from_value _ _ _ _ _ H2); clear H2; intros fn_m fn_lt.
+      generalize (find_zero_from_middle _ _ _ _ _ H0);
+      generalize (find_zero_from_value _ _ _ _ _ H0); clear H0; intros fn'_m' fn'_lt.
       elim (le_lt_dec m m'); intro.
       ++ inversion a; auto.
-         elim (H4 m); intros.
-         2: rewrite <- H6; split; auto with arith.
-         generalize (eval_opt_inj _ _ _ _ _ _ _ H2 H7); intro; inversion H6.
-         inversion H8.
-      ++ elim (H3 m'); intros.
+         elim (fn'_lt m); intros.
+         2: rewrite <- H2; split; auto with arith.
+         generalize (eval_opt_inj _ _ _ _ _ _ _ fn_m H3); intro exf; inversion exf.
+      ++ elim (fn_lt m'); intros.
          2: split; auto with arith.
-         generalize (eval_opt_inj _ _ _ _ _ _ _ H0 H5); intro; inversion H6.
-    * elim (find_zero_from_correct' _ _ _ _ _ H2); clear H2; intros.
-      inversion_clear H3.
-      simpl in H; generalize (le_S_n _ _ H); clear H; intro.
-      generalize (lt_S_n _ _ H1); clear H1; intro.
+         generalize (eval_opt_inj _ _ _ _ _ _ _ fn'_m' H0); intro exf; inversion exf.
+    * generalize (find_zero_from_bound _ _ _ _ _ H2);
+      generalize (find_zero_from_middle _ _ _ _ _ H2);
+      generalize (find_zero_from_value _ _ _ _ _ H2); clear H2; intros fn_m fn_lt m_lt.
+      simpl in H; generalize (le_S_n _ _ H); clear H; intro Hf.
+      generalize (lt_S_n _ _ H1); clear H1; intro Hnn'.
       elim (find_zero_from_None _ _ _ _ H0); clear H0; simpl; intros.
-      ** inversion_clear a; inversion_clear H0; inversion_clear H6; inversion_clear H3.
-         elim (lt_eq_lt_dec k0 x); intro.
+      ** elim a; clear a; intros x a; elim a; clear a; intros Hx a.
+         elim a; clear a; intros fn'_None fn'_lt.
+         elim (lt_eq_lt_dec m x); intro.
          inversion_clear a.
-         ++ elim (H7 k0); intros.
+         ++ elim (fn'_lt m); intros.
             2: split; auto with arith.
             assert (0 = S x0).
-            2: inversion H10.
-            apply (eval_opt_inj _ _ _ _ _ _ _ H4 H9); auto.
-         ++ rewrite <- H3 in H0.
-            generalize (IHd _ _ H _ _ _ H4 _ H1); intro.
-            rewrite H9 in H0; inversion H0.
-         ++ elim (H5 x); intros.
+            2: inversion H1.
+            apply (eval_opt_inj _ _ _ _ _ _ _ fn_m H0); auto.
+         ++ rewrite <- H in fn'_None.
+            generalize (IHd _ _ Hf _ _ _ fn_m _ Hnn'); intro.
+            rewrite H0 in fn'_None; inversion fn'_None.
+         ++ elim (fn_lt x); intros.
             2: split; auto with arith.
-            assert (0 = S k0).
-            2: inversion H9.
-            generalize (IHd _ _ H _ _ _ H3 _ H1); intro.
-            rewrite H0 in H9; inversion H9.
-      ** elim (b k0); intros.
+            assert (0 = S m).
+            2: inversion H0.
+            generalize (IHd _ _ Hf _ _ _ H _ Hnn'); intro.
+            rewrite H0 in fn'_None; inversion fn'_None.
+      ** elim (b m); intros.
          2: split; auto with arith; transitivity n; auto.
-         generalize (eval_opt_inj _ _ _ _ _ _ _ H4 H0); intro; inversion H3.
+         generalize (eval_opt_inj _ _ _ _ _ _ _ fn_m H); intro exf; inversion exf.
 Qed.
 
 Lemma eval_opt_mon : forall m (f : PRFunction m) s ns k,
@@ -1064,7 +1062,7 @@ Lemma eval_opt_mon : forall m (f : PRFunction m) s ns k,
 intros; apply eval_opt_mon_lemma with (depth f) s; auto.
 Qed.
 
-Lemma eval_opt_mon' : forall d m (f:PRFunction m) s ns, depth f <= d ->
+Lemma eval_opt_mon'_lemma : forall d m (f:PRFunction m) s ns, depth f <= d ->
   eval_opt f s ns = None -> forall s', s' <= s -> eval_opt f s' ns = None.
 intros.
 case_eq (eval_opt f s' ns); auto.
@@ -1075,15 +1073,49 @@ inversion H1.
   red; apply le_lt_trans with m0; auto; rewrite <- H4; auto with arith.
 Qed.
 
+Lemma eval_opt_mon' : forall m (f:PRFunction m) s ns,
+  eval_opt f s ns = None -> forall s', s' <= s -> eval_opt f s' ns = None.
+intros.
+apply eval_opt_mon'_lemma with (depth f) s; auto.
+Qed.
+
 Lemma eval_mon : forall m (f:PRFunction m) steps ns k, eval f steps ns = (Some k) ->
   forall s', s' > steps -> eval f s' ns = (Some k).
 intros.
 apply eval_opt_mon with steps; auto.
 Qed.
 
-Lemma eval_inj : forall m (f:PRFunction m) s s' ns m m', eval f s ns = Some m -> eval f s' ns = Some m' -> m = m'.
+Lemma eval_inj_Some : forall m (f:PRFunction m) s s' ns m m', eval f s ns = Some m -> eval f s' ns = Some m' -> m = m'.
 intros.
 rewrite (eval_opt_inj _ _ _ _ _ _ _ H H0); auto.
 Qed.
 
-End Incomplete.
+Lemma eval_inj_None : forall m (f:PRFunction m) s ns, eval f s ns = None -> forall s', s'<s -> eval f s' ns = None.
+intros.
+apply eval_opt_mon' with s; auto with arith.
+Qed.
+
+End Evaluation.
+
+Section Convergence.
+
+Definition converges {k} (f:PRFunction k) ns y := exists steps, eval f steps ns = Some y.
+
+Definition diverges  {k} (f:PRFunction k) ns := forall steps, eval f steps ns = None.
+
+Lemma converges_inj : forall {k} f ns y y', converges (k:=k) f ns y -> converges f ns y' -> y = y'.
+intros.
+inversion_clear H; inversion_clear H0.
+revert H1 H; apply eval_inj_Some.
+Qed.
+
+Lemma converges_diverges : forall {k} f ns, (diverges (k:=k) f ns <-> forall y, ~converges f ns y).
+split; intros; intro.
++ inversion_clear H0.
+  rewrite H in H1; inversion H1.
++ case_eq (eval f steps ns); auto.
+  intros.
+  elim (H n); exists steps; auto.
+Qed.
+
+End Convergence.
