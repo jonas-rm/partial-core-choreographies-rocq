@@ -1,6 +1,11 @@
-Require Import Bool.
+Require Export Bool.
 Require Import List.
 Require Import Sorting.Permutation.
+Require Export Arith.
+Require Export Vector.
+Require Import Coq.Program.Equality.
+
+Section Logical.
 
 (** De Morgan law *)
 Lemma deMorganNotOr : forall P Q : Prop,
@@ -22,6 +27,38 @@ tauto.
 tauto.
 Qed.
 
+End Logical.
+
+Section Natural_Numbers.
+
+(** Random stuff about natural numbers. *)
+Lemma minus_S : forall m n, n - S m = pred (n - m).
+Proof.
+double induction m n; simpl; auto.
+intros; rewrite minus_n_O; auto.
+Qed.
+
+Lemma minus_is_S : forall m n, m < n -> exists k, n - m = S k.
+Proof.
+induction n; intros.
++ inversion H.
++ exists (n-m); rewrite minus_Sn_m; auto with arith.
+Qed.
+
+Lemma not_lt_minus_0 n m : ~ m < n -> n - m = 0.
+Proof.
+induction n; intros; auto.
+assert (S n <= m).
++ apply not_gt; auto.
++ elim (le_lt_eq_dec _ _ H0); intro.
+  - apply not_le_minus_0; auto with arith.
+  - rewrite b; auto with arith.
+Qed.
+
+End Natural_Numbers.
+
+Section Lists.
+
 Lemma Permutation_NoDup : forall A, forall P Q: list A, Permutation P Q ->
                                                         NoDup P -> NoDup Q.
 intros.
@@ -36,3 +73,147 @@ apply H; left; auto.
 apply NoDup_cons; auto.
 intro; apply H; right; auto.
 Qed.
+
+End Lists.
+
+Import VectorNotations.
+
+Section Vectors.
+(** Random stuff about vectors to be placed elsewhere. *)
+
+(* Equality. *)
+Lemma eq_nth_iff' {A} {n} (v1 v2:t A n) : (forall (p:Fin.t n), v1[@p] = v2[@p]) <-> v1 = v2.
+Proof.
+split.
+intro; apply eq_nth_iff; intros; rewrite H0; auto.
+intros; apply eq_nth_iff; auto.
+Qed.
+
+(* Characterization results. *)
+
+Lemma vector_1_equal : forall {A} (x y:A), x = y -> forall Hi, [x][@Hi] = [y][@Hi].
+Proof.
+intros; rewrite H; auto.
+Qed.
+
+Lemma vector_2_equal : forall {A} (x x' y y':A), x = x' -> y = y' -> forall Hi, [x; y][@Hi] = [x'; y'][@Hi].
+Proof.
+intros; rewrite H, H0; auto.
+Qed.
+
+Lemma vector_3_equal : forall {A} (x x' y y' z z':A), x = x' -> y = y' -> z = z' ->
+  forall Hi, [x; y; z][@Hi] = [x'; y'; z'][@Hi].
+Proof.
+intros; rewrite H, H0, H1; auto.
+Qed.
+
+Lemma vector_0_inv : forall {A} (v:t A 0), [] = v.
+Proof.
+intro; apply (case0 (fun x => []=x)); auto.
+Qed.
+
+Lemma vector_1_inv : forall {A} (v:t A 1), [hd v] = v.
+Proof.
+intros; rewrite (eta v); simpl.
+replace (tl v) with (nil A); auto.
+apply vector_0_inv.
+Qed.
+
+Lemma vector_2_inv : forall {A} (v:t A 2), [hd v; hd (tl v)] = v.
+Proof.
+intros; rewrite (eta v); simpl.
+replace (tl v) with [hd (tl v)]; auto.
+apply vector_1_inv.
+Qed.
+
+Lemma vector_3_inv : forall {A} (v:t A 3), [hd v; hd (tl v); hd (tl (tl v))] = v.
+Proof.
+intros; rewrite (eta v); simpl.
+replace (tl v) with [hd (tl v); hd (tl (tl v))]; auto.
+apply vector_2_inv.
+Qed.
+
+(* On heads and tails. *)
+Lemma nth_hd : forall {A} {n} (v:t A (S n)), v[@Fin.F1] = hd v.
+Proof.
+intros.
+rewrite (eta v); simpl; auto.
+Qed.
+
+Lemma nth_hd' : forall {A} (v:t A 1) Hi, v[@Hi] = hd v.
+Proof.
+intros.
+replace v with (const (hd v) 1) at 1.
++ rewrite const_nth; auto.
++ simpl; apply vector_1_inv.
+Qed.
+
+Lemma nth_tl : forall {A} {n} (v:t A (S n)) Hi, v[@Fin.FS Hi] = (tl v)[@Hi].
+Proof.
+induction n; simpl.
++ intros; inversion Hi.
++ intros; rewrite (eta v).
+  simpl; auto.
+Qed.
+
+Lemma eta_elim : forall {A} {n} (v:t A (S n)) x Hi, v[@Hi] = x -> hd v = x \/ exists Hi', (tl v)[@Hi'] = x.
+dependent induction Hi; intros.
+- left; rewrite nth_hd in H; auto.
+- right; rewrite nth_tl in H; eauto.
+Qed.
+
+Lemma map_shiftin : forall {A} {B} {n} (f:A->B) (v:t A n) x, map f (shiftin x v) = shiftin (f x) (map f v).
+Proof.
+induction v; simpl; auto.
+intro.
+rewrite IHv; auto.
+Qed.
+
+Fixpoint map_inv {A} {B} {n} (f:t (A->B) n) (x:A) : t B n :=
+  match f with
+  | [] => []
+  | (f0 :: fs) => (f0 x) :: (map_inv fs x)
+  end.
+
+Lemma nth_map' {A B} (f: A -> B) {n} v (p: Fin.t n) : (map f v) [@p] = f (v [@p]).
+Proof.
+apply nth_map; auto.
+Qed.
+
+Lemma nth_map_inv {A} {B} {n} (f:t (A->B) n) v (p1 p2: Fin.t n) (eq: p1 = p2) :
+  (map_inv f v) [@ p1] = f[@ p2] v.
+Proof.
+subst p2; induction p1.
++ revert n f; refine (@caseS _ _ _); now simpl.
++ revert n f p1 IHp1; refine (@caseS _  _ _); now simpl.
+Qed.
+
+Lemma nth_map_inv' {A} {B} {n} (f:t (A->B) n) v (p: Fin.t n) : (map_inv f v) [@p] = f[@p] v.
+Proof.
+apply nth_map_inv; auto.
+Qed.
+
+Fixpoint vmax {n} (v:t nat n) :=
+  match v with
+  | [] => 0
+  | x :: xs => Nat.max x (vmax xs)
+end.
+
+Lemma vmax_leq : forall n v x, vmax (n:=n) v <= x -> forall p, v[@p] <= x.
+Proof.
+induction p.
+* revert n v H; refine (@caseS _ _ _); simpl; intros.
+  eapply Nat.max_lub_l; exact H.
+* revert n v H p IHp; refine (@caseS _ _ _); simpl; intros.
+  apply IHp; eapply Nat.max_lub_r; exact H.
+Qed.
+
+(* Sanity check.
+Definition f0 (n:nat) := 2*n.
+Definition f1 (n:nat) := n+3.
+
+Eval compute in (map_inv [f0; f1] 5).
+*)
+
+End Vectors.
+
