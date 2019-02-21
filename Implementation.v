@@ -25,6 +25,15 @@ induction p.
   apply IHp; eapply max_lt_r; exact H.
 Qed.
 
+(** Vector containing the numbers 1 to n. *)
+Fixpoint vec_1_to_n_aux n k : t nat n :=
+  match n with
+  | 0 => []
+  | S m => k :: vec_1_to_n_aux m (S k)
+  end.
+
+Definition vec_1_to_n n : t nat n := vec_1_to_n_aux n 1.
+
 (** Sum of a vector of natural numbers. *)
 Fixpoint vsum {n} (v:t nat n) :=
   match v with
@@ -68,7 +77,9 @@ Fixpoint Pi {m} (f:PRFunction m) : nat :=
   | Minimization f => Pi f + 3
   end.
 
+(*
 Eval compute in (Pi PR_sub).
+*)
 
 End MC_plus.
 
@@ -92,6 +103,13 @@ Fixpoint skip_labels (n:nat) {k} {m} (fs:t (PRFunction m) k) : t Pid k :=
   | (f :: fs') => (n :: skip_labels (n + Pi f) fs')
   end.
 
+(** This function takes care of the first part of the definition of composition.
+    Relationship to the arguments in the paper:
+    - fs is the vector of functions
+    - ps are the (fixed) argument processes
+    - target is the output process for the first function to implement
+    - init is the label l_i
+*)
 Fixpoint compose_args {m} {k} (fs:t (PRFunction m) k) d (Hd:forall i, depth fs[@i] < d) (ps:t Pid m) (target:nat) (init:nat)
   (Implement : forall m' (f:PRFunction m') (Hd:depth f < d) (ps':t Pid m') (q' i':nat), Choreography) {struct fs} : Choreography.
 Proof.
@@ -110,6 +128,12 @@ Defined.
   end.
 *)
 
+(** Relationship to the arguments in the paper:
+    - f is the function (f)
+    - ps are the input processes p
+    - q is the output process q
+    - init is the label l
+*)
 Fixpoint Implementation_aux {m} (f:PRFunction m) d (Hd:depth f<d) (ps:t Pid m) (q:Pid) (init:nat) {struct d}: Choreography.
 induction d.
 + elim (Nat.nlt_0_r _ Hd).
@@ -133,7 +157,7 @@ induction d.
     intros; rewrite <- nth_map'; apply vmax_lt; auto.
     apply
     (compose_args fs _ H ps init (init+k) (fun m f => Implementation_aux m f d);;
-      Implementation_aux _ f _ Hdf (skip_labels (init+k) fs) (init + (vsum (map Pi fs))) q).
+      Implementation_aux _ f _ Hdf (seq_labels init fs) q (init + (vsum (map Pi fs)))).
 
   (* Recursion *)
   - apply End.
@@ -142,9 +166,18 @@ induction d.
   - apply End.
 Defined.
 
+(** The definition in the paper uses auxiliary process names distinct from the ps and q,
+    numbered from 0. We model this by using auxiliary processes higher than the ps and q. *)
 Definition Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Choreography :=
-  Implementation_aux f _ (lt_n_Sn (depth f)) ps q 0.
+  Implementation_aux f _ (lt_n_Sn (depth f)) ps q (S (max q (vmax ps))).
 
-Eval compute in (Implementation (Composition Zero [Projection aux13]) (2 :: 1 :: [0]) 5).
+(** By default, we take process 0 for q and 1..m for the ps. *)
+Definition Implementation' {m} (f:PRFunction m) : Choreography :=
+  Implementation f (vec_1_to_n m) 0.
+
+(* Sanity checks.
+Eval compute in (Implementation' (Composition Successor [Zero])).
+Eval compute in (Implementation' (Composition Zero [Projection aux13])).
+*)
 
 End Definitions.
