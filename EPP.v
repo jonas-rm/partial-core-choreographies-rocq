@@ -430,8 +430,8 @@ inversion a.
  *)
 
 Lemma epp_preserves_pids (conf:Configuration) :
-  forall (C:Choreography) (s:State) (N:Network) (WF:WellFormedConf conf),
-  conf = (C,s) -> (epp conf WF) = Some N -> (pidseteq (pn C) (SPpn N)).
+  forall (C:Choreography) (s:Store) (N:Network) (WF:WellFormedConf conf),
+  conf = (C,s) -> (epp conf WF) = Some N -> (eq_pidset (pn C) (SPpn N)).
 Proof.
 intros.
 subst.
@@ -448,6 +448,7 @@ apply perm_nil.
 induction e.
 (* Com *)
 inversion_clear WF.
+
 set (NoDupPn := pn_is_set (Com p e p0; C) WF).
 simpl. simpl in NoDupPn.
 simpl in H0.
