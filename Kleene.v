@@ -1,9 +1,6 @@
 Require Export Basic.
-
+Require Export Vector.
 Import VectorNotations.
-
-Section to_be_moved.
-End to_be_moved.
 
 (** * Definitions
     Our class of partial recursive functions, together with their semantics. *)

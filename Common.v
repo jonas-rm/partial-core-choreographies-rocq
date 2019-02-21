@@ -1,12 +1,6 @@
 Require Import FunctionalExtensionality.
-Require Import Bool.
-Require Import List.
-Require Import Coq.Lists.ListSet.
-Require Import Arith.
-Require Import Sorting.Permutation.
-Require Import Nat.
-Require Import EqNat.
-Require Import PeanoNat.
+Require Export Coq.Lists.ListSet.
+Require Export Sorting.Permutation.
 Local Open Scope nat_scope.
 
 Require Import Basic.

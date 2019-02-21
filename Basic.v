@@ -1,8 +1,7 @@
 Require Export Bool.
-Require Import List.
-Require Import Sorting.Permutation.
+Require Export List.
+Require Export Sorting.Permutation.
 Require Export Arith.
-Require Export Vector.
 Require Import Coq.Program.Equality.
 
 Section Logical.
@@ -75,6 +74,8 @@ intro; apply H; right; auto.
 Qed.
 
 End Lists.
+
+Require Import Vector.
 
 Import VectorNotations.
 
@@ -216,4 +217,3 @@ Eval compute in (map_inv [f0; f1] 5).
 *)
 
 End Vectors.
-
