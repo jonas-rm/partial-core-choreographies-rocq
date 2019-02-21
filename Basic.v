@@ -80,9 +80,11 @@ Require Import Vector.
 Import VectorNotations.
 
 Section Vectors.
-(** Random stuff about vectors to be placed elsewhere. *)
+(** * Vectors
+    Random stuff about vectors to be placed elsewhere. *)
 
-(* Equality. *)
+(** ** Equality.
+    This is a specialziation of a lemma from the standard library. *)
 Lemma eq_nth_iff' {A} {n} (v1 v2:t A n) : (forall (p:Fin.t n), v1[@p] = v2[@p]) <-> v1 = v2.
 Proof.
 split.
@@ -90,7 +92,7 @@ intro; apply eq_nth_iff; intros; rewrite H0; auto.
 intros; apply eq_nth_iff; auto.
 Qed.
 
-(* Characterization results. *)
+(** Characterization results for vectors of length up to 3. *)
 
 Lemma vector_1_equal : forall {A} (x y:A), x = y -> forall Hi, [x][@Hi] = [y][@Hi].
 Proof.
@@ -134,7 +136,7 @@ replace (tl v) with [hd (tl v); hd (tl (tl v))]; auto.
 apply vector_2_inv.
 Qed.
 
-(* On heads and tails. *)
+(** On heads and tails. *)
 Lemma nth_hd : forall {A} {n} (v:t A (S n)), v[@Fin.F1] = hd v.
 Proof.
 intros.
@@ -157,12 +159,14 @@ induction n; simpl.
   simpl; auto.
 Qed.
 
+(** A variant of the eta lemma from the standard library. *)
 Lemma eta_elim : forall {A} {n} (v:t A (S n)) x Hi, v[@Hi] = x -> hd v = x \/ exists Hi', (tl v)[@Hi'] = x.
 dependent induction Hi; intros.
 - left; rewrite nth_hd in H; auto.
 - right; rewrite nth_tl in H; eauto.
 Qed.
 
+(** Hopefully self-explanatory. *)
 Lemma map_shiftin : forall {A} {B} {n} (f:A->B) (v:t A n) x, map f (shiftin x v) = shiftin (f x) (map f v).
 Proof.
 induction v; simpl; auto.
@@ -170,12 +174,16 @@ intro.
 rewrite IHv; auto.
 Qed.
 
+(** ** Alternative map function
+    It maps a list of functions onto an argument, rather than the usual. *)
 Fixpoint map_inv {A} {B} {n} (f:t (A->B) n) (x:A) : t B n :=
   match f with
   | [] => []
   | (f0 :: fs) => (f0 x) :: (map_inv fs x)
   end.
 
+(** The results about map_inv are the same as those for map in the standard library, with analogous
+    names. We add a specialization of nth_map. *)
 Lemma nth_map' {A B} (f: A -> B) {n} v (p: Fin.t n) : (map f v) [@p] = f (v [@p]).
 Proof.
 apply nth_map; auto.
@@ -194,6 +202,7 @@ Proof.
 apply nth_map_inv; auto.
 Qed.
 
+(** Maximum of a vector of natural numbers. *)
 Fixpoint vmax {n} (v:t nat n) :=
   match v with
   | [] => 0

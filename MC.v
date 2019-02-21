@@ -1,8 +1,4 @@
-Require Import Nat.
-Require Import EqNat.
-Require Import PeanoNat.
-Require Import List.
-Require Import Coq.Lists.ListSet.
+Require Export Basic.
 Require Export Common.
 Local Open Scope nat_scope.
 

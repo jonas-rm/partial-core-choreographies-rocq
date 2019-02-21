@@ -1,6 +1,6 @@
 Require Export Basic.
 Require Export Vector.
-Import VectorNotations.
+Export VectorNotations.
 
 (** * Definitions
     Our class of partial recursive functions, together with their semantics. *)
@@ -355,8 +355,10 @@ Qed.
 (** ** Addition. *)
 Definition PR_add := Recursion (Projection aux11) (Composition Successor [Projection aux23]).
 
+(* Sanity checks.
 Eval compute in (eval PR_add 0 [2; 3]).
 Eval compute in (eval PR_add 0 [5; 7]).
+*)
 
 (* OMG *)
 Lemma add_correct : forall m n steps, eval PR_add steps [m; n] = Some (m + n).
@@ -372,8 +374,10 @@ Qed.
 (** ** Multiplication. *)
 Definition PR_mult := Recursion Zero (Composition PR_add [Projection aux33; Projection aux23]).
 
+(* Sanity checks.
 Eval compute in (eval PR_mult 0 [2; 3]).
 Eval compute in (eval PR_mult 0 [5; 7]).
+*)
 
 Lemma mult_correct : forall m n steps, eval PR_mult steps [m; n] = Some (m * n).
 intros; induction m.
@@ -390,8 +394,10 @@ Definition PR_sign := Composition
   (Recursion Zero(Composition Successor [Composition Zero [Projection aux23]]))
   [Projection aux11; Projection aux11].
 
+(* Sanity checks.
 Eval compute in (eval PR_sign 0 [32]).
 Eval compute in (eval PR_sign 0 [0]).
+*)
 
 Lemma sign_correct_0 : forall steps, eval PR_sign steps [0] = Some (0).
 intros; simpl; auto.
@@ -408,8 +414,10 @@ Qed.
 (** ** Predecessor. *)
 Definition PR_pred := Composition (Recursion Zero (Projection aux13)) [Projection aux11; Zero].
 
+(* Sanity checks.
 Eval compute in (eval PR_pred 0 [32]).
 Eval compute in (eval PR_pred 0 [0]).
+*)
 
 Lemma pred_correct : forall n steps, eval PR_pred steps [n] = Some (pred n).
 intros; unfold PR_pred.
@@ -424,9 +432,11 @@ Qed.
 Definition PR_minus := Composition (Recursion (Projection aux11) (Composition PR_pred [Projection aux23]))
   [Projection aux22; Projection aux12].
 
+(* Sanity checks.
 Eval compute in (eval PR_minus 0 [3; 2]).
 Eval compute in (eval PR_minus 0 [7; 5]).
 Eval compute in (eval PR_minus 0 [2; 3]).
+*)
 
 Lemma minus_correct : forall m n steps, eval PR_minus steps [n; m] = Some (n - m).
 intros; unfold PR_minus.
