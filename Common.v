@@ -1,4 +1,5 @@
 Require Import FunctionalExtensionality.
+Require Import Nat.
 Require Export Coq.Lists.ListSet.
 Require Export Sorting.Permutation.
 Local Open Scope nat_scope.
