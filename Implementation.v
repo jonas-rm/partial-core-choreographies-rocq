@@ -141,6 +141,7 @@ Defined.
     - init is the label l
 *)
 Fixpoint Implementation_aux {m} (f:PRFunction m) d (Hd:depth f<d) (ps:t Pid m) (q:Pid) (init:nat) {struct d}: Choreography.
+Proof.
 induction d.
 + elim (Nat.nlt_0_r _ Hd).
 + destruct f; intros.
@@ -223,6 +224,7 @@ destruct fs.
 Defined.
 
 Fixpoint Par_Implementation_aux {m} (f:PRFunction m) d (Hd:depth f<d) (ps:t Pid m) (q:Pid) (init:nat) {struct d}: Choreography.
+Proof.
 induction d.
 + elim (Nat.nlt_0_r _ Hd).
 + destruct f; intros.

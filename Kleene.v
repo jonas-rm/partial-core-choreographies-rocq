@@ -42,6 +42,7 @@ end end.
     tricky to write. So... *)
 (** First we define the fixpoint construction over the option type, to cater for undefinedness. *)
 Fixpoint eval_opt {m} (f:PRFunction m) : forall (steps:nat) (ns:t (option nat) m), option nat.
+Proof.
 destruct f; intros.
 
 (* Zero *)
