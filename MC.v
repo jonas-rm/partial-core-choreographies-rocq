@@ -133,7 +133,7 @@ Proof.
  split; auto.
 Qed.
 
-Definition Configuration : Type := Choreography * Store.
+Definition Configuration : Type := Choreography * State.
 
 Definition WellFormedConf (conf:Configuration) : Prop := WellFormed( fst conf ).
 

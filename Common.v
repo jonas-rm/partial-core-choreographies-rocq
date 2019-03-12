@@ -30,6 +30,12 @@ Section Expressions.
 
 Definition Value := nat.
 
+Lemma eq_value_dec : forall (e e' : Value), { e = e' } + { e <> e' }.
+Proof.
+decide equality.
+Qed.
+
+
 Inductive Expr : Type :=
  | this : Expr
  | zero : Expr
@@ -64,17 +70,13 @@ Proof.
 decide equality.
 Qed.
 
-Definition set_add_pid := set_add eq_nat_dec.
-Definition set_union_pid := set_union eq_nat_dec.
-Definition set_inter_pid := set_inter eq_nat_dec.
+Definition set_add_pid := set_add eq_pid_dec.
+Definition set_union_pid := set_union eq_pid_dec.
+Definition set_inter_pid := set_inter eq_pid_dec.
 
 Definition eq_pidset (s:set Pid) (s':set Pid) : Prop := Permutation s s'.
 
-(* Lemma set_union_pid_el : forall (p:Pid) (P:set Pid), ~(In p P) -> set_add eq_nat_dec p (P ++ nil) = (P ++ p::nil).
-Proof.
-intros.
- *)
-
+(*
 Lemma set_add_pid_char :
   forall (p:Pid) (P:set Pid),
   ~(In p P) -> (set_add_pid p P) = P ++ p::nil.
@@ -88,7 +90,7 @@ inversion H.
 set (myH := IHP H1).
 simpl.
 rewrite myH.
-induction Nat.eq_dec.
+induction eq_pid_dec.
 symmetry in a0.
 contradiction.
 trivial.
@@ -117,7 +119,7 @@ Qed.
 
 Lemma set_union_pid_nil :
   forall (P:set Pid), (NoDup P) ->
-  (set_union eq_nat_dec nil P) = (rev P).
+  (set_union eq_pid_dec nil P) = (rev P).
 Proof.
 intros.
 induction P.
@@ -161,7 +163,7 @@ simpl.
 simpl in H.
 apply deMorganNotOr in H.
 inversion H.
-destruct Nat.eq_dec.
+destruct eq_pid_dec.
 rewrite e in H0.
 contradiction.
 set (myH := IHP H1).
@@ -234,25 +236,74 @@ apply Permutation_app_comm.
 apply Permutation_NoDup with (P ++ Q); auto.
 apply Permutation_app_comm.
 Qed.
+*)
 
 End Pids.
 
-Section Store.
+Section State.
 
-Definition Store := Pid -> Value.
+Definition State := Pid -> Value.
 
-Definition evaluate (e:Expr) (s:Store) (p:Pid) : Value :=
+Definition eq_state (P : set Pid) (s1: State) (s2: State) : Prop :=
+set_fold_right (fun p => fun b => b /\ (s1 p = s2 p)) P True.
+
+(** Equivalence of states up to a set of processes *)
+Lemma eq_state_dec : forall P s1 s2, 
+  { eq_state P s1 s2 } + { ~eq_state P s1 s2}. 
+Proof.
+intros.
+induction P.
+(* P is empty *)
++ left. simpl. trivial.
+(* a :: P *)
++ simpl.
+  assert (SHP := eq_value_dec (s1 a) (s2 a)).
+  case IHP, SHP.
+  - left. auto. 
+  - right; red; intros; inversion H; contradiction.
+  - right; red; intros; inversion H; contradiction.
+  - right; red; intros; inversion H; contradiction.
+Qed.
+
+(* characterisation of eq_state *)
+
+(*
+Lemma eq_state_monotonicity : forall (P1 P2:set Pid) s1 s2,
+  eq_state P1 s1 s2 -> eq_state P2 s1 s2 -> eq_state (set_union_pid P1 P2) s1 s2.
+Proof.
+intros.
+induction P1, P2.
++ trivial.
++ 
+rewrite set_union_pid_nil.
+  
++
++
+End.
+*)
+
+(** Expression evaluation given a value for the place-holder this *)
+(* TODO: update SP_evaluate *)
+Definition evaluate_on_value (e:Expr) (v:Value) : Value :=
+match e with
+ | zero => 0
+ | this => v
+ | succ_this => S v
+end.
+
+(** Expression evaluation on the state of a process *)
+Definition evaluate (e:Expr) (s:State) (p:Pid) : Value :=
 match e with
  | zero => 0
  | this => s p
  | succ_this => S (s p)
 end.
 
-Definition update (s:Store) (p:Pid) (v:Value) : Store :=
+Definition update (s:State) (p:Pid) (v:Value) : State :=
 fun (q:Pid) => if (p =? q) then v else (s q)
 .
 
-Lemma update_read : forall (s:Store) (p:Pid) (v:Value),
+Lemma update_read : forall (s:State) (p:Pid) (v:Value),
   update s p v p = v.
 Proof.
   intros.
@@ -260,7 +311,7 @@ Proof.
   rewrite <- beq_nat_refl; auto.
 Qed.
 
-Lemma update_monotonicity : forall (s:Store) (p q:Pid) (v:Value),
+Lemma update_monotonicity : forall (s:State) (p q:Pid) (v:Value),
   p <> q -> update s p v q = s q.
 Proof.
 intros.
@@ -271,14 +322,50 @@ generalize (beq_nat_true _ _ H0); intros.
 elim H; auto.
 Qed.
 
-Lemma update_update : forall (s:Store) (p:Pid) (v1 v2:Value),
+(*
+Lemma update_locality : forall (s:State) (p:Pid) (v:Value) (P:set Pid),
+  ~set_In p P -> eq_state P s (update s p v).
+Proof.
+intros.
+induction P.
++ simpl. trivial.
++ destruct H.
+simpl.
+  split. 
+red.
+assert (L : forall (q:Pid), set_In q P -> s q = update s p v q).
++ intros.
+unfold update. 
+case_eq ( p =? q); auto.
+  
+unfold update.
+case_eq (p =? q); auto.
+intro.
+generalize (beq_nat_true _ _ H0); intros.
+elim H; auto.
+Qed.
+
+Lemma update_update : forall (s:State) (p:Pid) (v1 v2:Value) (P : set Pid),
+  state_eq P (update (update s p v2) p v1) (update s p v1).
+Proof.
+intros.
+red.
+unfold update.
+unfold update.
+ intro q.
+case_eq (p =? q); trivial.
+Qed.
+*)
+
+(* TODO use eq_state instead *)
+Lemma update_update : forall (s:State) (p:Pid) (v1 v2:Value),
   update (update s p v2) p v1 = update s p v1.
 Proof.
 intros.
 unfold update.
-apply FunctionalExtensionality.functional_extensionality. (* TODO avoid this *)
+apply FunctionalExtensionality.functional_extensionality. 
 unfold update; intro q.
 case_eq (p =? q); trivial.
 Qed.
 
-End Store.
+End State.

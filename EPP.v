@@ -238,7 +238,7 @@ Section PaperExample1.
 Local Definition p := 0.
 Local Definition q := 1.
 Local Definition r := 2.
-Local Definition sigma : Store := fun p => 0.
+Local Definition sigma : State := fun p => 0.
 
 (* Definition TestChoreography := p # this --> q; p --> q [ left ]; MC.End. *)
 
@@ -430,7 +430,7 @@ inversion a.
  *)
 
 Lemma epp_preserves_pids (conf:Configuration) :
-  forall (C:Choreography) (s:Store) (N:Network) (WF:WellFormedConf conf),
+  forall (C:Choreography) (s:State) (N:Network) (WF:WellFormedConf conf),
   conf = (C,s) -> (epp conf WF) = Some N -> (eq_pidset (pn C) (SPpn N)).
 Proof.
 intros.
