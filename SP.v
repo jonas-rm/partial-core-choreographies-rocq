@@ -39,6 +39,19 @@ Inductive Network : Type :=
  | Par : Network -> Network -> Network
 .
 
+(** The process names in a network *)
+Fixpoint SPpn (N:Network) : list Pid :=
+match N with
+| Empty => nil
+| Process p v B => (p :: nil)
+| Par N N' => (SPpn N) ++ (SPpn N')
+end
+.
+
+(** A well-formed network has no duplicate process names and no self-communications. *)
+Definition WellFormedNetwork (N:Network) : Prop := NoDup(SPpn N).
+(* Enrich with no self-communications *)
+
 End Syntax.
 
 Delimit Scope SP_scope with SP.
@@ -56,22 +69,89 @@ Notation "'If' p 'Then' B1 'Else' B2" := (Cond p B1 B2) (at level 60) : SP_scope
 Notation "'bnil'" := (End) : SP_scope.
 Notation "'nnil'" := (Empty) : SP_scope.
 
+(* 
 Check (Empty | Empty)%SP.
 Check (0 [1, bnil])%SP.
 Check (Empty | 0 [1, bnil])%SP.
 Check (If 0 Then bnil Else bnil)%SP.
 Check (0!zero; 0?; 1+left; bnil)%SP.
+*)
 
 Section Semantics.
 
-Definition sp_evaluate (e:Expr) (v:Value) : Value :=
-match e with
- | zero => 0
- | this => v
- | succ_this => S v
+(** Precongruence of behaviours. Will be used to define unfolding. *)
+Definition PrecongrB := (eq (A := Behaviour)).
+
+(** Sugar for (value, behaviour). Makes the definition of congr readable. *)
+Definition ProcessTerm : Type := Value * Behaviour.
+
+(** Returns the value and behaviour of process p in a network, if the process exists in the network. *)
+Fixpoint get_proc (p:Pid) (N:Network) : option ProcessTerm :=
+match N with
+| nnil%SP => None
+| (q [ v, B ])%SP => if (p =? q) then Some (v, B) else None
+| (Par N1 N2) => match (get_proc p N1), (get_proc p N2) with
+                  | Some (v,B), _ => Some (v,B)
+                  | None, Some (v,B) => Some (v,B)
+                  | _, _ => None
+                  end
 end.
 
+(** get_proc makes sense wrt SPpn. Case 1/2: the process is not there. *)
+Lemma get_proc_None : forall (p:Pid) (N:Network), ~(In p (SPpn N)) -> (get_proc p N) = None.
+intros.
+induction N.
++ auto.
++ simpl.
+  simpl SPpn in H.
+  apply not_in_cons in H.
+  destruct H.
+  rewrite <- Nat.eqb_eq in H.
+  rewrite not_true_iff_false in H.
+  rewrite H.
+  trivial.
++ simpl in H.
+  simpl.
+  rewrite IHN1.
+  rewrite IHN2.
+  auto.
+  intro; apply H.
+  apply in_or_app; auto.
+  intro; apply H.
+  apply in_or_app; auto.
+Qed.
+
+(** get_proc makes sense wrt SPpn. Case 2/2: the process is there. *)
+Lemma get_proc_Some : forall (p:Pid) (N:Network), In p (SPpn N) -> exists T, (get_proc p N) = Some T.
+induction N; simpl; intros.
++ inversion H.
++ inversion_clear H.
+  symmetry in H0; rewrite <- Nat.eqb_eq in H0.
+  rewrite H0.
+  exists (v,b); auto.
+  inversion H0.
++ elim (in_dec eq_pid_dec p (SPpn N1)); intros.
+  elim IHN1; auto; intros.
+  rewrite H0.
+  exists x; destruct x; auto.
+  rewrite (get_proc_None _ _ b).
+  elim (in_app_or _ _ _ H); intros.
+  elim b; auto.
+  elim IHN2; auto; intros.
+  rewrite H1.
+  exists x; destruct x; auto.
+Qed.
+
+Lemma Some_get_proc : forall (p:Pid) (N:Network) T, (get_proc p N) = Some T -> In p (SPpn N).
+intros.
+elim (in_dec eq_pid_dec p (SPpn N)); auto.
+intro.
+rewrite get_proc_None in H; auto.
+inversion H.
+Qed.
+
 Inductive Precongr : Network -> Network -> Prop :=
+ | Lift p v B B' : PrecongrB B B' -> Precongr (p [v, B])%SP (p [v, B'])%SP
  | Refl N : Precongr N N
  | Sym N1 N2 : Precongr (N1 | N2) (N2 | N1)
  | AssocL N1 N2 N3 : Precongr (N1|(N2|N3)) ((N1|N2)|N3)
@@ -82,6 +162,136 @@ Inductive Precongr : Network -> Network -> Prop :=
  | PZero p v : Precongr (Process p v End) Empty
  | NZero N : Precongr (Par N Empty) N
 .
+
+Definition PrecongrPT (P P': option ProcessTerm) : Prop :=
+match P, P' with
+| Some (v, B), Some (v', B')%SP => if v =? v' then PrecongrB B B' else False
+| Some (v, B), None => PrecongrB B bnil%SP
+| None, None => True
+| _, _ => False
+end.
+
+Definition Precongr_op (N N': Network) : Prop := forall p, PrecongrPT (get_proc p N) (get_proc p N').
+
+Variable N N': Network.
+Hypothesis WFN: WellFormedNetwork N.
+Hypothesis WFN': WellFormedNetwork N'.
+
+Lemma NoDup_app_not_in : forall A (l l':list A), NoDup (l ++ l') -> forall x, In x l -> ~In x l'.
+induction l; simpl; intros; intro; auto.
+inversion_clear H0.
++ inversion_clear H.
+  apply H0.
+  apply in_or_app.
+  rewrite H2; auto.
++ inversion_clear H.
+  apply (IHl l') with x; auto.
+Qed.
+
+Lemma get_proc_wf_par : WellFormedNetwork (N | N')%SP -> forall p, (get_proc p (N | N')%SP) = (get_proc p (N' | N)%SP).
+intros.
+simpl.
+case_eq (get_proc p N); case_eq (get_proc p N'); auto.
+intros.
+exfalso.
+red in H.
+simpl in H.
+apply (NoDup_app_not_in _ _ _ H p).
++ apply Some_get_proc with p1; auto.
++ apply Some_get_proc with p0; auto.
+Qed.
+
+Lemma Precongr_char_if : Precongr N N' -> Precongr_op N N'.
+intros; induction H; intro.
++ red; unfold get_proc.
+  case_eq (Nat.eqb p0 p); auto.
+  rewrite Nat.eqb_refl; auto.
++ case_eq (get_proc p N); intros; simpl; auto.
+  destruct p0; rewrite Nat.eqb_refl; red; auto.
++ 
+
+Lemma Precongr_char_only_if : forall N N', Precongr_op N N' -> Precongr N N'.
+
+(* See https://imada.sdu.dk/~petersk/sn/doc/BinaryTrees.html for Variable and Hypothesis. *)
+
+Lemma congr_refl : forall N:Network, congr N N.
+intros.
+induction N; unfold congr; intros; simpl; auto.
+Qed.
+
+(** Reflexivity of Precongr *)
+Lemma Precongr_refl : forall N:Network, Precongr N N.
+intros.
+apply Equiv.
+apply congr_refl.
+Qed.
+
+(** Symmetry of congr *)
+Lemma congr_sym : forall N N':Network, congr N N' -> congr N' N.
+intros.
+unfold congr in H.
+unfold congr.
+symmetry in H.
+apply H.
+Qed.
+
+(** Parallel law of congr *)
+Lemma congr_par : forall N N':Network, WellFormedNetwork (N|N') -> congr (N|N') (N'|N).
+intros.
+red. simpl.
+intros.
+case_eq (get_proc p N).
+
+(** congr is preserved by parallel composition. *)
+Lemma congr_par_ctx : forall N1 N2 N'1 N'2: Network, WellFormedNetwork (N1|N2) -> congr N1 N'1 -> congr N2 N'2 -> congr (N1|N2) (N'1 | N'2).
+intros.
+red; intros.
+red in H0, H1.
+simpl.
+rewrite H0.
+rewrite H1.
+trivial.
+Qed.
+
+Lemma congr_nil : forall (N:Network), WellFormedNetwork (N|nnil) -> congr (N|nnil) N.
+intros.
+red; intros.
+simpl.
+case_eq (get_proc p N); auto.
+intros.
+induction p0.
+trivial.
+Qed.
+
+(** Transivity of congr. *)
+Lemma congr_trans : forall (N1 N2 N3:Network), congr N1 N2 -> congr N2 N3 -> congr N1 N3.
+unfold congr; intros.
+rewrite H.
+apply H0.
+Qed.
+
+(** Associativity of congr *)
+Lemma congr_assocL : forall (N1 N2 N3:Network), WellFormedNetwork (N1|N2|N3) -> congr (N1|(N2|N3)) ((N1|N2)|N3).
+intros.
+induction N1.
++ apply (congr_trans (nnil|(N2|N3)) (N2|N3) ((nnil|N2)|N3)).
+  apply 
+  red.
+  simpl.
+  apply congr_refl.
+
+(** Associativity of Precongr *)
+Lemma Precongr_assocL : forall (N1 N2 N3:Network), Precongr (N1|(N2|N3)) ((N1|N2)|N3).
+intros.
+apply Equiv.
+
+
+Definition sp_evaluate (e:Expr) (v:Value) : Value :=
+match e with
+ | zero => 0
+ | this => v
+ | succ_this => S v
+end.
 
 Inductive SPTo : Network -> Network -> Prop :=
  | S_Com p v q u e B B' : SPTo ( p [v, q!e;B] | q [u, p?;B'] )%SP
@@ -107,4 +317,5 @@ Notation "N --> N'" := (SPTo N N') (at level 50, left associativity) : SP_scope.
 Notation "N -->* N'" := (SPToStar N N') (at level 50, left associativity) : SP_scope.
 
 End Semantics.
+
 

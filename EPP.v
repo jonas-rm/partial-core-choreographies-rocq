@@ -389,17 +389,10 @@ Qed.
 End PaperExample1.
 
 
-Fixpoint SPpn (N:Network) : list Pid :=
-match N with
-| Empty => nil
-| Process p v B => (p :: nil)
-| Par N N' => (SPpn N) ++ (SPpn N')
-end
-.
+Section EPPProperties.
 
-Definition WellFormedNetwork (N:Network) : Prop := NoDup(SPpn N).
+(* The EPPs of two configurations with the same choreography and equivalent states are the same *)
 
-(* Enrich with no self-communications *)
 
 (* Lemma set_union_whatever : forall (p p':Pid) (P:set Pid),
   {In p P /\ In p' P /\ (set_union_pid (p::p'::nil) P) = P} + 
@@ -429,40 +422,41 @@ induction P; simpl; auto.
 inversion a.
  *)
 
+Lemma epp_list_preserves_pids :
+  forall (conf:Configuration) (pids:list Pid) (WF:WellFormedConf conf) (N:Network),
+  (epp_list conf pids WF) = Some N -> (eq_pidset pids (SPpn N)).
+Proof.
+induction pids; intros.
+- inversion H.
+  apply perm_nil.
+- simpl in H.
+  revert H.
+  set (C := (fst conf)).
+  case_eq (bproj C a).
+  + case_eq (epp_list conf pids WF); intros.
+    * inversion H1.
+      simpl.
+      apply perm_skip.
+      apply IHpids with WF; auto.
+    * inversion H1.
+  + intros; inversion H0.
+Qed.
+
 Lemma epp_preserves_pids (conf:Configuration) :
   forall (C:Choreography) (s:State) (N:Network) (WF:WellFormedConf conf),
   conf = (C,s) -> (epp conf WF) = Some N -> (eq_pidset (pn C) (SPpn N)).
 Proof.
 intros.
-subst.
-simpl in WF.
-revert N H0.
-induction C; intros.
-(* End *)
-simpl in H0.
-simpl.
-inversion_clear H0.
-simpl.
-apply perm_nil.
-(* Interaction *)
-induction e.
-(* Com *)
-inversion_clear WF.
-
-set (NoDupPn := pn_is_set (Com p e p0; C) WF).
-simpl. simpl in NoDupPn.
-simpl in H0.
-
-
-rewrite (set_union_pid_char).
-rewrite (set_union_pid_char) in NoDupPn.
-simpl in H0.
-
-
+apply epp_list_preserves_pids with conf WF.
+revert WF H0.
+rewrite H.
+simpl; auto.
 Qed.
 
 Lemma epp_preserves_wellformedness (conf:Configuration) (WF:WellFormedConf conf) : forall N, (epp conf WF) = Some N -> WellFormedNetwork N.
 Proof.
 intros.
 destruct conf.
-Qed.
+.
+
+End EPPProperties.
