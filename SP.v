@@ -285,22 +285,14 @@ Lemma Precongr_assocL : forall (N1 N2 N3:Network), Precongr (N1|(N2|N3)) ((N1|N2
 intros.
 apply Equiv.
 
-
-Definition sp_evaluate (e:Expr) (v:Value) : Value :=
-match e with
- | zero => 0
- | this => v
- | succ_this => S v
-end.
-
 Inductive SPTo : Network -> Network -> Prop :=
  | S_Com p v q u e B B' : SPTo ( p [v, q!e;B] | q [u, p?;B'] )%SP
-                               ( p [v, B] | q [(sp_evaluate e v), B'] )%SP
+                               ( p [v, B] | q [(evaluate_on_value e v), B'] )%SP
  | S_Sel p v q u l B f {B':Behaviour}: (f l = inl B') -> SPTo ( Par (Process p v (Sel q l B)) (Process q u (Branching p f)) )
                                ( Par (Process p v B) (Process q u B') )
- | S_Then p v q u e B B1 B2 : ((sp_evaluate e v) = u) -> SPTo ( Par (Process p v (Send q e B)) (Process q u (Cond p B1 B2)) )
+ | S_Then p v q u e B B1 B2 : ((evaluate_on_value e v) = u) -> SPTo ( Par (Process p v (Send q e B)) (Process q u (Cond p B1 B2)) )
                                ( Par (Process p v B) (Process q u B1) )
- | S_Else p v q u e B1 B2 B : ((sp_evaluate e v) <> u) -> SPTo ( Par (Process p v (Send q e B)) (Process q u (Cond p B1 B2)) )
+ | S_Else p v q u e B1 B2 B : ((evaluate_on_value e v) <> u) -> SPTo ( Par (Process p v (Send q e B)) (Process q u (Cond p B1 B2)) )
                                ( Par (Process p v B) (Process q u B2) )
  | S_Par N M N' : SPTo N N' -> SPTo (Par N M) (Par N' M)
  | S_Struct N1 N1' N2' N2 : Precongr N1 N1' -> SPTo N1' N2' -> Precongr N2' N2 -> SPTo N1 N2
