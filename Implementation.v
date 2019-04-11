@@ -1,5 +1,6 @@
 Require Export MC.
 Require Export Kleene.
+Require Import Coq.Program.Equality.
 
 Section to_be_moved.
 
@@ -48,7 +49,89 @@ Fixpoint vsum {n} (v:t nat n) :=
   | x :: xs => x + vsum xs
 end.
 
+Lemma terminated_does_not_reduce : forall C C' s s', Precongr C End -> ~MCTo (C,s) (C',s').
+intros; intro.
+rewrite (not_end_precongr' _ H) in H0; clear H.
+dependent induction H0.
+assert (C1' = End).
++ clear H1 IHMCTo C2' C' H0 s s'.
+  dependent induction H; auto.
++ rewrite H2 in IHMCTo, H1; clear H C1' H2.
+  apply IHMCTo with C2' s s'; auto.
+Qed.
+
+Lemma terminated_does_not_reduce_conf : forall c c', terminated c -> ~MCTo c c'.
+intros.
+induction c; induction c'.
+rename a into C; rename a0 into C'; rename b into s; rename b0 into s'.
+red in H; simpl in H.
+apply terminated_does_not_reduce; auto.
+Qed.
+
 End to_be_moved.
+
+Section Implementation.
+
+(** The type of partial functions and the notion of a choreography implementing one.
+    We can only represent computable functions, but this is not a problem. *)
+
+Definition PFunction (n:nat) := t nat n -> option nat.
+
+Definition implements (C:Choreography) {n} (f:PFunction n) (ps:t Pid n) (q:Pid) :=
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
+  (forall y, f xs = Some y -> exists s', MCToStar (C,s) (End,s') /\ s' q = y) /\
+  (f xs = None -> ~exists s', MCToStar (C,s) (End,s')).
+
+(** For convenience. *)
+Lemma implements_None : forall C {n} f ps q, implements C f ps q -> 
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
+  f xs = None -> ~exists s', MCToStar (C,s) (End,s').
+unfold implements; intros.
+elim (H _ _ H0); auto.
+Qed.
+
+Lemma implements_Some : forall C {n} f ps q, implements C f ps q -> 
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
+  forall y, f xs = Some y -> exists s', MCToStar (C,s) (End,s') /\ s' q = y.
+unfold implements; intros.
+elim (H _ _ H0); auto.
+Qed.
+
+(** Currying for simple cases. *)
+Definition make_pf_1 (f:nat -> nat) : PFunction 1
+  := fun xs => Some (f (hd xs)).
+
+Definition make_pf_2 (f:nat -> nat -> nat) : PFunction 2
+  := fun xs => Some (f (hd xs) (hd (tl xs))).
+
+Definition make_pf_3 (f:nat -> nat -> nat -> nat) : PFunction 3
+  := fun xs => Some (f (hd xs) (hd (tl xs)) (hd (tl (tl xs)))).
+
+(** We recover the examples from the paper. *)
+Definition C_Inc (p t:Pid) := p # this --> t; t # succ_this --> p; End.
+
+Lemma C_Inc_char : forall p t s, let s1 := update s t (evaluate this s p) in
+  MCToStar (C_Inc p t, s) (End, (update s1 p (evaluate succ_this s1 t))).
+intros; eapply ToTran; apply ToSingle; apply C_Com.
+Qed.
+
+Lemma C_Inc_correct : forall p t, implements (C_Inc p t) (make_pf_1 (fun n => S n)) [p] p.
+unfold make_pf_1; split; intros; inversion H0.
+set (s1 := update s t (evaluate this s p)).
+unfold C_Inc; exists (update s1 p (evaluate succ_this s1 t)).
+split.
++ apply C_Inc_char.
++ assert (xs = [s p]).
+  - apply eq_nth_iff; intros.
+    rewrite <- H.
+    repeat rewrite nth_hd'; auto.
+  - unfold s1; clear s1; simpl.
+    rewrite H1; clear H1 H2 H0 H.
+    simpl; unfold update.
+    repeat rewrite <- beq_nat_refl; auto.
+Qed.
+
+End Implementation.
 
 (** * Extensions of MC
     We require some additional operators on MC for our encoding. *)
@@ -63,14 +146,141 @@ Fixpoint fatsemi (C C':Choreography) : Choreography :=
   | If p == q Then C1 Else C2 => If p == q Then (fatsemi C1 C') Else (fatsemi C2 C')
   end.
 
-Fixpoint single_exit_point (C:Choreography) : bool :=
+Notation "C ;; C'" := (fatsemi C C') (at level 90).
+
+Fixpoint single_exit_point (C:Choreography) : Prop :=
   match C with
-  | End => true
+  | End => True
   | eta; C' => single_exit_point C'
-  | If p == q Then C1 Else C2 => xorb (single_exit_point C1) (single_exit_point C2)
+  | If p == q Then C1 Else C2 => (single_exit_point C1) \/ (single_exit_point C2)
   end.
 
-(** Missing semantic characterization. *)
+Lemma fatsemi_precongr : forall C C1 C2, Precongr C1 C2 -> Precongr (C1;;C) (C2;;C).
+intros; induction H.
++ apply Refl.
++ apply Trans with (C2;;C); auto.
++ apply EtaEta; auto.
++ apply EtaCond; auto.
++ apply CondEta; auto.
++ apply CondCond; auto.
++ apply CtxEta; auto.
++ apply CtxCond; auto.
+Qed.
+
+Lemma fatsemi_End : forall C, (C;;End) = C.
+induction C; simpl; auto.
++ rewrite IHC; auto.
++ rewrite IHC1; rewrite IHC2; auto.
+Qed.
+
+Lemma fatsemi_End_inv : forall C C', (C;;C') = End -> C = End /\ C' = End.
+induction C; split; auto; try inversion H.
+Qed.
+
+(** Semantic characterization - Lemma 1. *)
+Lemma MCTo_inv : forall c c', MCTo c c' ->
+    (exists p e q C s, c = (p#e-->q; C, s) /\ c' = (C,update s q (evaluate e s p)))
+    \/ (exists p q l C s, c = (Sel p q l; C, s) /\ c' = (C,s))
+    \/ (exists p q C1 C2 s, c = (If p == q Then C1 Else C2, s) /\ s p = s q /\ c' = (C1,s))
+    \/ (exists p q C1 C2 s, c = (If p == q Then C1 Else C2, s) /\ s p <> s q /\ c' = (C2,s))
+    \/ (exists C s C' s' C1 C2, c = (C,s) /\ c' = (C',s') /\ Precongr C C1 /\ Precongr C2 C' /\ MCTo (C1,s) (C2,s')).
+intros; inversion H; auto.
++ left.
+  exists p; exists e; exists q; exists C; exists s; split; auto.
++ right; left.
+  exists p; exists q; exists l; exists C; exists s; split; auto.
++ right; right; left.
+  exists p; exists q; exists C1; exists C2; exists s; split; auto.
++ right; right; right; left.
+  exists p; exists q; exists C1; exists C2; exists s; split; auto.
++ repeat right.
+  exists C1; exists s1; exists C2; exists s2; exists C1'; exists C2'; auto.
+Qed.
+
+Lemma MCToStar_inv : forall c c', MCToStar c c' ->
+    c = c' \/ MCTo c c' \/ exists c'', MCToStar c c'' /\ MCToStar c'' c'.
+intros; inversion H; auto.
+repeat right; exists c2; auto.
+Qed.
+
+Lemma Lemma_1_To : forall C C' C'' s s', MCTo (C,s) (C'',s') -> MCTo (C;;C',s) (C'';;C',s').
+intros.
+dependent induction H.
+- apply C_Com.
+- apply C_Sel.
+- apply C_Then; auto.
+- apply C_Else; auto.
+- apply C_Struct with (C1';;C') (C2';;C'); try (apply fatsemi_precongr; auto).
+  apply IHMCTo; auto.
+Qed.
+
+Lemma Lemma_1_ToStar : forall C C' C'' s s', MCToStar (C,s) (C', s') -> MCToStar (C;;C'',s) (C';;C'', s').
+intros.
+dependent induction H.
++ apply ToRefl.
++ apply ToSingle; apply Lemma_1_To; auto.
++ induction c2.
+  apply ToTran with (a;;C'', b); auto.
+Qed.
+
+Lemma Lemma_1_ToEnd : forall C C' s s', MCTo (C;;C',s) (End,s') ->
+  {C = End /\ MCTo (C',s) (End,s')} + {C' = End /\ MCTo (C,s) (End,s')}.
+double induction C C'; intros; auto;
+  try (right; rewrite fatsemi_End in H0; auto);
+  exfalso; clear H H0.
+  - elim (MCTo_inv _ _ H1); intros; inversion_clear H.
+    * inversion_clear H0; inversion_clear H; inversion_clear H0; inversion_clear H; inversion_clear H0.
+      inversion H2.
+      rewrite <- H3 in H; clear H4 H3 H2 H1 s' x2.
+
+(* - Precongr preserves length
+   - only length 1 reduces to End
+*)
+
+  - dependent induction H1.
+    * elim (fatsemi_End_inv _ _ x); intros.
+      inversion H0.
+    * elim (fatsemi_End_inv _ _ x); intros.
+      inversion H0.
+    * apply IHMCTo with e c e0 c0 s s'.
+      2: rewrite (not_end_precongr' _ H0); auto.
+      simpl; rewrite H.
+
+
+
+Lemma Lemma_1_1 : forall C C' s s' s'',
+  MCToStar (C,s) (End,s') -> MCToStar (C',s') (End,s'') -> MCToStar (C;;C',s) (End,s'').
+intros.
+apply ToTran with (C',s'); auto.
+replace (C',s') with (End;;C',s'); auto; apply Lemma_1_ToStar; auto.
+Qed.
+
+Lemma Lemma_1_2 : forall C C' s,
+  (forall s', ~MCToStar (C,s) (End,s')) -> forall s', ~MCToStar (C;;C',s) (End,s').
+intros; intro.
+inversion H0.
++ rewrite <- H4 in H0; clear H4 s'.
+
+(*  elim (fatsemi_End _ _ H3); intros.
+  rewrite H2 in H; apply (H _ (ToRefl _)).
++ clear H1 H2 c1 c2.
+  induction C; simpl in P; try clear IHC.
+  - apply (H _ (ToRefl _)).
+  - apply (H s'); apply ToSingle.
+    inversion P.
+    * elim (fatsemi_End _ _ H5); intros.
+      rewrite H1; rewrite H7; apply C_Com.
+    * elim (fatsemi_End _ _ H5); intros.
+      rewrite H1; rewrite H7; apply C_Sel.
+    * clear C1 C2 s1 s2 H1 H2 H3 H4.
+
+
+  inversion P.
+  - rewrite H4 in H2; clear H4 H3 s0 C0.
+
+*)
+
+
 
 (** ** Function Pi *)
 
@@ -89,8 +299,6 @@ Eval compute in (Pi PR_sub).
 *)
 
 End MC_plus.
-
-Notation "C ;; C'" := (fatsemi C C') (at level 90).
 
 (** * Definitions
     We have the usual problems with defining implementation: we need information about the size
