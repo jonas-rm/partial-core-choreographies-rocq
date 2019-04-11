@@ -1,7 +1,9 @@
 Require Import FunctionalExtensionality.
 Require Import Nat.
+Require Export List.
 Require Export Coq.Lists.ListSet.
 Require Export Sorting.Permutation.
+Require Export Setoid.
 Local Open Scope nat_scope.
 
 Require Import Basic.
@@ -262,12 +264,6 @@ apply H1 in H0.
 contradiction.
 Qed.
 
-Lemma eq_state_rest : forall s1 s2, eq_state nil s1 s2.
-Proof.
-intros. red. intros. contradiction.
-Qed.
-
-
 Lemma eq_state_nil : forall s1 s2, eq_state nil s1 s2.
 Proof.
 intros. red. intros. contradiction.
@@ -338,8 +334,38 @@ induction P.
   - right. contradict n. apply eq_state_tl with a, n.
 Qed.
 
+Lemma eq_state_refl : forall P, reflexive _ (eq_state P).
+Proof.
+repeat (red; intros). auto.
+Qed.
+
+Lemma eq_state_sym : forall P, symmetric _ (eq_state P).
+Proof.
+repeat (red; intros).
+apply symmetry, H, H0.
+Qed.
+
+Lemma eq_state_trans : forall P, transitive _ (eq_state P).
+Proof.
+red.
+intros.
+red.
+red in H, H0.
+intros.
+specialize (H p H1).
+specialize (H0 p H1).
+rewrite H. apply H0.
+Qed.
+
+Add Parametric Relation P : State (eq_state P)
+  reflexivity proved by (eq_state_refl P)
+  symmetry proved by (eq_state_sym P)
+  transitivity proved by (eq_state_trans P)
+  as eq_setate_rel.
+
+(* TODO: Perhaps Add Parametric Morphism *)
+
 (** Expression evaluation given a value for the place-holder this *)
-(* TODO: update SP_evaluate *)
 Definition evaluate_on_value (e:Expr) (v:Value) : Value :=
 match e with
  | zero => 0
@@ -348,12 +374,7 @@ match e with
 end.
 
 (** Expression evaluation on the state of a process *)
-Definition evaluate (e:Expr) (s:State) (p:Pid) : Value :=
-match e with
- | zero => 0
- | this => s p
- | succ_this => S (s p)
-end.
+Definition evaluate_on_state (e:Expr) (s:State) (p:Pid) : Value := evaluate_on_value e (s p).
 
 Definition update (s:State) (p:Pid) (v:Value) : State :=
   fun (q:Pid) => if (p =? q) then v else (s q).
@@ -366,7 +387,7 @@ Proof.
   rewrite <- beq_nat_refl; auto.
 Qed.
 
-Lemma update_locality : forall (s:State) (p:Pid) (v:Value) (P:list Pid),
+Lemma update_not_in : forall (s:State) (p:Pid) (v:Value) (P:list Pid),
   ~In p P -> eq_state P s (update s p v).
 Proof.
 intros.
@@ -394,9 +415,19 @@ intro q.
 case_eq (p =? q); trivial.
 Qed.
 
+(* Lemma updrate_swap :  forall (s: State) *)
+
+Fixpoint list_to_state (l : list (Pid * Value)) : State :=
+match l with
+| nil => fun _ => 0
+| (p,v)::l' => update (list_to_state l') p v
+end.
+
+(* Eval compute in (list_to_state ((0,0)::(1,2)::(0,1)::nil)). *)
+
 Definition eq_state_ext (s1 s2: State) : Prop := forall p, s1 p = s2 p.
 
-Lemma update_elim : forall (s:State) (p:Pid) (v1 v2:Value),
+Lemma update_update_ext : forall (s:State) (p:Pid) (v1 v2:Value),
   eq_state_ext (update (update s p v2) p v1) (update s p v1).
 Proof.
 intros.

@@ -68,7 +68,7 @@ destruct f; intros.
   apply (if (all_defined ms) && (all_defined ns) then (eval_opt _ f steps ms) else None).
 
 (* Recursion *)
-+ elim (hd ns); [idtac 1 | apply None].              (* is there an argument? *)
++ elim (hd ns); [idtac | apply None].                (* is there an argument? *)
   intro n; induction n.                              (* finally *)
   apply (eval_opt _ f1 steps (tl ns)).               (* f x1...xn *)
   destruct IHn; [rename n0 into x | apply None].

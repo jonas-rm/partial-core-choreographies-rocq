@@ -138,7 +138,7 @@ Definition Configuration : Type := Choreography * State.
 Definition WellFormedConf (conf:Configuration) : Prop := WellFormed( fst conf ).
 
 Inductive MCTo : Configuration -> Configuration -> Prop :=
- | C_Com p e q C s : MCTo ( Com p e q; C, s ) ( C, (update s q (evaluate e s p)) )
+ | C_Com p e q C s : MCTo ( Com p e q; C, s ) ( C, (update s q (evaluate_on_state e s p)) )
  | C_Sel p q l C s : MCTo ( Sel p q l; C, s ) ( C, s )
  | C_Then p q C1 C2 s : (s p = s q) -> MCTo ( If p == q Then C1 Else C2, s ) ( C1, s )
  | C_Else p q C1 C2 s : (s p <> s q) -> MCTo ( If p == q Then C1 Else C2, s ) ( C2, s )
@@ -183,13 +183,13 @@ Definition HeadTo (c:Configuration) : ~ (terminated c) -> Configuration.
 destruct c; destruct c; intros.
 elim H; apply terminated_iff_end; auto.
 destruct e.
-apply (c, update s p0 (evaluate e s p)).
+apply (c, update s p0 (evaluate_on_state e s p)).
 apply (c, s).
 apply (if ((s p) =? (s p0)) then (c1, s) else (c2, s)).
 Defined.
 
 Example HeadTo_Com : forall p e q C s HC, 
-HeadTo (Com p e q ; C, s) HC = (C, update s q (evaluate e s p)).
+HeadTo (Com p e q ; C, s) HC = (C, update s q (evaluate_on_state e s p)).
 Proof.
 intros.
 simpl.
