@@ -105,7 +105,7 @@ Notation "'If' p '==' q 'Then' C1 'Else' C2" := (Cond p q C1 C2) (at level 60).
 (* Check (1-->2[left]). *)
 (* Check (1#this--> 2). *)
 
-Section Semantics.
+Section Semantics_Definitions.
 
 Inductive Precongr : Choreography -> Choreography -> Prop :=
  | Refl C : Precongr C C
@@ -118,9 +118,6 @@ Inductive Precongr : Choreography -> Choreography -> Prop :=
  | CtxEta eta C1 C2 : Precongr C1 C2 -> Precongr (eta; C1) (eta; C2)
  | CtxCond p q C1 C2 C3 C4 : Precongr C1 C2 -> Precongr C3 C4 -> Precongr (If p == q Then C1 Else C3) (If p == q Then C2 Else C4)
 .
-
-Notation "C1 \u227c C2" := (Precongr C1 C2) (at level 50, left associativity).
-Notation "C1 \u22e0 C2" := (not (C1 \u227c C2)) (at level 50).
 
 Example sanity_check : Precongr ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 3; End) Else (Com 3 zero 2; End) )
                                 ( If 2 == 3 Then (Com 0 this 1; Com 4 succ_this 3; End) Else (Com 3 zero 2; Com 0 this 1; End) ).
@@ -152,11 +149,17 @@ Inductive MCToStar : Configuration -> Configuration -> Prop :=
  | ToTran c1 c2 c3 (P1:MCToStar c1 c2) (P2:MCToStar c2 c3) : MCToStar c1 c3
 .
 
-Notation "c --> c'" := (MCTo c c') (at level 50, left associativity).
-Notation "c -->* c'" := (MCToStar c c') (at level 50, left associativity).
-
-
 Definition terminated (c:Configuration) : Prop := Precongr (fst c) End.
+
+End Semantics_Definitions.
+
+Notation "c ---> c'" := (MCTo c c') (at level 50, left associativity).
+Notation "c --->* c'" := (MCToStar c c') (at level 50, left associativity).
+
+Notation "C1 ~<= C2" := (Precongr C1 C2) (at level 50, left associativity).
+(* Notation "C1 \u22e0 C2" := (not (C1 \u227c C2)) (at level 50). *)
+
+Section Semantics_Props.
 
 Lemma not_end_precongr : forall (C C':Choreography), C <> End -> C' = End -> ~ Precongr C C'.
 intros; intro.
@@ -204,7 +207,7 @@ simpl.
 trivial.
 Qed.
 
-Lemma HeadTo_Soundness : forall c Hc, c --> (HeadTo c Hc).
+Lemma HeadTo_Soundness : forall c Hc, c ---> (HeadTo c Hc).
 Proof.
 destruct c; intros.
 induction c.
@@ -222,7 +225,7 @@ Qed.
 
 (*
 Example MCToStar_sanity_check : forall p e q s1 C, exists s2,
-  (Com p e q ; Com p zero q ; C, s1) -->* (C, s2) /\  (eq_state_ext s2 (update s1 q 0)).
+  (Com p e q ; Com p zero q ; C, s1) --->* (C, s2) /\  (eq_state_ext s2 (update s1 q 0)).
 Proof.
 intros.
 set (c0 := (Com p e q ; Com p zero q ; C, s)).
@@ -263,14 +266,14 @@ apply beq_nat_false; auto.
 Qed.
 *)
 
-Theorem progress : forall c, ~(terminated c) -> exists c', c --> c'.
+Theorem progress : forall c, ~(terminated c) -> exists c', c ---> c'.
 Proof.
 intros.
 exists (HeadTo c H).
 apply HeadTo_Soundness.
 Qed.
 
-Theorem termination : forall C s, exists c', (C,s) -->* c' /\ terminated c'.
+Theorem termination : forall C s, exists c', (C,s) --->* c' /\ terminated c'.
 Proof.
 pose proof terminated_iff_end as T.
 induction C; intro s.
@@ -332,4 +335,4 @@ induction C; intro s.
     inversion_clear Hc'. auto.
 Qed.
 
-End Semantics.
+End Semantics_Props.
