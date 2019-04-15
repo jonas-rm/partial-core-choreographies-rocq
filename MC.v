@@ -152,8 +152,8 @@ Inductive MCToStar : Configuration -> Configuration -> Prop :=
  | ToTran c1 c2 c3 (P1:MCToStar c1 c2) (P2:MCToStar c2 c3) : MCToStar c1 c3
 .
 
-Notation "c --> c'" := (MCTo c c') (at level 50, left associativity).
-Notation "c -->* c'" := (MCToStar c c') (at level 50, left associativity).
+Notation "c ---> c'" := (MCTo c c') (at level 50, left associativity).
+Notation "c --->* c'" := (MCToStar c c') (at level 50, left associativity).
 
 
 Definition terminated (c:Configuration) : Prop := Precongr (fst c) End.
