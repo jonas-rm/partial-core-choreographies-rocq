@@ -204,7 +204,7 @@ simpl.
 trivial.
 Qed.
 
-Lemma HeadTo_Soundness : forall c Hc, c --> (HeadTo c Hc).
+Lemma HeadTo_Soundness : forall c Hc, c ---> (HeadTo c Hc).
 Proof.
 destruct c; intros.
 induction c.
@@ -263,14 +263,14 @@ apply beq_nat_false; auto.
 Qed.
 *)
 
-Theorem progress : forall c, ~(terminated c) -> exists c', c --> c'.
+Theorem progress : forall c, ~(terminated c) -> exists c', c ---> c'.
 Proof.
 intros.
 exists (HeadTo c H).
 apply HeadTo_Soundness.
 Qed.
 
-Theorem termination : forall C s, exists c', (C,s) -->* c' /\ terminated c'.
+Theorem termination : forall C s, exists c', (C,s) --->* c' /\ terminated c'.
 Proof.
 pose proof terminated_iff_end as T.
 induction C; intro s.
