@@ -1,4 +1,5 @@
 Require Export Implementation.
+Require Export Coq.Program.Equality.
 
 Section test.
 
@@ -127,6 +128,21 @@ Lemma size_0_End : forall C, size C = 0 -> C = End.
 induction C; simpl; auto; intros; inversion H.
 Qed.
 
+Lemma precongr_size_ge : forall C C', Precongr C C' -> size C <= size C'.
+intros.
+induction H; simpl; auto with arith.
++ transitivity (size C2); auto.
++ set (s1 := size C1); set (s2 := size C2); set (s3 := size C3); set (s4 := size C4).
+  rewrite Nat.min_assoc.
+  rewrite <- (Nat.min_assoc s1 s2 s3).
+  rewrite (Nat.min_comm s2 s3).
+  repeat rewrite Nat.min_assoc; auto.
++ apply le_n_S.
+  apply Nat.min_glb.
+  * transitivity (size C1); auto; apply Nat.le_min_l.
+  * transitivity (size C3); auto; apply Nat.le_min_r.
+Qed.
+
 Lemma MCTo_End_size : forall C s s', (C,s) ---> (End, s') -> size C = 1.
 intros.
 assert (size C <> 0).
@@ -150,19 +166,14 @@ assert (size C <> 0).
       rewrite H6 in H5; auto with arith.
 Qed.
 
-Lemma precongr_size_ge : forall C C', Precongr C C' -> size C <= size C'.
+Lemma fatsemi_size : forall C C', size C + size C' <= size (C;;C').
+induction C; simpl; auto with arith.
 intros.
-induction H; simpl; auto with arith.
-+ transitivity (size C2); auto.
-+ set (s1 := size C1); set (s2 := size C2); set (s3 := size C3); set (s4 := size C4).
-  rewrite Nat.min_assoc.
-  rewrite <- (Nat.min_assoc s1 s2 s3).
-  rewrite (Nat.min_comm s2 s3).
-  repeat rewrite Nat.min_assoc; auto.
-+ apply le_n_S.
-  apply Nat.min_glb.
-  * transitivity (size C1); auto; apply Nat.le_min_l.
-  * transitivity (size C3); auto; apply Nat.le_min_r.
+apply le_n_S.
+rewrite <- Nat.add_min_distr_r.
+apply Nat.min_glb.
++ etransitivity; [apply Nat.le_min_l | apply IHC1].
++ etransitivity; [apply Nat.le_min_r | apply IHC2].
 Qed.
 
 End to_be_moved.
@@ -170,49 +181,70 @@ End to_be_moved.
 Lemma fatsemi_ToEnd : forall C C' s s', (C;;C',s) ---> (End,s') ->
   {C = End /\ (C',s) ---> (End,s')} + {C' = End /\ (C,s) ---> (End,s')}.
 double induction C C'; intros; auto;
-  try (right; rewrite fatsemi_End in H0; auto);
-  exfalso; clear H H0.
-  - elim (MCTo_inv _ _ H1); intros; inversion_clear H.
-    * inversion_clear H0; inversion_clear H; inversion_clear H0; inversion_clear H; inversion_clear H0.
-      inversion H2.
-      rewrite <- H3 in H; clear H4 H3 H2 H1 s' x2.
-
-(* - Precongr preserves length
-   - only length 1 reduces to End
-*)
-
-  - dependent induction H1.
-    * elim (fatsemi_End_inv _ _ x); intros.
-      inversion H0.
-    * elim (fatsemi_End_inv _ _ x); intros.
-      inversion H0.
-    * apply IHMCTo with e c e0 c0 s s'.
-      2: rewrite (not_end_precongr' _ H0); auto.
-      simpl; rewrite H.
+  try (right; rewrite fatsemi_End in H0; auto).
+- exfalso; clear H H0.
+  generalize (MCTo_End_size _ _ _ H1); simpl; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H2 at 2.
+  etransitivity.
+  2: apply fatsemi_size.
+  replace 1 with (0+1); auto.
+  apply plus_le_compat; simpl; auto with arith.
+- exfalso; clear H H0.
+  generalize (MCTo_End_size _ _ _ H2); simpl; clear H1 H2; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H1 at 2.
+  etransitivity.
+  2: apply fatsemi_size.
+  replace 1 with (0+1); auto.
+  apply plus_le_compat; simpl; auto with arith.
+- right; split; auto.
+  rewrite fatsemi_End in H1; auto.
+- exfalso; clear H H0.
+  generalize (MCTo_End_size _ _ _ H2); simpl; clear H1 H2; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H1 at 2.
+  apply Nat.min_glb.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+- exfalso; clear H H0.
+  generalize (MCTo_End_size _ _ _ H3); simpl; clear H1 H2 H3; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H1 at 2.
+  apply Nat.min_glb.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+Qed.
 
 Lemma Lemma_1_2 : forall C C' s,
   (forall s', ~MCToStar (C,s) (End,s')) -> forall s', ~MCToStar (C;;C',s) (End,s').
 intros; intro.
-inversion H0.
-+ rewrite <- H4 in H0; clear H4 s'.
-
-(*  elim (fatsemi_End _ _ H3); intros.
-  rewrite H2 in H; apply (H _ (ToRefl _)).
-+ clear H1 H2 c1 c2.
-  induction C; simpl in P; try clear IHC.
-  - apply (H _ (ToRefl _)).
-  - apply (H s'); apply ToSingle.
-    inversion P.
-    * elim (fatsemi_End _ _ H5); intros.
-      rewrite H1; rewrite H7; apply C_Com.
-    * elim (fatsemi_End _ _ H5); intros.
-      rewrite H1; rewrite H7; apply C_Sel.
-    * clear C1 C2 s1 s2 H1 H2 H3 H4.
-
-
-  inversion P.
-  - rewrite H4 in H2; clear H4 H3 s0 C0.
-
-*)
-
-
+dependent induction H0.
++ apply (H s').
+  elim (fatsemi_End_inv _ _ x); intros.
+  rewrite H0; apply ToRefl.
++ elim (fatsemi_ToEnd _ _ _ _ P); intros.
+  - inversion_clear a; apply (H s).
+    rewrite H0; apply ToRefl; auto.
+  - inversion_clear b; apply (H s'); apply ToSingle; auto.
++ 
