@@ -51,6 +51,12 @@ Fixpoint vsum {n} (v:t nat n) :=
   | x :: xs => x + vsum xs
 end.
 
+Lemma ToTrans : forall c1 c2 c3, c1 --->* c2 -> c2 --->* c3 -> c1 --->* c3.
+intros.
+induction H; auto.
+apply ToStep with c2; auto.
+Qed.
+
 End to_be_moved.
 
 Section Implementation.
@@ -95,7 +101,7 @@ Definition C_Inc (p t:Pid) := p # this --> t; t # succ_this --> p; End.
 
 Lemma C_Inc_char : forall p t s, let s1 := update s t (evaluate_on_state this s p) in
   (C_Inc p t, s) --->* (End, (update s1 p (evaluate_on_state succ_this s1 t))).
-intros; eapply ToTran; apply ToSingle; apply C_Com.
+intros; eapply ToStep; [apply C_Com | eapply ToStep]; [apply C_Com | apply ToRefl].
 Qed.
 
 Lemma C_Inc_correct : forall p t, implements (C_Inc p t) (make_pf_1 (fun n => S n)) [p] p.
@@ -175,16 +181,16 @@ Lemma fatsemi_ToStar : forall C C' C'' s s', (C,s) --->* (C', s') -> (C;;C'',s) 
 intros.
 dependent induction H.
 + apply ToRefl.
-+ apply ToSingle; apply fatsemi_To; auto.
 + induction c2.
-  apply ToTran with (a;;C'', b); auto.
+  apply ToStep with (a;;C'', b); auto.
+  - apply fatsemi_To; auto.
 Qed.
 
 (** Semantic characterization - Lemma 1. *)
 Lemma Lemma_1_1 : forall C C' s s' s'',
   MCToStar (C,s) (End,s') -> MCToStar (C',s') (End,s'') -> MCToStar (C;;C',s) (End,s'').
 intros.
-apply ToTran with (C',s'); auto.
+apply ToTrans with (C',s'); auto.
 replace (C',s') with (End;;C',s'); auto; apply fatsemi_ToStar; auto.
 Qed.
 

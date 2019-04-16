@@ -1,5 +1,6 @@
 Require Export Basic.
 Require Export Common.
+
 Local Open Scope nat_scope.
 
 Section Syntax.
@@ -142,11 +143,20 @@ Inductive MCTo : Configuration -> Configuration -> Prop :=
  | C_Struct C1 C1' C2 C2' s1 s2 : Precongr C1 C1' -> Precongr C2' C2 -> MCTo (C1', s1) (C2', s2) -> MCTo (C1, s1) (C2, s2)
 .
 
-
+(*
 Inductive MCToStar : Configuration -> Configuration -> Prop :=
  | ToRefl c : MCToStar c c
  | ToSingle c1 c2 (P:MCTo c1 c2) : MCToStar c1 c2
  | ToTran c1 c2 c3 (P1:MCToStar c1 c2) (P2:MCToStar c2 c3) : MCToStar c1 c3
+.
+
+Definition MCToStar : Configuration -> Configuration -> Prop := clos_refl_trans_1n _ MCTo.
+*)
+
+(** We'd love to use the library definitions, but they just don't work -- and give horrible names. *)
+Inductive MCToStar : Configuration -> Configuration -> Prop :=
+ | ToRefl c : MCToStar c c
+ | ToStep c1 c2 c3 : MCTo c1 c2 -> MCToStar c2 c3 -> MCToStar c1 c3
 .
 
 Definition terminated (c:Configuration) : Prop := Precongr (fst c) End.
@@ -161,12 +171,12 @@ Notation "C1 ~<= C2" := (Precongr C1 C2) (at level 50, left associativity).
 
 Section Semantics_Props.
 
-Lemma not_end_precongr : forall (C C':Choreography), C <> End -> C' = End -> ~ Precongr C C'.
+Lemma not_end_precongr : forall (C C':Choreography), C <> End -> C' = End -> ~ C ~<= C'.
 intros; intro.
 induction H1; auto; try inversion H0.
 Qed.
 
-Lemma not_end_precongr' : forall C:Choreography, Precongr C End -> C = End.
+Lemma not_end_precongr' : forall C:Choreography, C ~<= End -> C = End.
 intros.
 elim (eq_chor_dec C End); auto.
 intro.
@@ -192,7 +202,7 @@ apply (if ((s p) =? (s p0)) then (c1, s) else (c2, s)).
 Defined.
 
 Example HeadTo_Com : forall p e q C s HC, 
-HeadTo (Com p e q ; C, s) HC = (C, update s q (evaluate_on_state e s p)).
+HeadTo (p # e --> q ; C, s) HC = (C, update s q (evaluate_on_state e s p)).
 Proof.
 intros.
 simpl.
@@ -200,7 +210,7 @@ trivial.
 Qed.
 
 Example HeadTo_Sel : forall p q l C s HC, 
-HeadTo (Sel p q l; C, s) HC = (C, s).
+HeadTo (p --> q [l]; C, s) HC = (C, s).
 Proof.
 intros.
 simpl.
@@ -290,10 +300,9 @@ induction C; intro s.
   induction c1 as (C1, s1).
   elim (IHC s1); intros c' Hc'.
   inversion_clear c'; exists c'; split; auto.
-  inversion_clear Hc'. 
-  apply ToTran with (C,s1); auto.
+  inversion_clear Hc'.
+  apply ToStep with (C,s1); auto.
   replace C with C1.
-  apply ToSingle.
   rewrite H.
   apply HeadTo_Soundness.
   unfold c0 in H; induction e; simpl in H; inversion H; auto.
@@ -310,9 +319,8 @@ induction C; intro s.
   + elim (IHC1 s1); intros c' Hc'.
     inversion_clear c'; exists c'; split; auto.
     inversion_clear Hc'. 
-    apply ToTran with (CT,s1); auto.
+    apply ToStep with (CT,s1); auto.
     replace CT with C1.
-    apply ToSingle.
     rewrite H.
     apply HeadTo_Soundness.
     unfold c0 in H.
@@ -323,9 +331,8 @@ induction C; intro s.
   + elim (IHC2 s1); intros c' Hc'.
     inversion_clear c'; exists c'; split; auto.
     inversion_clear Hc'. 
-    apply ToTran with (CE,s1); auto.
+    apply ToStep with (CE,s1); auto.
     replace CE with C1.
-    apply ToSingle.
     rewrite H.
     apply HeadTo_Soundness.
     unfold c0 in H.

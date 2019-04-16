@@ -186,7 +186,7 @@ double induction C C'; intros; auto;
   generalize (MCTo_End_size _ _ _ H1); simpl; intros.
   inversion H.
   apply lt_irrefl with 0.
-  apply lt_le_trans with 1; auto.
+  apply lt_le_tran  s with 1; auto.
   rewrite <- H2 at 2.
   etransitivity.
   2: apply fatsemi_size.
