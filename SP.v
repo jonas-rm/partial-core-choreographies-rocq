@@ -18,6 +18,46 @@ match o with
  | None => false
 end.
 
+Lemma NoDup_app :
+  forall A (P Q:set A),
+  (NoDup (P ++ Q)) -> (NoDup P) /\ (NoDup Q).
+Proof.
+intros.
+induction P.
+split.
+apply NoDup_nil.
+trivial.
+split.
+simpl in H.
+apply NoDup_cons_iff in H.
+inversion_clear H.
+apply NoDup_cons.
+(* ~ In a (P ++ Q) -> ~ In a P *)
+set (myH := (in_or_app P Q a)).
+apply or_over_impl in myH; inversion_clear myH.
+intro.
+apply H0.
+apply in_or_app.
+auto.
+elim IHP; auto.
+simpl in H.
+inversion H.
+elim IHP; auto.
+Qed.
+
+Lemma NoDup_app_not_in :
+  forall A (l l':list A),
+  NoDup (l ++ l') -> forall x, In x l -> ~In x l'.
+induction l; simpl; intros; intro; auto.
+inversion_clear H0.
++ inversion_clear H.
+  apply H0.
+  apply in_or_app.
+  rewrite H2; auto.
++ inversion_clear H.
+  apply (IHl l') with x; auto.
+Qed.
+
 End ToMove.
 
 Section Syntax.
@@ -173,22 +213,23 @@ end.
 
 Definition Precongr_op (N N': Network) : Prop := forall p, PrecongrPT (get_proc p N) (get_proc p N').
 
-Variable N N': Network.
-Hypothesis WFN: WellFormedNetwork N.
-Hypothesis WFN': WellFormedNetwork N'.
-
-Lemma NoDup_app_not_in : forall A (l l':list A), NoDup (l ++ l') -> forall x, In x l -> ~In x l'.
-induction l; simpl; intros; intro; auto.
-inversion_clear H0.
-+ inversion_clear H.
-  apply H0.
-  apply in_or_app.
-  rewrite H2; auto.
-+ inversion_clear H.
-  apply (IHl l') with x; auto.
+Lemma WellFormedNetwork_par :
+  forall (N N': Network), WellFormedNetwork (N | N')%SP -> WellFormedNetwork N /\ WellFormedNetwork N'.
+intros.
+red in H.
+split.
+- red.
+  simpl in H.
+  set (H' := NoDup_app Pid (SPpn N) (SPpn N')).
+  apply (H' H).
+- red.
+  simpl in H.
+  set (H' := NoDup_app Pid (SPpn N) (SPpn N')).
+  apply (H' H).
 Qed.
 
-Lemma get_proc_wf_par : WellFormedNetwork (N | N')%SP -> forall p, (get_proc p (N | N')%SP) = (get_proc p (N' | N)%SP).
+Lemma get_proc_wf_par :
+forall (N N': Network), WellFormedNetwork (N | N')%SP -> forall p, (get_proc p (N | N')%SP) = (get_proc p (N' | N)%SP).
 intros.
 simpl.
 case_eq (get_proc p N); case_eq (get_proc p N'); auto.
@@ -196,21 +237,24 @@ intros.
 exfalso.
 red in H.
 simpl in H.
-apply (NoDup_app_not_in _ _ _ H p).
+apply (NoDup_app_not_in Pid (SPpn N) (SPpn N') H p).
 + apply Some_get_proc with p1; auto.
 + apply Some_get_proc with p0; auto.
 Qed.
 
-Lemma Precongr_char_if : Precongr N N' -> Precongr_op N N'.
-intros; induction H; intro.
+Lemma Precongr_char_if : forall (N N': Network), WellFormedNetwork N -> WellFormedNetwork N' -> Precongr N N' -> Precongr_op N N'.
+intros; induction H1; intro.
 + red; unfold get_proc.
   case_eq (Nat.eqb p0 p); auto.
   rewrite Nat.eqb_refl; auto.
 + case_eq (get_proc p N); intros; simpl; auto.
   destruct p0; rewrite Nat.eqb_refl; red; auto.
-+ 
++ red.
+  set (H1 := (get_proc_wf_par N1 N2 H)).
+  case (get_proc p (N1 | N2)).
 
 Lemma Precongr_char_only_if : forall N N', Precongr_op N N' -> Precongr N N'.
+intros
 
 (* See https://imada.sdu.dk/~petersk/sn/doc/BinaryTrees.html for Variable and Hypothesis. *)
 
