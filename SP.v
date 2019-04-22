@@ -10,56 +10,6 @@ Require Import FunInd.
 
 Local Open Scope nat_scope.
 
-Section ToMove.
-
-Definition is_defined (A:Type) (o:option A) : bool :=
-match o with
- | Some a => true
- | None => false
-end.
-
-Lemma NoDup_app :
-  forall A (P Q:set A),
-  (NoDup (P ++ Q)) -> (NoDup P) /\ (NoDup Q).
-Proof.
-intros.
-induction P.
-split.
-apply NoDup_nil.
-trivial.
-split.
-simpl in H.
-apply NoDup_cons_iff in H.
-inversion_clear H.
-apply NoDup_cons.
-(* ~ In a (P ++ Q) -> ~ In a P *)
-set (myH := (in_or_app P Q a)).
-apply or_over_impl in myH; inversion_clear myH.
-intro.
-apply H0.
-apply in_or_app.
-auto.
-elim IHP; auto.
-simpl in H.
-inversion H.
-elim IHP; auto.
-Qed.
-
-Lemma NoDup_app_not_in :
-  forall A (l l':list A),
-  NoDup (l ++ l') -> forall x, In x l -> ~In x l'.
-induction l; simpl; intros; intro; auto.
-inversion_clear H0.
-+ inversion_clear H.
-  apply H0.
-  apply in_or_app.
-  rewrite H2; auto.
-+ inversion_clear H.
-  apply (IHl l') with x; auto.
-Qed.
-
-End ToMove.
-
 Section Syntax.
 
 Inductive Behaviour : Type :=
@@ -211,6 +161,25 @@ match P, P' with
 | _, _ => False
 end.
 
+Lemma PrecongrPT_sym_Some : forall (P:ProcessTerm), PrecongrPT (Some P) (Some P).
+intros.
+simpl.
+destruct P.
+case_eq (v =? v).
+- intros.
+  reflexivity.
+- intro.
+  rewrite Nat.eqb_neq in H.
+  contradiction.
+Qed.
+
+Lemma PrecongrPT_sym : forall (op: option ProcessTerm), PrecongrPT op op.
+intros.
+case op.
+- apply PrecongrPT_sym_Some.
+- simpl; auto.
+Qed.
+
 Definition Precongr_op (N N': Network) : Prop := forall p, PrecongrPT (get_proc p N) (get_proc p N').
 
 Lemma WellFormedNetwork_par :
@@ -242,6 +211,66 @@ apply (NoDup_app_not_in Pid (SPpn N) (SPpn N') H p).
 + apply Some_get_proc with p0; auto.
 Qed.
 
+Lemma get_proc_wf_assoc :
+forall (N1 N2 N3: Network), WellFormedNetwork (N1 | N2 | N3)%SP -> forall p, (get_proc p (N1 | N2 | N3)%SP) = (get_proc p ((N1 | N2) | N3)%SP).
+intros.
+red in H.
+simpl in H.
+set (Hin := (in_dec Nat.eq_dec p (SPpn N1 ++ SPpn N2 ++ SPpn N3))).
+inversion Hin.
++ set (myH := (NoDup_pid_app_or p (SPpn N1) (SPpn N2 ++ SPpn N3) H H0)).
+  destruct myH.
+  - simpl.
+    rewrite (get_proc_None p N2).
+    rewrite (get_proc_None p N3).
+    destruct (get_proc p N1); auto.
+    destruct p0; auto.
+    set (myH := (NoDup_app_not_in Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H p H1)).
+    apply (not_in_app Pid p (SPpn N2) (SPpn N3) Nat.eq_dec myH).
+    set (myH := (NoDup_app_not_in Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H p H1)).
+    apply (not_in_app Pid p (SPpn N2) (SPpn N3) Nat.eq_dec myH).
+  - simpl.
+    rewrite (get_proc_None p N1).
+    set (ndp := (NoDup_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3)) H).
+    destruct ndp.
+    set (myH := (NoDup_pid_app_or p (SPpn N2) (SPpn N3)) H3 H1).
+    inversion myH.
+    * rewrite (get_proc_None p N3).
+      destruct (get_proc p N2); auto.
+      apply (NoDup_app_not_in Pid (SPpn N2)); auto.
+    * rewrite (get_proc_None p N2).
+      destruct (get_proc p N3); auto.
+      destruct p0; auto.
+      set (H5 := (NoDup_app_comm Pid (SPpn N2) (SPpn N3) H3)).
+      apply (NoDup_app_not_in Pid (SPpn N3)); auto.
+    * rewrite in_app_iff in H0.
+      rewrite or_comm in H0.
+      rewrite <- in_app_iff in H0.
+      set (myH := NoDup_app_not_in Pid (SPpn N2 ++ SPpn N3) (SPpn N1)).
+      set (myH2 := NoDup_app_comm Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H).
+      apply (myH myH2 p H1).
++ simpl.
+  rewrite (get_proc_None p N1).
+  rewrite (get_proc_None p N2).
+  rewrite (get_proc_None p N3); auto.
+  set (myH := elim_not_In_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
+  inversion_clear myH.
+  set (myH := NoDup_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H).
+  inversion_clear myH.
+  set (myH := elim_not_In_app Pid (SPpn N2) (SPpn N3) p H2).
+  inversion_clear myH.
+  auto.
+  set (myH := elim_not_In_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
+  inversion_clear myH.
+  set (myH := NoDup_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H).
+  inversion_clear myH.
+  set (myH := elim_not_In_app Pid (SPpn N2) (SPpn N3) p H2).
+  inversion_clear myH.
+  auto.
+  set (myH := elim_not_In_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
+  inversion_clear myH; auto.
+Qed.
+
 Lemma Precongr_char_if : forall (N N': Network), WellFormedNetwork N -> WellFormedNetwork N' -> Precongr N N' -> Precongr_op N N'.
 intros; induction H1; intro.
 + red; unfold get_proc.
@@ -249,26 +278,39 @@ intros; induction H1; intro.
   rewrite Nat.eqb_refl; auto.
 + case_eq (get_proc p N); intros; simpl; auto.
   destruct p0; rewrite Nat.eqb_refl; red; auto.
-+ red.
-  set (H1 := (get_proc_wf_par N1 N2 H)).
-  case (get_proc p (N1 | N2)).
++ set (H1 := (get_proc_wf_par N1 N2 H)).
+  rewrite <- (H1 p).
+  apply PrecongrPT_sym.
++ rewrite <- get_proc_wf_assoc.
+  destruct (get_proc p (N1 | N2 | N3)).
+  simpl.
+  destruct p0.
+  case_eq (Nat.eqb v v).
+  rewrite Nat.eqb_eq.
+  intro.
+  red; auto.
+  rewrite Nat.eqb_neq.
+  intro.
+  contradiction.
+  simpl; auto.
+  assumption.
++ admit.
++ admit.
++ admit.
++ admit.
++ admit.
++ admit.
+Admitted.
 
 Lemma Precongr_char_only_if : forall N N', Precongr_op N N' -> Precongr N N'.
-intros
+Admitted.
 
 (* See https://imada.sdu.dk/~petersk/sn/doc/BinaryTrees.html for Variable and Hypothesis. *)
-
+(* (* 
 Lemma congr_refl : forall N:Network, congr N N.
 intros.
 induction N; unfold congr; intros; simpl; auto.
-Qed.
-
-(** Reflexivity of Precongr *)
-Lemma Precongr_refl : forall N:Network, Precongr N N.
-intros.
-apply Equiv.
-apply congr_refl.
-Qed.
+Qed. *)
 
 (** Symmetry of congr *)
 Lemma congr_sym : forall N N':Network, congr N N' -> congr N' N.
@@ -323,11 +365,13 @@ induction N1.
   red.
   simpl.
   apply congr_refl.
+ *)
 
 (** Associativity of Precongr *)
-Lemma Precongr_assocL : forall (N1 N2 N3:Network), Precongr (N1|(N2|N3)) ((N1|N2)|N3).
+(* Lemma Precongr_assocL : forall (N1 N2 N3:Network), Precongr (N1|(N2|N3)) ((N1|N2)|N3).
 intros.
 apply Equiv.
+ *)
 
 Inductive SPTo : Network -> Network -> Prop :=
  | S_Com p v q u e B B' : SPTo ( p [v, q!e;B] | q [u, p?;B'] )%SP
@@ -349,8 +393,8 @@ Inductive SPToStar : Network -> Network -> Prop :=
 .
 
 Bind Scope SP_scope with SPTo.
-Notation "N --> N'" := (SPTo N N') (at level 50, left associativity) : SP_scope.
-Notation "N -->* N'" := (SPToStar N N') (at level 50, left associativity) : SP_scope.
+Notation "N ---> N'" := (SPTo N N') (at level 50, left associativity) : SP_scope.
+Notation "N --->* N'" := (SPToStar N N') (at level 50, left associativity) : SP_scope.
 
 End Semantics.
 

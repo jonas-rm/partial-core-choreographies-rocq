@@ -73,6 +73,129 @@ apply NoDup_cons; auto.
 intro; apply H; right; auto.
 Qed.
 
+Definition or_add_left : forall A B C, B \/ C -> (A \/ B) \/ C.
+intros.
+inversion H; auto.
+Qed.
+
+Definition is_defined (A:Type) (o:option A) : bool :=
+match o with
+ | Some a => true
+ | None => false
+end.
+
+Lemma not_in_app :
+  forall (A:Type) (a:A) (l l':list A),
+  (forall x y : A, {x = y} + {x <> y}) -> ~ In a (l ++ l') -> ~In a l /\ ~In a l'.
+intros.
+induction l; auto.
+simpl.
+simpl in H.
+apply deMorganNotOr in H.
+destruct H.
+set (myH := IHl H0).
+destruct myH.
+split; auto.
+red.
+intros.
+inversion H3; auto.
+Qed.
+
+Lemma NoDup_app :
+  forall A (P Q:list A),
+  (NoDup (P ++ Q)) -> (NoDup P) /\ (NoDup Q).
+Proof.
+intros.
+induction P.
+split.
+apply NoDup_nil.
+trivial.
+split.
+simpl in H.
+apply NoDup_cons_iff in H.
+inversion_clear H.
+apply NoDup_cons.
+(* ~ In a (P ++ Q) -> ~ In a P *)
+set (myH := (in_or_app P Q a)).
+apply or_over_impl in myH; inversion_clear myH.
+intro.
+apply H0.
+apply in_or_app.
+auto.
+elim IHP; auto.
+simpl in H.
+inversion H.
+elim IHP; auto.
+Qed.
+
+Lemma NoDup_app_not_in :
+  forall A (l l':list A),
+  NoDup (l ++ l') -> forall x, In x l -> ~In x l'.
+induction l; simpl; intros; intro; auto.
+inversion_clear H0.
++ inversion_clear H.
+  apply H0.
+  apply in_or_app.
+  rewrite H2; auto.
++ inversion_clear H.
+  apply (IHl l') with x; auto.
+Qed.
+
+(* TODO: Generalise and change order of NoDup and In requirements *)
+Lemma NoDup_pid_app_or : forall x:nat, forall l l':list nat, NoDup (l ++ l') -> In x (l ++ l') -> In x l \/ In x l'.
+intros.
+induction l.
+- simpl in H0; auto.
+- case_eq (Nat.eqb x a).
+  + intros.
+    left.
+    simpl.
+    rewrite Nat.eqb_eq in H1; auto.
+  + intros.
+    rewrite Nat.eqb_neq in H1.
+    simpl.
+    simpl in H.
+    apply NoDup_cons_iff in H.
+    destruct H.
+    apply or_add_left.
+    apply (IHl H2).
+    simpl in H0.
+    elim H0.
+    * intro.
+      symmetry in H3.
+      contradiction.
+    * intro.
+      trivial.
+Qed.
+
+Lemma NoDup_app_comm :
+  forall (A: Type) (a b: list A),
+  NoDup (a ++ b) -> NoDup (b ++ a).
+Proof.
+  intro A.
+  assert (forall (x: A) (b: list A) (a: list A), 
+           NoDup (a ++ b) -> ~(In x a) -> ~(In x b) -> 
+           NoDup (a ++ x :: b)).
+    induction a; simpl; intros.
+    constructor; auto.
+    inversion H. constructor. red; intro.
+    elim (in_app_or _ _ _ H6); intro.
+    elim H4. apply in_or_app. tauto.
+    elim H7; intro. subst a. elim H0. left. auto.
+    elim H4. apply in_or_app. tauto.
+    auto.
+  induction a; simpl; intros.
+  rewrite <- app_nil_end. auto.
+  inversion H0. apply H. auto.
+  red; intro; elim H3. apply in_or_app. tauto.
+  red; intro; elim H3. apply in_or_app. tauto.
+Qed.
+
+Lemma elim_not_In_app : forall (A : Type) (xs ys : list A) (x : A),
+  ~ In x (xs ++ ys) ->
+  ~ In x xs /\ ~ In x ys.
+Proof. split; auto using in_or_app. Qed.
+
 End Lists.
 
 Require Import Vector.
