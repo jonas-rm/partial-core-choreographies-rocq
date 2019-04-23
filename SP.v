@@ -294,16 +294,144 @@ intros; induction H1; intro.
   contradiction.
   simpl; auto.
   assumption.
++ rewrite get_proc_wf_assoc.
+  destruct (get_proc p ((N1 | N2) | N3)).
+  simpl.
+  destruct p0.
+  case_eq (v =? v).
+  rewrite Nat.eqb_eq.
+  intro; red; auto.
+  rewrite Nat.eqb_neq; intro; contradiction.
+  simpl; auto.
+  assumption.
 + admit.
 + admit.
 + admit.
-+ admit.
++ simpl.
+  case_eq (p0 =? p).
+  intro.
+  simpl; red; auto.
+  intro.
+  red; auto.
++ simpl.
+  destruct (get_proc p N).
+  destruct p0.
+  simpl.
+  case_eq (v =? v).
+  intro; red; auto.
+  rewrite Nat.eqb_neq; intro; contradiction.
+  simpl; auto.
+Admitted.
+
+Lemma Precongr_op_SPpn : forall N N', Precongr_op N N' -> forall p, In p (SPpn N') -> In p (SPpn N).
+induction N, N'.
++ easy.
++ intros.
+  simpl.
+  specialize (H p0).
+  simpl in H.
+  case_eq (p0 =? p).
+  - intro.
+    rewrite H1 in H; assumption.
+  - intro.
+    simpl in H0.
+    rewrite Nat.eqb_neq in H1.
+    inversion_clear H0; auto.
++ intros.
+  simpl.
+  specialize (H p).
+  simpl (get_proc p nnil) in H.
+  red in H.
+  set (myH := get_proc_Some p (N'1 | N'2) H0).
+  inversion_clear myH.
+  rewrite H1 in H; assumption.
++ intros.
+  simpl in H0; exfalso; assumption.
++ intros.
+  simpl (SPpn (p0 [v0, b0])) in H0.
+  simpl in H0.
+  inversion_clear H0; auto.
+  - case_eq (p =? p0).
+    * intro.
+      specialize (H p).
+      simpl in H.
+      rewrite <- beq_nat_refl in H.
+      rewrite H0 in H.
+      simpl in H.
+      case_eq (v =? v0).
+      *** intro.
+          rewrite Nat.eqb_eq in H0.
+          rewrite <- H1.
+          rewrite H0.
+          simpl; auto.
+      *** intro.
+          rewrite Nat.eqb_eq in H0.
+          rewrite <- H1.
+          rewrite <- H0.
+          simpl; auto.
+    * intro.
+      specialize (H p0).
+      simpl in H.
+      rewrite <- beq_nat_refl in H.
+      rewrite <- beq_sym in H.
+      rewrite H0 in H.
+      simpl in H; exfalso; assumption.
+  - exfalso; assumption.
++ intros.
+  set (dec := dec_eq_nat p0 p).
+  destruct dec.
+  - simpl; left; auto.
+  - simpl.
+    right.
+    specialize (H p0).
+    set (myH := get_proc_Some p0 (N'1 | N'2) H0).
+    inversion_clear myH.
+    rewrite H2 in H.
+    simpl in H.
+    rewrite <- Nat.eqb_neq in H1.
+    rewrite H1 in H.
+    simpl in H.
+    assumption.
++ intros.
+  simpl in H0; exfalso; assumption.
 + admit.
 + admit.
 Admitted.
 
-Lemma Precongr_char_only_if : forall N N', Precongr_op N N' -> Precongr N N'.
+Lemma Precongr_char_only_if : forall N N', WellFormedNetwork N -> WellFormedNetwork N' -> Precongr_op N N' -> Precongr N N'.
+intros.
+red in H1.
+induction N.
+(* + cut (N' = nnil%SP).
+  intro.
+  rewrite H2; apply Refl.
+  specialize (H1 0).
+  case_eq (get_proc 0 N').
+  - intros.
+
+  destruct (get_proc 0 N').
+
+assumption N' nnil%SP.
+apply Refl.
+
+specialize (H1 0).
+  simpl in H1.
+  case (get_proc 0 N') in H1.
+  - exfalso; auto.
+  - 
+induction N.
++ induction N'.
+  - apply Refl.
+  - exfalso.
+    red in H1.
+ *)
 Admitted.
+
+Lemma Precongr_char_iff : forall N N', WellFormedNetwork N -> WellFormedNetwork N' -> (Precongr_op N N' <-> Precongr N N').
+split.
+apply Precongr_char_only_if; auto.
+apply Precongr_char_if; auto.
+Qed.
 
 (* See https://imada.sdu.dk/~petersk/sn/doc/BinaryTrees.html for Variable and Hypothesis. *)
 (* (* 

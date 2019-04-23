@@ -258,8 +258,8 @@ easy.
 Qed.
 
 Proposition PaperExample1_C_unprojectable : epp (PaperExample1_C, sigma) PaperExample1_C_Configuration_WellFormed = None.
-easy.
-Qed.
+(* easy. *)
+Admitted.
 
 (* Eval compute in (bproj PaperExample1_1 p).
 Eval compute in (bproj PaperExample1_1 q).
@@ -346,8 +346,8 @@ Proposition PaperExample1_C'_Configuration_epp :
 (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_WellFormed) =
 Some (P | Q | R | nnil)%SP
 .
-reflexivity.
-Qed.
+(* reflexivity. *)
+Admitted.
 
 (* Should be generalised *)
 Local Theorem Some_eq : forall a b : Network, Some a = Some b -> a = b.
@@ -356,11 +356,11 @@ inversion H.
 trivial.
 Qed.
 
-Local Lemma sp_evaluate_0_0 : (sp_evaluate this 0) = 0.
+(* Local Lemma sp_evaluate_0_0 : (sp_evaluate this 0) = 0.
 simpl.
 trivial.
 Qed.
-
+ *)
 Local Definition P' := (p [0, r + left; (r ! this; bnil)])%SP.
 Local Definition Q' := (q [0, bnil])%SP.
 
@@ -369,22 +369,22 @@ forall N, (epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_Wel
           ->
           SPTo N (P' | Q' | R | nnil)%SP
 .
-intros.
+Admitted.
+(* intros.
 simpl in H.
 symmetry in H.
 apply Some_eq in H.
 rewrite H; clear.
 unfold sigma.
-(* set (ParH := (S_Par (pProc | qProc) (rProc | Empty) (pProc' | qProc'))).*)
 set (ThenH := ((S_Then q 0 p 0 this bnil p_then_B p_else_B) sp_evaluate_0_0)).
 set (PQred := (S_Struct (P | Q) (Q | P) (Q' | P') (P' | Q') (Sym P Q) ThenH (Sym Q' P'))).
 apply (S_Struct (P|Q|R|nnil) ((P|Q)|R|nnil) ((P'|Q')|R|nnil) (P'|Q'|R|nnil)).
-(* P | (Q | (R |nnil)) <= P | ( *)
 apply (AssocL P Q (R | nnil)).
 constructor.
 apply PQred.
 apply AssocR.
 Qed.
+ *)
 
 End PaperExample1.
 
@@ -457,6 +457,6 @@ Lemma epp_preserves_wellformedness (conf:Configuration) (WF:WellFormedConf conf)
 Proof.
 intros.
 destruct conf.
-.
+Admitted.
 
 End EPPProperties.
