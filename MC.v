@@ -108,26 +108,68 @@ Notation "'If' p '==' q 'Then' C1 'Else' C2" := (Cond p q C1 C2) (at level 60).
 
 Section Semantics_Definitions.
 
+Inductive Precongr_step : Choreography -> Choreography -> Prop :=
+ | EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr_step (eta1; eta2; C) (eta2; eta1; C)
+ | EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_step (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
+ | CondEta eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_step (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
+ | CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Precongr_step (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
+                                                               (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
+ | CtxEta eta C1 C2 : Precongr_step C1 C2 -> Precongr_step (eta; C1) (eta; C2)
+ | CtxThen p q C' C'' C : Precongr_step C' C'' -> Precongr_step (If p == q Then C' Else C) (If p == q Then C'' Else C)
+ | CtxElse p q C C' C'' : Precongr_step C' C'' -> Precongr_step (If p == q Then C Else C') (If p == q Then C Else C'')
+.
+
 Inductive Precongr : Choreography -> Choreography -> Prop :=
  | Refl C : Precongr C C
- | Trans C1 C2 C3 (P1:Precongr C1 C2) (P2:Precongr C2 C3) : Precongr C1 C3
- | EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr (eta1; eta2; C) (eta2; eta1; C)
- | EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
- | CondEta eta p q C1 C2 : unused p eta -> unused q eta -> Precongr (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
- | CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Precongr (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
-                                                               (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
- | CtxEta eta C1 C2 : Precongr C1 C2 -> Precongr (eta; C1) (eta; C2)
- | CtxCond p q C1 C2 C3 C4 : Precongr C1 C2 -> Precongr C3 C4 -> Precongr (If p == q Then C1 Else C3) (If p == q Then C2 Else C4)
+ | Trans C1 C2 C3: Precongr_step C1 C2 -> Precongr C2 C3 -> Precongr C1 C3
 .
+
+Lemma Precongr_Trans : forall C1 C2 C3, Precongr C1 C2 -> Precongr C2 C3 -> Precongr C1 C3.
+intros; induction H; auto.
+apply Trans with C2; auto.
+Qed.
+
+Lemma CtxEta': forall eta C1 C2, Precongr C1 C2 -> Precongr (eta; C1) (eta; C2).
+intros.
+induction H.
++ apply Refl.
++ apply Trans with (eta; C2); auto.
+  apply CtxEta; auto.
+Qed.
+
+Lemma CtxThen': forall p q C' C'' C, Precongr C' C'' -> Precongr (If p == q Then C' Else C) (If p == q Then C'' Else C).
+intros.
+induction H.
++ apply Refl.
++ apply Trans with (If p == q Then C2 Else C); auto.
+  apply CtxThen; auto.
+Qed.
+
+Lemma CtxElse': forall p q C C' C'', Precongr C' C'' -> Precongr (If p == q Then C Else C') (If p == q Then C Else C'').
+intros.
+induction H.
++ apply Refl.
++ apply Trans with (If p == q Then C Else C2); auto.
+  apply CtxElse; auto.
+Qed.
+
+Lemma CtxCond': forall p q C1 C2 C3 C4, Precongr C1 C2 -> Precongr C3 C4 -> Precongr (If p == q Then C1 Else C3) (If p == q Then C2 Else C4).
+intros.
+apply Precongr_Trans with (If p == q Then C1 Else C4); [apply CtxElse' | apply CtxThen']; auto.
+Qed.
+
+Lemma Precongr_step_to : forall C C', Precongr_step C C' -> Precongr C C'.
+intros; apply Trans with C'; auto; apply Refl.
+Qed.
 
 Example sanity_check : Precongr ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 3; End) Else (Com 3 zero 2; End) )
                                 ( If 2 == 3 Then (Com 0 this 1; Com 4 succ_this 3; End) Else (Com 3 zero 2; Com 0 this 1; End) ).
 Proof.
  eapply Trans.
  apply EtaCond; split; auto.
- apply CtxCond.
+ apply CtxCond'.
  apply Refl.
- apply EtaEta.
+ apply Precongr_step_to; apply EtaEta.
  split; auto.
 Qed.
 
@@ -159,6 +201,11 @@ Inductive MCToStar : Configuration -> Configuration -> Prop :=
  | ToStep c1 c2 c3 : MCTo c1 c2 -> MCToStar c2 c3 -> MCToStar c1 c3
 .
 
+Lemma MCToStar_trans : forall c1 c2 c3, MCToStar c1 c2 -> MCToStar c2 c3 -> MCToStar c1 c3.
+intros; induction H; auto.
+apply ToStep with c2; auto.
+Qed.
+
 Definition terminated (c:Configuration) : Prop := Precongr (fst c) End.
 
 End Semantics_Definitions.
@@ -167,13 +214,17 @@ Notation "c ---> c'" := (MCTo c c') (at level 50, left associativity).
 Notation "c --->* c'" := (MCToStar c c') (at level 50, left associativity).
 
 Notation "C1 ~<= C2" := (Precongr C1 C2) (at level 50, left associativity).
+Notation "C1 ~< C2" := (Precongr_step C1 C2) (at level 50, left associativity).
+
 (* Notation "C1 \u22e0 C2" := (not (C1 \u227c C2)) (at level 50). *)
 
 Section Semantics_Props.
 
 Lemma not_end_precongr : forall (C C':Choreography), C <> End -> C' = End -> ~ C ~<= C'.
 intros; intro.
-induction H1; auto; try inversion H0.
+induction H1; auto.
+apply IHPrecongr; auto; intro; clear IHPrecongr H2 C3 H0.
+induction H1; auto; try inversion H3.
 Qed.
 
 Lemma not_end_precongr' : forall C:Choreography, C ~<= End -> C = End.
