@@ -1,5 +1,4 @@
 Require Export Implementation.
-Require Export Coq.Program.Equality.
 
 Section test.
 
@@ -96,68 +95,6 @@ Notation "c ===>* c'" := (MCToStar_T c c') (at level 50, left associativity).
 Ltac strongify := first [apply MCTo_strongify | apply MCToStar_strongify].
 
 Section to_be_moved.
-
-Lemma terminated_does_not_reduce : forall C C' s s', Precongr C End -> ~(C,s) ---> (C',s').
-intros; intro.
-rewrite (not_end_precongr' _ H) in H0; clear H.
-dependent induction H0.
-assert (C1' = End).
-+ clear H1 IHMCTo C2' C' H0 s s'.
-  dependent induction H; auto.
-+ rewrite H2 in IHMCTo, H1; clear H C1' H2.
-  apply IHMCTo with C2' s s'; auto.
-Qed.
-
-Lemma terminated_does_not_reduce_conf : forall c c', terminated c -> ~ c ---> c'.
-intros.
-induction c; induction c'.
-rename a into C; rename a0 into C'; rename b into s; rename b0 into s'.
-red in H; simpl in H.
-apply terminated_does_not_reduce; auto.
-Qed.
-
-Lemma not_terminated_weird : forall {C s C' s' C''}, (C,s) ---> (C',s') ->
-  C ~<= C'' -> ~terminated (C'',s).
-intros; intro.
-red in H1; simpl in H1; rewrite (not_end_precongr' _ H1) in H0.
-rewrite (not_end_precongr' _ H0) in H.
-revert H; apply terminated_does_not_reduce; apply Refl.
-Qed.
-
-Fixpoint size (C:Choreography) : nat :=
-  match C with
-  | End => 0
-  | eta; C' => 1 + size C'
-  | If p == q Then C1 Else C2 => 1 + min (size C1) (size C2)
-  end.
-
-Lemma size_0_End : forall C, size C = 0 -> C = End.
-induction C; simpl; auto; intros; inversion H.
-Qed.
-
-Lemma precongr_size_ge : forall C C', Precongr C C' -> size C <= size C'.
-intros.
-induction H; simpl; auto with arith.
-+ transitivity (size C2); auto.
-+ set (s1 := size C1); set (s2 := size C2); set (s3 := size C3); set (s4 := size C4).
-  rewrite Nat.min_assoc.
-  rewrite <- (Nat.min_assoc s1 s2 s3).
-  rewrite (Nat.min_comm s2 s3).
-  repeat rewrite Nat.min_assoc; auto.
-+ apply le_n_S.
-  apply Nat.min_glb.
-  * transitivity (size C1); auto; apply Nat.le_min_l.
-  * transitivity (size C3); auto; apply Nat.le_min_r.
-Qed.
-
-Lemma End_precongr' : forall C C', C' ~<= C -> C' = End -> C = End.
-intros.
-induction H; auto; try inversion H0.
-Qed.
-
-Lemma End_precongr : forall C, End ~<= C -> C = End.
-intros; apply End_precongr' with End; auto.
-Qed.
 
 Lemma MCTo_End_size : forall C s s', (C,s) ---> (End, s') -> size C = 1.
 intros.
@@ -352,6 +289,16 @@ exists C3; split; auto.
 apply Trans with C1; auto.
 Qed.
 
+Lemma confluence_1 : forall C p q p' q' e e' C1 C2,
+  C ~<= (p # e --> q; C1) -> C ~<= (p' # e' --> q'; C2) -> (Com p e q <> Com p' e' q')
+  -> exists C', C1 ~<= (p' # e' --> q'; C') /\ C2 ~<= (p # e --> q; C').
+induction C; intros.
++ generalize (End_precongr _ H); intro; inversion H2.
++ inversion H; inversion H0.
+
+(* Change Precongr to one-step + transitive closure. *)
+
+
 Lemma MCTo_confluent : forall C C' C'' s s' s'', (C,s) ---> (C',s') ->
   (C,s) ---> (C'',s'') -> C' <> C'' -> exists c, (C',s') ---> c /\ (C'',s'') ---> c.
 intros.
@@ -363,10 +310,9 @@ generalize (not_terminated_weird H HC1); intro HC1''.
 generalize (not_terminated_weird H HC2); intro HC2''.
 generalize (HC1' HC1''); clear HC1'; intro HC1'.
 generalize (HC2' HC2''); clear HC2'; intro HC2'.
-clear H H0; revert C HC1 HC2.
-induction C1; inversion HC1'; try (elim HC1''; apply Refl); induction C2; inversion HC2'; try (elim HC2''; apply Refl); intros.
-+ induction e; induction e0; inversion_clear H0; inversion_clear H2.
-  - 
+destruct C1; inversion HC1'; try (elim HC1''; apply Refl); destruct C2; inversion HC2'; try (elim HC2''; apply Refl); intros.
++ induction e; induction e0; inversion_clear H3; inversion_clear H4.
+  
 
 
 End confluence.
