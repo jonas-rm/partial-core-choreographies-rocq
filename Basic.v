@@ -54,6 +54,21 @@ assert (S n <= m).
   - rewrite b; auto with arith.
 Qed.
 
+Lemma max_lt_l : forall k m n, max m n < k -> m < k.
+Proof.
+intro; case_eq k; intros.
+inversion H0.
+generalize (le_S_n _ _ H0); intros.
+apply le_n_S.
+eapply Nat.max_lub_l; exact H1.
+Qed.
+
+Lemma max_lt_r : forall k m n, max m n < k -> n < k.
+Proof.
+intros; apply max_lt_l with m.
+rewrite Nat.max_comm; auto.
+Qed.
+
 Theorem beq_sym: forall n m : nat, (n =? m) = (m =? n).
 Proof.
   induction n as [|n' IH]; destruct m; auto.
@@ -311,6 +326,13 @@ Fixpoint map_inv {A} {B} {n} (f:t (A->B) n) (x:A) : t B n :=
   | (f0 :: fs) => (f0 x) :: (map_inv fs x)
   end.
 
+(* Sanity check.
+Definition f0 (n:nat) := 2*n.
+Definition f1 (n:nat) := n+3.
+
+Eval compute in (map_inv [f0; f1] 5).
+*)
+
 (** The results about map_inv are the same as those for map in the standard library, with analogous
     names. We add a specialization of nth_map. *)
 Lemma nth_map' {A B} (f: A -> B) {n} v (p: Fin.t n) : (map f v) [@p] = f (v [@p]).
@@ -347,11 +369,36 @@ induction p.
   apply IHp; eapply Nat.max_lub_r; exact H.
 Qed.
 
-(* Sanity check.
-Definition f0 (n:nat) := 2*n.
-Definition f1 (n:nat) := n+3.
+Lemma vmax_lt : forall n v x, vmax (n:=n) v < x -> forall p, v[@p] < x.
+Proof.
+induction p.
+* revert n v H; refine (@caseS _ _ _); simpl; intros.
+  eapply max_lt_l; exact H.
+* revert n v H p IHp; refine (@caseS _ _ _); simpl; intros.
+  apply IHp; eapply max_lt_r; exact H.
+Qed.
 
-Eval compute in (map_inv [f0; f1] 5).
-*)
+(** Vector containing the numbers k to k+n. *)
+Fixpoint vec_k_to_n n k : t nat n :=
+  match n with
+  | 0 => []
+  | S m => k :: vec_k_to_n m (S k)
+  end.
+
+Definition vec_1_to_n n : t nat n := vec_k_to_n n 1.
+
+(** Vector of vectors with values [[m; ...; m+n-1] [m+n; ...; m+2n-1] ... [m+(k-1)n; ...; m+kn-1]]. *)
+Fixpoint vec_m_with_k m k n :=
+  match k with
+  | 0 => []
+  | S k' => (vec_k_to_n n m :: vec_m_with_k (m+n) k' n)
+  end.
+
+(** Sum of a vector of natural numbers. *)
+Fixpoint vsum {n} (v:t nat n) :=
+  match v with
+  | [] => 0
+  | x :: xs => x + vsum xs
+end.
 
 End Vectors.

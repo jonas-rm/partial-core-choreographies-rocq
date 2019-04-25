@@ -119,6 +119,7 @@ Section Semantics_Definitions.
 (** Structural precongruence is defined in two steps. One-step congruence contains exactly one swap;
     then we close under reflexivity and transitivity. *)
 Inductive Precongr_step : Choreography -> Choreography -> Prop :=
+ | SRefl C : Precongr_step C C
  | EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr_step (eta1; eta2; C) (eta2; eta1; C)
  | EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_step (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
  | CondEta eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_step (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
@@ -307,7 +308,7 @@ dependent induction H0.
 assert (C1' = End).
 + clear H1 IHMCTo C2' C' H0 s s'.
   dependent induction H; auto.
-  apply IHPrecongr; inversion H.
+  apply IHPrecongr; inversion H; auto.
 + rewrite H2 in IHMCTo, H1; clear H C1' H2.
   apply IHMCTo with C2' s s'; auto.
 Qed.

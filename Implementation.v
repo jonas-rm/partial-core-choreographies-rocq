@@ -4,61 +4,6 @@ Require Import Coq.Program.Equality.
 
 Local Open Scope nat_scope.
 
-Section to_be_moved.
-
-Lemma max_lt_l : forall k m n, max m n < k -> m < k.
-intro; case_eq k; intros.
-inversion H0.
-generalize (le_S_n _ _ H0); intros.
-apply le_n_S.
-eapply Nat.max_lub_l; exact H1.
-Qed.
-
-Lemma max_lt_r : forall k m n, max m n < k -> n < k.
-intros; apply max_lt_l with m.
-rewrite Nat.max_comm; auto.
-Qed.
-
-Lemma vmax_lt : forall n v x, vmax (n:=n) v < x -> forall p, v[@p] < x.
-Proof.
-induction p.
-* revert n v H; refine (@caseS _ _ _); simpl; intros.
-  eapply max_lt_l; exact H.
-* revert n v H p IHp; refine (@caseS _ _ _); simpl; intros.
-  apply IHp; eapply max_lt_r; exact H.
-Qed.
-
-(** Vector containing the numbers k to k+n. *)
-Fixpoint vec_k_to_n n k : t nat n :=
-  match n with
-  | 0 => []
-  | S m => k :: vec_k_to_n m (S k)
-  end.
-
-Definition vec_1_to_n n : t nat n := vec_k_to_n n 1.
-
-(** Vector of vectors with values [[m; ...; m+n-1] [m+n; ...; m+2n-1] ... [m+(k-1)n; ...; m+kn-1]]. *)
-Fixpoint vec_m_with_k m k n :=
-  match k with
-  | 0 => []
-  | S k' => (vec_k_to_n n m :: vec_m_with_k (m+n) k' n)
-  end.
-
-(** Sum of a vector of natural numbers. *)
-Fixpoint vsum {n} (v:t nat n) :=
-  match v with
-  | [] => 0
-  | x :: xs => x + vsum xs
-end.
-
-Lemma ToTrans : forall c1 c2 c3, c1 --->* c2 -> c2 --->* c3 -> c1 --->* c3.
-intros.
-induction H; auto.
-apply ToStep with c2; auto.
-Qed.
-
-End to_be_moved.
-
 Section Implementation.
 
 (** The type of partial functions and the notion of a choreography implementing one.
@@ -149,6 +94,7 @@ intros; induction H.
 + apply Refl.
 + apply Trans with (C2;;C); auto; clear C3 H0 IHPrecongr.
   induction H.
+  - apply SRefl.
   - apply EtaEta; auto.
   - apply EtaCond; auto.
   - apply CondEta; auto.
@@ -192,7 +138,7 @@ Qed.
 Lemma Lemma_1_1 : forall C C' s s' s'',
   MCToStar (C,s) (End,s') -> MCToStar (C',s') (End,s'') -> MCToStar (C;;C',s) (End,s'').
 intros.
-apply ToTrans with (C',s'); auto.
+apply MCToStar_trans with (C',s'); auto.
 replace (C',s') with (End;;C',s'); auto; apply fatsemi_ToStar; auto.
 Qed.
 
