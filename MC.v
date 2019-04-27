@@ -257,6 +257,24 @@ intro; rewrite H.
 constructor.
 Qed.
 
+Lemma precongr_eta' : forall eta C C', C' = (eta; End) -> C' ~<= C -> C = eta; End.
+intros.
+induction H0; auto; try inversion H.
+rewrite H3 in H0; rewrite (End_precongr C2); auto.
+Qed.
+
+Lemma precongr_eta : forall eta C, (eta; End) ~<= C -> C = eta; End.
+intros.
+apply precongr_eta' with (eta;End); auto.
+Qed.
+
+Lemma eta_not_terminated : forall eta C s, ~terminated (eta; C, s).
+intros; intro.
+red in H; simpl in H.
+generalize (not_End_precongr' _ H); intro.
+inversion H0.
+Qed.
+
 Lemma terminated_does_not_reduce : forall C C' s s', Precongr C End -> ~(C,s) ---> (C',s').
 intros; intro.
 rewrite (not_End_precongr' _ H) in H0; clear H.

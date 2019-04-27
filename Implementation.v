@@ -91,17 +91,15 @@ Fixpoint single_exit_point (C:Choreography) : Prop :=
 
 Lemma fatsemi_precongr : forall C C1 C2, C1 ~<= C2 -> (C1;;C) ~<= (C2;;C).
 intros; induction H.
-+ apply Refl.
-+ apply Trans with (C2;;C); auto; clear C3 H0 IHPrecongr.
-  induction H.
-  - apply SRefl.
-  - apply EtaEta; auto.
-  - apply EtaCond; auto.
-  - apply CondEta; auto.
-  - apply CondCond; auto.
-  - apply CtxEta; auto.
-  - apply CtxThen; auto.
-  - apply CtxElse; auto.
+- apply Refl.
+- apply Trans with (C2;;C); auto; clear C3 H0 IHPrecongr.
+- apply EtaEta; auto.
+- apply EtaCond; auto.
+- apply CondEta; auto.
+- apply CondCond; auto.
+- apply CtxEta; auto.
+- apply CtxThen; auto.
+- apply CtxElse; auto.
 Qed.
 
 Lemma fatsemi_End : forall C, (C;;End) = C.
