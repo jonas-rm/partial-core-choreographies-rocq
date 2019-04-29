@@ -514,3 +514,5 @@ induction C; intro s.
 Qed.
 
 End Semantics_Props.
+
+Notation "c $ H -H-> c'" := (HeadTo c H = c') (at level 50).
