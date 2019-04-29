@@ -118,22 +118,58 @@ Section Semantics_Definitions.
 
 (** Structural precongruence is defined in two steps. One-step congruence contains exactly one swap;
     then we close under reflexivity and transitivity. *)
-Inductive Precongr : Choreography -> Choreography -> Prop :=
- | Refl C : Precongr C C
- | Trans C1 C2 C3: Precongr C1 C2 -> Precongr C2 C3 -> Precongr C1 C3
- | EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr (eta1; eta2; C) (eta2; eta1; C)
- | EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
- | CondEta eta p q C1 C2 : unused p eta -> unused q eta -> Precongr (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
- | CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Precongr (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
+Inductive Precongr_step : Choreography -> Choreography -> Prop :=
+ | EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr_step (eta1; eta2; C) (eta2; eta1; C)
+ | EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_step (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
+ | CondEta eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_step (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
+ | CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Precongr_step (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
                                                                (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
- | CtxEta eta C1 C2 : Precongr C1 C2 -> Precongr (eta; C1) (eta; C2)
- | CtxThen p q C' C'' C : Precongr C' C'' -> Precongr (If p == q Then C' Else C) (If p == q Then C'' Else C)
- | CtxElse p q C C' C'' : Precongr C' C'' -> Precongr (If p == q Then C Else C') (If p == q Then C Else C'')
+ | CtxEta eta C1 C2 : Precongr_step C1 C2 -> Precongr_step (eta; C1) (eta; C2)
+ | CtxThen p q C' C'' C : Precongr_step C' C'' -> Precongr_step (If p == q Then C' Else C) (If p == q Then C'' Else C)
+ | CtxElse p q C C' C'' : Precongr_step C' C'' -> Precongr_step (If p == q Then C Else C') (If p == q Then C Else C'')
 .
 
-Lemma CtxCond: forall p q C1 C2 C3 C4, Precongr C1 C2 -> Precongr C3 C4 -> Precongr (If p == q Then C1 Else C3) (If p == q Then C2 Else C4).
+Inductive Precongr : Choreography -> Choreography -> Prop :=
+ | Refl C : Precongr C C
+ | Trans C1 C2 C3: Precongr_step C1 C2 -> Precongr C2 C3 -> Precongr C1 C3
+.
+
+Lemma Precongr_Trans : forall C1 C2 C3, Precongr C1 C2 -> Precongr C2 C3 -> Precongr C1 C3.
+intros; induction H; auto.
+apply Trans with C2; auto.
+Qed.
+
+Lemma CtxEta': forall eta C1 C2, Precongr C1 C2 -> Precongr (eta; C1) (eta; C2).
 intros.
-apply Trans with (If p == q Then C1 Else C4); [apply CtxElse | apply CtxThen]; auto.
+induction H.
++ apply Refl.
++ apply Trans with (eta; C2); auto.
+  apply CtxEta; auto.
+Qed.
+
+Lemma CtxThen': forall p q C' C'' C, Precongr C' C'' -> Precongr (If p == q Then C' Else C) (If p == q Then C'' Else C).
+intros.
+induction H.
++ apply Refl.
++ apply Trans with (If p == q Then C2 Else C); auto.
+  apply CtxThen; auto.
+Qed.
+
+Lemma CtxElse': forall p q C C' C'', Precongr C' C'' -> Precongr (If p == q Then C Else C') (If p == q Then C Else C'').
+intros.
+induction H.
++ apply Refl.
++ apply Trans with (If p == q Then C Else C2); auto.
+  apply CtxElse; auto.
+Qed.
+
+Lemma CtxCond': forall p q C1 C2 C3 C4, Precongr C1 C2 -> Precongr C3 C4 -> Precongr (If p == q Then C1 Else C3) (If p == q Then C2 Else C4).
+intros.
+apply Precongr_Trans with (If p == q Then C1 Else C4); [apply CtxElse' | apply CtxThen']; auto.
+Qed.
+
+Lemma Precongr_step_to : forall C C', Precongr_step C C' -> Precongr C C'.
+intros; apply Trans with C'; auto; apply Refl.
 Qed.
 
 Example sanity_check : Precongr ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 3; End) Else (Com 3 zero 2; End) )
@@ -141,9 +177,9 @@ Example sanity_check : Precongr ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 
 Proof.
  eapply Trans.
  apply EtaCond; split; auto.
- apply CtxCond.
+ apply CtxCond'.
  apply Refl.
- apply EtaEta.
+ apply Precongr_step_to; apply EtaEta.
  split; auto.
 Qed.
 
@@ -181,7 +217,7 @@ intros; induction H; auto.
 apply ToStep with c2; auto.
 Qed.
 
-Definition terminated (c:Configuration) : Prop := Precongr (fst c) End.
+Definition terminated (C:Choreography) : Prop := Precongr C End.
 
 End Semantics_Definitions.
 
@@ -189,6 +225,7 @@ Notation "c ---> c'" := (MCTo c c') (at level 50, left associativity).
 Notation "c --->* c'" := (MCToStar c c') (at level 50, left associativity).
 
 Notation "C1 ~<= C2" := (Precongr C1 C2) (at level 50, left associativity).
+Notation "C1 ~< C2" := (Precongr_step C1 C2) (at level 50, left associativity).
 
 (* Notation "C1 \u22e0 C2" := (not (C1 \u227c C2)) (at level 50). *)
 
@@ -206,51 +243,61 @@ Lemma precongr_size_ge : forall C C', C ~<= C' -> size C <= size C'.
 intros.
 induction H; simpl; auto with arith.
 + transitivity (size C2); auto.
-+ set (s1 := size C1); set (s2 := size C2); set (s3 := size C3); set (s4 := size C4).
-  repeat apply le_n_S.
-  rewrite Nat.min_assoc.
-  rewrite <- (Nat.min_assoc s1 s2 s3).
-  rewrite (Nat.min_comm s2 s3).
-  repeat rewrite Nat.min_assoc; auto.
-+ apply le_n_S.
-  apply Nat.min_glb.
-  * transitivity (size C'); auto; apply Nat.le_min_l.
-  * apply Nat.le_min_r.
-+ apply le_n_S.
-  apply Nat.min_glb.
-  * apply Nat.le_min_l.
-  * transitivity (size C'); auto; apply Nat.le_min_r.
+  clear IHPrecongr H0; induction H; simpl; auto with arith.
+  - set (s1 := size C1); set (s2 := size C2); set (s0 := size C0); set (s4 := size C4).
+    repeat apply le_n_S.
+    rewrite Nat.min_assoc.
+    rewrite <- (Nat.min_assoc s1 s2 s0).
+    rewrite (Nat.min_comm s2 s0).
+    repeat rewrite Nat.min_assoc; auto.
+  - apply le_n_S.
+    apply Nat.min_glb.
+    * transitivity (size C'); auto; apply Nat.le_min_l.
+    * apply Nat.le_min_r.
+  - apply le_n_S.
+    apply Nat.min_glb.
+    * apply Nat.le_min_l.
+    * transitivity (size C'); auto; apply Nat.le_min_r.
 Qed.
 
 (** A lot of stuff on terminated choreographies. *)
 Lemma size_0_End : forall C, size C = 0 -> C = End.
+Proof.
 induction C; simpl; auto; intros; inversion H.
 Qed.
 
 Lemma End_precongr' : forall C C', C' ~<= C -> C' = End -> C = End.
+Proof.
 intros.
-induction H; auto; inversion H0.
+induction H; auto.
+apply IHPrecongr; clear C3 H1 IHPrecongr.
+induction H; auto; try inversion H0.
 Qed.
 
 Lemma End_precongr : forall C, End ~<= C -> C = End.
+Proof.
 intros; apply End_precongr' with End; auto.
 Qed.
 
 Lemma not_End_precongr : forall (C C':Choreography), C <> End -> C' = End -> ~ C ~<= C'.
+Proof.
 intros; intro.
-induction H1; auto; inversion H0.
+induction H1; auto.
+apply IHPrecongr; auto; intro; clear IHPrecongr H2 C3 H0.
+induction H1; auto; try inversion H3.
 Qed.
 
 Lemma not_End_precongr' : forall C:Choreography, C ~<= End -> C = End.
+Proof.
 intros.
 elim (eq_chor_dec C End); auto.
 intro.
 elim not_End_precongr with C End; auto.
 Qed.
 
-Lemma terminated_iff_End : forall c:Configuration, terminated c <-> fst c = End.
+Lemma terminated_iff_End : forall C:Choreography, terminated C <-> C = End.
 Proof.
-destruct c; unfold terminated; simpl; clear s.
+unfold terminated; simpl.
 split.
 apply not_End_precongr'.
 intro; rewrite H.
@@ -259,43 +306,49 @@ Qed.
 
 Lemma precongr_eta' : forall eta C C', C' = (eta; End) -> C' ~<= C -> C = eta; End.
 intros.
+induction H0; auto.
+apply IHPrecongr; clear IHPrecongr H1 C3.
 induction H0; auto; try inversion H.
-rewrite H3 in H0; rewrite (End_precongr C2); auto.
+rewrite H3 in H0; rewrite (End_precongr _ (Precongr_step_to _ _ H0)); auto.
 Qed.
 
 Lemma precongr_eta : forall eta C, (eta; End) ~<= C -> C = eta; End.
+Proof.
 intros.
 apply precongr_eta' with (eta;End); auto.
 Qed.
 
-Lemma eta_not_terminated : forall eta C s, ~terminated (eta; C, s).
+Lemma eta_not_terminated : forall eta C, ~terminated (eta; C).
+Proof.
 intros; intro.
 red in H; simpl in H.
 generalize (not_End_precongr' _ H); intro.
 inversion H0.
 Qed.
 
-Lemma terminated_does_not_reduce : forall C C' s s', Precongr C End -> ~(C,s) ---> (C',s').
+Lemma cond_not_terminated : forall p q C1 C2, ~terminated (If p == q Then C1 Else C2).
+Proof.
+intros; intro.
+red in H; simpl in H.
+generalize (not_End_precongr' _ H); intro.
+inversion H0.
+Qed.
+
+Lemma terminated_does_not_reduce : forall C C' s s', terminated C -> ~(C,s) ---> (C',s').
+Proof.
 intros; intro.
 rewrite (not_End_precongr' _ H) in H0; clear H.
 dependent induction H0.
 assert (C1' = End).
 + clear H1 IHMCTo C2' C' H0 s s'.
   dependent induction H; auto.
+  apply IHPrecongr; inversion H.
 + rewrite H2 in IHMCTo, H1; clear H C1' H2.
   apply IHMCTo with C2' s s'; auto.
 Qed.
 
-Lemma terminated_does_not_reduce_conf : forall c c', terminated c -> ~ c ---> c'.
-intros.
-induction c; induction c'.
-rename a into C; rename a0 into C'; rename b into s; rename b0 into s'.
-red in H; simpl in H.
-apply terminated_does_not_reduce; auto.
-Qed.
-
-Lemma not_terminated_weird : forall {C s C' s' C''}, (C,s) ---> (C',s') ->
-  C ~<= C'' -> ~terminated (C'',s).
+Lemma not_terminated_weird : forall {C s C' s' C''}, (C,s) ---> (C',s') -> C ~<= C'' -> ~terminated C''.
+Proof.
 intros; intro.
 red in H1; simpl in H1; rewrite (not_End_precongr' _ H1) in H0.
 rewrite (not_End_precongr' _ H0) in H.
@@ -304,7 +357,7 @@ Qed.
 
 (** Head reductions (do not use structural precongruence). *)
 
-Definition HeadTo (c:Configuration) : ~ (terminated c) -> Configuration.
+Definition HeadTo (c:Configuration) : ~ (terminated (fst c)) -> Configuration.
 destruct c; destruct c; intros.
 elim H; apply terminated_iff_End; auto.
 destruct e.
@@ -312,6 +365,14 @@ apply (c, update s p0 (evaluate_on_state e s p)).
 apply (c, s).
 apply (if ((s p) =? (s p0)) then (c1, s) else (c2, s)).
 Defined.
+
+Lemma HeadTo_wd : forall c H H', HeadTo c H = HeadTo c H'.
+Proof.
+induction c.
+induction a; intros; auto.
++ elim H; red; simpl; apply Refl.
++ induction e; simpl; auto.
+Qed.
 
 Example HeadTo_Com : forall p e q C s HC, 
 HeadTo (p # e --> q ; C, s) HC = (C, update s q (evaluate_on_state e s p)).
@@ -388,14 +449,14 @@ apply beq_nat_false; auto.
 Qed.
 *)
 
-Theorem progress : forall c, ~(terminated c) -> exists c', c ---> c'.
+Theorem progress : forall C s, ~(terminated C) -> exists c', (C,s) ---> c'.
 Proof.
 intros.
-exists (HeadTo c H).
+exists (HeadTo (C,s) H).
 apply HeadTo_Soundness.
 Qed.
 
-Theorem termination : forall C s, exists c', (C,s) --->* c' /\ terminated c'.
+Theorem termination : forall C s, exists c', (C,s) --->* c' /\ terminated (fst c').
 Proof.
 pose proof terminated_iff_End as T.
 induction C; intro s.
@@ -405,8 +466,7 @@ induction C; intro s.
   + rewrite T. trivial.
 (* Eta *)
 * set (c0 := (e;C,s)).
-  assert (NTc0 : not (terminated c0)).
-  rewrite T. discriminate.
+  set (NTc0 := eta_not_terminated e C).
   set (c1 := HeadTo c0 NTc0).
   assert (c1 = (HeadTo c0 NTc0)); auto.
   induction c1 as (C1, s1).
@@ -422,8 +482,7 @@ induction C; intro s.
 (* If *)
 * rename C1 into CT, C2 into CE.
   set (c0 := (If p == p0 Then CT Else CE, s)).
-  assert (NTc0 : not (terminated c0)).
-  rewrite T. discriminate.
+  set (NTc0 := cond_not_terminated p p0 CT CE).
   set (c1 := HeadTo c0 NTc0).
   assert (c1 = (HeadTo c0 NTc0)); auto.
   induction c1 as (C1, s1).

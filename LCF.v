@@ -159,27 +159,28 @@ Lemma Congruent_Precongr : forall C C', Congruent C C' -> C ~<= C'.
 intros.
 induction H.
 + apply Refl.
-+ apply Trans with C2; auto.
-+ apply EtaEta; auto.
-+ apply EtaCond; auto.
-+ apply CondEta; auto.
-+ apply CondCond; auto.
-+ apply CtxEta; auto.
-+ apply CtxThen; auto.
-+ apply CtxElse; auto.
++ apply Precongr_Trans with C2; auto.
++ apply Precongr_step_to; apply EtaEta; auto.
++ apply Precongr_step_to; apply EtaCond; auto.
++ apply Precongr_step_to; apply CondEta; auto.
++ apply Precongr_step_to; apply CondCond; auto.
++ apply CtxEta'; auto.
++ apply CtxThen'; auto.
++ apply CtxElse'; auto.
 Qed.
 
 Lemma Precongr_Congruent : forall C C', C ~<= C' -> Congruent C C'.
 intros; induction H.
 + apply CRefl.
 + apply CTrans with C2; auto.
-+ apply CEtaEta; auto.
-+ apply CEtaCond; auto.
-+ apply CCondEta; auto.
-+ apply CCondCond; auto.
-+ apply CCtxEta; auto.
-+ apply CCtxThen; auto.
-+ apply CCtxElse; auto.
+  clear IHPrecongr H0 C3; induction H.
+  - apply CEtaEta; auto.
+  - apply CEtaCond; auto.
+  - apply CCondEta; auto.
+  - apply CCondCond; auto.
+  - apply CCtxEta; auto.
+  - apply CCtxThen; auto.
+  - apply CCtxElse; auto.
 Qed.
 
 (* When Unfold is introduced, there will be a lemma about head reductions.
@@ -307,19 +308,6 @@ Fixpoint ToStarDepth {c c'} (H:MCToStar_T c c') : nat :=
   | TToStep _ _ _ H' H'' => 1 + max (ToDepth H') (ToStarDepth H'')
   end.
 
-(** * Induction principles for one-step reduction in MC. *)
-Lemma MCTo_ind : forall (P:Choreography -> State -> Choreography -> State -> Prop),
-  (forall p e q C s, P (p#e --> q; C) s C (update s q (evaluate_on_state e s p))) ->
-  (forall p q l C s, P (Sel p q l; C) s C s) ->
-  (forall p q C1 C2 s, s p = s q -> P (If p == q Then C1 Else C2) s C1 s) ->
-  (forall p q C1 C2 s, s p <> s q -> P (If p == q Then C1 Else C2) s C2 s) ->
-  (forall C1 C1' C2 C2' s1 s2, Precongr C1 C1' -> Precongr C2' C2 -> P C1' s1 C2' s2 -> P C1 s1 C2 s2) ->
-  forall C s C' s', (C,s) ---> (C',s') -> P C s C' s'.
-intros.
-dependent induction H4; auto.
-apply H3 with C1' C2'; auto.
-Qed.
-
 Lemma MCTo_inv : forall c c', c ---> c' ->
     (exists p e q C s, c = (p#e-->q; C, s) /\ c' = (C,update s q (evaluate_on_state e s p)))
     \/ (exists p q l C s, c = (Sel p q l; C, s) /\ c' = (C,s))
@@ -355,6 +343,19 @@ Ltac strongify := first [apply MCTo_strongify | apply MCToStar_strongify].
 *)
 
 Section to_be_moved.
+
+(** * Induction principles for one-step reduction in MC. *)
+Lemma MCTo_ind : forall (P:Choreography -> State -> Choreography -> State -> Prop),
+  (forall p e q C s, P (p#e --> q; C) s C (update s q (evaluate_on_state e s p))) ->
+  (forall p q l C s, P (Sel p q l; C) s C s) ->
+  (forall p q C1 C2 s, s p = s q -> P (If p == q Then C1 Else C2) s C1 s) ->
+  (forall p q C1 C2 s, s p <> s q -> P (If p == q Then C1 Else C2) s C2 s) ->
+  (forall C1 C1' C2 C2' s1 s2, Precongr C1 C1' -> Precongr C2' C2 -> P C1' s1 C2' s2 -> P C1 s1 C2 s2) ->
+  forall C s C' s', (C,s) ---> (C',s') -> P C s C' s'.
+intros.
+dependent induction H4; auto.
+apply H3 with C1' C2'; auto.
+Qed.
 
 Lemma MCTo_End_size : forall C s s', (C,s) ---> (End, s') -> size C = 1.
 intros.
@@ -394,13 +395,6 @@ End to_be_moved.
 Notation "c $ H -H-> c'" := (HeadTo c H = c') (at level 50).
 
 Section confluence.
-
-Lemma HeadTo_wd : forall c H H', HeadTo c H = HeadTo c H'.
-induction c.
-induction a; intros; auto.
-+ elim H; red; simpl; apply Refl.
-+ induction e; simpl; auto.
-Qed.
 
 Lemma MCTo_canonical_weak : forall {C s C' s'}, (C,s) ---> (C',s') -> exists C'' C''', C ~<= C'' /\ C''' ~<= C' /\ forall H, (C'',s)$H -H-> (C''',s').
 intros.
@@ -625,6 +619,188 @@ revert C' s' H0; induction H1; intros.
     * rewrite <- H5; apply Precongr_step_to; auto.
 Qed.
 
+Lemma MCTo_square' : forall C C' s s', (C,s) ---> (C',s') ->
+  forall C'', C ~< C'' -> exists C''', (C'',s) ---> (C''',s') /\ C' ~<= C'''.
+intros.
+revert C' s' H; induction H0; intros.
++ exists C'; split; try apply Refl; inversion H0; induction eta1.
+  - rewrite H2; rewrite H5; rewrite H6; eapply C_Struct.
+    * apply Precongr_step_to; apply EtaEta; apply independent_sym; auto.
+    * apply Refl.
+    * auto.
+  - inversion H2.
+  - inversion H2.
+  - rewrite H2; rewrite H5; rewrite <- H6 at 1; eapply C_Struct.
+    * apply Precongr_step_to; apply EtaEta; apply independent_sym; auto.
+    * apply Refl.
+    * auto.
+  - eapply C_Struct.
+    * eapply Trans; [apply EtaEta; apply independent_sym; auto | apply H5].
+    * apply H6.
+    * auto.
+  - eapply C_Struct.
+    * eapply Trans; [apply EtaEta; apply independent_sym; auto | apply H5].
+    * apply H6.
+    * auto.
++ exists C'; inversion H1; induction eta; split; try apply Refl.
+  - rewrite H3; rewrite H7; rewrite H6; eapply C_Struct.
+    * apply Precongr_step_to; apply CondEta; auto.
+    * apply Refl.
+    * auto.
+  - inversion H3.
+  - inversion H3.
+  - rewrite H3; rewrite <- H7 at 1; rewrite H6; eapply C_Struct.
+    * apply Precongr_step_to; apply CondEta; auto.
+    * apply Refl.
+    * auto.
+  - eapply C_Struct.
+    * eapply Trans; [apply CondEta; auto | apply H6].
+    * apply H7.
+    * auto.
+  - eapply C_Struct.
+    * eapply Trans; [apply CondEta; auto | apply H6].
+    * apply H7.
+    * auto.
++ exists C'; split; try apply Refl; inversion H1; revert H3; case_eq (s p =? s q); intros.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply EtaCond; auto.
+    * apply Refl.
+    * apply C_Then; auto.
+  - rewrite <- H9 in H10; rewrite <- Nat.eqb_eq in H10; rewrite H10 in H3; inversion H3.
+  - rewrite <- H9 in H10; rewrite <- Nat.eqb_eq in H10; rewrite H3 in H10; elim H10; auto.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply EtaCond; auto.
+    * apply Refl.
+    * apply C_Else; auto.
+  - eapply C_Struct.
+    * eapply Trans; [apply EtaCond; auto | apply H6].
+    * apply H7.
+    * auto.
+  - eapply C_Struct.
+    * eapply Trans; [apply EtaCond; auto | apply H6].
+    * apply H7.
+    * auto.
++ exists C'; split; try apply Refl; inversion H0; revert H2; case_eq (s p =? s q); intros.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply CondCond; apply disjoint_sym; auto.
+    * apply Refl.
+    * apply C_Then; auto.
+  - rewrite <- H8 in H9; rewrite <- Nat.eqb_eq in H9; rewrite H9 in H2; inversion H2.
+  - rewrite <- H8 in H9; rewrite <- Nat.eqb_eq in H9; rewrite H2 in H9; elim H9; auto.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply CondCond; apply disjoint_sym; auto.
+    * apply Refl.
+    * apply C_Else; auto.
+  - eapply C_Struct.
+    * eapply Trans; [apply CondCond; apply disjoint_sym; auto | apply H5].
+    * apply H6.
+    * auto.
+  - eapply C_Struct.
+    * eapply Trans; [apply CondCond; apply disjoint_sym; auto | apply H5].
+    * apply H6.
+    * auto.
++ inversion H; induction eta; inversion H2.
+  - exists C2; split.
+    * apply C_Com.
+    * rewrite <- H5; apply Precongr_step_to; auto.
+  - exists C2; split.
+    * apply C_Sel.
+    * rewrite <- H5; apply Precongr_step_to; auto.
+  - clear H8 H4 H3 H2 H1 C0 s1 s2 C3.
+    elim (Precongr_confluent _ _ _ H5 (Precongr_step_to _ _ (CtxEta _ _ _ H0))); intros.
+    rename x into CC; inversion_clear H1.
+Abort.
+
+Lemma MCTo_square' : forall C C' s s' H, (C,s)$H -H-> (C',s') ->
+  forall C'', C ~<= C'' -> exists C''', (C'',s) ---> (C''',s') /\ C' ~<= C'''.
+intros.
+revert C' H H0; induction H1; intros.
+- exists C'; split; [rewrite <- H0; apply HeadTo_Soundness | apply Refl].
+- elim (MCTo_square _ _ _ _ _ H2 _ H); intros C'' HC''; destroy HC''.
+  elim (MCTo_canonical H3); intros C''' HC'''; destroy HC'''.
+Abort.
+
+(** For induction on reductions. *)
+
+Inductive MCTo_weighted : nat -> Configuration -> Configuration  -> Prop :=
+  | Base : forall c c' H, c$H -H-> c' -> MCTo_weighted 0 c c'
+  | Cons : forall k C1 C1' C2' C2 s1 s2, C1 ~<= C1' -> MCTo_weighted k (C1',s1) (C2',s2) -> C2' ~<= C2 -> MCTo_weighted (S k) (C1,s1) (C2,s2)
+.
+
+Lemma MCTo_weighted_to : forall n c c', MCTo_weighted n c c' -> c ---> c'.
+induction n; intros; inversion H.
++ rewrite <- H1; apply HeadTo_Soundness.
++ apply C_Struct with C1' C2'; auto.
+Qed.
+
+Lemma MCTo_to_weighted : forall c c', c ---> c' -> MCTo_weighted 0 c c' \/ MCTo_weighted 1 c c'.
+intros; induction H.
++ left.
+  assert (~terminated (p#e-->q;C,s)); try (apply Base with H; auto).
+  intro; rewrite terminated_iff_End in H; inversion H.
++ left.
+  assert (~terminated (Sel p q l;C,s)); try (apply Base with H; auto).
+  intro; rewrite terminated_iff_End in H; inversion H.
++ left.
+  assert (~terminated (If p == q Then C1 Else C2,s)); try (apply Base with H0; auto).
+  - intro; rewrite terminated_iff_End in H0; inversion H0.
+  - simpl; rewrite <- Nat.eqb_eq in H; rewrite H; auto.
++ left.
+  assert (~terminated (If p == q Then C1 Else C2,s)); try (apply Base with H0; auto).
+  - intro; rewrite terminated_iff_End in H0; inversion H0.
+  - simpl; rewrite <- Nat.eqb_neq in H; rewrite H; auto.
++ right.
+  elim IHMCTo; clear IHMCTo; intro.
+  - apply Cons with C1' C2'; auto.
+  - inversion H2.
+    apply Cons with C1'0 C2'0; auto.
+    * apply Precongr_Trans with C1'; auto.
+    * apply Precongr_Trans with C2'; auto.
+Qed.
+
+Lemma update_independent : forall s p q e e', p<>q ->
+  eq_state_ext (update (update s q e') p e) (update (update s p e) q e').
+red; intros.
+unfold update.
+case_eq (p =? p0); case_eq (q =? p0); auto; intros.
+elim H; rewrite Nat.eqb_eq in H0; rewrite Nat.eqb_eq in H1.
+transitivity p0; auto.
+Qed.
+
+Lemma MCTo_head_precongr : forall C s H C' s' C'' H'' C''' s''', (C,s)$H -H-> (C',s') ->
+  C ~< C'' -> (C'',s)$H'' -H-> (C''',s''') -> C' <> C''' -> exists c, (C',s') ---> c /\ (C''',s''') ---> c.
+intros.
+induction H1.
++ induction eta1; induction eta2; inversion H0; inversion H2; clear H H'' H0 H2 H3 H5 H7.
+  - rename p0 into q; rename p1 into p'; rename p2 into q'; rename e0 into e'.
+    assert (~terminated (p'#e'-->q'; C,s')).
+    * intro; rewrite terminated_iff_End in H; inversion H.
+    * rewrite <- H6 in H; exists (HeadTo _ H); split.
+      ++ apply HeadTo_Soundness.
+      ++ simpl; clear H.
+         
+apply C_Com.
+
+
+
+
+
+
+
+
+Lemma MCTo_confluent_head : forall C s H C' s' C'' s'', (C,s)$H -H-> (C',s') ->
+  (C,s) ---> (C'',s'') -> C' <> C'' -> exists c, (C',s') ---> c /\ (C'',s'') ---> c.
+intros.
+elim (MCTo_to_weighted _ _ H1); clear H1; intro.
++ elim H2; inversion H1.
+  generalize (HeadTo_wd _ H H3); intro.
+  rewrite H0 in H5; rewrite H4 in H5; inversion H5; auto.
++ inversion H1; inversion H9.
+  clear H1 H9 H3 c H14 c' H15 s2 H7 C2 H6 s1 H5 C1 H4.
+  induction 
+
+
+
 Lemma MCTo_confluent : forall C C' C'' s s' s'', (C,s) ---> (C',s') ->
   (C,s) ---> (C'',s'') -> C' <> C'' -> exists c, (C',s') ---> c /\ (C'',s'') ---> c.
 intros.
@@ -636,11 +812,13 @@ generalize (not_terminated_weird H HC1); intro HC1''.
 generalize (not_terminated_weird H HC2); intro HC2''.
 generalize (HC1' HC1''); clear HC1'; intro HC1'.
 generalize (HC2' HC2''); clear HC2'; intro HC2'.
-elim (Precongr_step_confluent 
+elim (Precongr_confluent _ _ _ HC1 HC2); intros CC HCC; inversion_clear HCC.
+elim (MCTo_square _ _ _ _ _ HC1') with CC; intros; auto.
+inversion_clear H4.
+elim (MCTo_square _ _ _ _ _ HC2') with CC; intros; auto.
+inversion_clear H4.
+rename x into C1'; rename x0 into C2'.
 
-destruct C1; inversion HC1'; try (elim HC1''; apply Refl); destruct C2; inversion HC2'; try (elim HC2''; apply Refl); intros.
-+ induction e; induction e0; inversion_clear H3; inversion_clear H4.
-  
 
 
 End confluence.
