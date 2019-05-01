@@ -54,6 +54,12 @@ assert (S n <= m).
   - rewrite b; auto with arith.
 Qed.
 
+Theorem beq_sym: forall n m : nat, (n =? m) = (m =? n).
+Proof.
+  induction n as [|n' IH]; destruct m; auto.
+  apply IH.
+Qed.
+
 End Natural_Numbers.
 
 Section Lists.
