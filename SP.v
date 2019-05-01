@@ -59,7 +59,7 @@ Notation "'If' p 'Then' B1 'Else' B2" := (Cond p B1 B2) (at level 60) : SP_scope
 Notation "'bnil'" := (End) : SP_scope.
 Notation "'nnil'" := (Empty) : SP_scope.
 
-(* 
+(*
 Check (Empty | Empty)%SP.
 Check (0 [1, bnil])%SP.
 Check (Empty | 0 [1, bnil])%SP.
@@ -395,15 +395,14 @@ induction N, N'.
 + intros.
   simpl in H0; exfalso; assumption.
 + admit.
-+ intros.
-  
-
++ admit.
+Admitted.
 
 Lemma Precongr_char_only_if : forall N N', WellFormedNetwork N -> WellFormedNetwork N' -> Precongr_op N N' -> Precongr N N'.
 intros.
 red in H1.
 induction N.
-+ cut (N' = nnil%SP).
+(* + cut (N' = nnil%SP).
   intro.
   rewrite H2; apply Refl.
   specialize (H1 0).
@@ -419,12 +418,14 @@ specialize (H1 0).
   simpl in H1.
   case (get_proc 0 N') in H1.
   - exfalso; auto.
-  - 
+  -
 induction N.
 + induction N'.
   - apply Refl.
   - exfalso.
     red in H1.
+ *)
+Admitted.
 
 Lemma Precongr_char_iff : forall N N', WellFormedNetwork N -> WellFormedNetwork N' -> (Precongr_op N N' <-> Precongr N N').
 split.
@@ -433,7 +434,7 @@ apply Precongr_char_if; auto.
 Qed.
 
 (* See https://imada.sdu.dk/~petersk/sn/doc/BinaryTrees.html for Variable and Hypothesis. *)
-(* (* 
+(* (*
 Lemma congr_refl : forall N:Network, congr N N.
 intros.
 induction N; unfold congr; intros; simpl; auto.
@@ -488,7 +489,7 @@ Lemma congr_assocL : forall (N1 N2 N3:Network), WellFormedNetwork (N1|N2|N3) -> 
 intros.
 induction N1.
 + apply (congr_trans (nnil|(N2|N3)) (N2|N3) ((nnil|N2)|N3)).
-  apply 
+  apply
   red.
   simpl.
   apply congr_refl.
@@ -524,5 +525,3 @@ Notation "N ---> N'" := (SPTo N N') (at level 50, left associativity) : SP_scope
 Notation "N --->* N'" := (SPToStar N N') (at level 50, left associativity) : SP_scope.
 
 End Semantics.
-
-
