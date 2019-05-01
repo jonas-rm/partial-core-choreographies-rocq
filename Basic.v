@@ -54,8 +54,6 @@ assert (S n <= m).
   - rewrite b; auto with arith.
 Qed.
 
-<<<<<<< HEAD
-=======
 Lemma max_lt_l : forall k m n, max m n < k -> m < k.
 Proof.
 intro; case_eq k; intros.
@@ -71,7 +69,6 @@ intros; apply max_lt_l with m.
 rewrite Nat.max_comm; auto.
 Qed.
 
->>>>>>> 880df4b958e235dd20abf9459101606e65b5a85f
 Theorem beq_sym: forall n m : nat, (n =? m) = (m =? n).
 Proof.
   induction n as [|n' IH]; destruct m; auto.
