@@ -21,6 +21,11 @@ Qed.
 
 Definition disjoint (p q r s:Pid) :=  p <> r /\ p <> s /\ q <> r /\ q <> s.
 
+Lemma disjoint_sym : forall p q r s, disjoint p q r s -> disjoint r s p q.
+Proof.
+intros; inversion H; inversion_clear H1; inversion_clear H3; repeat split; auto.
+Qed.
+
 Definition independent (eta1 eta2:Eta) : Prop :=
 match eta1, eta2 with
  | Com p _ q, Com r _ s => disjoint p q r s
@@ -28,6 +33,11 @@ match eta1, eta2 with
  | Sel p q _, Com r _ s => disjoint p q r s
  | Sel p q _, Sel r s _ => disjoint p q r s
 end.
+
+Lemma independent_sym : forall eta eta', independent eta eta' -> independent eta' eta.
+Proof.
+intros; induction eta; induction eta'; inversion H; inversion_clear H1; inversion_clear H3; repeat split; auto.
+Qed.
 
 Definition unused (r:Pid) (eta:Eta) : Prop :=
 match eta with
@@ -231,41 +241,21 @@ Notation "C1 ~< C2" := (Precongr_step C1 C2) (at level 50, left associativity).
 
 Section Semantics_Props.
 
-(** The size of a choreography, as the minimal number of reductions until we reach a terminal. *)
-Fixpoint size (C:Choreography) : nat :=
-  match C with
-  | End => 0
-  | eta; C' => 1 + size C'
-  | If p == q Then C1 Else C2 => 1 + min (size C1) (size C2)
-  end.
-
-Lemma precongr_size_ge : forall C C', C ~<= C' -> size C <= size C'.
-intros.
-induction H; simpl; auto with arith.
-+ transitivity (size C2); auto.
-  clear IHPrecongr H0; induction H; simpl; auto with arith.
-  - set (s1 := size C1); set (s2 := size C2); set (s0 := size C0); set (s4 := size C4).
-    repeat apply le_n_S.
-    rewrite Nat.min_assoc.
-    rewrite <- (Nat.min_assoc s1 s2 s0).
-    rewrite (Nat.min_comm s2 s0).
-    repeat rewrite Nat.min_assoc; auto.
-  - apply le_n_S.
-    apply Nat.min_glb.
-    * transitivity (size C'); auto; apply Nat.le_min_l.
-    * apply Nat.le_min_r.
-  - apply le_n_S.
-    apply Nat.min_glb.
-    * apply Nat.le_min_l.
-    * transitivity (size C'); auto; apply Nat.le_min_r.
-Qed.
-
-(** A lot of stuff on terminated choreographies. *)
-Lemma size_0_End : forall C, size C = 0 -> C = End.
+(** * Induction principles for one-step reduction in MC. *)
+Lemma MCTo_induction : forall (P:Choreography -> State -> Choreography -> State -> Prop),
+  (forall p e q C s, P (p#e --> q; C) s C (update s q (evaluate_on_state e s p))) ->
+  (forall p q l C s, P (Sel p q l; C) s C s) ->
+  (forall p q C1 C2 s, s p = s q -> P (If p == q Then C1 Else C2) s C1 s) ->
+  (forall p q C1 C2 s, s p <> s q -> P (If p == q Then C1 Else C2) s C2 s) ->
+  (forall C1 C1' C2 C2' s1 s2, Precongr C1 C1' -> Precongr C2' C2 -> P C1' s1 C2' s2 -> P C1 s1 C2 s2) ->
+  forall C s C' s', (C,s) ---> (C',s') -> P C s C' s'.
 Proof.
-induction C; simpl; auto; intros; inversion H.
+intros.
+dependent induction H4; auto.
+apply H3 with C1' C2'; auto.
 Qed.
 
+(** * Properties of precongruence. *)
 Lemma End_precongr' : forall C C', C' ~<= C -> C' = End -> C = End.
 Proof.
 intros.
@@ -295,15 +285,6 @@ intro.
 elim not_End_precongr with C End; auto.
 Qed.
 
-Lemma terminated_iff_End : forall C:Choreography, terminated C <-> C = End.
-Proof.
-unfold terminated; simpl.
-split.
-apply not_End_precongr'.
-intro; rewrite H.
-constructor.
-Qed.
-
 Lemma precongr_eta' : forall eta C C', C' = (eta; End) -> C' ~<= C -> C = eta; End.
 intros.
 induction H0; auto.
@@ -316,6 +297,16 @@ Lemma precongr_eta : forall eta C, (eta; End) ~<= C -> C = eta; End.
 Proof.
 intros.
 apply precongr_eta' with (eta;End); auto.
+Qed.
+
+(** More on termination. *)
+Lemma terminated_iff_End : forall C:Choreography, terminated C <-> C = End.
+Proof.
+unfold terminated; simpl.
+split.
+apply not_End_precongr'.
+intro; rewrite H.
+constructor.
 Qed.
 
 Lemma eta_not_terminated : forall eta C, ~terminated (eta; C).
@@ -332,6 +323,19 @@ intros; intro.
 red in H; simpl in H.
 generalize (not_End_precongr' _ H); intro.
 inversion H0.
+Qed.
+
+Lemma not_terminated_precongr' : forall C C', ~terminated C -> C ~< C' -> ~terminated C'.
+Proof.
+intros.
+induction H0; try apply eta_not_terminated; try apply cond_not_terminated.
+Qed.
+
+Lemma not_terminated_precongr : forall C C', ~terminated C -> C ~<= C' -> ~terminated C'.
+Proof.
+intros.
+induction H0; auto.
+apply IHPrecongr; apply not_terminated_precongr' with C1; auto.
 Qed.
 
 Lemma terminated_does_not_reduce : forall C C' s s', terminated C -> ~(C,s) ---> (C',s').
@@ -353,6 +357,65 @@ intros; intro.
 red in H1; simpl in H1; rewrite (not_End_precongr' _ H1) in H0.
 rewrite (not_End_precongr' _ H0) in H.
 revert H; apply terminated_does_not_reduce; apply Refl.
+Qed.
+
+(** The size of a choreography, as the minimal number of reductions until we reach a terminal. *)
+Fixpoint size (C:Choreography) : nat :=
+  match C with
+  | End => 0
+  | eta; C' => 1 + size C'
+  | If p == q Then C1 Else C2 => 1 + min (size C1) (size C2)
+  end.
+
+Lemma precongr_size_ge : forall C C', C ~<= C' -> size C <= size C'.
+intros.
+induction H; simpl; auto with arith.
++ transitivity (size C2); auto.
+  clear IHPrecongr H0; induction H; simpl; auto with arith.
+  - set (s1 := size C1); set (s2 := size C2); set (s0 := size C0); set (s4 := size C4).
+    repeat apply le_n_S.
+    rewrite Nat.min_assoc.
+    rewrite <- (Nat.min_assoc s1 s2 s0).
+    rewrite (Nat.min_comm s2 s0).
+    repeat rewrite Nat.min_assoc; auto.
+  - apply le_n_S.
+    apply Nat.min_glb.
+    * transitivity (size C'); auto; apply Nat.le_min_l.
+    * apply Nat.le_min_r.
+  - apply le_n_S.
+    apply Nat.min_glb.
+    * apply Nat.le_min_l.
+    * transitivity (size C'); auto; apply Nat.le_min_r.
+Qed.
+
+(** Some useful characterizations using size. *)
+Lemma size_0_End : forall C, size C = 0 -> C = End.
+Proof.
+induction C; simpl; auto; intros; inversion H.
+Qed.
+
+Lemma MCTo_End_size : forall C s s', (C,s) ---> (End, s') -> size C = 1.
+Proof.
+intros.
+assert (size C <> 0).
+* intro.
+  rewrite (size_0_End _ H0) in H.
+  apply (terminated_does_not_reduce _ _ _ _ (Refl _) H).
+* generalize (eq_refl End).
+  generalize H0.
+  apply MCTo_induction with (P:=fun C _ C' _ => size C <> 0 -> C' = End -> size C = 1) (s:=s) (C':=End) (s':=s'); simpl; auto; intros.
+  + rewrite H2; auto.
+  + rewrite H2; auto.
+  + rewrite H3; auto.
+  + rewrite H3; rewrite Nat.min_comm; auto.
+  + rewrite H5 in H2; clear H5.
+    generalize (not_End_precongr' _ H2); clear H2; intro.
+    generalize (precongr_size_ge _ _ H1); intro.
+    rewrite H3 in H5; auto.
+    - inversion H5; auto.
+      elim H4; auto with arith.
+    - intro; apply H4.
+      rewrite H6 in H5; auto with arith.
 Qed.
 
 (** Head reductions (do not use structural precongruence). *)
@@ -516,3 +579,373 @@ Qed.
 End Semantics_Props.
 
 Notation "c $ H -H-> c'" := (HeadTo c H = c') (at level 50).
+
+Section Representation_principles.
+
+(** Head reductions propagate by precongruence. *)
+Lemma HeadTo_precongr_one : forall {C C' C'' s s' H}, (C,s)$H -H-> (C',s') -> C' ~< C'' ->
+  exists C''', C ~< C''' /\ forall H', (C''',s)$H' -H-> (C'',s').
+Proof.
+intros.
+revert C H H0.
+dependent induction H1; intros.
+(* EtaEta *)
++ induction C0; try induction e; inversion H1.
+  - elim H0; apply Refl.
+  - exists (p#e-->p0; eta2; eta1; C); split; auto.
+    apply CtxEta; apply EtaEta; auto.
+  - exists (Sel p p0 l; eta2; eta1; C); split; auto.
+    apply CtxEta; apply EtaEta; auto.
+  - case_eq (s p =? s p0); intro; rewrite H2 in H3; inversion H3.
+    * exists (If p == p0 Then eta2; eta1; C Else C0_2); split.
+      apply CtxThen; apply EtaEta; auto.
+      intro; simpl; rewrite <- H6; rewrite H2; auto.
+    * exists (If p == p0 Then C0_1 Else (eta2; eta1; C)); split.
+      apply CtxElse; apply EtaEta; auto.
+      intro; simpl; rewrite <- H6; rewrite H2; auto.
+(* EtaCond *)
++ induction C; try induction e; inversion H2.
+  - elim H1; apply Refl.
+  - exists (p0#e-->p1; If p == q Then eta; C1 Else (eta; C2)); split; auto.
+    apply CtxEta; apply EtaCond; auto.
+  - exists (Sel p0 p1 l; If p == q Then eta; C1 Else (eta; C2)); split; auto.
+    apply CtxEta; apply EtaCond; auto.
+  - case_eq (s p0 =? s p1); intro; rewrite H3 in H4; inversion H4.
+    * exists (If p0 == p1 Then If p == q Then eta; C1 Else (eta; C2) Else C4); split.
+      apply CtxThen; apply EtaCond; auto.
+      intro; simpl; rewrite <- H7; rewrite H3; auto.
+    * exists (If p0 == p1 Then C3 Else (If p == q Then eta; C1 Else (eta; C2))); split.
+      apply CtxElse; apply EtaCond; auto.
+      intro; simpl; rewrite <- H7; rewrite H3; auto.
+(* CondEta *)
++ induction C; try induction e; inversion H2.
+  - elim H1; apply Refl.
+  - exists (p0#e-->p1; eta; If p == q Then C1 Else C2); split; auto.
+    apply CtxEta; apply CondEta; auto.
+  - exists (Sel p0 p1 l; eta; If p == q Then C1 Else C2); split; auto.
+    apply CtxEta; apply CondEta; auto.
+  - case_eq (s p0 =? s p1); intro; rewrite H3 in H4; inversion H4.
+    * exists (If p0 == p1 Then eta; If p == q Then C1 Else C2 Else C4); split.
+      apply CtxThen; apply CondEta; auto.
+      intro; simpl; rewrite <- H7; rewrite H3; auto.
+    * exists (If p0 == p1 Then C3 Else (eta; If p == q Then C1 Else C2)); split.
+      apply CtxElse; apply CondEta; auto.
+      intro; simpl; rewrite <- H7; rewrite H3; auto.
+(* CondCond *)
++ induction C; try induction e; inversion H1.
+  - elim H0; apply Refl.
+  - exists (p0#e-->p1; (If r == s0 Then If p == q Then C1 Else C3 Else (If p == q Then C2 Else C4))); split; auto.
+    apply CtxEta; apply CondCond; auto.
+  - exists (Sel p0 p1 l;(If r == s0 Then If p == q Then C1 Else C3 Else (If p == q Then C2 Else C4))); split; auto.
+    apply CtxEta; apply CondCond; auto.
+  - case_eq (s p0 =? s p1); intro; rewrite H2 in H3; inversion H3.
+    * exists (If p0 == p1 Then (If r == s0 Then If p == q Then C1 Else C3 Else (If p == q Then C2 Else C4)) Else C6); split; auto.
+      apply CtxThen; apply CondCond; auto.
+      intro; simpl; rewrite <- H6; rewrite H2; auto.
+    * exists (If p0 == p1 Then C5 Else (If r == s0 Then If p == q Then C1 Else C3 Else (If p == q Then C2 Else C4))); split; auto.
+      apply CtxElse; apply CondCond; auto.
+      intro; simpl; rewrite <- H6; rewrite H2; auto.
+(* CtxEta *)
++ induction C; try induction e; inversion H0.
+  - elim H; apply Refl.
+  - exists (p#e-->p0; eta; C2); split; auto.
+    apply CtxEta; apply CtxEta; auto.
+  - exists (Sel p p0 l; eta; C2); split; auto.
+    apply CtxEta; apply CtxEta; auto.
+  - case_eq (s p =? s p0); intro; rewrite H2 in H3; inversion H3.
+    * exists (If p == p0 Then eta; C2 Else C4); split; auto.
+      apply CtxThen; apply CtxEta; auto.
+      intro; simpl; rewrite <- H6; rewrite H2; auto.
+    * exists (If p == p0 Then C3 Else (eta; C2)); split; auto.
+      apply CtxElse; apply CtxEta; auto.
+      intro; simpl; rewrite <- H6; rewrite H2; auto.
+(* CtxThen *)
++ induction C0; try induction e; inversion H0.
+  - elim H; apply Refl.
+  - exists (p0#e-->p1; If p == q Then C'' Else C); split; auto.
+    apply CtxEta; apply CtxThen; auto.
+  - exists (Sel p0 p1 l; If p == q Then C'' Else C); split; auto.
+    apply CtxEta; apply CtxThen; auto.
+  - case_eq (s p0 =? s p1); intro; rewrite H2 in H3; inversion H3.
+    * exists (If p0 == p1 Then If p == q Then C'' Else C Else C0_2); split; auto.
+      apply CtxThen; apply CtxThen; auto.
+      intro; simpl; rewrite <- H6; rewrite H2; auto.
+    * exists (If p0 == p1 Then C0_1 Else (If p == q Then C'' Else C)); split; auto.
+      apply CtxElse; apply CtxThen; auto.
+      intro; simpl; rewrite <- H6; rewrite H2; auto.
+(* CtxElse *)
++ induction C0; try induction e; inversion H0.
+  - elim H; apply Refl.
+  - exists (p0#e-->p1; If p == q Then C Else C''); split; auto.
+    apply CtxEta; apply CtxElse; auto.
+  - exists (Sel p0 p1 l; If p == q Then C Else C''); split; auto.
+    apply CtxEta; apply CtxElse; auto.
+  - case_eq (s p0 =? s p1); intro; rewrite H2 in H3; inversion H3.
+    * exists (If p0 == p1 Then If p == q Then C Else C'' Else C0_2); split; auto.
+      apply CtxThen; apply CtxElse; auto.
+      intro; simpl; rewrite <- H6; rewrite H2; auto.
+    * exists (If p0 == p1 Then C0_1 Else (If p == q Then C Else C'')); split; auto.
+      apply CtxElse; apply CtxElse; auto.
+      intro; simpl; rewrite <- H6; rewrite H2; auto.
+Qed.
+
+Lemma HeadTo_precongr : forall {C C' C'' s s' H}, (C,s)$H -H-> (C',s') -> C' ~<= C'' ->
+  exists C''', C ~<= C''' /\ forall H', (C''',s)$H' -H-> (C'',s').
+Proof.
+intros.
+revert C H H0.
+dependent induction H1; intros.
++ exists C0; repeat split; intros; try apply Refl.
+  rewrite (HeadTo_wd (C0,s) H' H); auto.
++ elim (HeadTo_precongr_one H2 H); intros.
+  rename x into C'; inversion_clear H3.
+  assert (~terminated C').
+  - apply (not_terminated_weird (C:=C) (C':=C1) (s:=s) (s':=s')); auto.
+    rewrite <- H2; apply HeadTo_Soundness.
+    apply Precongr_step_to; auto.
+  - elim (IHPrecongr _ _ (H5 H3)); clear IHPrecongr; intros.
+    rename x into C''; inversion_clear H6.
+    exists C''; split; auto.
+    apply Trans with C'; auto.
+Qed.
+
+(** Currently this lemma could be stronger, but once unfolding is around things get different. *)
+Lemma MCTo_square : forall C C' s s' H, (C,s)$H -H-> (C',s') ->
+  forall C'', C ~< C'' -> exists C''', (C'',s) ---> (C''',s') /\ C' ~<= C'''.
+Proof.
+intros.
+revert C' s' H0; induction H1; intros.
++ exists C'; split; try apply Refl; inversion H1; induction eta1.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply EtaEta; apply independent_sym; auto.
+    * apply Refl.
+    * apply C_Com.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply EtaEta; apply independent_sym; auto.
+    * apply Refl.
+    * apply C_Sel.
++ exists C'; inversion H2; induction eta; split; try apply Refl.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply CondEta; auto.
+    * apply Refl.
+    * apply C_Com.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply CondEta; auto.
+    * apply Refl.
+    * apply C_Sel.
++ exists C'; split; try apply Refl; inversion H2; revert H4; case_eq (s p =? s q); intros.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply EtaCond; auto.
+    * apply Refl.
+    * apply C_Then; apply Nat.eqb_eq; auto.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply EtaCond; auto.
+    * apply Refl.
+    * apply C_Else; rewrite <- Nat.eqb_eq; intro.
+      rewrite H3 in H5; inversion H5.
++ exists C'; split; try apply Refl; inversion H1; revert H3; case_eq (s p =? s q); intros.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply CondCond; apply disjoint_sym; auto.
+    * apply Refl.
+    * apply C_Then; apply Nat.eqb_eq; auto.
+  - eapply C_Struct.
+    * apply Precongr_step_to; apply CondCond; apply disjoint_sym; auto.
+    * apply Refl.
+    * apply C_Else; rewrite <- Nat.eqb_eq; intro.
+      rewrite H2 in H4; inversion H4.
++ exists C2; inversion H0; induction eta; inversion H3; split; auto.
+  - apply C_Com.
+  - rewrite <- H4; apply Precongr_step_to; auto.
+  - apply C_Sel.
+  - rewrite <- H4; apply Precongr_step_to; auto.
++ inversion H0; revert H3; case_eq (s p =? s q); intros; inversion H3.
+  - exists C''; split.
+    * apply C_Then; apply Nat.eqb_eq; rewrite <- H6; auto.
+    * rewrite <- H5; apply Precongr_step_to; auto.
+  - exists C; split.
+    * rewrite <- H5; apply C_Else; rewrite <- Nat.eqb_eq; intro.
+      rewrite H6 in H2; rewrite H4 in H2; inversion H2.
+    * rewrite H5; apply Refl.
++ inversion H0; revert H3; case_eq (s p =? s q); intros; inversion H3.
+  - exists C; split.
+    * rewrite <- H5; apply C_Then; apply Nat.eqb_eq; rewrite <- H6; auto.
+    * rewrite H5; apply Refl.
+  - exists C''; split.
+    * apply C_Else; rewrite <- Nat.eqb_eq; intro.
+      rewrite H6 in H2; rewrite H4 in H2; inversion H2.
+    * rewrite <- H5; apply Precongr_step_to; auto.
+Qed.
+
+Lemma MCTo_head_precongr : forall C s H C' s' C'' H'' C''' s''', (C,s)$H -H-> (C',s') ->
+  C ~< C'' -> (C'',s)$H'' -H-> (C''',s''') -> (s' = s''' /\ (C' = C''' \/ C' ~< C''')) \/
+  exists C0 s1 s2, (C',s') ---> (C0,s1) /\ (C''',s''') ---> (C0,s2) /\ eq_state_ext s1 s2.
+Proof.
+intros.
+induction H1.
++ right.
+  induction eta1; induction eta2; inversion H0; inversion H2; clear H H'' H0 H2 H4 H6.
+  - (* Com/Com *)
+    rename p0 into q; rename p1 into p'; rename p2 into q'; rename e0 into e'.
+    set (H := eta_not_terminated (p'#e'-->q') C).
+    exists C; eexists; eexists; split; [apply C_Com | split; [apply C_Com | intro]].
+    rename p0 into r; rename H1 into H'; destroy H'.
+    rewrite update_independent; auto.
+    repeat rewrite read_update; auto.
+  - (* Com/Sel *)
+    rename p0 into q; rename p1 into p'; rename p2 into q'.
+    set (H := eta_not_terminated (Sel p' q' l) C).
+    exists C; eexists; eexists; split; [apply C_Sel | split; [apply C_Com | intro; auto]].
+  - (* Sel/Com *)
+    rename p0 into q; rename p1 into p'; rename p2 into q'.
+    set (H := eta_not_terminated (p'#e-->q') C).
+    exists C; eexists; eexists; split; [apply C_Com | split; [apply C_Sel | intro]].
+    rewrite H5; auto.
+  - (* Sel/Sel *)
+    rename p0 into q; rename p1 into p'; rename p2 into q'; rename l0 into l'.
+    set (H := eta_not_terminated (Sel p' q' l') C).
+    exists C; eexists; eexists; split; [apply C_Sel | split; [apply C_Sel | intro]].
+    rewrite <- H5, H7; auto.
++ right.
+  induction eta; inversion H0; revert H2; simpl; case_eq (s p =? s q); intros; inversion H4.
+  - (* Then/Com *)
+    exists C1, s', s'.
+    split; [idtac | split; [idtac | intro; reflexivity]].
+    * rewrite <- H9, <- H6; apply C_Then; auto.
+      inversion_clear H1; inversion_clear H3.
+      rewrite H6.
+      change (evaluate_on_state this s' p = evaluate_on_state this s' q).
+      rewrite <- H6; repeat rewrite read_update with (e:=this); auto.
+      rewrite Nat.eqb_eq in H2; auto.
+    * rewrite <- H9, <- H6; apply C_Com.
+  - (* Else/Com *)
+    exists C2, s', s'.
+    split; [idtac | split; [idtac | intro; reflexivity]].
+    * rewrite <- H9; rewrite <- H6; apply C_Else; auto.
+      inversion_clear H1; inversion_clear H3.
+      rewrite H6.
+      change (evaluate_on_state this s' p <> evaluate_on_state this s' q).
+      rewrite <- H6; repeat rewrite read_update with (e:=this); auto.
+      rewrite Nat.eqb_neq in H2; auto.
+    * rewrite <- H9, <- H6; apply C_Com.
+  - (* Then/Sel *)
+    exists C1, s', s'.
+    split; [idtac | split; [idtac | intro; reflexivity]].
+    * apply C_Then; auto.
+      inversion_clear H1; inversion_clear H3.
+      rewrite <- H6; rewrite Nat.eqb_eq in H2; auto.
+    * rewrite <- H9, <- H6; apply C_Sel.
+  - (* Else/Sel *)
+    exists C2, s', s'.
+    split; [idtac | split; [idtac | intro; reflexivity]].
+    * rewrite <- H6; apply C_Else; auto.
+      inversion_clear H1; inversion_clear H3.
+      rewrite Nat.eqb_neq in H2; auto.
+    * rewrite <- H9, <- H6; apply C_Sel.
++ right.
+  induction eta; inversion H2; revert H0; simpl; case_eq (s p =? s q); intros; inversion H4.
+  - (* Com/Then *)
+    exists C1, s''', s'''.
+    split; [idtac | split; [idtac | intro; reflexivity]].
+    * rewrite <- H9, <- H6; apply C_Com.
+    * rewrite <- H9; rewrite <- H6; apply C_Then; auto.
+      inversion_clear H1; inversion_clear H3.
+      rewrite H6.
+      change (evaluate_on_state this s''' p = evaluate_on_state this s''' q).
+      rewrite <- H6; repeat rewrite read_update with (e:=this); auto.
+      rewrite Nat.eqb_eq in H0; auto.
+  - (* Com/Else *)
+    exists C2, s''', s'''.
+    split; [idtac | split; [idtac | intro; reflexivity]].
+    * rewrite <- H9, <- H6; apply C_Com.
+    * rewrite <- H9; rewrite <- H6; apply C_Else; auto.
+      inversion_clear H1; inversion_clear H3.
+      rewrite H6.
+      change (evaluate_on_state this s''' p <> evaluate_on_state this s''' q).
+      rewrite <- H6; repeat rewrite read_update with (e:=this); auto.
+      rewrite Nat.eqb_neq in H0; auto.
+  - (* Sel/Then *)
+    exists C1, s''', s'''.
+    split; [idtac | split; [idtac | intro; reflexivity]].
+    * rewrite <- H9, <- H6; apply C_Sel.
+    * apply C_Then; auto.
+      inversion_clear H1; inversion_clear H3.
+      rewrite <- H6; rewrite Nat.eqb_eq in H0; auto.
+  - (* Sel/Else *)
+    exists C2, s''', s'''.
+    split; [idtac | split; [idtac | intro; reflexivity]].
+    * rewrite <- H9, <- H6; apply C_Sel.
+    * rewrite <- H6; apply C_Else; auto.
+      inversion_clear H1; inversion_clear H3.
+      rewrite Nat.eqb_neq in H0; auto.
++ right.
+  revert H0 H2; rename H1 into H'; destroy H'.
+  simpl; case_eq (s p =? s q); simpl; case_eq (s r =? s s0); intros;
+  inversion H5; clear H5; inversion H6; clear H6.
+  - (* Then/Then *)
+    rewrite <- H10, <- H9; exists C1, s, s; split;
+    [apply C_Then | split; [apply C_Then | intro; auto]];
+    rewrite Nat.eqb_eq in H3, H4; auto.
+  - (* Else/Then *)
+    rewrite <- H10, <- H9; exists C2, s, s; split;
+    [apply C_Else | split; [apply C_Then | intro; auto]];
+    rewrite Nat.eqb_neq in H3; rewrite Nat.eqb_eq in H4; auto.
+  - (* Then/Else *)
+    rewrite <- H10, <- H9; exists C3, s, s; split;
+    [apply C_Then | split; [apply C_Else | intro; auto]];
+    rewrite Nat.eqb_eq in H3; rewrite Nat.eqb_neq in H4; auto.
+  - (* Else/Else *)
+    rewrite <- H10, <- H9; exists C4, s, s; split;
+    [apply C_Else | split; [apply C_Else | intro; auto]];
+    rewrite Nat.eqb_neq in H3, H4; auto.
++ (* Com *)
+  left; clear IHPrecongr_step.
+  induction eta; inversion H0; inversion H2; split; try rewrite <- H4, <- H6; auto.
+  transitivity s; auto.
++ left; clear IHPrecongr_step.
+  inversion H0; inversion H2; revert H4 H5.
+  case_eq (s p =? s q); intros; inversion H4; inversion H5; split; try (transitivity s; auto);
+  rewrite <- H7, <- H9; auto.
++ left; clear IHPrecongr_step.
+  inversion H0; inversion H2; revert H4 H5.
+  case_eq (s p =? s q); intros; inversion H4; inversion H5; split; try (transitivity s; auto);
+  rewrite <- H7; rewrite <- H9; auto.
+Qed.
+
+(** Canonical representation for reductions. *)
+Lemma MCTo_canonical_weak : forall {C s C' s'}, (C,s) ---> (C',s') -> exists C'' C''', C ~<= C'' /\ C''' ~<= C' /\ forall H, (C'',s)$H -H-> (C''',s').
+Proof.
+intros.
+dependent induction H.
++ exists (p#e-->q;C'); exists C'; repeat split; auto; apply Refl.
++ exists (Sel p q l; C'); exists C'; repeat split; auto; apply Refl.
++ exists (If p == q Then C' Else C2); exists C'; repeat split; try apply Refl.
+  intros; simpl; rewrite <- Nat.eqb_eq in H; rewrite H; auto.
++ exists (If p == q Then C1 Else C'); exists C'; repeat split; try apply Refl.
+  intros; simpl; rewrite <- Nat.eqb_eq in H.
+  rewrite (not_true_is_false _ H); auto.
++ elim (IHMCTo _ _ _ _ (JMeq_refl _) (JMeq_refl _)); clear IHMCTo; intros.
+  rename x into C''; inversion_clear H2.
+  rename x into C'''; inversion_clear H3.
+  inversion_clear H4.
+  exists C''; exists C'''; repeat split; auto.
+  - apply Precongr_Trans with C1'; auto.
+  - apply Precongr_Trans with C2'; auto.
+Qed.
+
+Lemma MCTo_canonical : forall {C s C' s'}, (C,s) ---> (C',s') -> exists C'', C ~<= C'' /\ forall H, (C'',s)$H -H-> (C',s').
+Proof.
+intros.
+elim (MCTo_canonical_weak H); intros.
+rename x into C1; inversion_clear H0.
+rename x into C2; inversion_clear H1.
+inversion_clear H2.
+generalize (not_terminated_weird H H0); intro.
+generalize (H3 H2); clear H3; intro.
+elim (HeadTo_precongr H3 H1); intros.
+rename x into C3; inversion_clear H4.
+exists C3; split; auto.
+apply Precongr_Trans with C1; auto.
+Qed.
+
+
+End Representation_principles.

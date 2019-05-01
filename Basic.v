@@ -4,6 +4,8 @@ Require Export Sorting.Permutation.
 Require Export Arith.
 Require Import Coq.Program.Equality.
 
+Ltac destroy H := repeat (elim H; clear H; intro; intro H).
+
 Section Logical.
 
 (** De Morgan law *)

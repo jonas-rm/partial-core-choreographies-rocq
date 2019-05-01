@@ -387,6 +387,12 @@ Proof.
   rewrite <- beq_nat_refl; auto.
 Qed.
 
+Lemma read_update : forall s p q v e, p<>q -> evaluate_on_state e (update s q v) p = evaluate_on_state e s p.
+intros.
+assert (q<>p); auto.
+induction e; simpl; unfold update; auto; rewrite <- Nat.eqb_neq in H0; rewrite H0; auto.
+Qed.
+
 Lemma update_not_in : forall (s:State) (p:Pid) (v:Value) (P:list Pid),
   ~In p P -> eq_state P s (update s p v).
 Proof.
@@ -436,6 +442,16 @@ unfold update.
 unfold update.
 intro q.
 case_eq (p =? q); trivial.
+Qed.
+
+Lemma update_independent : forall s p q e e', p<>q ->
+  eq_state_ext (update (update s q e') p e) (update (update s p e) q e').
+Proof.
+red; intros.
+unfold update.
+case_eq (p =? p0); case_eq (q =? p0); auto; intros.
+elim H; rewrite Nat.eqb_eq in H0; rewrite Nat.eqb_eq in H1.
+transitivity p0; auto.
 Qed.
 
 End State.

@@ -1,6 +1,5 @@
 Require Export MC.
 Require Export Kleene.
-Require Import Coq.Program.Equality.
 
 Local Open Scope nat_scope.
 
@@ -133,6 +132,76 @@ dependent induction H.
 + induction c2.
   apply ToStep with (a;;C'', b); auto.
   - apply fatsemi_To; auto.
+Qed.
+
+Lemma fatsemi_size : forall C C', size C + size C' <= size (C;;C').
+Proof.
+induction C; simpl; auto with arith.
+intros.
+apply le_n_S.
+rewrite <- Nat.add_min_distr_r.
+apply Nat.min_glb.
++ etransitivity; [apply Nat.le_min_l | apply IHC1].
++ etransitivity; [apply Nat.le_min_r | apply IHC2].
+Qed.
+
+Lemma fatsemi_ToEnd : forall C C' s s', (C;;C',s) ---> (End,s') ->
+  {C = End /\ (C',s) ---> (End,s')} + {C' = End /\ (C,s) ---> (End,s')}.
+Proof.
+double induction C C'; intros; auto;
+  try (right; rewrite fatsemi_End in H0; auto).
+- exfalso; clear H H0.
+  generalize (MCTo_End_size _ _ _ H1); simpl; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H2 at 2.
+  etransitivity.
+  2: apply fatsemi_size.
+  replace 1 with (0+1); auto.
+  apply plus_le_compat; simpl; auto with arith.
+- exfalso; clear H H0.
+  generalize (MCTo_End_size _ _ _ H2); simpl; clear H1 H2; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H1 at 2.
+  etransitivity.
+  2: apply fatsemi_size.
+  replace 1 with (0+1); auto.
+  apply plus_le_compat; simpl; auto with arith.
+- right; split; auto.
+  rewrite fatsemi_End in H1; auto.
+- exfalso; clear H H0.
+  generalize (MCTo_End_size _ _ _ H2); simpl; clear H1 H2; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H1 at 2.
+  apply Nat.min_glb.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+- exfalso; clear H H0.
+  generalize (MCTo_End_size _ _ _ H3); simpl; clear H1 H2 H3; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H1 at 2.
+  apply Nat.min_glb.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
 Qed.
 
 (** Semantic characterization - Lemma 1. *)
