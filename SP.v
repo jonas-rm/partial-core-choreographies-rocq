@@ -53,7 +53,7 @@ Notation "N | N'" := (Par N N') (at level 202, right associativity) : SP_scope.
 Notation "p [ v , B ]" := (Process p v B) (at level 201, v at level 9, no associativity) : SP_scope.
 Notation "p ! e ; B" := (Send p e B) (at level 60, e at level 9, right associativity) : SP_scope.
 Notation "p ? ; B" := (Recv p B) (at level 60, right associativity) : SP_scope.
-Notation "p + l ; B" := (Sel p l B) (at level 49, l at level 9, right associativity) : SP_scope.
+Notation "p (+) l ; B" := (Sel p l B) (at level 49, l at level 9, right associativity) : SP_scope.
 Notation "p & f" := (Branching p f) (at level 60, no associativity) : SP_scope.
 Notation "'If' p 'Then' B1 'Else' B2" := (Cond p B1 B2) (at level 60) : SP_scope.
 Notation "'bnil'" := (End) : SP_scope.
@@ -197,6 +197,18 @@ split.
   apply (H' H).
 Qed.
 
+Lemma WellFormedNetwork_comm :
+  forall (N N': Network), WellFormedNetwork (N | N')%SP -> WellFormedNetwork (N' | N)%SP.
+intros.
+set (myH := WellFormedNetwork_par N N' H).
+inversion_clear myH.
+red in H, H0, H1.
+red.
+simpl.
+simpl in H.
+
+Admitted.
+
 Lemma get_proc_wf_par :
 forall (N N': Network), WellFormedNetwork (N | N')%SP -> forall p, (get_proc p (N | N')%SP) = (get_proc p (N' | N)%SP).
 intros.
@@ -271,6 +283,30 @@ inversion Hin.
   inversion_clear myH; auto.
 Qed.
 
+Lemma In_Network_par_xor : forall p N N', WellFormedNetwork (N | N')%SP -> In p (SPpn (N | N')%SP) ->
+  ( In p (SPpn N) /\ ~ In p (SPpn N') ) \/ ( In p (SPpn N') /\ ~ In p (SPpn N) ).
+intros.
+simpl in H0.
+set (WhereIsP := NoDup_pid_app_or p (SPpn N) (SPpn N') H H0).
+destruct WhereIsP as [InN | InN'].
+(* p is in N *)
++ left.
+  split.
+  - trivial.
+  - apply (NoDup_app_not_in Pid (SPpn N) (SPpn N') H p InN).
++ right.
+  split.
+  - trivial.
+  - rewrite (in_app_iff (SPpn N) (SPpn N') p) in H0.
+    rewrite or_comm in H0.
+    rewrite <- (in_app_iff (SPpn N') (SPpn N) p) in H0.
+    rewrite WellFormedNetwork_par_iff in H.
+    apply (NoDup_app_not_in Pid (SPpn N') (SPpn N) H p InN').
+Qed.
+
+Lemma WellFormedNetwork_ctx_trans : forall N1 N2 N3, WellFormedNetwork (N1 | N3)%SP -> WellFormedNetwork (N2 | N3)%SP -> WellFormedNetwork (N1 | N2)%SP.
+Admitted.
+
 Lemma Precongr_char_if : forall (N N': Network), WellFormedNetwork N -> WellFormedNetwork N' -> Precongr N N' -> Precongr_op N N'.
 intros; induction H1; intro.
 + red; unfold get_proc.
@@ -304,7 +340,19 @@ intros; induction H1; intro.
   rewrite Nat.eqb_neq; intro; contradiction.
   simpl; auto.
   assumption.
-+ admit.
++ set (WFN13 := WellFormedNetwork_par N1 N3 H); inversion_clear WFN13 as [WFN1 WFN3].
+  set (WFN12 := WellFormedNetwork_par N2 N3 H0); inversion_clear WFN12 as [WFN2 _].
+  set (myH := IHPrecongr WFN1 WFN2 p).
+  set (WhereIsP := In_Network_par_xor p N1 N3 H).
+  admit.
+(*   simpl.
+
+red.
+  case (get_proc p N1).
+  - destruct p0.
+
+admit.
+ *)
 + admit.
 + admit.
 + simpl.
