@@ -691,6 +691,7 @@ Qed.
 
 Lemma HeadTo_precongr : forall {C C' C'' s s' H}, (C,s)$H -H-> (C',s') -> C' ~<= C'' ->
   exists C''', C ~<= C''' /\ forall H', (C''',s)$H' -H-> (C'',s').
+(* Obsolete proof - follows from stronger lemma in LCF.v *)
 Proof.
 intros.
 revert C H H0.
@@ -711,11 +712,11 @@ Qed.
 
 (** Currently this lemma could be stronger, but once unfolding is around things get different. *)
 Lemma MCTo_square : forall C C' s s' H, (C,s)$H -H-> (C',s') ->
-  forall C'', C ~< C'' -> exists C''', (C'',s) ---> (C''',s') /\ C' ~<= C'''.
+  forall C'', C ~< C'' -> exists C''', (C'',s) ---> (C''',s') /\ (C' = C''' \/ C' ~< C''').
 Proof.
 intros.
 revert C' s' H0; induction H1; intros.
-+ exists C'; split; try apply Refl; inversion H1; induction eta1.
++ exists C'; split; auto; inversion H1; induction eta1.
   - eapply C_Struct.
     * apply Precongr_step_to; apply EtaEta; apply independent_sym; auto.
     * apply Refl.
@@ -724,7 +725,7 @@ revert C' s' H0; induction H1; intros.
     * apply Precongr_step_to; apply EtaEta; apply independent_sym; auto.
     * apply Refl.
     * apply C_Sel.
-+ exists C'; inversion H2; induction eta; split; try apply Refl.
++ exists C'; inversion H2; induction eta; split; auto.
   - eapply C_Struct.
     * apply Precongr_step_to; apply CondEta; auto.
     * apply Refl.
@@ -733,7 +734,7 @@ revert C' s' H0; induction H1; intros.
     * apply Precongr_step_to; apply CondEta; auto.
     * apply Refl.
     * apply C_Sel.
-+ exists C'; split; try apply Refl; inversion H2; revert H4; case_eq (s p =? s q); intros.
++ exists C'; split; auto; inversion H2; revert H4; case_eq (s p =? s q); intros.
   - eapply C_Struct.
     * apply Precongr_step_to; apply EtaCond; auto.
     * apply Refl.
@@ -743,7 +744,7 @@ revert C' s' H0; induction H1; intros.
     * apply Refl.
     * apply C_Else; rewrite <- Nat.eqb_eq; intro.
       rewrite H3 in H5; inversion H5.
-+ exists C'; split; try apply Refl; inversion H1; revert H3; case_eq (s p =? s q); intros.
++ exists C'; split; auto; inversion H1; revert H3; case_eq (s p =? s q); intros.
   - eapply C_Struct.
     * apply Precongr_step_to; apply CondCond; apply disjoint_sym; auto.
     * apply Refl.
@@ -755,25 +756,25 @@ revert C' s' H0; induction H1; intros.
       rewrite H2 in H4; inversion H4.
 + exists C2; inversion H0; induction eta; inversion H3; split; auto.
   - apply C_Com.
-  - rewrite <- H4; apply Precongr_step_to; auto.
+  - rewrite <- H4; auto.
   - apply C_Sel.
-  - rewrite <- H4; apply Precongr_step_to; auto.
+  - rewrite <- H4; auto.
 + inversion H0; revert H3; case_eq (s p =? s q); intros; inversion H3.
   - exists C''; split.
     * apply C_Then; apply Nat.eqb_eq; rewrite <- H6; auto.
-    * rewrite <- H5; apply Precongr_step_to; auto.
+    * rewrite <- H5; auto.
   - exists C; split.
     * rewrite <- H5; apply C_Else; rewrite <- Nat.eqb_eq; intro.
       rewrite H6 in H2; rewrite H4 in H2; inversion H2.
-    * rewrite H5; apply Refl.
+    * rewrite H5; auto.
 + inversion H0; revert H3; case_eq (s p =? s q); intros; inversion H3.
   - exists C; split.
     * rewrite <- H5; apply C_Then; apply Nat.eqb_eq; rewrite <- H6; auto.
-    * rewrite H5; apply Refl.
+    * rewrite H5; auto.
   - exists C''; split.
     * apply C_Else; rewrite <- Nat.eqb_eq; intro.
       rewrite H6 in H2; rewrite H4 in H2; inversion H2.
-    * rewrite <- H5; apply Precongr_step_to; auto.
+    * rewrite <- H5; auto.
 Qed.
 
 Lemma MCTo_head_precongr : forall C s H C' s' C'' H'' C''' s''', (C,s)$H -H-> (C',s') ->
