@@ -206,8 +206,8 @@ red in H, H0, H1.
 red.
 simpl.
 simpl in H.
-
-Admitted.
+apply (NoDup_app_sym Pid (SPpn N) (SPpn N') H).
+Qed.
 
 Lemma get_proc_wf_par :
 forall (N N': Network), WellFormedNetwork (N | N')%SP -> forall p, (get_proc p (N | N')%SP) = (get_proc p (N' | N)%SP).
@@ -238,9 +238,11 @@ inversion Hin.
     destruct (get_proc p N1); auto.
     destruct p0; auto.
     set (myH := (NoDup_app_not_in Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H p H1)).
-    apply (not_in_app Pid p (SPpn N2) (SPpn N3) Nat.eq_dec myH).
+    apply (not_in_app Pid (SPpn N2) (SPpn N3)) in myH.
+    destruct myH; auto.
     set (myH := (NoDup_app_not_in Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H p H1)).
-    apply (not_in_app Pid p (SPpn N2) (SPpn N3) Nat.eq_dec myH).
+    apply (not_in_app Pid (SPpn N2) (SPpn N3)) in myH.
+    destruct myH; auto.
   - simpl.
     rewrite (get_proc_None p N1).
     set (ndp := (NoDup_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3)) H).
@@ -253,33 +255,33 @@ inversion Hin.
     * rewrite (get_proc_None p N2).
       destruct (get_proc p N3); auto.
       destruct p0; auto.
-      set (H5 := (NoDup_app_comm Pid (SPpn N2) (SPpn N3) H3)).
+      set (H5 := (NoDup_app_sym Pid (SPpn N2) (SPpn N3) H3)).
       apply (NoDup_app_not_in Pid (SPpn N3)); auto.
     * rewrite in_app_iff in H0.
       rewrite or_comm in H0.
       rewrite <- in_app_iff in H0.
       set (myH := NoDup_app_not_in Pid (SPpn N2 ++ SPpn N3) (SPpn N1)).
-      set (myH2 := NoDup_app_comm Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H).
+      set (myH2 := NoDup_app_sym Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H).
       apply (myH myH2 p H1).
 + simpl.
   rewrite (get_proc_None p N1).
   rewrite (get_proc_None p N2).
   rewrite (get_proc_None p N3); auto.
-  set (myH := elim_not_In_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
+  set (myH := not_in_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
   inversion_clear myH.
   set (myH := NoDup_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H).
   inversion_clear myH.
-  set (myH := elim_not_In_app Pid (SPpn N2) (SPpn N3) p H2).
+  set (myH := not_in_app Pid (SPpn N2) (SPpn N3) p H2).
   inversion_clear myH.
   auto.
-  set (myH := elim_not_In_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
+  set (myH := not_in_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
   inversion_clear myH.
   set (myH := NoDup_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H).
   inversion_clear myH.
-  set (myH := elim_not_In_app Pid (SPpn N2) (SPpn N3) p H2).
+  set (myH := not_in_app Pid (SPpn N2) (SPpn N3) p H2).
   inversion_clear myH.
   auto.
-  set (myH := elim_not_In_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
+  set (myH := not_in_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
   inversion_clear myH; auto.
 Qed.
 
@@ -300,7 +302,7 @@ destruct WhereIsP as [InN | InN'].
   - rewrite (in_app_iff (SPpn N) (SPpn N') p) in H0.
     rewrite or_comm in H0.
     rewrite <- (in_app_iff (SPpn N') (SPpn N) p) in H0.
-    rewrite WellFormedNetwork_par_iff in H.
+    apply WellFormedNetwork_comm in H.
     apply (NoDup_app_not_in Pid (SPpn N') (SPpn N) H p InN').
 Qed.
 
