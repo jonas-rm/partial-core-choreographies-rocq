@@ -28,6 +28,17 @@ tauto.
 tauto.
 Qed.
 
+Definition or_add_left : forall A B C, B \/ C -> (A \/ B) \/ C.
+intros.
+inversion H; auto.
+Qed.
+
+Definition is_defined (A:Type) (o:option A) : bool :=
+match o with
+ | Some a => true
+ | None => false
+end.
+
 End Logical.
 
 Section Natural_Numbers.
@@ -81,8 +92,9 @@ End Natural_Numbers.
 
 Section Lists.
 
-Lemma Permutation_NoDup : forall A, forall P Q: list A, Permutation P Q ->
-                                                        NoDup P -> NoDup Q.
+Parameter A:Type.
+
+Lemma Permutation_NoDup : forall P Q: list A, Permutation P Q -> NoDup P -> NoDup Q.
 intros.
 induction H; auto.
 inversion_clear H0; apply NoDup_cons; auto.
@@ -96,32 +108,59 @@ apply NoDup_cons; auto.
 intro; apply H; right; auto.
 Qed.
 
-Definition or_add_left : forall A B C, B \/ C -> (A \/ B) \/ C.
+(** ** Miscellaneous about NoDup *)
+
+Lemma NoDup_app_char : forall l l':list A, NoDup l -> NoDup l' ->
+                      (forall x, In x l -> ~In x l') -> NoDup (l++l').
+Proof.
+induction l; simpl; auto.
 intros.
+inversion_clear H.
+apply NoDup_cons.
+intro; elim (in_app_or _ _ _ H); auto.
+apply H1; auto.
+apply IHl; auto.
+Qed.
+
+Lemma NoDup_app_elim_1 : forall l l':list A, NoDup (l++l') -> NoDup l.
+Proof.
+induction l; simpl; intros.
++ apply NoDup_nil.
++ inversion_clear H.
+  apply NoDup_cons; eauto.
+  intro; contradiction H0; apply in_or_app; auto.
+Qed.
+
+Lemma NoDup_app_elim_2 : forall l l':list A, NoDup (l++l') -> NoDup l'.
+Proof.
+induction l; simpl; intros; auto.
 inversion H; auto.
 Qed.
 
-Definition is_defined (A:Type) (o:option A) : bool :=
-match o with
- | Some a => true
- | None => false
-end.
+Lemma NoDup_app_both : forall l l':list A, NoDup (l++l') -> forall x, ~(In x l /\ In x l').
+Proof.
+induction l; simpl; intros; auto.
++ intro; inversion_clear H0; auto.
++ inversion_clear H; intro.
+  inversion_clear H.
+  generalize (IHl _ H1 x); intro.
+  inversion_clear H2; auto.
+  apply H0; apply in_or_app; rewrite H4; auto.
+Qed.
 
-Lemma not_in_app :
-  forall (A:Type) (a:A) (l l':list A),
-  (forall x y : A, {x = y} + {x <> y}) -> ~ In a (l ++ l') -> ~In a l /\ ~In a l'.
-intros.
-induction l; auto.
-simpl.
-simpl in H.
-apply deMorganNotOr in H.
-destruct H.
-set (myH := IHl H0).
-destruct myH.
-split; auto.
-red.
-intros.
-inversion H3; auto.
+Lemma NoDup_app_sym : forall l l':list A, NoDup (l++l') -> NoDup (l'++l).
+Proof.
+induction l; simpl; intros.
++ rewrite app_nil_r; auto.
++ inversion H; intros.
+  clear x H0 l0 H1.
+  apply NoDup_app_char; auto.
+  - apply NoDup_app_elim_2 with l; auto.
+  - apply NoDup_app_elim_1 with l'; auto.
+  - intros; intro.
+    inversion_clear H1.
+    * contradiction H2; apply in_or_app; rewrite H4; auto.
+    * apply (NoDup_app_both _ _ H3) with x; auto.
 Qed.
 
 Lemma NoDup_app :
@@ -151,17 +190,10 @@ inversion H.
 elim IHP; auto.
 Qed.
 
-Lemma NoDup_app_not_in :
-  forall A (l l':list A),
-  NoDup (l ++ l') -> forall x, In x l -> ~In x l'.
-induction l; simpl; intros; intro; auto.
-inversion_clear H0.
-+ inversion_clear H.
-  apply H0.
-  apply in_or_app.
-  rewrite H2; auto.
-+ inversion_clear H.
-  apply (IHl l') with x; auto.
+Lemma NoDup_app_not_in : forall l l':list A, NoDup (l ++ l') -> forall x, In x l -> ~In x l'.
+Proof.
+intros; intro.
+apply (NoDup_app_both _ _ H) with x; auto.
 Qed.
 
 (* TODO: Generalise and change order of NoDup and In requirements *)
@@ -192,10 +224,9 @@ induction l.
 Qed.
 
 Lemma NoDup_app_comm :
-  forall (A: Type) (a b: list A),
+  forall (a b: list A),
   NoDup (a ++ b) -> NoDup (b ++ a).
 Proof.
-  intro A.
   assert (forall (x: A) (b: list A) (a: list A), 
            NoDup (a ++ b) -> ~(In x a) -> ~(In x b) -> 
            NoDup (a ++ x :: b)).
@@ -214,10 +245,11 @@ Proof.
   red; intro; elim H3. apply in_or_app. tauto.
 Qed.
 
-Lemma elim_not_In_app : forall (A : Type) (xs ys : list A) (x : A),
-  ~ In x (xs ++ ys) ->
-  ~ In x xs /\ ~ In x ys.
+Lemma elim_not_In_app : forall (xs ys : list A) (x : A),
+  ~ In x (xs ++ ys) -> ~ In x xs /\ ~ In x ys.
 Proof. split; auto using in_or_app. Qed.
+
+Definition not_in_app := elim_not_In_app.
 
 End Lists.
 
