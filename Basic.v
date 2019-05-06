@@ -92,7 +92,7 @@ End Natural_Numbers.
 
 Section Lists.
 
-Parameter T:Type.
+Variable T:Type.
 
 Lemma Permutation_NoDup : forall P Q: list T, Permutation P Q -> NoDup P -> NoDup Q.
 intros.
