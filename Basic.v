@@ -92,9 +92,9 @@ End Natural_Numbers.
 
 Section Lists.
 
-Parameter A:Type.
+Parameter T:Type.
 
-Lemma Permutation_NoDup : forall P Q: list A, Permutation P Q -> NoDup P -> NoDup Q.
+Lemma Permutation_NoDup : forall P Q: list T, Permutation P Q -> NoDup P -> NoDup Q.
 intros.
 induction H; auto.
 inversion_clear H0; apply NoDup_cons; auto.
@@ -110,7 +110,7 @@ Qed.
 
 (** ** Miscellaneous about NoDup *)
 
-Lemma NoDup_app_char : forall l l':list A, NoDup l -> NoDup l' ->
+Lemma NoDup_app_char : forall l l':list T, NoDup l -> NoDup l' ->
                       (forall x, In x l -> ~In x l') -> NoDup (l++l').
 Proof.
 induction l; simpl; auto.
@@ -122,7 +122,7 @@ apply H1; auto.
 apply IHl; auto.
 Qed.
 
-Lemma NoDup_app_elim_1 : forall l l':list A, NoDup (l++l') -> NoDup l.
+Lemma NoDup_app_elim_1 : forall l l':list T, NoDup (l++l') -> NoDup l.
 Proof.
 induction l; simpl; intros.
 + apply NoDup_nil.
@@ -131,13 +131,13 @@ induction l; simpl; intros.
   intro; contradiction H0; apply in_or_app; auto.
 Qed.
 
-Lemma NoDup_app_elim_2 : forall l l':list A, NoDup (l++l') -> NoDup l'.
+Lemma NoDup_app_elim_2 : forall l l':list T, NoDup (l++l') -> NoDup l'.
 Proof.
 induction l; simpl; intros; auto.
 inversion H; auto.
 Qed.
 
-Lemma NoDup_app_both : forall l l':list A, NoDup (l++l') -> forall x, ~(In x l /\ In x l').
+Lemma NoDup_app_both : forall l l':list T, NoDup (l++l') -> forall x, ~(In x l /\ In x l').
 Proof.
 induction l; simpl; intros; auto.
 + intro; inversion_clear H0; auto.
@@ -148,7 +148,7 @@ induction l; simpl; intros; auto.
   apply H0; apply in_or_app; rewrite H4; auto.
 Qed.
 
-Lemma NoDup_app_sym : forall l l':list A, NoDup (l++l') -> NoDup (l'++l).
+Lemma NoDup_app_sym : forall l l':list T, NoDup (l++l') -> NoDup (l'++l).
 Proof.
 induction l; simpl; intros.
 + rewrite app_nil_r; auto.
@@ -190,7 +190,7 @@ inversion H.
 elim IHP; auto.
 Qed.
 
-Lemma NoDup_app_not_in : forall l l':list A, NoDup (l ++ l') -> forall x, In x l -> ~In x l'.
+Lemma NoDup_app_not_in : forall l l':list T, NoDup (l ++ l') -> forall x, In x l -> ~In x l'.
 Proof.
 intros; intro.
 apply (NoDup_app_both _ _ H) with x; auto.
@@ -223,33 +223,9 @@ induction l.
       trivial.
 Qed.
 
-Lemma NoDup_app_comm :
-  forall (a b: list A),
-  NoDup (a ++ b) -> NoDup (b ++ a).
-Proof.
-  assert (forall (x: A) (b: list A) (a: list A), 
-           NoDup (a ++ b) -> ~(In x a) -> ~(In x b) -> 
-           NoDup (a ++ x :: b)).
-    induction a; simpl; intros.
-    constructor; auto.
-    inversion H. constructor. red; intro.
-    elim (in_app_or _ _ _ H6); intro.
-    elim H4. apply in_or_app. tauto.
-    elim H7; intro. subst a. elim H0. left. auto.
-    elim H4. apply in_or_app. tauto.
-    auto.
-  induction a; simpl; intros.
-  rewrite <- app_nil_end. auto.
-  inversion H0. apply H. auto.
-  red; intro; elim H3. apply in_or_app. tauto.
-  red; intro; elim H3. apply in_or_app. tauto.
-Qed.
-
-Lemma elim_not_In_app : forall (xs ys : list A) (x : A),
+Lemma not_in_app : forall (xs ys : list T) (x : T),
   ~ In x (xs ++ ys) -> ~ In x xs /\ ~ In x ys.
 Proof. split; auto using in_or_app. Qed.
-
-Definition not_in_app := elim_not_In_app.
 
 End Lists.
 
