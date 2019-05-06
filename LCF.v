@@ -3,78 +3,16 @@ Require Export Implementation.
 Lemma fatsemi_To_inv : forall C C' s C'' s'', (C;;C',s) ---> (C'',s'') ->
   (exists C0, (C,s) ---> (C0,s'') /\ (C0;;C') ~<= C'')
   \/ (exists C0', (C',s) ---> (C0',s'') /\ (C;;C0') ~<= C'').
+Proof.
 intros.
 elim (MCTo_canonical H); intros CC HCC; destroy HCC.
+Abort.
 
-
-
-Section Weighted_Relations.
-
-Inductive Precongr_weighted : nat -> Choreography -> Choreography -> Prop :=
-  | PBase : forall {C}, Precongr_weighted 0 C C
-  | PStep : forall {n C} C' {C''}, C ~< C' -> Precongr_weighted n C' C'' -> Precongr_weighted (S n) C C''
-.
-
-Lemma Precongr_to_weighted : forall C C', C ~<= C' -> exists n, Precongr_weighted n C C'.
-Proof.
-intros; induction H.
-+ exists 0; apply PBase.
-+ elim IHPrecongr; intros n Hn.
-  exists (S n); apply PStep with C2; auto.
-Qed.
-
-Lemma Precongr_weighted_to : forall n C C', Precongr_weighted n C C' -> C ~<= C'.
-Proof.
-induction n; intros; inversion H.
-+ apply Refl.
-+ apply Trans with C'0; auto.
-Qed.
-
-Inductive MCTo_weighted : nat -> Configuration -> Configuration  -> Prop :=
-  | Base : forall {c c'} H, c$H -H-> c' -> MCTo_weighted 0 c c'
-  | Cons : forall {n k m C1} C1' C2' {C2 s1 s2}, Precongr_weighted n C1 C1' -> MCTo_weighted k (C1',s1) (C2',s2) -> Precongr_weighted m C2' C2 -> MCTo_weighted (S (n+k+m)) (C1,s1) (C2,s2)
-.
-
-Lemma MCTo_weighted_to : forall n c c', MCTo_weighted n c c' -> c ---> c'.
-Proof.
-assert (forall n k, k < n -> forall c c', MCTo_weighted k c c' -> c ---> c').
-2: intro; apply H with (S n); auto.
-induction n; intros.
-+ inversion H.
-+ inversion H0.
-  - rewrite <- H2; apply HeadTo_Soundness.
-  - apply C_Struct with C1' C2'.
-    * apply Precongr_weighted_to with n0; auto.
-    * apply Precongr_weighted_to with m; auto.
-    * apply IHn with k0; auto.
-      rewrite <- H4 in H; red in H.
-      apply lt_le_trans with (S (n0+k0+m)); auto with arith.
-Qed.
-
-Lemma MCTo_to_weighted : forall c c', c ---> c' -> exists n, MCTo_weighted n c c'.
-Proof.
-intros; induction H.
-+ exists 0; set (H := eta_not_terminated (p#e-->q) C); apply Base with H; auto.
-+ exists 0; set (H := eta_not_terminated (Sel p q l) C); apply Base with H; auto.
-+ exists 0; set (H0 := cond_not_terminated p q C1 C2); apply Base with H0.
-  simpl; rewrite <- Nat.eqb_eq in H; rewrite H; auto.
-+ exists 0; set (H0 := cond_not_terminated p q C1 C2); apply Base with H0.
-  simpl; rewrite <- Nat.eqb_neq in H; rewrite H; auto.
-+ elim IHMCTo; clear IHMCTo; intros k Hk.
-  elim (Precongr_to_weighted _ _ H); intros n Hn.
-  elim (Precongr_to_weighted _ _ H0); intros m Hm.
-  exists (S (n+k+m)).
-  apply Cons with C1' C2'; auto.
-Qed.
-
-End Weighted_Relations.
-
-Notation "C $ n '~<n' C'" := (Precongr_weighted n C C') (at level 50).
-Notation "c $ n -n-> c'" := (MCTo_weighted n c c') (at level 50).
 
 Section Applications.
 
 (** Stronger versions of existing lemmas. *)
+
 Lemma HeadTo_precongr : forall {C C' s s' H}, (C,s)$H -H-> (C',s') ->
   forall {n C''}, C'$n ~<n C'' ->
   exists C''', C$n ~<n C''' /\ forall H', (C''',s)$H' -H-> (C'',s').

@@ -1,7 +1,76 @@
+Require Import Kleene.
 Require Export MC.
-Require Export Kleene.
+
+(* Kill me. *)
+Require Import Coq.Program.Equality.
 
 Local Open Scope nat_scope.
+
+(** * The concrete language we have in mind for Turing completeness. *)
+Inductive Expr : Type :=
+ | this : Expr
+ | zero : Expr
+ | succ_this : Expr
+.
+
+Module MC_Expressions <: DecType.
+
+Definition t := Expr.
+
+Lemma eq_dec : forall (e e' : Expr), { e = e' } + { e <> e' }.
+Proof.
+decide equality.
+Qed.
+
+(*
+Definition eqb (e:Expr) (e':Expr) : bool :=
+match e, e' with
+ | this, this => true
+ | zero, zero => true
+ | succ_this, succ_this => true
+ | _, _ => false
+end.
+
+Lemma eqb_eq : forall e e', eqb e e' = true <-> e = e'.
+Proof.
+induction e; induction e'; split; intros; auto; discriminate H.
+Qed.
+*)
+
+End MC_Expressions.
+
+Module Export MC_Eval <: Eval MC_Expressions Nat.
+
+(** Expression evaluation given a value for the place-holder this *)
+Definition eval (e:Expr) (v:nat) : nat :=
+match e with
+ | zero => 0
+ | this => v
+ | succ_this => S v
+end.
+
+End MC_Eval.
+
+Module Import MC_Nat := MCBase Nat MC_Expressions Nat MC_Eval.
+Import St.
+
+Example sanity_check : ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 3; End) Else (Com 3 zero 2; End) )
+                       ~<=
+                       ( If 2 == 3 Then (Com 0 this 1; Com 4 succ_this 3; End) Else (Com 3 zero 2; Com 0 this 1; End) ).
+Proof.
+ eapply Trans.
+ apply EtaCond; split; auto.
+ apply CtxCond'.
+ apply Refl.
+ apply Precongr_step_to; apply EtaEta.
+ split; auto.
+Qed.
+
+Fixpoint list_to_state (l : list (Pid * Value)) : State :=
+match l with
+| List.nil => fun _ => 0
+| List.cons (p,v) l' => update (list_to_state l') p v
+end.
 
 Section Implementation.
 
@@ -60,8 +129,10 @@ split.
     repeat rewrite nth_hd'; auto.
   - unfold s1; clear s1; simpl.
     rewrite H1; clear H1 H2 H0 H.
-    simpl; unfold update.
-    repeat rewrite <- beq_nat_refl; auto.
+    rewrite update_read; simpl.
+    unfold evaluate_on_state; simpl.
+    rewrite update_read; simpl.
+    repeat rewrite MC_Nat.Pdec.eqb_refl; auto.
 Qed.
 
 End Implementation.
@@ -149,10 +220,10 @@ Lemma fatsemi_ToEnd : forall C C' s s', (C;;C',s) ---> (End,s') ->
   {C = End /\ (C',s) ---> (End,s')} + {C' = End /\ (C,s) ---> (End,s')}.
 Proof.
 double induction C C'; intros; auto;
-  try (right; rewrite fatsemi_End in H0; auto).
-- exfalso; clear H H0.
-  generalize (MCTo_End_size _ _ _ H1); simpl; intros.
-  inversion H.
+  try (right; rewrite fatsemi_End in H; auto).
+- exfalso; clear X X0.
+  generalize (MCTo_End_size _ _ _ H); simpl; intros.
+  inversion H0.
   apply lt_irrefl with 0.
   apply lt_le_trans with 1; auto.
   rewrite <- H2 at 2.
@@ -160,8 +231,8 @@ double induction C C'; intros; auto;
   2: apply fatsemi_size.
   replace 1 with (0+1); auto.
   apply plus_le_compat; simpl; auto with arith.
-- exfalso; clear H H0.
-  generalize (MCTo_End_size _ _ _ H2); simpl; clear H1 H2; intros.
+- exfalso; clear X X0.
+  generalize (MCTo_End_size _ _ _ H); simpl; clear H X1; intros.
   inversion H.
   apply lt_irrefl with 0.
   apply lt_le_trans with 1; auto.
@@ -170,10 +241,8 @@ double induction C C'; intros; auto;
   2: apply fatsemi_size.
   replace 1 with (0+1); auto.
   apply plus_le_compat; simpl; auto with arith.
-- right; split; auto.
-  rewrite fatsemi_End in H1; auto.
-- exfalso; clear H H0.
-  generalize (MCTo_End_size _ _ _ H2); simpl; clear H1 H2; intros.
+- exfalso; clear X X0.
+  generalize (MCTo_End_size _ _ _ H); simpl; clear H X1; intros.
   inversion H.
   apply lt_irrefl with 0.
   apply lt_le_trans with 1; auto.
@@ -187,8 +256,8 @@ double induction C C'; intros; auto;
     2: apply fatsemi_size.
     replace 1 with (0+1); auto.
     apply plus_le_compat; simpl; auto with arith.
-- exfalso; clear H H0.
-  generalize (MCTo_End_size _ _ _ H3); simpl; clear H1 H2 H3; intros.
+- exfalso; clear X X0.
+  generalize (MCTo_End_size _ _ _ H); simpl; clear H X1 X2; intros.
   inversion H.
   apply lt_irrefl with 0.
   apply lt_le_trans with 1; auto.
