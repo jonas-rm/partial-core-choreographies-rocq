@@ -11,6 +11,36 @@ Require Import SP.
 
 Local Open Scope nat_scope.
 
+
+Section FromLCF_RemoveLater.
+Inductive Congruent : Choreography -> Choreography -> Prop :=
+ | CRefl C : Congruent C C
+ | CTrans C1 C2 C3 : Congruent C1 C2 -> Congruent C2 C3 -> Congruent C1 C3
+ | CEtaEta eta1 eta2 C : independent eta1 eta2 -> Congruent (eta1; eta2; C) (eta2; eta1; C)
+ | CEtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Congruent (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
+ | CCondEta eta p q C1 C2 : unused p eta -> unused q eta -> Congruent (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
+ | CCondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Congruent (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
+                                                               (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
+ | CCtxEta eta C1 C2 : Congruent C1 C2 -> Congruent (eta; C1) (eta; C2)
+ | CCtxThen p q C' C'' C : Congruent C' C'' -> Congruent (If p == q Then C' Else C) (If p == q Then C'' Else C)
+ | CCtxElse p q C C' C'' : Congruent C' C'' -> Congruent (If p == q Then C Else C') (If p == q Then C Else C'')
+.
+
+Lemma Congruent_sym : forall C C', Congruent C C' -> Congruent C' C.
+Proof.
+intros; induction H.
++ apply CRefl.
++ apply CTrans with C2; auto.
++ apply CEtaEta; apply independent_sym; auto.
++ apply CCondEta; auto.
++ apply CEtaCond; auto.
++ apply CCondCond; apply disjoint_sym; auto.
++ apply CCtxEta; auto.
++ apply CCtxThen; auto.
++ apply CCtxElse; auto.
+Qed.
+End FromLCF_RemoveLater.
+
 Section EPP.
 
 Fixpoint merge (B1:Behaviour) (B2:Behaviour) : option Behaviour :=
@@ -331,8 +361,8 @@ Qed.
 
 (* Eval compute in epp PaperExample1_C'_Configuration PaperExample1_C'_Configuration_WellFormed. *)
 
-Local Definition p_then_B := (r + left; (r ! this; bnil))%SP.
-Local Definition p_else_B := (r + right; (r ? ; bnil))%SP.
+Local Definition p_then_B := (r (+) left; (r ! this; bnil))%SP.
+Local Definition p_else_B := (r (+) right; (r ? ; bnil))%SP.
 Local Definition P := (p [0, If q Then p_then_B Else p_else_B])%SP.
 Local Definition Q := (q [0, 0 ! this; bnil])%SP.
 Local Definition R := (
@@ -361,7 +391,7 @@ simpl.
 trivial.
 Qed.
  *)
-Local Definition P' := (p [0, r + left; (r ! this; bnil)])%SP.
+Local Definition P' := (p [0, r (+) left; (r ! this; bnil)])%SP.
 Local Definition Q' := (q [0, bnil])%SP.
 
 Example PaperExample1_C'_Configuration_epp_FirstRed :
@@ -387,6 +417,14 @@ Qed.
  *)
 
 End PaperExample1.
+
+Section StuffToMoveToMC.
+
+Lemma congruent_pn : forall C C', Congruent C C' -> eq_pidset (pn C) (pn C').
+Admitted.
+
+End StuffToMoveToMC.
+
 
 
 Section EPPProperties.
@@ -457,6 +495,59 @@ Lemma epp_preserves_wellformedness (conf:Configuration) (WF:WellFormedConf conf)
 Proof.
 intros.
 destruct conf.
+Admitted.
+
+Definition get_proc_option (p:Pid) (oN:option Network) : option ProcessTerm :=
+match oN with
+| Some N => get_proc p N
+| None => None
+end.
+
+Theorem congruent_bproj : forall C C', Congruent C C' -> forall r, (bproj C r) = (bproj C' r).
+intros.
+induction H.
++ trivial.
++ rewrite IHCongruent1. rewrite IHCongruent2. trivial.
++ case eta1.
+  - intros.
+    case eta2.
+    * intros.
+      case_eq (p0 =? r0).
+      ** intros.
+         simpl.
+         destruct (eqb_pid p0 r0).
+Admitted.
+
+Lemma get_proc_epp : forall C s (WF:WellFormedConf (C,s)),
+  forall p, (get_proc_behaviour p (epp (C, s) WF)) = (bproj C p).
+
+
+Theorem epp_congruent_eq : forall C C' s s' (WF: WellFormedConf (C, s)) (WF': WellFormedConf (C', s')),
+  (Congruent C C') ->
+  forall p, (get_proc_behaviour p (epp (C, s) WF)) = (get_proc_behaviour p (epp (C', s') WF')).
+(* intro.
+intro.
+intro.
+intro.
+intro.
+intro.
+intro.
+intro. *)
+intros.
+induction H.
++ unfold get_proc_option.
+Admitted.
+
+Theorem epp_ordered_congr_eq : forall C C' s s' (WF: WellFormedConf (C, s)) (WF': WellFormedConf (C', s')) N N',
+  (Congruent C C') -> (eq_state_ext s s') ->
+  (epp_ordered (C, s) WF) = Some N -> (epp_ordered (C', s') WF') = Some N' ->
+  N = N'.
+intros.
+simpl in H1.
+simpl in H2.
+rewrite <- (congruent_pn_ordered C C' H) in H2.
+induction H.
++ 
 Admitted.
 
 End EPPProperties.

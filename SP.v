@@ -75,8 +75,29 @@ Definition PrecongrB := (eq (A := Behaviour)).
 (** Sugar for (value, behaviour). Makes the definition of congr readable. *)
 Definition ProcessTerm : Type := Value * Behaviour.
 
+Fixpoint get_proc_behaviour (p:Pid) (N:Network) : Behaviour :=
+match N with
+| nnil%SP => bnil%SP
+| (q [ v, B ])%SP => if (p =? q) then B else bnil%SP
+| (Par N1 N2) => match (get_proc_behaviour p N1), (get_proc_behaviour p N2) with
+                  | bnil%SP, B' => B'
+                  | B, _ => B
+                  end
+end.
+
+Fixpoint get_proc_value (p:Pid) (N:Network) : option Value :=
+match N with
+| nnil%SP => None
+| (q [ v, B ])%SP => if (p =? q) then Some v else None
+| (Par N1 N2) => match (get_proc_value p N1), (get_proc_value p N2) with
+                  | Some v, _ => Some v
+                  | None, Some v => Some v
+                  | _, _ => None
+                  end
+end.
+
 (** Returns the value and behaviour of process p in a network, if the process exists in the network. *)
-Fixpoint get_proc (p:Pid) (N:Network) : option ProcessTerm :=
+(* Fixpoint get_proc (p:Pid) (N:Network) : option ProcessTerm :=
 match N with
 | nnil%SP => None
 | (q [ v, B ])%SP => if (p =? q) then Some (v, B) else None
@@ -86,9 +107,9 @@ match N with
                   | _, _ => None
                   end
 end.
+ *)
 
-(** get_proc makes sense wrt SPpn. Case 1/2: the process is not there. *)
-Lemma get_proc_None : forall (p:Pid) (N:Network), ~(In p (SPpn N)) -> (get_proc p N) = None.
+Lemma get_proc_behaviour_not_in : forall (p:Pid) (N:Network), ~(In p (SPpn N)) -> (get_proc_behaviour p N) = bnil%SP.
 intros.
 induction N.
 + auto.
@@ -111,14 +132,65 @@ induction N.
   apply in_or_app; auto.
 Qed.
 
-(** get_proc makes sense wrt SPpn. Case 2/2: the process is there. *)
-Lemma get_proc_Some : forall (p:Pid) (N:Network), In p (SPpn N) -> exists T, (get_proc p N) = Some T.
+Lemma get_proc_value_not_in : forall (p:Pid) (N:Network), ~(In p (SPpn N)) -> (get_proc_value p N) = None.
+intros.
+induction N.
++ auto.
++ simpl.
+  simpl SPpn in H.
+  apply not_in_cons in H.
+  destruct H.
+  rewrite <- Nat.eqb_eq in H.
+  rewrite not_true_iff_false in H.
+  rewrite H.
+  trivial.
++ simpl in H.
+  simpl.
+  rewrite IHN1.
+  rewrite IHN2.
+  auto.
+  intro; apply H.
+  apply in_or_app; auto.
+  intro; apply H.
+  apply in_or_app; auto.
+Qed.
+
+Lemma get_proc_value_in : forall (p:Pid) (N:Network), In p (SPpn N) -> exists T, (get_proc_value p N) = Some T.
 induction N; simpl; intros.
-+ inversion H.
-+ inversion_clear H.
++ exists 0. intros. exfalso. trivial.
++ exists v.
+  intros.
+  inversion_clear H.
+  - rewrite H0.
+    rewrite Nat.eqb_refl.
+    trivial.
+  - exfalso; auto.
++ apply in_app_or in H.
+  inversion_clear H.
+  - elim IHN1; auto.
+inversion_clear IHN1.
+  inversion_clear IHN2.
+  eexists.
+  intro.
+  apply in_app_or in H1.
+  simple inversion H1.
+  2: {
+    intro.
+    destruct (get_proc_value p N1).
+    - reflexivity. 
+  }
+  2:
+  2:now rewrite (H H1).
+(*   inversion_clear H1. *)
+  - intro. now rewrite (H H2).
+  - rewrite (H0 H2).
+    destruct (get_proc_value p N1).
+    * 
+
+inversion_clear H.
   symmetry in H0; rewrite <- Nat.eqb_eq in H0.
   rewrite H0.
-  exists (v,b); auto.
+  
   inversion H0.
 + elim (in_dec eq_pid_dec p (SPpn N1)); intros.
   elim IHN1; auto; intros.
@@ -132,7 +204,7 @@ induction N; simpl; intros.
   exists x; destruct x; auto.
 Qed.
 
-Lemma Some_get_proc : forall (p:Pid) (N:Network) T, (get_proc p N) = Some T -> In p (SPpn N).
+Lemma Some_get_proc : forall (p:Pid) (N:Network), (get_proc_behaviour p N) <> bnil%SP -> In p (SPpn N).
 intros.
 elim (in_dec eq_pid_dec p (SPpn N)); auto.
 intro.
