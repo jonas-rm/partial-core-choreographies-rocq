@@ -1,14 +1,13 @@
-Require Import Bool.
-Require Import List.
-Require Import Coq.Lists.ListSet.
-Require Import Arith.
-Require Import Sorting.Permutation.
-Require Import Common.
-Require Import MC.
-Require Import Basic.
-Require Import FunInd.
+Require Export MC.
+Require Export Coq.Lists.ListSet.
+Require Export Sorting.Permutation.
+Require Export FunInd.
 
 Local Open Scope nat_scope.
+
+Module SPBase (P E V:DecType) (Import Ev:Eval E V).
+
+Module Import MCBase := MCBase P E V Ev.
 
 Section Syntax.
 
@@ -21,7 +20,7 @@ Inductive Behaviour : Type :=
  | Cond : Pid -> Behaviour -> Behaviour -> Behaviour
 .
 
-Definition Branch : Set := (Behaviour + unit).
+Definition Branch : Type := (Behaviour + unit).
 
 Inductive Network : Type :=
  | Empty : Network
@@ -35,11 +34,10 @@ match N with
 | Empty => nil
 | Process p v B => (p :: nil)
 | Par N N' => (SPpn N) ++ (SPpn N')
-end
-.
+end.
 
 (** A well-formed network has no duplicate process names and no self-communications. *)
-Definition WellFormedNetwork (N:Network) : Prop := NoDup(SPpn N).
+Definition WellFormedNetwork (N:Network) : Prop := NoDup (SPpn N).
 (* Enrich with no self-communications *)
 
 End Syntax.
@@ -78,7 +76,7 @@ Definition ProcessTerm : Type := Value * Behaviour.
 Fixpoint get_proc_behaviour (p:Pid) (N:Network) : Behaviour :=
 match N with
 | nnil%SP => bnil%SP
-| (q [ v, B ])%SP => if (p =? q) then B else bnil%SP
+| (q [ v, B ])%SP => if (Pid_dec p q) then B else bnil%SP
 | (Par N1 N2) => match (get_proc_behaviour p N1), (get_proc_behaviour p N2) with
                   | bnil%SP, B' => B'
                   | B, _ => B
@@ -88,7 +86,7 @@ end.
 Fixpoint get_proc_value (p:Pid) (N:Network) : option Value :=
 match N with
 | nnil%SP => None
-| (q [ v, B ])%SP => if (p =? q) then Some v else None
+| (q [ v, B ])%SP => if (Pid_dec p q) then Some v else None
 | (Par N1 N2) => match (get_proc_value p N1), (get_proc_value p N2) with
                   | Some v, _ => Some v
                   | None, Some v => Some v
@@ -109,7 +107,8 @@ match N with
 end.
  *)
 
-Lemma get_proc_behaviour_not_in : forall (p:Pid) (N:Network), ~(In p (SPpn N)) -> (get_proc_behaviour p N) = bnil%SP.
+Lemma not_in_get_proc_behaviour : forall (p:Pid) (N:Network), ~(In p (SPpn N)) -> (get_proc_behaviour p N) = bnil%SP.
+Proof.
 intros.
 induction N.
 + auto.
@@ -117,9 +116,8 @@ induction N.
   simpl SPpn in H.
   apply not_in_cons in H.
   destruct H.
-  rewrite <- Nat.eqb_eq in H.
-  rewrite not_true_iff_false in H.
-  rewrite H.
+  rewrite <- Pdec.eqb_neq in H.
+  unfold Pid_dec; rewrite H.
   trivial.
 + simpl in H.
   simpl.
@@ -132,7 +130,8 @@ induction N.
   apply in_or_app; auto.
 Qed.
 
-Lemma get_proc_value_not_in : forall (p:Pid) (N:Network), ~(In p (SPpn N)) -> (get_proc_value p N) = None.
+Lemma not_in_get_proc_value : forall (p:Pid) (N:Network), ~(In p (SPpn N)) -> (get_proc_value p N) = None.
+Proof.
 intros.
 induction N.
 + auto.
@@ -140,9 +139,8 @@ induction N.
   simpl SPpn in H.
   apply not_in_cons in H.
   destruct H.
-  rewrite <- Nat.eqb_eq in H.
-  rewrite not_true_iff_false in H.
-  rewrite H.
+  rewrite <- Pdec.eqb_neq in H.
+  unfold Pid_dec; rewrite H.
   trivial.
 + simpl in H.
   simpl.
@@ -155,61 +153,36 @@ induction N.
   apply in_or_app; auto.
 Qed.
 
-Lemma get_proc_value_in : forall (p:Pid) (N:Network), In p (SPpn N) -> exists T, (get_proc_value p N) = Some T.
+Lemma in_get_proc_value : forall (p:Pid) (N:Network),
+  In p (SPpn N) -> exists T, (get_proc_value p N) = Some T.
+Proof.
 induction N; simpl; intros.
-+ exists 0. intros. exfalso. trivial.
-+ exists v.
-  intros.
-  inversion_clear H.
-  - rewrite H0.
-    rewrite Nat.eqb_refl.
-    trivial.
-  - exfalso; auto.
-+ apply in_app_or in H.
-  inversion_clear H.
-  - elim IHN1; auto.
-inversion_clear IHN1.
-  inversion_clear IHN2.
-  eexists.
-  intro.
-  apply in_app_or in H1.
-  simple inversion H1.
-  2: {
-    intro.
-    destruct (get_proc_value p N1).
-    - reflexivity. 
-  }
-  2:
-  2:now rewrite (H H1).
-(*   inversion_clear H1. *)
-  - intro. now rewrite (H H2).
-  - rewrite (H0 H2).
-    destruct (get_proc_value p N1).
-    * 
-
-inversion_clear H.
-  symmetry in H0; rewrite <- Nat.eqb_eq in H0.
++ inversion H.
++ inversion_clear H.
+  2: inversion H0.
+  exists v.
   rewrite H0.
-  
-  inversion H0.
-+ elim (in_dec eq_pid_dec p (SPpn N1)); intros.
-  elim IHN1; auto; intros.
-  rewrite H0.
-  exists x; destruct x; auto.
-  rewrite (get_proc_None _ _ b).
-  elim (in_app_or _ _ _ H); intros.
-  elim b; auto.
-  elim IHN2; auto; intros.
-  rewrite H1.
-  exists x; destruct x; auto.
+  rewrite Pdec.eqb_refl; auto.
++ elim (In_dec P.eq_dec p (SPpn N1)).
+  - intros.
+    elim IHN1; auto.
+    intros; exists x.
+    rewrite H0; auto.
+  - intros.
+    elim IHN2; auto.
+    * intros; exists x.
+      rewrite H0; rewrite not_in_get_proc_value; auto.
+    * elim (in_app_or _ _ _ H); auto.
+      intro; elim b; auto.
 Qed.
 
-Lemma Some_get_proc : forall (p:Pid) (N:Network), (get_proc_behaviour p N) <> bnil%SP -> In p (SPpn N).
+Lemma get_proc_behaviour_in : forall (p:Pid) (N:Network), (get_proc_behaviour p N) <> bnil%SP -> In p (SPpn N).
+Proof.
 intros.
-elim (in_dec eq_pid_dec p (SPpn N)); auto.
+elim (in_dec P.eq_dec p (SPpn N)); auto.
 intro.
-rewrite get_proc_None in H; auto.
-inversion H.
+rewrite not_in_get_proc_behaviour in H; auto.
+elim H; auto.
 Qed.
 
 Inductive Precongr : Network -> Network -> Prop :=
@@ -225,15 +198,17 @@ Inductive Precongr : Network -> Network -> Prop :=
  | NZero N : Precongr (Par N Empty) N
 .
 
+(*
 Definition PrecongrPT (P P': option ProcessTerm) : Prop :=
 match P, P' with
-| Some (v, B), Some (v', B')%SP => if v =? v' then PrecongrB B B' else False
+| Some (v, B), Some (v', B')%SP => if (Value_dec v v') then PrecongrB B B' else False
 | Some (v, B), None => PrecongrB B bnil%SP
 | None, None => True
 | _, _ => False
 end.
 
 Lemma PrecongrPT_sym_Some : forall (P:ProcessTerm), PrecongrPT (Some P) (Some P).
+Proof.
 intros.
 simpl.
 destruct P.
@@ -251,11 +226,15 @@ case op.
 - apply PrecongrPT_sym_Some.
 - simpl; auto.
 Qed.
+*)
 
-Definition Precongr_op (N N': Network) : Prop := forall p, PrecongrPT (get_proc p N) (get_proc p N').
+Definition Precongr_op (N N': Network) : Prop :=
+  forall p, PrecongrB (get_proc_behaviour p N) (get_proc_behaviour p N')
+            /\ (forall x, get_proc_value p N' = Some x -> get_proc_value p N = Some x).
 
-Lemma WellFormedNetwork_par :
-  forall (N N': Network), WellFormedNetwork (N | N')%SP -> WellFormedNetwork N /\ WellFormedNetwork N'.
+Lemma WellFormedNetwork_par : forall (N N': Network),
+  WellFormedNetwork (N | N')%SP -> WellFormedNetwork N /\ WellFormedNetwork N'.
+Proof.
 intros.
 red in H.
 split.
@@ -269,8 +248,9 @@ split.
   apply (H' H).
 Qed.
 
-Lemma WellFormedNetwork_comm :
-  forall (N N': Network), WellFormedNetwork (N | N')%SP -> WellFormedNetwork (N' | N)%SP.
+Lemma WellFormedNetwork_comm : forall (N N': Network),
+  WellFormedNetwork (N | N')%SP -> WellFormedNetwork (N' | N)%SP.
+Proof.
 intros.
 set (myH := WellFormedNetwork_par N N' H).
 inversion_clear myH.
@@ -281,101 +261,112 @@ simpl in H.
 apply (NoDup_app_sym Pid (SPpn N) (SPpn N') H).
 Qed.
 
-Lemma get_proc_wf_par :
-forall (N N': Network), WellFormedNetwork (N | N')%SP -> forall p, (get_proc p (N | N')%SP) = (get_proc p (N' | N)%SP).
+Lemma get_proc_behaviour_wf_par : forall (N N': Network),
+  WellFormedNetwork (N | N')%SP ->
+  forall p, (get_proc_behaviour p (N | N')%SP) = (get_proc_behaviour p (N' | N)%SP).
+Proof.
 intros.
-simpl.
-case_eq (get_proc p N); case_eq (get_proc p N'); auto.
-intros.
-exfalso.
 red in H.
 simpl in H.
-apply (NoDup_app_not_in Pid (SPpn N) (SPpn N') H p).
-+ apply Some_get_proc with p1; auto.
-+ apply Some_get_proc with p0; auto.
+elim (In_dec P.eq_dec p (SPpn N ++ SPpn N')); intro.
++ elim (in_app_or _ _ _ a); intro; simpl.
+  - pose (NoDup_app_not_in _ _ _ H _ H0) as Hp; clearbody Hp.
+    rewrite (not_in_get_proc_behaviour _ _ Hp).
+    case_eq (get_proc_behaviour p N); auto.
+  - pose (NoDup_app_not_in _ _ _ (NoDup_app_sym _ _ _ H) _ H0) as Hp; clearbody Hp.
+    rewrite (not_in_get_proc_behaviour _ _ Hp).
+    case_eq (get_proc_behaviour p N'); auto.
++ simpl.
+  elim (not_in_app _ _ _ _ b); intros.
+  repeat rewrite not_in_get_proc_behaviour; auto.
 Qed.
 
-Lemma get_proc_wf_assoc :
-forall (N1 N2 N3: Network), WellFormedNetwork (N1 | N2 | N3)%SP -> forall p, (get_proc p (N1 | N2 | N3)%SP) = (get_proc p ((N1 | N2) | N3)%SP).
+Lemma get_proc_value_wf_par : forall (N N': Network),
+  WellFormedNetwork (N | N')%SP -> forall p, (get_proc_value p (N | N')%SP) = (get_proc_value p (N' | N)%SP).
+Proof.
 intros.
 red in H.
 simpl in H.
-set (Hin := (in_dec Nat.eq_dec p (SPpn N1 ++ SPpn N2 ++ SPpn N3))).
-inversion Hin.
-+ set (myH := (NoDup_pid_app_or p (SPpn N1) (SPpn N2 ++ SPpn N3) H H0)).
-  destruct myH.
-  - simpl.
-    rewrite (get_proc_None p N2).
-    rewrite (get_proc_None p N3).
-    destruct (get_proc p N1); auto.
-    destruct p0; auto.
-    set (myH := (NoDup_app_not_in Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H p H1)).
-    apply (not_in_app Pid (SPpn N2) (SPpn N3)) in myH.
-    destruct myH; auto.
-    set (myH := (NoDup_app_not_in Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H p H1)).
-    apply (not_in_app Pid (SPpn N2) (SPpn N3)) in myH.
-    destruct myH; auto.
-  - simpl.
-    rewrite (get_proc_None p N1).
-    set (ndp := (NoDup_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3)) H).
-    destruct ndp.
-    set (myH := (NoDup_pid_app_or p (SPpn N2) (SPpn N3)) H3 H1).
-    inversion myH.
-    * rewrite (get_proc_None p N3).
-      destruct (get_proc p N2); auto.
-      apply (NoDup_app_not_in Pid (SPpn N2)); auto.
-    * rewrite (get_proc_None p N2).
-      destruct (get_proc p N3); auto.
-      destruct p0; auto.
-      set (H5 := (NoDup_app_sym Pid (SPpn N2) (SPpn N3) H3)).
-      apply (NoDup_app_not_in Pid (SPpn N3)); auto.
-    * rewrite in_app_iff in H0.
-      rewrite or_comm in H0.
-      rewrite <- in_app_iff in H0.
-      set (myH := NoDup_app_not_in Pid (SPpn N2 ++ SPpn N3) (SPpn N1)).
-      set (myH2 := NoDup_app_sym Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H).
-      apply (myH myH2 p H1).
+elim (In_dec P.eq_dec p (SPpn N ++ SPpn N')); intro.
++ elim (in_app_or _ _ _ a); intro; simpl.
+  - pose (NoDup_app_not_in _ _ _ H _ H0) as Hp; clearbody Hp.
+    rewrite (not_in_get_proc_value _ _ Hp).
+    case_eq (get_proc_value p N); auto.
+  - pose (NoDup_app_not_in _ _ _ (NoDup_app_sym _ _ _ H) _ H0) as Hp; clearbody Hp.
+    rewrite (not_in_get_proc_value _ _ Hp).
+    case_eq (get_proc_value p N'); auto.
 + simpl.
-  rewrite (get_proc_None p N1).
-  rewrite (get_proc_None p N2).
-  rewrite (get_proc_None p N3); auto.
-  set (myH := not_in_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
-  inversion_clear myH.
-  set (myH := NoDup_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H).
-  inversion_clear myH.
-  set (myH := not_in_app Pid (SPpn N2) (SPpn N3) p H2).
-  inversion_clear myH.
-  auto.
-  set (myH := not_in_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
-  inversion_clear myH.
-  set (myH := NoDup_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) H).
-  inversion_clear myH.
-  set (myH := not_in_app Pid (SPpn N2) (SPpn N3) p H2).
-  inversion_clear myH.
-  auto.
-  set (myH := not_in_app Pid (SPpn N1) (SPpn N2 ++ SPpn N3) p H0).
-  inversion_clear myH; auto.
+  elim (not_in_app _ _ _ _ b); intros.
+  repeat rewrite not_in_get_proc_value; auto.
+Qed.
+
+Lemma get_proc_behaviour_wf_assoc : forall (N1 N2 N3: Network),
+  WellFormedNetwork (N1 | N2 | N3)%SP ->
+  forall p, (get_proc_behaviour p (N1 | N2 | N3)%SP) = (get_proc_behaviour p ((N1 | N2) | N3)%SP).
+Proof.
+intros.
+red in H.
+simpl in H.
+set (Hin := (in_dec P.eq_dec p (SPpn N1 ++ SPpn N2 ++ SPpn N3))).
+inversion Hin.
++ elim (in_app_or _ _ _ H0); intro.
+  - generalize (NoDup_app_not_in _ _ _ H _ H1); intro.
+    elim (not_in_app _ _ _ _ H2); intros.
+    simpl.
+    rewrite (not_in_get_proc_behaviour p N2); auto.
+    destruct (get_proc_behaviour p N1); auto.
+  - generalize (NoDup_app_not_in _ _ _ (NoDup_app_sym _ _ _ H) _ H1); intro.
+    simpl.
+    rewrite (not_in_get_proc_behaviour p N1); auto.
++ elim (not_in_app _ _ _ _ H0); intros.
+  elim (not_in_app _ _ _ _ H2); intros.
+  simpl; repeat rewrite not_in_get_proc_behaviour; auto.
+Qed.
+
+Lemma get_proc_value_wf_assoc : forall (N1 N2 N3: Network),
+  WellFormedNetwork (N1 | N2 | N3)%SP ->
+  forall p, (get_proc_value p (N1 | N2 | N3)%SP) = (get_proc_value p ((N1 | N2) | N3)%SP).
+Proof.
+intros.
+red in H.
+simpl in H.
+set (Hin := (in_dec P.eq_dec p (SPpn N1 ++ SPpn N2 ++ SPpn N3))).
+inversion Hin.
++ elim (in_app_or _ _ _ H0); intro.
+  - generalize (NoDup_app_not_in _ _ _ H _ H1); intro.
+    elim (not_in_app _ _ _ _ H2); intros.
+    simpl.
+    rewrite (not_in_get_proc_value p N2); auto.
+    rewrite (not_in_get_proc_value p N3); auto.
+    destruct (get_proc_value p N1); auto.
+  - generalize (NoDup_app_not_in _ _ _ (NoDup_app_sym _ _ _ H) _ H1); intro.
+    simpl.
+    rewrite (not_in_get_proc_value p N1); auto.
+    elim (in_app_or _ _ _ H1); intro.
+    * generalize (NoDup_app_elim_2 _ _ _ H); intros.
+      generalize (NoDup_app_not_in _ _ _ H4 _ H3); intro.
+      rewrite (not_in_get_proc_value p N3); auto.
+    * generalize (NoDup_app_elim_2 _ _ _ H); intros.
+      generalize (NoDup_app_not_in _ _ _ (NoDup_app_sym _ _ _ H4) _ H3); intro.
+      rewrite (not_in_get_proc_value p N2); auto.
+      destruct (get_proc_value p N3); auto.
++ elim (not_in_app _ _ _ _ H0); intros.
+  elim (not_in_app _ _ _ _ H2); intros.
+  simpl; repeat rewrite not_in_get_proc_value; auto.
 Qed.
 
 Lemma In_Network_par_xor : forall p N N', WellFormedNetwork (N | N')%SP -> In p (SPpn (N | N')%SP) ->
   ( In p (SPpn N) /\ ~ In p (SPpn N') ) \/ ( In p (SPpn N') /\ ~ In p (SPpn N) ).
+Proof.
 intros.
 simpl in H0.
-set (WhereIsP := NoDup_pid_app_or p (SPpn N) (SPpn N') H H0).
-destruct WhereIsP as [InN | InN'].
-(* p is in N *)
-+ left.
-  split.
-  - trivial.
-  - apply (NoDup_app_not_in Pid (SPpn N) (SPpn N') H p InN).
-+ right.
-  split.
-  - trivial.
-  - rewrite (in_app_iff (SPpn N) (SPpn N') p) in H0.
-    rewrite or_comm in H0.
-    rewrite <- (in_app_iff (SPpn N') (SPpn N) p) in H0.
-    apply WellFormedNetwork_comm in H.
-    apply (NoDup_app_not_in Pid (SPpn N') (SPpn N) H p InN').
+red in H; simpl in H.
+elim (in_app_or _ _ _ H0); intro.
++ left; split; auto.
+  apply NoDup_app_not_in with (SPpn N); auto.
++ right; split; auto.
+  apply NoDup_app_not_in with (SPpn N'); auto.
+  apply NoDup_app_sym; auto.
 Qed.
 
 Lemma WellFormedNetwork_ctx_trans : forall N1 N2 N3, WellFormedNetwork (N1 | N3)%SP -> WellFormedNetwork (N2 | N3)%SP -> WellFormedNetwork (N1 | N2)%SP.
@@ -647,3 +638,5 @@ Notation "N ---> N'" := (SPTo N N') (at level 50, left associativity) : SP_scope
 Notation "N --->* N'" := (SPToStar N N') (at level 50, left associativity) : SP_scope.
 
 End Semantics.
+
+End SPBase.

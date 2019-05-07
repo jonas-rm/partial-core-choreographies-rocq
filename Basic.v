@@ -2,6 +2,8 @@ Require Export Bool.
 Require Export List.
 Require Export Sorting.Permutation.
 Require Export Arith.
+
+(* Kill me. *)
 Require Import Coq.Program.Equality.
 
 Ltac destroy H := repeat (elim H; clear H; intro; intro H).
@@ -196,33 +198,6 @@ intros; intro.
 apply (NoDup_app_both _ _ H) with x; auto.
 Qed.
 
-(* TODO: Generalise and change order of NoDup and In requirements *)
-Lemma NoDup_pid_app_or : forall x:nat, forall l l':list nat, NoDup (l ++ l') -> In x (l ++ l') -> In x l \/ In x l'.
-intros.
-induction l.
-- simpl in H0; auto.
-- case_eq (Nat.eqb x a).
-  + intros.
-    left.
-    simpl.
-    rewrite Nat.eqb_eq in H1; auto.
-  + intros.
-    rewrite Nat.eqb_neq in H1.
-    simpl.
-    simpl in H.
-    apply NoDup_cons_iff in H.
-    destruct H.
-    apply or_add_left.
-    apply (IHl H2).
-    simpl in H0.
-    elim H0.
-    * intro.
-      symmetry in H3.
-      contradiction.
-    * intro.
-      trivial.
-Qed.
-
 Lemma not_in_app : forall (xs ys : list T) (x : T),
   ~ In x (xs ++ ys) -> ~ In x xs /\ ~ In x ys.
 Proof. split; auto using in_or_app. Qed.
@@ -238,7 +213,7 @@ Section Vectors.
     Random stuff about vectors to be placed elsewhere. *)
 
 (** ** Equality.
-    This is a specialziation of a lemma from the standard library. *)
+    This is a specialization of a lemma from the standard library. *)
 Lemma eq_nth_iff' {A} {n} (v1 v2:t A n) : (forall (p:Fin.t n), v1[@p] = v2[@p]) <-> v1 = v2.
 Proof.
 split.
@@ -312,6 +287,12 @@ induction n; simpl.
 + intros; rewrite (eta v).
   simpl; auto.
 Qed.
+
+Fixpoint eta_elim_aux {A n} (v:t A (S n)) H :=
+  match H with
+  | Fin.F1 => hd v
+  | Fin.FS H' => (tl v)[@H]
+end.
 
 (** A variant of the eta lemma from the standard library. *)
 Lemma eta_elim : forall {A} {n} (v:t A (S n)) x Hi, v[@Hi] = x -> hd v = x \/ exists Hi', (tl v)[@Hi'] = x.
