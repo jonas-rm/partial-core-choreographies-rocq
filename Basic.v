@@ -7,6 +7,7 @@ Require Export Arith.
 Require Import Coq.Program.Equality.
 
 Ltac destroy H := repeat (elim H; clear H; intro; intro H).
+Ltac destroy_as H H' := rename H into H'; set (H:=True); destroy H'; clear H; rename H' into H.
 
 Section Logical.
 

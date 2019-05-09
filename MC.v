@@ -3,12 +3,16 @@ Require Export Common.
 
 Local Open Scope nat_scope.
 
-Module MCBase (P E V: DecType) (Import Ev : Eval E V).
+(** * The general type of MC choreographies, parameterized over sets of
+  process identifiers, values, expressions and recursion variables. *)
+
+Module MCBase (P E V R: DecType) (Import Ev : Eval E V).
 
 Module Import St := State P V.
 Module Pdec := DecidableType P.
 Module Edec := DecidableType E.
 Module Vdec := DecidableType V.
+Module Rdec := DecidableType R.
 
 Definition Pid := P.t.
 Definition Pid_dec := Pdec.eqb.
@@ -16,9 +20,13 @@ Definition Expr := E.t.
 Definition Expr_dec := Edec.eqb.
 Definition Value := V.t.
 Definition Value_dec := Vdec.eqb.
+Definition RecVar := R.t.
+Definition RecVar_dec := Rdec.eqb.
 Definition State := St.State.
 
 Section Syntax.
+
+(** ** Syntax of MC choreographies. *)
 
 (** Communication actions. *)
 Inductive Eta : Type :=
@@ -62,47 +70,60 @@ end.
 (** Choreographies. *)
 Inductive Choreography : Type :=
  | End : Choreography
+ | Call : RecVar -> Choreography
  | Interaction : Eta -> Choreography -> Choreography
  | Cond : Pid -> Pid -> Choreography -> Choreography -> Choreography
+ | Rec : RecVar -> Choreography -> Choreography -> Choreography
 .
 
 Lemma chor_eq_dec : forall (C C':Choreography), { C = C' } + { C <> C' }.
 Proof.
-decide equality; try apply P.eq_dec.
+decide equality; try apply P.eq_dec; try apply R.eq_dec.
 apply eta_eq_dec.
 Qed.
 
-(** A choreography is well-formed if it does not contain self-communications. *)
-Fixpoint WellFormed (C:Choreography) : Prop :=
+(** A choreography is well-formed if it does not contain self-communications or free recursion variables. *)
+Fixpoint WellFormed_ctx (C:Choreography) (l:list RecVar) : Prop :=
 match C with
 | End => True
-| Interaction eta C' => match eta with Com p _ q => p <> q /\ WellFormed C'
-                          | Sel p q _ => p <> q /\ WellFormed C' end
-| Cond p q C1 C2 => p <> q /\ WellFormed C1 /\ WellFormed C2
+| Call X => In X l
+| Interaction eta C' => match eta with
+                        | Com p _ q => p <> q /\ WellFormed_ctx C' l
+                        | Sel p q _ => p <> q /\ WellFormed_ctx C' l
+                        end
+| Cond p q C1 C2 => p <> q /\ WellFormed_ctx C1 l /\ WellFormed_ctx C2 l
+| Rec X C1 C2 => WellFormed_ctx C1 (X::l) /\ (forall Y, C1 <> Call Y) /\ WellFormed_ctx C2 (X::l)
 end.
 
+Definition WellFormed (C:Choreography) : Prop := WellFormed_ctx C nil.
+
 (** Set of process names in a choreography. *)
-Fixpoint pn_eta (e:Eta) : list Pid :=
+Definition pn_eta (e:Eta) : list Pid :=
 match e with
 | Com p _ q => (cons p (cons q nil))
 | Sel p q _ => (cons p (cons q nil))
-end
-.
+end.
 
 Definition set_union_pid := set_union P.eq_dec.
 
 Fixpoint pn (C:Choreography) : list Pid :=
 match C with
 | End => nil
+| Call X => nil
 | Interaction eta C' => (set_union_pid (pn_eta eta) (pn C'))
 | Cond p q C1 C2 => (set_union_pid (set_union_pid (cons p (cons q nil)) (pn C1)) (pn C2))
-end
-.
+| Rec X C1 C2 => (set_union_pid (pn C1) (pn C2))
+end.
 
 Lemma pn_is_set (C:Choreography) : WellFormed C -> NoDup(pn C).
 Proof.
-induction C; intros.
+intro.
+red in H.
+assert (forall l, WellFormed_ctx C l -> NoDup (pn C)); eauto.
+clear H; induction C; intros.
 + (* End *)
+  apply NoDup_nil.
++ (* X *)
   apply NoDup_nil.
 + (* e; C *)
   simpl.
@@ -119,16 +140,23 @@ induction C; intros.
     intro.
     inversion_clear H; auto.
     apply NoDup_nil.
-   - induction e; inversion H; auto.
+   - induction e; inversion H; eauto.
 + (* Cond *)
   inversion H.
   inversion_clear H1.
   simpl.
-  repeat apply set_union_nodup; auto.
+  repeat apply set_union_nodup; eauto.
   simpl; repeat apply NoDup_cons; simpl; auto.
   intro.
   inversion_clear H1; auto.
   apply NoDup_nil.
++ (* Def *)
+  inversion H.
+  inversion_clear H1.
+  simpl.
+  repeat apply set_union_nodup; auto.
+  simpl; repeat apply NoDup_cons; simpl; eauto.
+  simpl; repeat apply NoDup_cons; simpl; eauto.
 Qed.
 
 End Syntax.
@@ -137,23 +165,90 @@ Notation "p # e --> q" := (Com p e q) (at level 50, e at level 9, format "p # e 
 Notation "p --> q [ l ]" := (Sel p q l) (at level 50, format "p --> q [ l ]").
 Notation "eta ';' C" := (Interaction eta C) (at level 60, right associativity).
 Notation "'If' p '==' q 'Then' C1 'Else' C2" := (Cond p q C1 C2) (at level 60).
+Notation "'Def' X '==' C1 'In' C2" := (Rec X C1 C2) (at level 60).
 
 (* Check (1-->2[left]). *)
 (* Check (1#this--> 2). *)
 
+Section Syntactic_Properties.
+
+Lemma WellFormed_ctx_mon : forall C l, WellFormed_ctx C l ->
+  forall l', (forall X, List.In X l -> List.In X l') -> WellFormed_ctx C l'.
+Proof.
+induction C; simpl; intros; auto.
++ induction e; destroy_as H H'; split; eauto.
++ destroy_as H H'; repeat split; eauto.
++ destroy_as H H'; repeat split; auto.
+  - apply IHC1 with (r::l); auto.
+    intros X HX; inversion_clear HX; simpl; auto.
+  - apply IHC2 with (r::l); auto.
+    intros X HX; inversion_clear HX; simpl; auto.
+Qed.
+
+Lemma DefEta_wf_ctx : forall X CX eta C l,
+  WellFormed_ctx (Def X == CX In (eta;C)) l <-> WellFormed_ctx (eta; Def X == CX In C) l.
+Proof.
+intros.
+induction eta; simpl; split; intro H'; destroy H'; repeat split; auto.
+Qed.
+
+Lemma DefEta_wf : forall X CX eta C,
+  WellFormed (Def X == CX In (eta;C)) <-> WellFormed (eta; Def X == CX In C).
+Proof.
+intros; apply DefEta_wf_ctx.
+Qed.
+
+Lemma CondEta_wf_ctx : forall X CX p q C1 C2 l,
+  WellFormed_ctx (Def X == CX In (If p == q Then C1 Else C2)) l <-> WellFormed_ctx (If p == q Then Def X == CX In C1 Else Def X == CX In C2) l.
+Proof.
+intros.
+simpl; split; intro H'; destroy H'; repeat split; auto.
+destroy_as H0 H''; auto.
+Qed.
+
+Lemma CondEta_wf : forall X CX p q C1 C2,
+  WellFormed (Def X == CX In (If p == q Then C1 Else C2)) <-> WellFormed (If p == q Then Def X == CX In C1 Else Def X == CX In C2).
+Proof.
+intros; apply CondEta_wf_ctx.
+Qed.
+
+End Syntactic_Properties.
+
 Section Semantics_Definitions.
 
-(** Structural precongruence is defined in two steps. One-step congruence contains exactly one swap;
-    then we close under reflexivity and transitivity. *)
+(** ** Semantics of MC.
+    Structural precongruence is defined in two steps.
+    One-step congruence contains exactly one swap or unfolding;
+    then we close under reflexivity and transitivity.
+    For unfolding, we need some previous work. *)
+Inductive Unfolded X CX : Choreography -> Choreography -> Prop :=
+  | UVar : Unfolded X CX (Call X) CX
+  | UEta eta C1 C2 : Unfolded X CX C1 C2 -> Unfolded X CX (eta;C1) (eta;C2)
+  | UThen p q C1 C2 C' : Unfolded X CX C1 C2 -> Unfolded X CX (If p == q Then C1 Else C') (If p == q Then C2 Else C')
+  | UElse p q C' C1 C2 : Unfolded X CX C1 C2 -> Unfolded X CX (If p == q Then C' Else C1) (If p == q Then C' Else C2)
+  | URec Y CY C1 C2: X <> Y -> Unfolded X CX C1 C2 -> Unfolded X CX (Def Y == CY In C1) (Def Y == CY In C2)
+.
+
 Inductive Precongr_step : Choreography -> Choreography -> Prop :=
+ | PB_Refl C : Precongr_step C C
  | EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr_step (eta1; eta2; C) (eta2; eta1; C)
  | EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_step (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
  | CondEta eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_step (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
  | CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Precongr_step (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
                                                                (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
+(*
+ | EtaRec eta X CX C : Precongr_step (eta; Def X == CX In C) (Def X == CX In (eta;C))
+ | RecEta eta X CX C : Precongr_step (Def X == CX In (eta;C)) (eta; Def X == CX In C)
+ | CondRec p q X CX C1 C2 : Precongr_step (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
+ | RecCond p q X CX C1 C2 : Precongr_step (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
+*)
+ | Unfold X CX C1 C2 : Unfolded X CX C1 C2 -> Precongr_step (Def X == CX In C1) (Def X == CX In C2)
+ | Garbage X C : Precongr_step (Def X == C In End) End
  | CtxEta eta C1 C2 : Precongr_step C1 C2 -> Precongr_step (eta; C1) (eta; C2)
  | CtxThen p q C' C'' C : Precongr_step C' C'' -> Precongr_step (If p == q Then C' Else C) (If p == q Then C'' Else C)
  | CtxElse p q C C' C'' : Precongr_step C' C'' -> Precongr_step (If p == q Then C Else C') (If p == q Then C Else C'')
+ | CtxDef X C1 C1' C2 : Precongr_step C1 C1' -> Precongr_step (Def X == C1 In C2) (Def X == C1' In C2)
+ | CtxRec X C1 C2 C2' : Precongr_step C2 C2' -> Precongr_step (Def X == C1 In C2) (Def X == C1 In C2')
 .
 
 Inductive Precongr : Choreography -> Choreography -> Prop :=
@@ -161,12 +256,15 @@ Inductive Precongr : Choreography -> Choreography -> Prop :=
  | Trans C1 C2 C3: Precongr_step C1 C2 -> Precongr C2 C3 -> Precongr C1 C3
 .
 
+(** Additional properties of precongruence. *)
 Lemma Precongr_Trans : forall C1 C2 C3, Precongr C1 C2 -> Precongr C2 C3 -> Precongr C1 C3.
+Proof.
 intros; induction H; auto.
 apply Trans with C2; auto.
 Qed.
 
 Lemma CtxEta': forall eta C1 C2, Precongr C1 C2 -> Precongr (eta; C1) (eta; C2).
+Proof.
 intros.
 induction H.
 + apply Refl.
@@ -175,6 +273,7 @@ induction H.
 Qed.
 
 Lemma CtxThen': forall p q C' C'' C, Precongr C' C'' -> Precongr (If p == q Then C' Else C) (If p == q Then C'' Else C).
+Proof.
 intros.
 induction H.
 + apply Refl.
@@ -183,6 +282,7 @@ induction H.
 Qed.
 
 Lemma CtxElse': forall p q C C' C'', Precongr C' C'' -> Precongr (If p == q Then C Else C') (If p == q Then C Else C'').
+Proof.
 intros.
 induction H.
 + apply Refl.
@@ -191,11 +291,38 @@ induction H.
 Qed.
 
 Lemma CtxCond': forall p q C1 C2 C3 C4, Precongr C1 C2 -> Precongr C3 C4 -> Precongr (If p == q Then C1 Else C3) (If p == q Then C2 Else C4).
+Proof.
 intros.
 apply Precongr_Trans with (If p == q Then C1 Else C4); [apply CtxElse' | apply CtxThen']; auto.
 Qed.
 
+Lemma CtxDef': forall X C1 C1' C2, Precongr C1 C1' -> Precongr (Def X == C1 In C2) (Def X == C1' In C2).
+Proof.
+intros.
+induction H.
++ apply Refl.
++ apply Trans with (Def X == C0 In C2); auto; apply CtxDef; auto.
+Qed.
+
+Lemma CtxRec': forall X C1 C2 C2', Precongr C2 C2' -> Precongr (Def X == C1 In C2) (Def X == C1 In C2').
+Proof.
+intros.
+induction H.
++ apply Refl.
++ apply Trans with (Def X == C1 In C2); auto; apply CtxRec; auto.
+Qed.
+
+Lemma CtxRecDef' : forall X C1 C1' C2 C2',
+  Precongr C1 C1' -> Precongr C2 C2' -> Precongr (Def X == C1 In C2) (Def X == C1' In C2').
+Proof.
+intros.
+apply Precongr_Trans with (Def X == C1 In C2').
++ apply CtxRec'; auto.
++ apply CtxDef'; auto.
+Qed.
+
 Lemma Precongr_step_to : forall C C', Precongr_step C C' -> Precongr C C'.
+Proof.
 intros; apply Trans with C'; auto; apply Refl.
 Qed.
 
@@ -212,18 +339,9 @@ Inductive MCTo : Configuration -> Configuration -> Prop :=
  | C_Sel p q l C s : MCTo ( Sel p q l; C, s ) ( C, s )
  | C_Then p q C1 C2 s : (s p = s q) -> MCTo ( If p == q Then C1 Else C2, s ) ( C1, s )
  | C_Else p q C1 C2 s : (s p <> s q) -> MCTo ( If p == q Then C1 Else C2, s ) ( C2, s )
+ | C_Ctx X C1 C2 C2' s s' : MCTo (C2,s) (C2',s') -> MCTo ( Def X == C1 In C2,s ) ( Def X == C1 In C2',s')
  | C_Struct C1 C1' C2 C2' s1 s2 : Precongr C1 C1' -> Precongr C2' C2 -> MCTo (C1', s1) (C2', s2) -> MCTo (C1, s1) (C2, s2)
 .
-
-(*
-Inductive MCToStar : Configuration -> Configuration -> Prop :=
- | ToRefl c : MCToStar c c
- | ToSingle c1 c2 (P:MCTo c1 c2) : MCToStar c1 c2
- | ToTran c1 c2 c3 (P1:MCToStar c1 c2) (P2:MCToStar c2 c3) : MCToStar c1 c3
-.
-
-Definition MCToStar : Configuration -> Configuration -> Prop := clos_refl_trans_1n _ MCTo.
-*)
 
 (** We'd love to use the library definitions, but they just don't work -- and give horrible names. *)
 Inductive MCToStar : Configuration -> Configuration -> Prop :=
@@ -232,6 +350,7 @@ Inductive MCToStar : Configuration -> Configuration -> Prop :=
 .
 
 Lemma MCToStar_trans : forall c1 c2 c3, MCToStar c1 c2 -> MCToStar c2 c3 -> MCToStar c1 c3.
+Proof.
 intros; induction H; auto.
 apply ToStep with c2; auto.
 Qed.
@@ -248,11 +367,88 @@ Notation "C1 ~< C2" := (Precongr_step C1 C2) (at level 50, left associativity).
 
 Section Semantics_Props.
 
-Lemma read_update : forall s p q v e, p<>q -> evaluate_on_state e (update s q v) p = evaluate_on_state e s p.
+(** Properties of unfolding. *)
+Lemma Unfolded_pn : forall X CX C C', Unfolded X CX C C' ->
+  forall p, List.In p (pn C') <-> (List.In p (pn C) \/ List.In p (pn CX)).
 Proof.
 intros.
-unfold evaluate_on_state.
-rewrite update_read'; auto.
+induction H; simpl; split; auto; intros; try inversion_clear IHUnfolded.
+(* AGH *)
++ inversion_clear H; auto. elim H0.
++ elim (set_union_elim _ _ _ _ H0); intro.
+  - left; apply set_union_intro1; auto.
+  - elim H1; auto.
+    left; apply set_union_intro2; auto.
++ inversion_clear H0.
+  elim (set_union_elim _ _ _ _ H3); intro.
+  - apply set_union_intro1; auto.
+  - apply set_union_intro2; apply H2; auto.
+  - apply set_union_intro2; apply H2; auto.
++ elim (set_union_elim _ _ _ _ H0); intro.
+  elim (set_union_elim _ _ _ _ H3); intro.
+  - left; do 2 apply set_union_intro1; auto.
+  - elim H1; auto.
+    left; apply set_union_intro1; apply set_union_intro2; auto.
+  - left; apply set_union_intro2; auto.
++ inversion_clear H0.
+  elim (set_union_elim _ _ _ _ H3); intro.
+  elim (set_union_elim _ _ _ _ H0); intro.
+  - do 2 apply set_union_intro1; auto.
+  - apply set_union_intro1; apply set_union_intro2; apply H2; auto.
+  - apply set_union_intro2; auto.
+  - apply set_union_intro1; apply set_union_intro2; apply H2; auto.
++ elim (set_union_elim _ _ _ _ H0); intro.
+  - left; apply set_union_intro1; auto.
+  - elim H1; auto.
+    left; apply set_union_intro2; auto.
++ inversion_clear H0.
+  elim (set_union_elim _ _ _ _ H3); intro.
+  - apply set_union_intro1; auto.
+  - apply set_union_intro2; apply H2; auto.
+  - apply set_union_intro2; apply H2; auto.
++ elim (set_union_elim _ _ _ _ H1); intro.
+  - left; apply set_union_intro1; auto.
+  - elim H2; auto.
+    left; apply set_union_intro2; auto.
++ inversion_clear H1.
+  elim (set_union_elim _ _ _ _ H4); intro.
+  - apply set_union_intro1; auto.
+  - apply set_union_intro2; apply H3; auto.
+  - apply set_union_intro2; apply H3; auto.
+Qed.
+
+Lemma Unfolded_wf_ctx : forall X CX C C' l lX l',
+  (forall Y, List.In Y l -> List.In Y l') -> (forall Y, List.In Y lX -> List.In Y l') ->
+  WellFormed_ctx CX lX -> WellFormed_ctx C l -> Unfolded X CX C C' -> WellFormed_ctx C' l'.
+Proof.
+intros.
+revert dependent l'; revert dependent l.
+induction H3; simpl; intros.
++ apply WellFormed_ctx_mon with lX; auto.
++ induction eta; inversion_clear H2; eauto.
++ destroy_as H2 H'; repeat split; eauto.
+  apply WellFormed_ctx_mon with l; auto.
++ destroy_as H2 H'; repeat split; eauto.
+  apply WellFormed_ctx_mon with l; auto.
++ destroy_as H2 H'; repeat split; auto.
+  - apply WellFormed_ctx_mon with (Y::l); auto.
+    intros Z HZ; inversion_clear HZ; simpl; auto.
+  - apply IHUnfolded with (Y::l); simpl; auto.
+    intros Z HZ; inversion_clear HZ; simpl; auto.
+Qed.
+
+Lemma Unfolded_wf : forall X CX C C',
+  WellFormed CX -> WellFormed C -> Unfolded X CX C C' -> WellFormed C'.
+Proof.
+intros.
+apply (Unfolded_wf_ctx X CX C C' nil nil nil); auto.
+Qed.
+
+Lemma Unfolded_antisym : forall X CX CX' C1 C2,
+  Unfolded X CX C1 C2 -> Unfolded X CX' C2 C1 -> C1 = C2.
+Proof.
+intros.
+induction H; inversion H0; auto; try rewrite IHUnfolded; auto.
 Qed.
 
 (** * Properties of precongruence. *)
@@ -269,6 +465,35 @@ Proof.
 intros; apply End_precongr' with End; auto.
 Qed.
 
+Lemma Call_precongr' : forall C C' X, C' ~<= C -> C' = Call X -> C = Call X.
+Proof.
+intros.
+induction H; auto.
+apply IHPrecongr; clear C3 H1 IHPrecongr.
+induction H; auto; try inversion H0.
+Qed.
+
+Lemma Call_precongr : forall X C, Call X ~<= C -> C = Call X.
+Proof.
+intros; apply Call_precongr' with (Call X); auto.
+Qed.
+
+Lemma precongr_Call' : forall C C' X, C' ~<= C -> C = Call X -> C' = Call X.
+Proof.
+intros.
+induction H; auto.
+apply IHPrecongr in H0; clear C3 H1 IHPrecongr.
+induction H; auto; try inversion H0.
+Qed.
+
+Lemma precongr_Call : forall X C, C ~<= Call X -> C = Call X.
+Proof.
+intros; apply precongr_Call' with (Call X); auto.
+Qed.
+
+(*
+No longer true...
+
 Lemma not_End_precongr : forall (C C':Choreography), C <> End -> C' = End -> ~ C ~<= C'.
 Proof.
 intros; intro.
@@ -284,8 +509,10 @@ elim (chor_eq_dec C End); auto.
 intro.
 elim not_End_precongr with C End; auto.
 Qed.
+*)
 
 Lemma precongr_eta' : forall eta C C', C' = (eta; End) -> C' ~<= C -> C = eta; End.
+Proof.
 intros.
 induction H0; auto.
 apply IHPrecongr; clear IHPrecongr H1 C3.
@@ -299,7 +526,126 @@ intros.
 apply precongr_eta' with (eta;End); auto.
 Qed.
 
-(** More on termination. *)
+Lemma Precongr_step_wf_ctx : forall C C' l, WellFormed_ctx C l -> C ~< C' -> WellFormed_ctx C' l.
+intros.
+revert l H; induction H0; intros; auto.
++ induction eta1; induction eta2; destroy_as H0 H'; repeat split; auto.
++ induction eta; destroy_as H1 H'; repeat split; auto.
++ induction eta; destroy_as H1 H'; destroy_as H3 H''; repeat split; auto.
++ destroy_as H0 H'; destroy_as H2 H''; repeat split; auto.
++ destroy_as H0 H'; repeat split; auto.
+  apply (Unfolded_wf_ctx X CX C1 C2 (X::l) (X::l) (X::l)); auto.
++ simpl; auto.
++ induction eta; destroy_as H H'; split; auto.
++ destroy_as H H'; split; auto.
++ destroy_as H H'; split; auto.
++ destroy_as H H'; repeat split; eauto.
+  do 2 intro.
+  apply H2 with Y.
+  apply precongr_Call; apply Precongr_step_to; rewrite <- H3; auto.
++ destroy_as H H'; repeat split; auto.
+Qed.
+
+Lemma precongr_wf : forall C C', WellFormed C -> C ~<= C' -> WellFormed C'.
+Proof.
+intros.
+induction H0; auto.
+apply IHPrecongr; clear IHPrecongr C3 H1.
+apply Precongr_step_wf_ctx with C1; auto.
+Qed.
+
+Lemma eta_precongr_inv : forall eta C1 C2, (eta;C1) ~< (eta;C2) -> C1 ~< C2.
+Proof.
+intros; inversion H; auto; apply PB_Refl.
+Qed.
+
+Lemma Then_precongr_inv : forall p q C1 C2 C,
+  (If p == q Then C1 Else C) ~< (If p == q Then C2 Else C) -> C1 ~< C2.
+Proof.
+intros; inversion H; auto; apply PB_Refl.
+Qed.
+
+Lemma Else_precongr_inv : forall p q C1 C2 C,
+  (If p == q Then C Else C1) ~< (If p == q Then C Else C2) -> C1 ~< C2.
+Proof.
+intros; inversion H; auto; apply PB_Refl.
+Qed.
+
+Lemma Def_precongr_inv : forall X Y CX CY C1 C2,
+  Unfolded X CX C1 C2 -> Unfolded Y CY C2 C1 ->
+  forall Z CZ, X <> Z -> Y <> Z -> (Def Z == CZ In C1) ~< (Def Z == CZ In C2) -> C1 ~< C2.
+Proof.
+intros.
+induction H; inversion H0.
++ rewrite <- H in H3; inversion H3; auto; try apply PB_Refl.
+  inversion H6; elim H1; auto.
++ clear eta0 C0 C3 H4 H6 H7; inversion H3; auto; try apply PB_Refl.
+  apply CtxEta; apply IHUnfolded; auto.
+  inversion H6; apply Unfold; auto.
++ inversion H3; auto; try apply PB_Refl.
+  apply CtxThen; apply IHUnfolded; auto.
+  inversion H11; try apply PB_Refl; apply Unfold; auto.
++ inversion H3; auto; try apply PB_Refl.
++ inversion H3; auto; try apply PB_Refl.
++ inversion H3; auto; try apply PB_Refl.
+  apply CtxElse; apply IHUnfolded; auto.
+  inversion H11; try apply PB_Refl; apply Unfold; auto.
++ rename Y0 into W; rename CY0 into CW.
+  clear Y1 CY1 C0 C3 H9 H8 H6 H5.
+  inversion H3; auto; try apply PB_Refl.
+  apply CtxRec; apply IHUnfolded; auto.
+  inversion H6; apply Unfold; auto.
+Qed.
+
+Lemma Unfolded_mixed : forall X Y CX CY C1 C2,
+  Unfolded X CX C1 C2 -> Unfolded Y CY C2 C1 ->
+  C1 = C2 \/ (CX = Call Y /\ CY = Call X /\ ~C1 ~< C2 /\ ~C2 ~< C1).
+Proof.
+intros; case_eq (RecVar_dec X Y); intro.
++ left; rewrite Rdec.eqb_eq in H1; rewrite <- H1 in H0.
+  apply Unfolded_antisym with X CX CY; auto.
++ induction H; inversion H0; auto.
+  - right; repeat split; auto;
+    intro H'; pose (Call_precongr _ _ (Precongr_step_to _ _ H')) as H'';
+    inversion H''; rewrite Rdec.eqb_neq in H1; elim H1; auto.
+  - elim IHUnfolded; auto; intro H'; [left; rewrite H' | right; destroy H']; repeat split; auto.
+    * intro H''; contradiction H8; apply eta_precongr_inv with eta; auto.
+    * intro H''; contradiction H'; apply eta_precongr_inv with eta; auto.
+  - elim IHUnfolded; auto; intro H'; [left; rewrite H' | right; destroy H']; repeat split; auto.
+    * intro H''; contradiction H10; apply Then_precongr_inv with p q C'; auto.
+    * intro H''; contradiction H'; apply Then_precongr_inv with p q C'; auto.
+  - elim IHUnfolded; auto; intro H'; [left; rewrite H' | right; destroy H']; repeat split; auto.
+    * intro H''; contradiction H10; apply Else_precongr_inv with p q C'; auto.
+    * intro H''; contradiction H'; apply Else_precongr_inv with p q C'; auto.
+  - elim IHUnfolded; auto; intro H'; [left; rewrite H' | right; destroy H']; repeat split;
+    rename Y0 into Z; rename CY0 into CZ; auto.
+    * intro H''; contradiction H11; apply Def_precongr_inv with X Y CX CY Z CZ; auto.
+    * intro H''; contradiction H'; apply Def_precongr_inv with Y X CY CX Z CZ; auto.
+Qed.
+
+Lemma Precongr_step_Unfold_ctx : forall X CX C1 C2, Unfolded X CX C1 C2 -> C2 ~< C1 ->
+  forall l, WellFormed_ctx C1 l -> C1 = C2.
+Proof.
+intros.
+revert l H1; induction H0; inversion H; auto; intros.
+- rename X0 into Z; rename CX0 into CZ; clear Y H1 CY H2 C0 H4 C3 H5.
+  elim (Unfolded_mixed _ _ _ _ _ _ H0 H6); intros.
+  + rewrite H1; auto.
+  + destroy_as H1 H'; destroy_as H7 H'.
+    elim (H9 _ H2).
+- rewrite IHPrecongr_step with l; induction eta; inversion H5; auto.
+- rewrite IHPrecongr_step with l; destroy_as H7 H'; auto.
+- rewrite IHPrecongr_step with l; destroy_as H7 H'; auto.
+- rewrite IHPrecongr_step with (X0::l); destroy_as H7 H'; auto.
+Qed.
+
+Lemma Precongr_step_Unfold : forall X CX C1 C2, Unfolded X CX C1 C2 -> C2 ~< C1 ->
+  WellFormed C1 -> C1 = C2.
+Proof.
+intros; apply Precongr_step_Unfold_ctx with X CX nil; auto.
+Qed.
+
+(* ** More on termination.
 Lemma terminated_iff_End : forall C:Choreography, terminated C <-> C = End.
 Proof.
 unfold terminated; simpl.
@@ -308,53 +654,125 @@ apply not_End_precongr'.
 intro; rewrite H.
 constructor.
 Qed.
+*)
 
-Lemma eta_not_terminated : forall eta C, ~terminated (eta; C).
+(** ** Head reductions
+    Head reductions do not use structural precongruence.
+*)
+
+Fixpoint pure_call (C:Choreography) : Prop :=
+match C with
+| Call _ => True
+| Def _ == _ In C2 => pure_call C2
+| _ => False
+end.
+
+Lemma pure_call_dec : forall C, {pure_call C} + {~pure_call C}.
 Proof.
-intros; intro.
-red in H; simpl in H.
-generalize (not_End_precongr' _ H); intro.
-inversion H0.
+induction C; simpl; auto.
 Qed.
 
-Lemma cond_not_terminated : forall p q C1 C2, ~terminated (If p == q Then C1 Else C2).
+Fixpoint has_head_action (C:Choreography) : Prop :=
+match C with
+| End => False
+| Call X => False
+| eta; C' => True
+| If p == q Then C1 Else C2 => True
+| Def X == C1 In C2 => has_head_action C2
+end.
+
+Lemma has_head_action_dec : forall C, {has_head_action C} + {~has_head_action C}.
 Proof.
-intros; intro.
-red in H; simpl in H.
-generalize (not_End_precongr' _ H); intro.
-inversion H0.
+induction C; simpl; auto.
 Qed.
 
-Lemma not_terminated_precongr' : forall C C', ~terminated C -> C ~< C' -> ~terminated C'.
+
+(* Needed?
+Definition top_var (C:Choreography) : pure_call C -> RecVar.
 Proof.
-intros.
-induction H0; try apply eta_not_terminated; try apply cond_not_terminated.
+induction C; intro; try (inversion H; fail).
++ apply r.
++ apply (IHC2 H).
+Defined.
+
+(** Finds the definition of X. Because of branching, this is only well-defined if X has a unique definition. *)
+Fixpoint get_body (X:RecVar) C : Choreography :=
+match C with
+| End => End
+| Call _ => End
+| eta; C' => get_body X C'
+| If p == q Then C1 Else C2 => get_body X C1
+| Def Y == C1 In C2 => if (RecVar_dec X Y) then C1 else get_body X C2
+end.
+
+(* Vacuously true. Self-flagellates. *)
+Lemma get_body_top_wd : forall C HC C', WellFormed C ->
+  Unfolded (top_var C HC) (get_body (top_var C HC) C) C C' -> C ~< C'.
+Proof.
+intros C HC.
+assert (forall l C', WellFormed_ctx C l -> Unfolded (top_var C HC) (get_body (top_var C HC) C) C C' -> List.In (top_var C HC) l \/ C ~< C').
+2:{ intros; elim (H nil C'); auto.
+    intro; inversion H2.
+  }
+induction C; intros; try inversion HC.
++ case HC; auto.
++ revert dependent C2; simpl; intros.
+  rename H into H'; destroy H'.
+  case_eq (RecVar_dec (top_var C2 HC) r); simpl; intro.
+  - right; inversion H0.
+    contradiction H7.
+    apply Rdec.eqb_eq; auto.
+  - generalize (IHC2 HC); clear IHC2; revert H0.
+    rewrite H2; apply Rdec.eqb_neq in H2; intros.
+    inversion H0.
+    elim (H3 _ C3 H'); auto.
+    * left. inversion_clear H10; auto.
+      contradiction H2; rewrite H11; auto.
+    * clear H3; intro.
+      right; apply CtxRec; auto.
 Qed.
 
-Lemma not_terminated_precongr : forall C C', ~terminated C -> C ~<= C' -> ~terminated C'.
+Definition unfold_if_needed (C:Choreography) : Choreography.
 Proof.
-intros.
-induction H0; auto.
-apply IHPrecongr; apply not_terminated_precongr' with C1; auto.
-Qed.
+elim (pure_call_dec C); intro H.
++ set (X := top_var C H).
+  set (CX := get_body X C).
+  induction C; try inversion H.
+  - apply CX.
+  - simpl in H.
+    apply (Def r == C1 In (IHC2 H)).
++ apply C.
+Defined.
+*)
 
-(** Head reductions (do not use structural precongruence). *)
-
-Definition HeadTo (c:Configuration) : ~ (terminated (fst c)) -> Configuration.
-destruct c; destruct c; intros.
-elim H; apply terminated_iff_End; auto.
-destruct e.
-apply (c, update s p0 (evaluate_on_state e s p)).
-apply (c, s).
-apply (if (Value_dec (s p) (s p0)) then (c1, s) else (c2, s)).
+Definition HeadTo (c:Configuration) : has_head_action (fst c) -> Configuration.
+Proof.
+destruct c; induction c; intros.
++ inversion H.
++ inversion H.
++ destruct e.
+  - apply (c, update s p0 (evaluate_on_state e s p)).
+  - apply (c, s).
++ apply (if (Value_dec (s p) (s p0)) then (c1, s) else (c2, s)).
++ elim IHc2; intros.
+  - apply (Def r == c1 In a,b).
+  - auto.
 Defined.
 
 Lemma HeadTo_wd : forall c H H', HeadTo c H = HeadTo c H'.
 Proof.
-induction c.
-induction a; intros; auto.
-+ elim H; red; simpl; apply Refl.
+destruct c; induction c; auto; intros.
++ inversion H.
++ inversion H.
 + induction e; simpl; auto.
++ generalize (IHc2 H H'); clear IHc1 IHc2.
+  set (c := HeadTo (c2,s) H).
+  set (c' := HeadTo (c2,s) H').
+  intros.
+  simpl in c, c'; simpl; fold c c'.
+  assert (c = HeadTo (c2,s) H); auto; clearbody c.
+  assert (c' = HeadTo (c2,s) H'); auto; clearbody c'.
+  induction c; induction c'; inversion H0; auto.
 Qed.
 
 Example HeadTo_Com : forall p e q C s HC, 
@@ -375,68 +793,25 @@ Qed.
 
 Lemma HeadTo_Soundness : forall c Hc, c ---> (HeadTo c Hc).
 Proof.
-destruct c; intros.
-induction c.
-elim Hc; apply terminated_iff_End; trivial.
-induction e.
-apply C_Com.
-apply C_Sel.
-simpl.
-case_eq (Value_dec (s p) (s p0)); intros.
-+ apply C_Then; apply Vdec.eqb_eq; auto.
-+ apply C_Else; apply Vdec.eqb_neq; auto.
+destruct c; induction c; intros.
++ inversion Hc.
++ inversion Hc.
++ induction e.
+  - apply C_Com.
+  - apply C_Sel.
++ simpl; case_eq (Value_dec (s p) (s p0)); intros.
+  - apply C_Then; apply Vdec.eqb_eq; auto.
+  - apply C_Else; apply Vdec.eqb_neq; auto.
++ generalize (IHc2 Hc).
+  set (c := HeadTo (c2,s) Hc); intros.
+  assert (c = HeadTo (c2,s) Hc); auto.
+  simpl in H0; simpl; rewrite <- H0.
+  change (c = HeadTo (c2,s) Hc) in H0; auto.
+  clearbody c; induction c.
+  apply C_Ctx; auto.
 Qed.
 
-(*
-Example MCToStar_sanity_check : forall p e q s1 C, exists s2,
-  (Com p e q ; Com p zero q ; C, s1) --->* (C, s2) /\  (eq_state_ext s2 (update s1 q 0)).
-Proof.
-intros.
-set (c0 := (Com p e q ; Com p zero q ; C, s)).
-pose proof terminated_iff_end as T.
-assert (NTc0 : not (terminated c0)).
-rewrite T. discriminate.
-set (c1 := HeadTo c0 NTc0).
-apply ToTran with c1. apply ToSingle. apply HeadTo_Soundness.
-assert (NTc1 : not (terminated c1)).
-rewrite T. discriminate.
-set (c2 := HeadTo c1 NTc1).
-set (c3 := (C, update s q 0)).
-assert (E : c2 = c3).
-unfold c2,c3; repeat simpl.
-rewrite update_elim. trivial.
-rewrite <- E.
-apply ToSingle. apply HeadTo_Soundness.
-Qed.
-*)
-(*
-Theorem progress : forall C s, C <> End -> exists C' s', MCTo (C, s) (C', s').
-Proof.
-intros.
-induction C.
-elim H; trivial.
-destruct e.
-repeat eapply ex_intro.
-apply C_Com.
-repeat eapply ex_intro.
-apply C_Sel.
-case_eq (Nat.eqb (s p) (s p0)); intros.
-repeat eapply ex_intro.
-apply C_Then.
-apply beq_nat_true; auto.
-repeat eapply ex_intro.
-apply C_Else.
-apply beq_nat_false; auto.
-Qed.
-*)
-
-Theorem progress : forall C s, ~(terminated C) -> exists c', (C,s) ---> c'.
-Proof.
-intros.
-exists (HeadTo (C,s) H).
-apply HeadTo_Soundness.
-Qed.
-
+(* Not true anymore!
 Theorem termination : forall C s, exists c', (C,s) --->* c' /\ terminated (fst c').
 Proof.
 pose proof terminated_iff_End as T.
@@ -493,6 +868,7 @@ induction C; intro s.
     inversion H. auto.
     inversion_clear Hc'. auto.
 Qed.
+*)
 
 End Semantics_Props.
 
@@ -500,25 +876,357 @@ Notation "c $ H -H-> c'" := (HeadTo c H = c') (at level 50).
 
 Section Weighted_Relations.
 
-Inductive Precongr_weighted : nat -> Choreography -> Choreography -> Prop :=
-  | PBase : forall {C}, Precongr_weighted 0 C C
-  | PStep : forall {n C} C' {C''}, C ~< C' -> Precongr_weighted n C' C'' -> Precongr_weighted (S n) C C''
+(** ** Weighted Relations
+    Useful for proofs by induction on the derivation.
+    For precongruence, we also get a canonical representation: first, a sequence of unfoldings
+    and garbage collection; afterwards, reversible rewritings. *)
+
+Inductive Asym_Precongr : Choreography -> Choreography -> Prop :=
+| ARefl C : Asym_Precongr C C
+| AUnfold X CX C1 C2 : Unfolded X CX C1 C2 -> Asym_Precongr (Def X == CX In C1) (Def X == CX In C2)
+| AGarbage X C : Asym_Precongr (Def X == C In End) End
+| ACtxEta eta C1 C2 : Asym_Precongr C1 C2 -> Asym_Precongr (eta; C1) (eta; C2)
+| ACtxThen p q C' C'' C : Asym_Precongr C' C'' -> Asym_Precongr (If p == q Then C' Else C) (If p == q Then C'' Else C)
+| ACtxElse p q C C' C'' : Asym_Precongr C' C'' -> Asym_Precongr (If p == q Then C Else C') (If p == q Then C Else C'')
+| ACtxDef X C1 C1' C2 : Asym_Precongr C1 C1' -> Asym_Precongr (Def X == C1 In C2) (Def X == C1' In C2)
+| ACtxRec X C1 C2 C2' : Asym_Precongr C2 C2' -> Asym_Precongr (Def X == C1 In C2) (Def X == C1 In C2')
 .
 
-Lemma Precongr_to_weighted : forall C C', C ~<= C' -> exists n, Precongr_weighted n C C'.
+Lemma Asym_Precongr_precongr : forall C C', Asym_Precongr C C' -> C ~< C'.
 Proof.
 intros; induction H.
-+ exists 0; apply PBase.
-+ elim IHPrecongr; intros n Hn.
-  exists (S n); apply PStep with C2; auto.
++ apply PB_Refl; auto.
++ apply Unfold; auto.
++ apply Garbage; auto.
++ apply CtxEta; auto.
++ apply CtxThen; auto.
++ apply CtxElse; auto.
++ apply CtxDef; auto.
++ apply CtxRec; auto.
 Qed.
+
+Inductive Congruent : Choreography -> Choreography -> Prop :=
+| CRefl C : Congruent C C
+| CTrans C1 C2 C3 : Congruent C1 C2 -> Congruent C2 C3 -> Congruent C1 C3
+| CEtaEta eta1 eta2 C : independent eta1 eta2 -> Congruent (eta1; eta2; C) (eta2; eta1; C)
+| CEtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Congruent (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
+| CCondEta eta p q C1 C2 : unused p eta -> unused q eta -> Congruent (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
+| CCondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Congruent (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
+                                                              (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
+| CCtxEta eta C1 C2 : Congruent C1 C2 -> Congruent (eta; C1) (eta; C2)
+| CCtxThen p q C' C'' C : Congruent C' C'' -> Congruent (If p == q Then C' Else C) (If p == q Then C'' Else C)
+| CCtxElse p q C C' C'' : Congruent C' C'' -> Congruent (If p == q Then C Else C') (If p == q Then C Else C'')
+| CCtxDef X C1 C1' C2 : Congruent C1 C1' -> Congruent (Def X == C1 In C2) (Def X == C1' In C2)
+| CCtxRec X C1 C2 C2' : Congruent C2 C2' -> Congruent (Def X == C1 In C2) (Def X == C1 In C2')
+.
+
+Lemma Congruent_precongr : forall C C', Congruent C C' -> C ~<= C'.
+Proof.
+intros; induction H.
++ apply Refl.
++ apply Precongr_Trans with C2; auto.
++ apply Precongr_step_to; apply EtaEta; auto.
++ apply Precongr_step_to; apply EtaCond; auto.
++ apply Precongr_step_to; apply CondEta; auto.
++ apply Precongr_step_to; apply CondCond; auto.
++ apply CtxEta'; auto.
++ apply CtxThen'; auto.
++ apply CtxElse'; auto.
++ apply CtxDef'; auto.
++ apply CtxRec'; auto.
+Qed.
+
+Lemma Congruent_sym : forall C C', Congruent C C' -> Congruent C' C.
+Proof.
+intros; induction H.
++ apply CRefl.
++ apply CTrans with C2; auto.
++ apply CEtaEta; apply independent_sym; auto.
++ apply CCondEta; auto.
++ apply CEtaCond; auto.
++ apply CCondCond; apply disjoint_sym; auto.
++ apply CCtxEta; auto.
++ apply CCtxThen; auto.
++ apply CCtxElse; auto.
++ apply CCtxDef; auto.
++ apply CCtxRec; auto.
+Qed.
+
+Lemma Precongr_step_Congruent_ctx : forall C C' l, WellFormed_ctx C l ->
+  C ~< C' -> C' ~< C -> Congruent C C'.
+Proof.
+intros.
+revert l H; induction H0; intros.
++ apply CRefl; auto.
++ apply CEtaEta; auto.
++ apply CEtaCond; auto.
++ apply CCondEta; auto.
++ apply CCondCond; auto.
++ inversion H1; try apply CRefl.
+  - rewrite (Unfolded_antisym _ _ _ _ _ H H3); apply CRefl.
+  - replace C1 with C2; try apply CRefl.
+    clear X0 H2 C0 H4 C3 H5 C2' H6 H1.
+    induction H3; inversion H; auto.
+    * destroy_as H0 H'.
+      elim (Unfolded_mixed _ _ _ _ _ _ H1 H7); intro.
+      ++ rewrite H12; auto.
+      ++ destroy_as H12 H'.
+         elim (H9 _ H14).
+    * apply DefEta_wf_ctx in H0; rewrite IHPrecongr_step; auto.
+      induction eta; inversion_clear H0; auto.
+    * apply CondEta_wf_ctx in H0; rewrite IHPrecongr_step; auto.
+      destroy_as H0 H'; auto.
+    * rewrite IHPrecongr_step; auto.
+      destroy_as H0 H'; repeat split; auto.
+    * rename X0 into Z; clear H1 Y CY H2 C0 H5 C3 H6.
+      destroy_as H0 H'.
+      rewrite (Precongr_step_Unfold_ctx _ _ _ _ H7 H3 (Z::X::l)); auto.
++ rewrite (End_precongr _ (Precongr_step_to _ _ H1)); apply CRefl.
++ inversion H1; try apply CRefl.
+  apply CCtxEta; induction eta; inversion H; eauto.
++ inversion H1; try apply CRefl.
+  apply CCtxThen; destroy_as H H'; eauto.
++ inversion H1; try apply CRefl.
+  apply CCtxElse; destroy_as H H'; eauto.
++ inversion H1; try apply CRefl.
+  apply CCtxDef; destroy_as H H'; eauto.
++ inversion H1; try apply CRefl.
+  - clear X0 CX C0 C3 H2 H4 H5 H6.
+    destroy_as H H'.
+    rewrite (Precongr_step_Unfold_ctx _ _ _ _ H3 H0 (X::l)); try apply CRefl.
+    apply Precongr_step_wf_ctx with C2; auto.
+  - clear X0 C0 C3 C2'0 H2 H4 H5 H6.
+    apply CCtxRec; destroy_as H H'; eauto.
+Qed.
+
+(*
+Lemma precongr_Congruent_ctx_mixed : forall C C' l, WellFormed_ctx C l ->
+  C ~< C' -> C' ~<= C -> Congruent C C'.
+Proof.
+intros.
+revert l H; induction H1; intros; try apply CRefl.
+apply CTrans with C2.
+
+
+Lemma precongr_Congruent : forall C C', C ~<= C' -> C' ~<= C -> Congruent C C'.
+Proof.
+intros.
+induction H; try apply CRefl.
+- apply CTrans with C2.
+  + apply 
+induction C; induction C'; intros;
+  try (pose (End_precongr _ H) as H'; inversion H');
+  try (pose (End_precongr _ H0) as H'; inversion H');
+  try (pose (Call_precongr _ _ H) as H'; inversion H');
+  try (pose (Call_precongr _ _ H0) as H'; inversion H');
+  try apply CRefl.
++ inversion H; try apply CRefl.
+  - 
+
+intros C C' H; induction H; intros.
++ apply CRefl.
++ apply CTrans with C2; auto.
+  2: { apply IHPrecongr.
+       apply Precongr_Trans with C1; auto.
+       apply Precongr_step_to; auto.
+  }
+*)
+
+Inductive Precongr_weighted : nat -> Choreography -> Choreography -> Prop :=
+  | PBase : forall {C C'}, Congruent C C' -> Precongr_weighted 0 C C'
+  | PStep : forall {n C} C' {C''}, Asym_Precongr C C' -> Precongr_weighted n C' C'' -> Precongr_weighted (S n) C C''
+.
 
 Lemma Precongr_weighted_to : forall n C C', Precongr_weighted n C C' -> C ~<= C'.
 Proof.
 induction n; intros; inversion H.
-+ apply Refl.
-+ apply Trans with C'0; auto.
++ apply Congruent_precongr; auto.
++ clear C'' H4 n0 H0 C0 H3; rename C'0 into C''.
+  apply Trans with C''; auto.
+  apply Asym_Precongr_precongr; auto.
 Qed.
+
+Lemma Precongr_step_to_weighted : forall C C', C ~< C' -> Asym_Precongr C C' \/ Congruent C C'.
+Proof.
+intros; induction H; try inversion IHPrecongr_step.
++ right; apply CRefl; auto.
++ right; apply CEtaEta; auto.
++ right; apply CEtaCond; auto.
++ right; apply CCondEta; auto.
++ right; apply CCondCond; auto.
++ left; apply AUnfold; auto.
++ left; apply AGarbage; auto.
++ left; apply ACtxEta; auto.
++ right; apply CCtxEta; auto.
++ left; apply ACtxThen; auto.
++ right; apply CCtxThen; auto.
++ left; apply ACtxElse; auto.
++ right; apply CCtxElse; auto.
++ left; apply ACtxDef; auto.
++ right; apply CCtxDef; auto.
++ left; apply ACtxRec; auto.
++ right; apply CCtxRec; auto.
+Qed.
+
+(** For forcing unfolded in the "same place" *)
+Lemma Unfolded_with : forall X CX C C', Unfolded X CX C C' ->
+  forall CX', exists U, Unfolded X CX' C U
+  /\ (Congruent CX CX' -> Congruent C' U)
+  /\ (Asym_Precongr CX CX' -> Asym_Precongr CX CX').
+Proof.
+intros.
+induction H.
+- exists CX'; repeat split; try constructor; auto.
+- destroy IHUnfolded; exists (eta; x); repeat split; try constructor; auto.
+- destroy IHUnfolded; exists (If p == q Then x Else C'); repeat split; try constructor; auto.
+- destroy IHUnfolded; exists (If p == q Then C' Else x); repeat split; try constructor; auto.
+- destroy IHUnfolded; exists (Def Y == CY In x); repeat split; try constructor; auto.
+Qed.
+
+Lemma Unfolded_with_Congruent : forall X CX C C', Unfolded X CX C C' ->
+  forall C'', Congruent C C'' -> exists U, Unfolded X CX C'' U /\ (Congruent C' U).
+Proof.
+intros; revert C' H; induction H0; intros.
+- exists C'; split; auto; constructor.
+- elim (IHCongruent1 _ H); intros C'' HC''; inversion_clear HC''.
+  elim (IHCongruent2 _ H0); intros x Hx; inversion_clear Hx.
+  exists x; split; auto; eapply CTrans; eauto.
+- inversion H0. inversion H4.
+  eexists; split; [repeat constructor | apply CEtaEta]; auto.
+- inversion H1. inversion H5;
+  (eexists; split; [repeat constructor | apply CEtaCond]; auto).
+- inversion H1; inversion H7;
+  (eexists; split; [repeat constructor | apply CCondEta]; auto).
+- inversion H0; inversion H6;
+  (eexists; split; [repeat constructor | apply CCondCond]; auto).
+- inversion H.
+  elim (IHCongruent _ H4); intros.
+  inversion_clear H5; eexists; split; [constructor | apply CCtxEta]; eauto.
+- inversion H.
+  + elim (IHCongruent _ H6); intros;
+    inversion_clear H7; eexists; split; [constructor | apply CCtxThen]; eauto.
+  + eexists; split; [constructor | apply CCtxThen]; eauto.
+- inversion H.
+  + eexists; split; [constructor | apply CCtxElse]; eauto.
+  + elim (IHCongruent _ H6); intros;
+    inversion_clear H7; eexists; split; [apply UElse | apply CCtxElse]; eauto.
+- inversion H.
+  eexists; split; [constructor | apply CCtxDef]; eauto.
+- inversion H.
+  elim (IHCongruent _ H6); intros.
+  inversion_clear H7; eexists; split; [constructor | apply CCtxRec]; eauto.
+Qed.
+
+Lemma AsymPrecongr_Congr_commute :
+  forall C C' C1, Congruent C C' -> Asym_Precongr C C1 ->
+  exists C1', Congruent C1 C1' /\ Asym_Precongr C' C1'.
+Proof.
+intros.
+revert C1 H0; set (H0:=I); induction H; clear H0; intros.
++ (* Reflexivity *)
+  exists C1; split; auto; constructor.
++ (* Transitivity *)
+  elim (IHCongruent1 _ H0); intros C' HC'; inversion_clear HC'.
+  elim (IHCongruent2 _ H3); intros C'' HC''; inversion_clear HC''.
+  exists C''; split; auto.
+  apply CTrans with C'; auto.
++ inversion H0.
+  - eexists; split; constructor; auto.
+  - inversion H4.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CEtaEta | repeat apply ACtxEta]; auto.
++ inversion H0.
+  - eexists; split; constructor; auto.
+  - inversion H5.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CEtaCond | apply ACtxThen; apply ACtxEta]; auto.
+    * eexists; split; [apply CEtaCond | apply ACtxElse; apply ACtxEta]; auto.
++ inversion H0.
+  - eexists; split; constructor; auto.
+  - inversion H7.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CCondEta | apply ACtxEta; apply ACtxThen]; auto.
+  - inversion H7.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CCondEta | apply ACtxEta; apply ACtxElse]; auto.
++ inversion H0.
+  - eexists; split; [apply CCondCond; auto | apply ARefl].
+  - clear p0 q0 H1 H3; inversion H6.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CCondCond | apply ACtxThen; apply ACtxThen]; auto.
+    * eexists; split; [apply CCondCond | apply ACtxElse; apply ACtxThen]; auto.
+  - inversion H6.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CCondCond | apply ACtxThen; apply ACtxElse]; auto.
+    * eexists; split; [apply CCondCond | apply ACtxElse; apply ACtxElse]; auto.
++ inversion H0.
+  - eexists; split; [apply CCtxEta | apply ARefl]; auto.
+  - elim (IHCongruent _ H4); intros C' HC'; inversion_clear HC'.
+    exists (eta;C'); split; [apply CCtxEta | apply ACtxEta]; auto.
++ inversion H0.
+  - eexists; split; [apply CCtxThen | apply ARefl]; auto.
+  - elim (IHCongruent _ H6); intros C1' HC'; inversion_clear HC'.
+    exists (If p == q Then C1' Else C); split; [apply CCtxThen | apply ACtxThen]; auto.
+  - exists (If p == q Then C'' Else C''0); split; [apply CCtxThen | apply ACtxElse]; auto.
++ inversion H0.
+  - eexists; split; [apply CCtxElse | apply ARefl]; auto.
+  - exists (If p == q Then C''0 Else C''); split; [apply CCtxElse | apply ACtxThen]; auto.
+  - elim (IHCongruent _ H6); intros C1' HC'; inversion_clear HC'.
+    exists (If p == q Then C Else C1'); split; [apply CCtxElse | apply ACtxElse]; auto.
++ inversion H0.
+  - eexists; split; [apply CCtxDef | apply ARefl]; auto.
+  - elim (Unfolded_with _ _ _ _ H5 C1'); intros U HU; destroy HU.
+    exists (Def X == C1' In U); split; [eapply CTrans | apply AUnfold; auto].
+    * apply CCtxDef; eauto.
+    * apply CCtxRec; auto.
+  - exists End; split; constructor.
+  - elim (IHCongruent _ H5); intros C' HC'; inversion_clear HC'.
+    exists (Def X == C' In C2); split; constructor; auto.
+  - exists (Def X == C1' In C2'); split; [apply CCtxDef | apply ACtxRec]; auto.
++ inversion H0.
+  - eexists; split; [apply CCtxRec | apply ARefl]; auto.
+  - elim (Unfolded_with_Congruent _ _ _ _ H5 _ H); intros C' HC'; inversion_clear HC'.
+    exists (Def X == C1 In C'); split; constructor; auto.
+  - exists End; split; try constructor.
+    replace C2' with End; try constructor.
+    symmetry; apply End_precongr.
+    apply Congruent_precongr.
+    rewrite H4; auto.
+  - exists (Def X == C1' In C2'); split; constructor; auto.
+  - elim (IHCongruent _ H5); clear X0 H1 C3 H3 C4 H4; rename C2'0 into C3; intros.
+    inversion_clear H1.
+    exists (Def X == C1 In x); split; [apply CCtxRec | apply ACtxRec]; auto.
+Qed.
+
+Lemma Precongr_Congr_commute : forall n C C', Precongr_weighted n C C' ->
+  forall C'', Congruent C C'' -> Precongr_weighted n C'' C'.
+Proof.
+induction n; intros; inversion H.
++ apply PBase.
+  apply CTrans with C; auto.
+  apply Congruent_sym; auto.
++ clear n0 H1 C0 H4 C''0 H5; rename C'0 into C1.
+  generalize (IHn _ _ H3); clear IHn; intro IHn.
+  elim (AsymPrecongr_Congr_commute _ _ _ H0 H2); intros C0 HC0; inversion_clear HC0.
+  apply PStep with C0; auto.
+Qed.
+
+(** Every precongruence proof can be made canonical. *)
+
+Lemma Precongr_to_weighted : forall C C', C ~<= C' -> exists n, Precongr_weighted n C C'.
+Proof.
+intros; induction H.
++ exists 0; apply PBase; apply CRefl.
++ elim IHPrecongr; intros n Hn; clear IHPrecongr.
+  elim (Precongr_step_to_weighted _ _ H); intros.
+  - exists (S n); apply PStep with C2; auto.
+  - exists n.
+    apply Precongr_Congr_commute with C2; auto.
+    apply Congruent_sym; auto.
+Qed.
+
+
+(*** HERE ***)
 
 Inductive MCTo_weighted : nat -> Configuration -> Configuration  -> Prop :=
   | Base : forall {c c'} H, c$H -H-> c' -> MCTo_weighted 0 c c'
@@ -567,6 +1275,44 @@ Notation "c $ n -n-> c'" := (MCTo_weighted n c c') (at level 50).
 Section Applications.
 
 (** Some results that require stronger induction principles, which we obtain through weight. *)
+Theorem progress : forall C s, ~(terminated C) -> exists c', (C,s) ---> c'.
+Proof.
+intros.
+exists (HeadTo (C,s) H).
+apply HeadTo_Soundness.
+Qed.
+
+Lemma Precongr_pn : forall C C', Precongr C C' ->
+  forall p, In p (pn C') -> In p (pn C).
+
+Lemma eta_not_terminated : forall eta C, ~terminated (eta; C).
+Proof.
+intros; intro.
+red in H; simpl in H.
+generalize (not_End_precongr' _ H); intro.
+inversion H0.
+Qed.
+
+Lemma cond_not_terminated : forall p q C1 C2, ~terminated (If p == q Then C1 Else C2).
+Proof.
+intros; intro.
+red in H; simpl in H.
+generalize (not_End_precongr' _ H); intro.
+inversion H0.
+Qed.
+
+Lemma not_terminated_precongr' : forall C C', ~terminated C -> C ~< C' -> ~terminated C'.
+Proof.
+intros.
+induction H0; try apply eta_not_terminated; try apply cond_not_terminated.
+Qed.
+
+Lemma not_terminated_precongr : forall C C', ~terminated C -> C ~<= C' -> ~terminated C'.
+Proof.
+intros.
+induction H0; auto.
+apply IHPrecongr; apply not_terminated_precongr' with C1; auto.
+Qed.
 
 Lemma terminated_does_not_reduce : forall C C' s s', terminated C -> ~(C,s) ---> (C',s').
 Proof.
@@ -903,7 +1649,7 @@ induction H1.
     rename p0 into q; rename p1 into p'; rename p2 into q'; rename e0 into e'.
     set (H := eta_not_terminated (p'#e'-->q') C).
     exists C; eexists; eexists; split; [apply C_Com | split; [apply C_Com | intro]].
-    rename p0 into r; rename H1 into H'; destroy H'.
+    rename p0 into r; destroy_as H1 H'.
     rewrite update_independent; auto.
     repeat rewrite read_update; auto.
   - (* Com/Sel *)
@@ -985,7 +1731,7 @@ induction H1.
       inversion_clear H1; inversion_clear H3.
       apply Vdec.eqb_neq; auto.
 + right.
-  revert H0 H2; rename H1 into H'; destroy H'.
+  revert H0 H2; destroy_as H1 H'.
   simpl; case_eq (Value_dec (s p) (s q)); simpl; case_eq (Value_dec (s r) (s s0)); intros;
   inversion H5; clear H5; inversion H6; clear H6.
   - (* Then/Then *)

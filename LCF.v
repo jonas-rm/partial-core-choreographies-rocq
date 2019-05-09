@@ -467,32 +467,6 @@ End unneeded.
 
 Section confluence.
 
-Inductive Congruent : Choreography -> Choreography -> Prop :=
- | CRefl C : Congruent C C
- | CTrans C1 C2 C3 : Congruent C1 C2 -> Congruent C2 C3 -> Congruent C1 C3
- | CEtaEta eta1 eta2 C : independent eta1 eta2 -> Congruent (eta1; eta2; C) (eta2; eta1; C)
- | CEtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Congruent (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
- | CCondEta eta p q C1 C2 : unused p eta -> unused q eta -> Congruent (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
- | CCondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Congruent (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
-                                                               (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
- | CCtxEta eta C1 C2 : Congruent C1 C2 -> Congruent (eta; C1) (eta; C2)
- | CCtxThen p q C' C'' C : Congruent C' C'' -> Congruent (If p == q Then C' Else C) (If p == q Then C'' Else C)
- | CCtxElse p q C C' C'' : Congruent C' C'' -> Congruent (If p == q Then C Else C') (If p == q Then C Else C'')
-.
-
-Lemma Congruent_sym : forall C C', Congruent C C' -> Congruent C' C.
-Proof.
-intros; induction H.
-+ apply CRefl.
-+ apply CTrans with C2; auto.
-+ apply CEtaEta; apply independent_sym; auto.
-+ apply CCondEta; auto.
-+ apply CEtaCond; auto.
-+ apply CCondCond; apply disjoint_sym; auto.
-+ apply CCtxEta; auto.
-+ apply CCtxThen; auto.
-+ apply CCtxElse; auto.
-Qed.
 
 Lemma Congruent_Precongr : forall C C', Congruent C C' -> C ~<= C'.
 Proof.

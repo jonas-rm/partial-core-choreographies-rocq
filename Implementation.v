@@ -66,6 +66,29 @@ Proof.
  split; auto.
 Qed.
 
+(*
+Example MCToStar_sanity_check : forall p e q s1 C, exists s2,
+  (Com p e q ; Com p zero q ; C, s1) --->* (C, s2) /\  (eq_state_ext s2 (update s1 q 0)).
+Proof.
+intros.
+set (c0 := (Com p e q ; Com p zero q ; C, s)).
+pose proof terminated_iff_end as T.
+assert (NTc0 : not (terminated c0)).
+rewrite T. discriminate.
+set (c1 := HeadTo c0 NTc0).
+apply ToTran with c1. apply ToSingle. apply HeadTo_Soundness.
+assert (NTc1 : not (terminated c1)).
+rewrite T. discriminate.
+set (c2 := HeadTo c1 NTc1).
+set (c3 := (C, update s q 0)).
+assert (E : c2 = c3).
+unfold c2,c3; repeat simpl.
+rewrite update_elim. trivial.
+rewrite <- E.
+apply ToSingle. apply HeadTo_Soundness.
+Qed.
+*)
+
 Fixpoint list_to_state (l : list (Pid * Value)) : State :=
 match l with
 | List.nil => fun _ => 0
