@@ -355,7 +355,8 @@ inversion Hin.
   simpl; repeat rewrite not_in_get_proc_value; auto.
 Qed.
 
-Lemma In_Network_par_xor : forall p N N', WellFormedNetwork (N | N')%SP -> In p (SPpn (N | N')%SP) ->
+Lemma in_network_par_xor : forall p N N',
+  WellFormedNetwork (N | N')%SP -> In p (SPpn (N | N')%SP) ->
   ( In p (SPpn N) /\ ~ In p (SPpn N') ) \/ ( In p (SPpn N') /\ ~ In p (SPpn N) ).
 Proof.
 intros.
@@ -369,10 +370,88 @@ elim (in_app_or _ _ _ H0); intro.
   apply NoDup_app_sym; auto.
 Qed.
 
-Lemma WellFormedNetwork_ctx_trans : forall N1 N2 N3, WellFormedNetwork (N1 | N3)%SP -> WellFormedNetwork (N2 | N3)%SP -> WellFormedNetwork (N1 | N2)%SP.
+(*
+
+These results are not true. :-)
+
+Lemma NoDup_app_trans : forall A (l l' lctx:list A), NoDup(l ++ lctx) -> NoDup(l' ++ lctx) -> NoDup(l ++ l').
+Proof.
+intros.
+induction l, l'.
++ simpl. apply NoDup_nil.
++ simpl.
+  apply (NoDup_app A (a::l') lctx H0).
++ pose (NoDup_app_elim_1 _ _ _ H).
+  simpl.
+  rewrite app_nil_r; auto.
++ simpl in H.
+  rewrite NoDup_cons_iff in H; inversion_clear H.
+  pose (IHl H2).
+  simpl.
+  rewrite NoDup_cons_iff.
+  split.
+  2: trivial.
+  rewrite in_app_iff.
+  simpl.
+  Search In.
+Qed.
+
+Lemma WellFormedNetwork_ctx_trans : forall N N' Nctx, WellFormedNetwork (N | Nctx)%SP -> WellFormedNetwork (N' | Nctx)%SP -> WellFormedNetwork (N | N')%SP.
+Proof.
+intros.
+red. red in H, H0.
+simpl. simpl in H, H0.
+
+
+generalize (SPpn N).
+destruct (SPpn N).
+Search NoDup.
 Admitted.
+ *)
 
 Lemma Precongr_char_if : forall (N N': Network), WellFormedNetwork N -> WellFormedNetwork N' -> Precongr N N' -> Precongr_op N N'.
+(* red.
+intros.
+induction H1.
++ simpl.
+  inversion_clear H1.
+  case_eq (Pid_dec p p0).
+  intros; split; auto; reflexivity.
+  intros; split; auto; reflexivity.
++ split; auto. reflexivity.
++ split.
+  - simpl.
+    case (get_proc_behaviour p N1), (get_proc_behaviour p N2); red; auto.
+    * 
+    * red.
+      case N2; auto.
+      intros.
+    
+    set (Hin := (in_dec P.eq_dec p (SPpn N1 ++ SPpn N2))).
+    elim Hin; intros.
+    elim (in_app_or _ _ p a); intros.
+    * 
+generalize (NoDup_app_not_in _ _ _ H p a).
+    elim (in_app_or _ _ _ (SPpn N1 ++ SPpn N2)).
+    elim (in_app_or).
+  - intros.
+    split; auto.
+    reflexivity.
+  - intros.
+    split; auto.
+    reflexivity.
+
+simpl.
+  inversion_clear H1.
+  - simpl.
+    split; auto.
+    red. trivial.
+  - 
+    
+    
+split.
++ 
+
 intros; induction H1; intro.
 + red; unfold get_proc.
   case_eq (Nat.eqb p0 p); auto.
@@ -434,7 +513,7 @@ admit.
   intro; red; auto.
   rewrite Nat.eqb_neq; intro; contradiction.
   simpl; auto.
-Admitted.
+ *)Admitted.
 
 Lemma Precongr_op_SPpn : forall N N', Precongr_op N N' -> forall p, In p (SPpn N') -> In p (SPpn N).
 induction N, N'.
