@@ -427,7 +427,11 @@ Admitted.
 Lemma SP_Precongr_wf : forall N1 N2,
   WellFormedNetwork N1 -> SP_Precongr N1 N2 -> WellFormedNetwork N2.
 Proof.
-Admitted.
+intros.
+inversion_clear H; split.
+apply SP_Precongr_NoDup with N1; auto.
+apply SP_Precongr_NoSelfCommunications with N1; auto.
+Qed.
 
 Lemma Precongr_char_if : forall (N N': Network), WellFormedNetwork N -> WellFormedNetwork N' -> SP_Precongr N N' -> Precongr_op N N'.
 Proof.
