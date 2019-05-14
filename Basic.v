@@ -200,7 +200,28 @@ Qed.
 
 Lemma not_in_app : forall (xs ys : list T) (x : T),
   ~ In x (xs ++ ys) -> ~ In x xs /\ ~ In x ys.
-Proof. split; auto using in_or_app. Qed.
+Proof.
+split; auto using in_or_app.
+Qed.
+
+Lemma not_in_app' : forall (xs ys : list T) (x : T),
+  ~ In x xs /\ ~ In x ys -> ~ In x (xs ++ ys).
+Proof.
+intros.
+inversion_clear H.
+red.
+rewrite in_app_iff.
+intros.
+inversion H; auto.
+Qed.
+
+Lemma not_in_app_iff : forall (xs ys : list T) (x : T),
+  ~ In x (xs ++ ys) <-> ~ In x xs /\ ~ In x ys.
+Proof.
+split.
+apply not_in_app.
+apply not_in_app'.
+Qed.
 
 End Lists.
 
