@@ -91,6 +91,18 @@ Proof.
   apply IH.
 Qed.
 
+Lemma O_plus_O : forall {n m}, n+m = 0 -> n = 0.
+Proof.
+double induction n m; auto; clear n m; intros.
+- inversion H0.
+- inversion H1.
+Qed.
+
+Lemma O_plus_O' : forall {n m}, n+m = 0 -> m = 0.
+Proof.
+intros n m; rewrite plus_comm; apply O_plus_O.
+Qed.
+
 End Natural_Numbers.
 
 Section Lists.

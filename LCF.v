@@ -1,5 +1,25 @@
 Require Export Implementation.
 
+(** There are several interesting notions of size of a choreography: size of the AST,
+    minimal number of reductions until we reach a terminal, ... *)
+Fixpoint AST_size (C:Choreography) : nat :=
+  match C with
+  | End => 1
+  | Call X => 1
+  | eta; C' => 1 + AST_size C'
+  | If p == q Then C1 Else C2 => 1 + AST_size C1 + AST_size C2
+  | Def X == C1 In C2 => 1 + AST_size C1 + AST_size C2
+  end.
+
+Fixpoint sem_size (C:Choreography) : nat :=
+  match C with
+  | End => 0
+  | Call X => 1
+  | eta; C' => 1 + sem_size C'
+  | If p == q Then C1 Else C2 => 1 + min (sem_size C1) (sem_size C2)
+  | Def X == C1 In C2 => 1 + sem_size C2
+  end.
+
 Lemma fatsemi_To_inv : forall C C' s C'' s'', (C;;C',s) ---> (C'',s'') ->
   (exists C0, (C,s) ---> (C0,s'') /\ (C0;;C') ~<= C'')
   \/ (exists C0', (C',s) ---> (C0',s'') /\ (C;;C0') ~<= C'').

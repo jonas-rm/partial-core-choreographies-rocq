@@ -51,7 +51,7 @@ end.
 
 End MC_Eval.
 
-Module Import MC_Nat := MCBase Nat MC_Expressions Nat MC_Eval.
+Module Import MC_Nat := MCBase Nat MC_Expressions Nat Nat MC_Eval.
 Import St.
 
 Example sanity_check : ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 3; End) Else (Com 3 zero 2; End) )
@@ -169,17 +169,34 @@ Section MC_plus.
 Fixpoint fatsemi (C C':Choreography) : Choreography :=
   match C with
   | End => C'
+  | Call X => Call X
   | eta; C0 => eta; fatsemi C0 C'
   | If p == q Then C1 Else C2 => If p == q Then (fatsemi C1 C') Else (fatsemi C2 C')
+  | Def X == C1 In C2 => Def X == (fatsemi C1 C') In (fatsemi C2 C')
   end.
 
 Notation "C ;; C'" := (fatsemi C C') (at level 90).
 
+Fixpoint no_exit_point (C:Choreography) : Prop :=
+  match C with
+  | End => False
+  | Call X => True
+  | eta; C' => no_exit_point C'
+  | If p == q Then C1 Else C2 => (no_exit_point C1) /\ (no_exit_point C2)
+  | Def X == C1 In C2 => (no_exit_point C1) /\ (no_exit_point C2)
+  end.
+
 Fixpoint single_exit_point (C:Choreography) : Prop :=
   match C with
   | End => True
+  | Call X => False
   | eta; C' => single_exit_point C'
-  | If p == q Then C1 Else C2 => (single_exit_point C1) \/ (single_exit_point C2)
+  | If p == q Then C1 Else C2 =>
+      ((single_exit_point C1) /\ (no_exit_point C2))
+    \/ ((no_exit_point C1) /\ (single_exit_point C2))
+  | Def X == C1 In C2 =>
+      ((single_exit_point C1) /\ (no_exit_point C2))
+    \/ ((no_exit_point C1) /\ (single_exit_point C2))
   end.
 
 Lemma fatsemi_precongr : forall C C1 C2, C1 ~<= C2 -> (C1;;C) ~<= (C2;;C).
