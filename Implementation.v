@@ -1,9 +1,6 @@
 Require Import Kleene.
 Require Export MC.
 
-(* Kill me. *)
-Require Import Coq.Program.Equality.
-
 Local Open Scope nat_scope.
 
 (** * The concrete language we have in mind for Turing completeness. *)
@@ -58,42 +55,36 @@ Example sanity_check : ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 3; End) E
                        ~<=
                        ( If 2 == 3 Then (Com 0 this 1; Com 4 succ_this 3; End) Else (Com 3 zero 2; Com 0 this 1; End) ).
 Proof.
- eapply Trans.
+ eapply MCP_Step.
  apply EtaCond; split; auto.
  apply CtxCond'.
- apply Refl.
- apply Precongr_step_to; apply EtaEta.
+ constructor.
+ apply MCP_step_to; apply EtaEta.
  split; auto.
 Qed.
 
-(*
 Example MCToStar_sanity_check : forall p e q s1 C, exists s2,
   (Com p e q ; Com p zero q ; C, s1) --->* (C, s2) /\  (eq_state_ext s2 (update s1 q 0)).
 Proof.
 intros.
-set (c0 := (Com p e q ; Com p zero q ; C, s)).
-pose proof terminated_iff_end as T.
-assert (NTc0 : not (terminated c0)).
-rewrite T. discriminate.
-set (c1 := HeadTo c0 NTc0).
-apply ToTran with c1. apply ToSingle. apply HeadTo_Soundness.
-assert (NTc1 : not (terminated c1)).
-rewrite T. discriminate.
-set (c2 := HeadTo c1 NTc1).
-set (c3 := (C, update s q 0)).
-assert (E : c2 = c3).
-unfold c2,c3; repeat simpl.
-rewrite update_elim. trivial.
-rewrite <- E.
-apply ToSingle. apply HeadTo_Soundness.
+set (c0 := (p#e --> q ; p#zero --> q ; C, s1)).
+generalize (HeadTo_Soundness c0 (eta_has_head_action _ _ )).
+set (c1 := HeadTo c0 (eta_has_head_action _ _ )); intros.
+assert (c1 = HeadTo c0 (eta_has_head_action _ _ )); auto.
+induction c1.
+inversion H0.
+rewrite H2, H3 in H; clear a b H0 H2 H3.
+generalize (HeadTo_Soundness (p#zero-->q;C,s1) (eta_has_head_action _ _ )).
+set (c2 := HeadTo (p#zero-->q;C,s1) (eta_has_head_action _ _)); intros.
+assert (c2 = HeadTo (p#zero-->q;C,s1) (eta_has_head_action _ _)); auto.
+induction c2.
+inversion H1.
+rewrite H3, H4 in H0; clear a b H1 H3 H4.
+eexists; split.
++ eapply MCT_Step; [apply C_Com | eapply MCT_Step; [apply C_Com | apply MCT_Refl]].
++ intro; simpl.
+  rewrite update_update_ext; auto.
 Qed.
-*)
-
-Fixpoint list_to_state (l : list (Pid * Value)) : State :=
-match l with
-| List.nil => fun _ => 0
-| List.cons (p,v) l' => update (list_to_state l') p v
-end.
 
 Section Implementation.
 
@@ -111,6 +102,7 @@ Definition implements (C:Choreography) {n} (f:PFunction n) (ps:t Pid n) (q:Pid) 
 Lemma implements_None : forall C {n} f ps q, implements C f ps q -> 
   forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
   f xs = None -> ~exists s', (C,s) --->* (End,s').
+Proof.
 unfold implements; intros.
 elim (H _ _ H0); auto.
 Qed.
@@ -118,6 +110,7 @@ Qed.
 Lemma implements_Some : forall C {n} f ps q, implements C f ps q -> 
   forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
   forall y, f xs = Some y -> exists s', (C,s) --->* (End,s') /\ s' q = y.
+Proof.
 unfold implements; intros.
 elim (H _ _ H0); auto.
 Qed.
@@ -137,10 +130,12 @@ Definition C_Inc (p t:Pid) := p # this --> t; t # succ_this --> p; End.
 
 Lemma C_Inc_char : forall p t s, let s1 := update s t (evaluate_on_state this s p) in
   (C_Inc p t, s) --->* (End, (update s1 p (evaluate_on_state succ_this s1 t))).
-intros; eapply ToStep; [apply C_Com | eapply ToStep]; [apply C_Com | apply ToRefl].
+Proof.
+intros; eapply MCT_Step; [apply C_Com | eapply MCT_Step]; [apply C_Com | apply MCT_Refl].
 Qed.
 
 Lemma C_Inc_correct : forall p t, implements (C_Inc p t) (make_pf_1 (fun n => S n)) [p] p.
+Proof.
 unfold make_pf_1; split; intros; inversion H0.
 set (s1 := update s t (evaluate_on_state this s p)).
 unfold C_Inc; exists (update s1 p (evaluate_on_state succ_this s1 t)).
@@ -199,11 +194,18 @@ Fixpoint single_exit_point (C:Choreography) : Prop :=
     \/ ((no_exit_point C1) /\ (single_exit_point C2))
   end.
 
+(* No longer holds.
+Lemma MCP_fatsemi_step : forall C C1 C2, C1 ~< C2 -> (C1;;C) ~< (C2;;C).
+Proof.
+intros; induction H; try (constructor; auto; fail).
+2: simpl; apply CtxDef; auto.
++ apply CtxDec; auto.
+
 Lemma fatsemi_precongr : forall C C1 C2, C1 ~<= C2 -> (C1;;C) ~<= (C2;;C).
 Proof.
 intros; induction H.
-+ apply Refl.
-+ apply Trans with (C2;;C); auto; clear C3 H0 IHPrecongr.
++ constructor.
++ apply MCP_Trans with (C2;;C); auto; clear C3 H0 IHMC_Precongr.
   induction H.
   - apply EtaEta; auto.
   - apply EtaCond; auto.
@@ -213,20 +215,37 @@ intros; induction H.
   - apply CtxThen; auto.
   - apply CtxElse; auto.
 Qed.
+*)
 
 Lemma fatsemi_End : forall C, (C;;End) = C.
 Proof.
 induction C; simpl; auto.
 + rewrite IHC; auto.
 + rewrite IHC1; rewrite IHC2; auto.
++ rewrite IHC1; rewrite IHC2; auto.
 Qed.
 
 Lemma fatsemi_End_inv : forall C C', (C;;C') = End -> C = End /\ C' = End.
+Proof.
 induction C; split; auto; try inversion H.
 Qed.
 
 Lemma fatsemi_To : forall C C' C'' s s', (C,s) ---> (C'',s') -> (C;;C',s) ---> (C'';;C',s').
+Proof.
 intros.
+elim (MCTo_to_weighted H); clear H; intros n Hn.
+revert C C' C'' s s' Hn.
+induction n; intros; inversion Hn.
+- induction C; try inversion H; inversion H0; simpl.
+  + induction e; inversion H4; [apply C_Com | apply C_Sel].
+  + revert H4; case_eq (MC_Nat.Value_dec (s p) (s p0)); intros; inversion H4.
+    * apply C_Then; apply MC_Nat.Vdec.eqb_eq; rewrite <- H7; auto.
+    * apply C_Else; apply MC_Nat.Vdec.eqb_neq; rewrite <- H7; auto.
+  + revert H4; simpl in H0; rewrite H0.
+    intro; simpl.
+
+
+
 dependent induction H.
 - apply C_Com.
 - apply C_Sel.
