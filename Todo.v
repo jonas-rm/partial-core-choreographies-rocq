@@ -3,12 +3,6 @@
 (* decidability of termination *)
 
 (*
-Lemma MCToStar_wf : forall C, WellFormed C -> forall s C' s',
-  (C,s) --->* (C',s') -> WellFormed C'.
-Proof.
-intros.
-(* Needs weighted... *)
-
 (** This theorem would be nicer with decidability of termination incorporated... *)
 Theorem progress' : forall C s, ~(terminated C) -> WellFormed C ->
   forall c, (C,s) --->* c -> ~terminated (fst c) -> exists c', c ---> c'.
