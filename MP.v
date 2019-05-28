@@ -1,6 +1,7 @@
-Require Export MC.
-Require Export Arith.
+Require Import MC.
+Require Import Arith.
 Require Import Coq.Arith.Arith. 
+Require Import Coq.Lists.List.
 
 Module Import MC_Plus (P E V R: DecType) (Ev : Eval E V).
 
@@ -53,11 +54,89 @@ induction n.
 apply (MCToStar_weighted_wf' n n); auto.
 Qed.
 
-(** Transitive reduction preserve well-formedness. *)
+(** The transitive and reflexive closure of reductions preserve well-formedness. *)
 Lemma MCToStar_wf : forall C, WellFormed C -> forall s C' s',
   (C,s) --->* (C',s') -> WellFormed C'.
 Proof.
 intros.
 elim (MCToStar_to_weighted H0). intro n.
 apply MCToStar_weighted_wf. assumption.
+Qed.
+
+Fixpoint MC_Precongr_ctx (l : list (RecVar*Choreography)) (C1 C2 : Choreography) : Prop :=
+let CTX := (fun C => fold_right (fun D C' => match D with | (X,CX) => (Def X == CX In C') end) C l)
+in MC_Precongr (CTX C1) (CTX C2).
+
+Definition terminated_ctx (l : list (RecVar*Choreography)) (C:Choreography) : Prop := MC_Precongr_ctx l C End.
+
+Lemma terminated_nil : forall C, terminated C <-> terminated_ctx nil C.
+Proof.
+intro C. split; intro H; apply H.
+Qed.
+
+Lemma terminated_cons : forall C l D, terminated_ctx l C -> terminated_ctx (D::l) C.
+Proof.
+intros.
+induction l; compute; compute in H; destruct D; apply CtxRec'; assumption.
+Qed.
+
+Lemma terminated_app : forall C l l', terminated_ctx l C -> terminated_ctx (l'++l) C.
+Proof.
+intros.
+induction l'.
+simpl. assumption.
+simpl. apply terminated_cons. assumption.
+Qed.
+
+(*
+Lemma terminated_ctx_dec : forall C l, {terminated_ctx l C} + {~terminated_ctx l C}.
+Proof.
+intro C. induction C.
+- left. induction l.
+  constructor.
+  apply terminated_cons. assumption.
+- admit.
+- induction l.
+  right. apply eta_not_terminated.
+  right. compute.
+  
+Qed.
+*)
+
+(* TODO: add WF *)
+Fixpoint terminated_ctx_char (C:Choreography) (l : list (RecVar*Prop)) : Prop :=
+match C with
+| End => True
+| Call X => List.In (X,True) l
+| Interaction eta C' => False
+| Cond p q C1 C2 => False
+| Rec X C1 C2 => 
+  let l1 := ((X,True)::l) in
+  let l2 := ((X,False)::l) in
+  (terminated_ctx_char C1 l1 /\ terminated_ctx_char C2 l1)
+  \/ (~terminated_ctx_char C1 l2 /\ terminated_ctx_char C2 l2)
+end.
+
+Lemma terminated_ctx_base_char : forall C l, terminated_ctx C
+  -> (forall eta C', C <> (eta; C'))
+  /\ (forall p q C1 C2, C <> If p == q Then C1 Else C2)
+  /\ (forall X, C <> Call X).
+Proof.
+
+Lemma terminated_if : forall C, terminated_ctx C nil -> terminated C.
+Proof.
+intro C. 
+induction C; intro H.
+- simpl in H. red. constructor.
+- contradict H.
+- contradict H.
+- contradict H.
+- elim H. 
+  + intro. 
+
+Qed.
+
+Lemma terminated_onlyif : forall C, terminated C  -> terminated_ctx C nil.
+Proof.
+
 Qed.

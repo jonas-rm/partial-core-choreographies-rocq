@@ -258,7 +258,7 @@ Inductive MC_Precongr_step : Choreography -> Choreography -> Prop :=
  | CondEta eta p q C1 C2 : unused p eta -> unused q eta -> MC_Precongr_step (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
  | CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> MC_Precongr_step (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
                                                                (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
-(*
+(* TODO: Marco uncomment this! Chop chop
  | EtaRec eta X CX C : MC_Precongr_step (eta; Def X == CX In C) (Def X == CX In (eta;C))
  | RecEta eta X CX C : MC_Precongr_step (Def X == CX In (eta;C)) (eta; Def X == CX In C)
  | CondRec p q X CX C1 C2 : MC_Precongr_step (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
