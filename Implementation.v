@@ -48,7 +48,7 @@ end.
 
 End MC_Eval.
 
-Module Import MC_Nat := MCBase Nat MC_Expressions Nat Nat MC_Eval.
+Module Export MC_Nat := MCBase Nat MC_Expressions Nat Nat MC_Eval.
 Import St.
 
 Example sanity_check : ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 3; End) Else (Com 3 zero 2; End) )
@@ -194,152 +194,6 @@ Fixpoint single_exit_point (C:Choreography) : Prop :=
     \/ ((no_exit_point C1) /\ (single_exit_point C2))
   end.
 
-(* No longer holds.
-Lemma MCP_fatsemi_step : forall C C1 C2, C1 ~< C2 -> (C1;;C) ~< (C2;;C).
-Proof.
-intros; induction H; try (constructor; auto; fail).
-2: simpl; apply CtxDef; auto.
-+ apply CtxDec; auto.
-
-Lemma fatsemi_precongr : forall C C1 C2, C1 ~<= C2 -> (C1;;C) ~<= (C2;;C).
-Proof.
-intros; induction H.
-+ constructor.
-+ apply MCP_Trans with (C2;;C); auto; clear C3 H0 IHMC_Precongr.
-  induction H.
-  - apply EtaEta; auto.
-  - apply EtaCond; auto.
-  - apply CondEta; auto.
-  - apply CondCond; auto.
-  - apply CtxEta; auto.
-  - apply CtxThen; auto.
-  - apply CtxElse; auto.
-Qed.
-*)
-
-Lemma fatsemi_End : forall C, (C;;End) = C.
-Proof.
-induction C; simpl; auto.
-+ rewrite IHC; auto.
-+ rewrite IHC1; rewrite IHC2; auto.
-+ rewrite IHC1; rewrite IHC2; auto.
-Qed.
-
-Lemma fatsemi_End_inv : forall C C', (C;;C') = End -> C = End /\ C' = End.
-Proof.
-induction C; split; auto; try inversion H.
-Qed.
-
-Lemma fatsemi_To : forall C C' C'' s s', (C,s) ---> (C'',s') -> (C;;C',s) ---> (C'';;C',s').
-Proof.
-intros.
-elim (MCTo_to_weighted H); clear H; intros n Hn.
-revert C C' C'' s s' Hn.
-induction n; intros; inversion Hn.
-- induction C; try inversion H; inversion H0; simpl.
-  + induction e; inversion H4; [apply C_Com | apply C_Sel].
-  + revert H4; case_eq (MC_Nat.Value_dec (s p) (s p0)); intros; inversion H4.
-    * apply C_Then; apply MC_Nat.Vdec.eqb_eq; rewrite <- H7; auto.
-    * apply C_Else; apply MC_Nat.Vdec.eqb_neq; rewrite <- H7; auto.
-  + revert H4; simpl in H0; rewrite H0.
-    intro; simpl.
-
-
-
-dependent induction H.
-- apply C_Com.
-- apply C_Sel.
-- apply C_Then; auto.
-- apply C_Else; auto.
-- apply C_Struct with (C1';;C') (C2';;C'); try (apply fatsemi_precongr; auto).
-  apply IHMCTo; auto.
-Qed.
-
-Lemma fatsemi_ToStar : forall C C' C'' s s', (C,s) --->* (C', s') -> (C;;C'',s) --->* (C';;C'', s').
-intros.
-dependent induction H.
-+ apply ToRefl.
-+ induction c2.
-  apply ToStep with (a;;C'', b); auto.
-  - apply fatsemi_To; auto.
-Qed.
-
-Lemma fatsemi_size : forall C C', size C + size C' <= size (C;;C').
-Proof.
-induction C; simpl; auto with arith.
-intros.
-apply le_n_S.
-rewrite <- Nat.add_min_distr_r.
-apply Nat.min_glb.
-+ etransitivity; [apply Nat.le_min_l | apply IHC1].
-+ etransitivity; [apply Nat.le_min_r | apply IHC2].
-Qed.
-
-Lemma fatsemi_ToEnd : forall C C' s s', (C;;C',s) ---> (End,s') ->
-  {C = End /\ (C',s) ---> (End,s')} + {C' = End /\ (C,s) ---> (End,s')}.
-Proof.
-double induction C C'; intros; auto;
-  try (right; rewrite fatsemi_End in H; auto).
-- exfalso; clear X X0.
-  generalize (MCTo_End_size _ _ _ H); simpl; intros.
-  inversion H0.
-  apply lt_irrefl with 0.
-  apply lt_le_trans with 1; auto.
-  rewrite <- H2 at 2.
-  etransitivity.
-  2: apply fatsemi_size.
-  replace 1 with (0+1); auto.
-  apply plus_le_compat; simpl; auto with arith.
-- exfalso; clear X X0.
-  generalize (MCTo_End_size _ _ _ H); simpl; clear H X1; intros.
-  inversion H.
-  apply lt_irrefl with 0.
-  apply lt_le_trans with 1; auto.
-  rewrite <- H1 at 2.
-  etransitivity.
-  2: apply fatsemi_size.
-  replace 1 with (0+1); auto.
-  apply plus_le_compat; simpl; auto with arith.
-- exfalso; clear X X0.
-  generalize (MCTo_End_size _ _ _ H); simpl; clear H X1; intros.
-  inversion H.
-  apply lt_irrefl with 0.
-  apply lt_le_trans with 1; auto.
-  rewrite <- H1 at 2.
-  apply Nat.min_glb.
-  + etransitivity.
-    2: apply fatsemi_size.
-    replace 1 with (0+1); auto.
-    apply plus_le_compat; simpl; auto with arith.
-  + etransitivity.
-    2: apply fatsemi_size.
-    replace 1 with (0+1); auto.
-    apply plus_le_compat; simpl; auto with arith.
-- exfalso; clear X X0.
-  generalize (MCTo_End_size _ _ _ H); simpl; clear H X1 X2; intros.
-  inversion H.
-  apply lt_irrefl with 0.
-  apply lt_le_trans with 1; auto.
-  rewrite <- H1 at 2.
-  apply Nat.min_glb.
-  + etransitivity.
-    2: apply fatsemi_size.
-    replace 1 with (0+1); auto.
-    apply plus_le_compat; simpl; auto with arith.
-  + etransitivity.
-    2: apply fatsemi_size.
-    replace 1 with (0+1); auto.
-    apply plus_le_compat; simpl; auto with arith.
-Qed.
-
-(** Semantic characterization - Lemma 1. *)
-Lemma Lemma_1_1 : forall C C' s s' s'',
-  MCToStar (C,s) (End,s') -> MCToStar (C',s') (End,s'') -> MCToStar (C;;C',s) (End,s'').
-intros.
-apply MCToStar_trans with (C',s'); auto.
-replace (C',s') with (End;;C',s'); auto; apply fatsemi_ToStar; auto.
-Qed.
-
 (** ** Function Pi *)
 
 Fixpoint Pi {m} (f:PRFunction m) : nat :=
@@ -425,9 +279,8 @@ induction d.
 
   (* Composition *)
   - simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
-    generalize (max_lt_l _ _ _ Hd').
-    generalize (max_lt_r _ _ _ Hd').
-    intros Hdfs Hdf.
+    pose (max_lt_l _ _ _ Hd') as Hdf.
+    pose (max_lt_r _ _ _ Hd') as Hdfs.
     assert (forall i, depth fs[@i] < d).
     intros; rewrite <- nth_map'; apply vmax_lt; auto.
     apply
@@ -435,10 +288,24 @@ induction d.
       Implementation_aux _ f _ Hdf (seq_labels init fs) q (init + (vsum (map Pi fs)))).
 
   (* Recursion *)
-  - apply End.
+  - rename f1 into f; rename f2 into g.
+    simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
+    pose (max_lt_l _ _ _ Hd') as Hf.
+    pose (max_lt_r _ _ _ Hd') as Hg.
+    apply
+    (Def 0 == (If (S init) == ps[@Fin.F1]
+               Then (init # this --> q; End)
+               Else ((Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f)) ;;
+                    (init+2 # this --> init); (S init # this --> (init+2)); (init+2 # succ_this --> S init); Call 0))
+     In ((Implementation_aux _ f _ Hf (tl ps) init (init+3));; (init+2 # zero --> S init); Call 0)).
 
   (* Minimization *)
-  - apply End.
+  - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
+    apply
+    (Def 0 == (Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3));; init+1 # zero --> (init+2);
+              If (init+2) == init Then (init+1 # this --> q; End)
+                 Else (init+1 # this --> (init+2); init+2 # succ_this --> (init+1); Call 0)
+    In (init+2 # zero --> (init+1); Call 0)).
 Defined.
 
 (** The definition in the paper uses auxiliary process names distinct from the ps and q,
@@ -454,6 +321,7 @@ Definition Implementation' {m} (f:PRFunction m) : Choreography :=
 Eval compute in (Implementation' (Composition Successor [Zero])).
 Eval compute in (Implementation' (Composition Zero [Projection aux13])).
 Eval compute in (Implementation' (Composition (Projection aux22) (Zero :: [Successor]))).
+Eval compute in (Implementation' PR_add).
 *)
 
 (** There is also a parallel variant for composition. This is defined in the same steps, but
@@ -520,10 +388,24 @@ induction d.
       Par_Implementation_aux _ f _ Hdf (seq_labels init' fs) q (init' + (vsum (map Pi fs)))).
 
   (* Recursion *)
-  - apply End.
+  - rename f1 into f; rename f2 into g.
+    simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
+    pose (max_lt_l _ _ _ Hd') as Hf.
+    pose (max_lt_r _ _ _ Hd') as Hg.
+    apply
+    (Def 0 == (If (S init) == ps[@Fin.F1]
+               Then (init # this --> q; End)
+               Else ((Par_Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f)) ;;
+                    (init+2 # this --> init); (S init # this --> (init+2)); (init+2 # succ_this --> S init); Call 0))
+     In ((Par_Implementation_aux _ f _ Hf (tl ps) init (init+3));; (init+2 # zero --> S init); Call 0)).
 
   (* Minimization *)
-  - apply End.
+  - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
+    apply
+    (Def 0 == (Par_Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3));; init+1 # zero --> (init+2);
+              If (init+2) == init Then (init+1 # this --> q; End)
+                 Else (init+1 # this --> (init+2); init+2 # succ_this --> (init+1); Call 0)
+    In (init+2 # zero --> (init+1); Call 0)).
 Defined.
 
 Definition Par_Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Choreography :=
@@ -539,9 +421,8 @@ Eval compute in (Implementation' (Composition Zero [Projection aux13])).
 Eval compute in (Par_Implementation' (Composition Zero [Projection aux13])).
 Eval compute in (Implementation' (Composition (Projection aux22) (Zero :: [Successor]))).
 Eval compute in (Par_Implementation' (Composition (Projection aux22) (Zero :: [Successor]))).
+Eval compute in (Implementation' PR_add).
+Eval compute in (Par_Implementation' PR_add).
 *)
 
 End Definitions.
-
-(* We could also prove the converse: every choreography computes a computable function.
-   At least without recursion... *)
