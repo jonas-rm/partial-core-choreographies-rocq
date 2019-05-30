@@ -1,32 +1,147 @@
-Require Export MC.
+Require Export Implementation.
 
-Module Import MC_Plus (P E V R: DecType) (Ev : Eval E V).
-
-Module Import agh := MCBase P E V R Ev.
-
+Import MC_Nat.
+Import St.
 
 Fixpoint list_to_state (l : list (Pid * Value)) : State :=
 match l with
-| List.nil => fun _ => 0
-| List.cons (p,v) l' => update (list_to_state l') p v
+| nil => fun _ => 0
+| (p,v)::l' => update (list_to_state l') p v
 end.
 
+Fixpoint Definitional_Context (l:list (RecVar * Choreography)) (C:Choreography) : Choreography :=
+match l with
+| nil => C
+| (X,CX)::l' => Def X == CX In (Definitional_Context l' C)
+end.
+
+Lemma MCP_step_End_char : forall C, C ~<a End -> exists l, C = Definitional_Context l End.
+Proof.
+intros.
+inversion H; simpl.
++ exists nil; auto.
++ exists ((X,C0)::nil); auto.
+Qed.
+
+Lemma MCP_Congruent_End_char : forall C, C ~<>~ End -> C = End.
+Proof.
+intros.
+elim (Congruent_to_weighted H); clear H; intro n; revert C.
+assert (forall k, k <= n -> forall C, C$k ~<n>~ End -> C = End); eauto.
+induction n; intros; [inversion H | case_eq k; intros]; rewrite H1 in H0; inversion H0; auto.
+rewrite H1 in H; apply le_S_n in H; clear k H1.
+rename n0 into n'; rename n1 into m; rename k0 into k.
+clear C3 H6 C1 H5.
+assert (C2 = End).
++ apply IHn with k; auto.
+  transitivity n'; auto.
+  rewrite <- H2; auto with arith.
++ rewrite H1 in H3.
+  apply IHn with m; auto.
+  transitivity n'; auto.
+  rewrite <- H2; auto with arith.
+Qed.
+
+Lemma MCP_terminated_char : forall C, C ~<= End -> exists l, C = Definitional_Context l End.
+Proof.
+intros.
+elim (MCP_to_weighted H); clear H; intro n; revert C.
+induction n; intros; inversion H.
++ exists nil; apply MCP_Congruent_End_char; auto.
++ clear C'' H4 C0 H3 n0 H0 H.
+  elim (IHn C'); auto.
+  intros l Hl.
+  rewrite Hl in H1; clear Hl H2 C' n IHn.
+
+Abort.
+
+Lemma fatsemi_End : forall C, (C;;End) = C.
+Proof.
+induction C; simpl; auto.
++ rewrite IHC; auto.
++ rewrite IHC1; rewrite IHC2; auto.
++ rewrite IHC1; rewrite IHC2; auto.
+Qed.
+
+Lemma fatsemi_End_inv : forall C C', (C;;C') = End -> C = End /\ C' = End.
+Proof.
+induction C; split; auto; try inversion H.
+Qed.
+
 (*
+Lemma fatsemi_To : forall C C' C'' s s', (C,s) ---> (C'',s') -> (C;;C',s) ---> (C'';;C',s').
+Proof.
+intros.
+elim (MCTo_to_weighted H); clear H; intros n Hn.
+revert C C' C'' s s' Hn.
+induction n; intros; inversion Hn.
+- induction C; try inversion H; inversion H0; simpl.
+  + induction e; inversion H4; [apply C_Com | apply C_Sel].
+  + revert H4; case_eq (MC_Nat.Value_dec (s p) (s p0)); intros; inversion H4.
+    * apply C_Then; apply MC_Nat.Vdec.eqb_eq; rewrite <- H7; auto.
+    * apply C_Else; apply MC_Nat.Vdec.eqb_neq; rewrite <- H7; auto.
+  + revert H4; simpl in H0; rewrite H0.
+    intro; simpl.
 
-Lemma Precongr_pn : forall C C', C ~<= C' ->
-  forall p, In p (pn C') -> In p (pn C).
+*)
 
+(*
+Lemma fatsemi_ToStar : forall C C' C'' s s', (C,s) --->* (C', s') -> (C;;C'',s) --->* (C';;C'', s').
+intros.
+dependent induction H.
++ apply ToRefl.
++ induction c2.
+  apply ToStep with (a;;C'', b); auto.
+  - apply fatsemi_To; auto.
+Qed.
+*)
+
+Fixpoint size (C:Choreography) : nat :=
+  match C with
+  | End => 0
+  | Call X => 1
+  | eta; C' => 1 + size C'
+  | If p == q Then C1 Else C2 => 1 + min (size C1) (size C2)
+  | Def X == C1 In C2 => 1 + size C2
+  end.
+
+(*
+Lemma fatsemi_size : forall C C', size C + size C' <= size (C;;C').
+Proof.
+induction C. simpl; auto with arith.
+intros.
+apply le_n_S.
+rewrite <- Nat.add_min_distr_r.
+apply Nat.min_glb.
++ etransitivity; [apply Nat.le_min_l | apply IHC1].
++ etransitivity; [apply Nat.le_min_r | apply IHC2].
+Qed.
+*)
+
+Lemma has_head_action_not_terminated : forall C, has_head_action C -> ~terminated C.
+Proof.
+induction C; intros; simpl; auto.
++ apply eta_not_terminated.
++ apply cond_not_terminated.
++ simpl in H.
+
+
+
+Lemma terminated_has_head_action : forall C, ~(terminated C /\ has_head_action C).
+Proof.
+induction C; simpl; intro; inversion_clear H; auto.
++ 
 
 
 Lemma terminated_does_not_reduce : forall C C' s s', terminated C -> ~(C,s) ---> (C',s').
 Proof.
 intros; intro.
-rewrite (not_End_MCP' _ H) in H0; clear H.
-elim (MCTo_to_weighted _ _ H0); clear H0; intros n Hn.
-assert (forall k, k <= n -> ~(End,s)$k -n-> (C',s')); intros.
-2: apply H with n; auto.
-clear C Hn; revert k H s C' s'.
-induction n; intros; intro; inversion H0; try (apply H1; apply Refl).
+elim (MCTo_to_weighted H0); clear H0; intros n Hn.
+assert (forall k, k <= n -> ~(C,s)$k -n-> (C',s')); intros.
+2: apply H0 with n; auto.
+clear Hn; revert k H0 C H s C' s'.
+induction n; intros; intro; [inversion H0 | case_eq k; intros]; rewrite H2 in H1; inversion H1.
+
 + rewrite <- H4 in H; inversion H.
 + clear C1 H1 s1 H2 C2 H3 s2 H5.
   generalize (Precongr_weighted_to _ _ _ H6); clear H6; intro.
@@ -37,6 +152,85 @@ induction n; intros; intro; inversion H0; try (apply H1; apply Refl).
   rewrite <- H4 in H; apply le_S_n in H.
   transitivity (n0+k0+m); auto with arith.
 Qed.
+
+Lemma fatsemi_ToEnd : forall C C' s s', (C;;C',s) ---> (End,s') ->
+  {C = End /\ (C',s) ---> (End,s')} + {C' = End /\ (C,s) ---> (End,s')}.
+Proof.
+double induction C C'; intros; auto;
+  try (right; rewrite fatsemi_End in H; auto).
+- exfalso.
+  generalize (MCTo_End_size _ _ _ H); simpl; intros.
+
+
+
+- exfalso; clear X X0.
+  generalize (MCTo_End_size _ _ _ H); simpl; intros.
+  inversion H0.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H2 at 2.
+  etransitivity.
+  2: apply fatsemi_size.
+  replace 1 with (0+1); auto.
+  apply plus_le_compat; simpl; auto with arith.
+- exfalso; clear X X0.
+  generalize (MCTo_End_size _ _ _ H); simpl; clear H X1; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H1 at 2.
+  etransitivity.
+  2: apply fatsemi_size.
+  replace 1 with (0+1); auto.
+  apply plus_le_compat; simpl; auto with arith.
+- exfalso; clear X X0.
+  generalize (MCTo_End_size _ _ _ H); simpl; clear H X1; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H1 at 2.
+  apply Nat.min_glb.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+- exfalso; clear X X0.
+  generalize (MCTo_End_size _ _ _ H); simpl; clear H X1 X2; intros.
+  inversion H.
+  apply lt_irrefl with 0.
+  apply lt_le_trans with 1; auto.
+  rewrite <- H1 at 2.
+  apply Nat.min_glb.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+  + etransitivity.
+    2: apply fatsemi_size.
+    replace 1 with (0+1); auto.
+    apply plus_le_compat; simpl; auto with arith.
+Qed.
+
+(** Semantic characterization - Lemma 1. *)
+Lemma Lemma_1_1 : forall C C' s s' s'',
+  MCToStar (C,s) (End,s') -> MCToStar (C',s') (End,s'') -> MCToStar (C;;C',s) (End,s'').
+intros.
+apply MCToStar_trans with (C',s'); auto.
+replace (C',s') with (End;;C',s'); auto; apply fatsemi_ToStar; auto.
+Qed.
+*)
+
+(*
+
+Lemma Precongr_pn : forall C C', C ~<= C' ->
+  forall p, In p (pn C') -> In p (pn C).
+
+
+
 
 Lemma not_terminated_weird : forall {C s C' s' C''}, (C,s) ---> (C',s') -> C ~<= C'' -> ~terminated C''.
 Proof.
@@ -489,14 +683,6 @@ Fixpoint AST_size (C:Choreography) : nat :=
   | Def X == C1 In C2 => 1 + AST_size C1 + AST_size C2
   end.
 
-Fixpoint sem_size (C:Choreography) : nat :=
-  match C with
-  | End => 0
-  | Call X => 1
-  | eta; C' => 1 + sem_size C'
-  | If p == q Then C1 Else C2 => 1 + min (sem_size C1) (sem_size C2)
-  | Def X == C1 In C2 => 1 + sem_size C2
-  end.
 
 Lemma fatsemi_To_inv : forall C C' s C'' s'', (C;;C',s) ---> (C'',s'') ->
   (exists C0, (C,s) ---> (C0,s'') /\ (C0;;C') ~<= C'')
