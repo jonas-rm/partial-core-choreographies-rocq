@@ -103,7 +103,6 @@ intro C. induction C.
 Qed.
 *)
 
-(* TODO: add WF *)
 Fixpoint terminated_ctx_char (C:Choreography) (l : list (RecVar*Prop)) : Prop :=
 match C with
 | End => True
@@ -116,6 +115,7 @@ match C with
   (terminated_ctx_char C1 l1 /\ terminated_ctx_char C2 l1)
   \/ (~terminated_ctx_char C1 l2 /\ terminated_ctx_char C2 l2)
 end.
+
 
 Lemma terminated_ctx_base_char : forall C l, terminated_ctx C
   -> (forall eta C', C <> (eta; C'))
