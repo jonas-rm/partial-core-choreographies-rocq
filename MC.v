@@ -258,12 +258,10 @@ Inductive MC_Precongr_step : Choreography -> Choreography -> Prop :=
  | CondEta eta p q C1 C2 : unused p eta -> unused q eta -> MC_Precongr_step (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
  | CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> MC_Precongr_step (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
                                                                (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
-(* TODO: Marco uncomment this! Chop chop
  | EtaRec eta X CX C : MC_Precongr_step (eta; Def X == CX In C) (Def X == CX In (eta;C))
  | RecEta eta X CX C : MC_Precongr_step (Def X == CX In (eta;C)) (eta; Def X == CX In C)
  | CondRec p q X CX C1 C2 : MC_Precongr_step (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
  | RecCond p q X CX C1 C2 : MC_Precongr_step (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
-*)
  | Unfold X CX C1 C2 : Unfolded X CX C1 C2 -> MC_Precongr_step (Def X == CX In C1) (Def X == CX In C2)
  | Garbage X C : MC_Precongr_step (Def X == C In End) End
  | CtxEta eta C1 C2 : MC_Precongr_step C1 C2 -> MC_Precongr_step (eta; C1) (eta; C2)
@@ -732,9 +730,12 @@ Qed.
 Lemma MCP_step_guarded : forall C C', C ~< C' ->
   guarded C -> forall l, WellFormed_ctx C l -> guarded C'.
 Proof.
-intros C C' H; induction H; simpl; intros; auto;
-  destroy_as H1 H'; inversion_clear H0; split; eauto.
-eapply Unfolded_guarded; eauto.
+intros C C' H; induction H; simpl; intros; auto.
+- split. 2: apply H. induction eta; apply H0.
+- inversion_clear H0; split; eauto; apply H2.
+- inversion_clear H0; split; eauto; eapply Unfolded_guarded; eauto.
+- inversion_clear H0; split; eauto; eapply IHMC_Precongr_step; eauto; apply H1.
+- inversion_clear H0; split; eauto; eapply IHMC_Precongr_step; eauto; apply H1.
 Qed.
 
 Lemma MCP_step_wf_ctx : forall C C' l, WellFormed_ctx C l -> C ~< C' -> WellFormed_ctx C' l.
@@ -745,6 +746,10 @@ revert l H; induction H0; intros; auto.
 + induction eta; destroy_as H1 H'; repeat split; auto.
 + induction eta; destroy_as H1 H'; destroy_as H3 H''; repeat split; auto.
 + destroy_as H0 H'; destroy_as H2 H''; repeat split; auto.
++ simpl. simpl in H. induction eta; repeat split; apply H.
++ simpl. simpl in H. induction eta; repeat split; apply H.
++ simpl. simpl in H. repeat split; apply H.
++ simpl. simpl in H. repeat split; apply H.
 + destroy_as H0 H'; repeat split; auto.
   apply (Unfolded_wf_ctx X CX C1 C2 (X::l) (X::l) (X::l)); auto.
 + simpl; auto.
@@ -855,6 +860,10 @@ Inductive Congruent : Choreography -> Choreography -> Prop :=
 | CCondEta eta p q C1 C2 : unused p eta -> unused q eta -> Congruent (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
 | CCondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Congruent (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
                                                               (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
+| CEtaRec eta X CX C : Congruent (eta; Def X == CX In C) (Def X == CX In (eta;C))
+| CRecEta eta X CX C : Congruent (Def X == CX In (eta;C)) (eta; Def X == CX In C)
+| CCondRec p q X CX C1 C2 : Congruent (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
+| CRecCond p q X CX C1 C2 : Congruent (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
 | CCtxEta eta C1 C2 : Congruent C1 C2 -> Congruent (eta; C1) (eta; C2)
 | CCtxThen p q C' C'' C : Congruent C' C'' -> Congruent (If p == q Then C' Else C) (If p == q Then C'' Else C)
 | CCtxElse p q C C' C'' : Congruent C' C'' -> Congruent (If p == q Then C Else C') (If p == q Then C Else C'')
@@ -872,6 +881,10 @@ Inductive Congruent_weighted : nat -> Choreography -> Choreography -> Prop :=
 | CWCondEta eta p q C1 C2 : unused p eta -> unused q eta -> Congruent_weighted 1 (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
 | CWCondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Congruent_weighted 1 (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
                                                               (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
+| CWEtaRec eta X CX C : Congruent_weighted 1 (eta; Def X == CX In C) (Def X == CX In (eta;C))
+| CWRecEta eta X CX C : Congruent_weighted 1 (Def X == CX In (eta;C)) (eta; Def X == CX In C)
+| CWCondRec p q X CX C1 C2 : Congruent_weighted 1 (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
+| CWRecCond p q X CX C1 C2 : Congruent_weighted 1 (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
 | CWCtxEta n eta C1 C2 : Congruent_weighted n C1 C2 -> Congruent_weighted (S n) (eta; C1) (eta; C2)
 | CWCtxThen n p q C' C'' C : Congruent_weighted n C' C'' -> Congruent_weighted (S n) (If p == q Then C' Else C) (If p == q Then C'' Else C)
 | CWCtxElse n p q C C' C'' : Congruent_weighted n C' C'' -> Congruent_weighted (S n) (If p == q Then C Else C') (If p == q Then C Else C'')
@@ -928,6 +941,10 @@ intros; induction H.
 + apply MCP_step_to; apply EtaCond; auto.
 + apply MCP_step_to; apply CondEta; auto.
 + apply MCP_step_to; apply CondCond; auto.
++ apply MCP_step_to; apply EtaRec; auto.
++ apply MCP_step_to; apply RecEta; auto.
++ apply MCP_step_to; apply CondRec; auto.
++ apply MCP_step_to; apply RecCond; auto.
 + apply CtxEta'; auto.
 + apply CtxThen'; auto.
 + apply CtxElse'; auto.
@@ -972,30 +989,17 @@ Qed.
 
 Lemma Congruent_sym : forall C C', C ~<>~ C' -> C' ~<>~ C.
 Proof.
-intros; induction H.
-+ apply CRefl.
+intros; induction H; try constructor; auto.
 + apply CTrans with C2; auto.
-+ apply CEtaEta; apply independent_sym; auto.
-+ apply CCondEta; auto.
-+ apply CEtaCond; auto.
-+ apply CCondCond; apply disjoint_sym; auto.
-+ apply CCtxEta; auto.
-+ apply CCtxThen; auto.
-+ apply CCtxElse; auto.
-+ apply CCtxDef; auto.
-+ apply CCtxRec; auto.
++ apply independent_sym; auto.
++ apply disjoint_sym; auto.
 Qed.
 
 Lemma MCP_step_Congruent_ctx : forall C C' l, WellFormed_ctx C l ->
   C ~< C' -> C' ~< C -> C ~<>~ C'.
 Proof.
 intros.
-revert l H; induction H0; intros.
-+ apply CRefl; auto.
-+ apply CEtaEta; auto.
-+ apply CEtaCond; auto.
-+ apply CCondEta; auto.
-+ apply CCondCond; auto.
+revert l H; induction H0; intros; try constructor; auto.
 + inversion H1; try apply CRefl.
   - rewrite (Unfolded_antisym _ _ _ _ _ H H3); apply CRefl.
   - replace C1 with C2; try apply CRefl.
@@ -1017,20 +1021,20 @@ revert l H; induction H0; intros.
       rewrite (MCP_step_Unfold_ctx _ _ _ _ H7 H3 (Z::X::l)); auto.
 + rewrite (End_MCP _ (MCP_step_to _ _ H1)); apply CRefl.
 + inversion H1; try apply CRefl.
-  apply CCtxEta; induction eta; inversion H; eauto.
+  induction eta; inversion H; eauto.
 + inversion H1; try apply CRefl.
-  apply CCtxThen; destroy_as H H'; eauto.
+  destroy_as H H'; eauto.
 + inversion H1; try apply CRefl.
-  apply CCtxElse; destroy_as H H'; eauto.
+  destroy_as H H'; eauto.
 + inversion H1; try apply CRefl.
-  apply CCtxDef; destroy_as H H'; eauto.
+  destroy_as H H'; eauto.
 + inversion H1; try apply CRefl.
   - clear X0 CX C0 C3 H2 H4 H5 H6.
     destroy_as H H'.
     rewrite (MCP_step_Unfold_ctx _ _ _ _ H3 H0 (X::l)); try apply CRefl.
     apply MCP_step_wf_ctx with C2; auto.
   - clear X0 C0 C3 C2'0 H2 H4 H5 H6.
-    apply CCtxRec; destroy_as H H'; eauto.
+    destroy_as H H'; eauto.
 Qed.
 
 Lemma MCP_step_to_weighted : forall C C', C ~< C' -> C ~<a C' \/ C ~<>~ C'.
@@ -1041,6 +1045,10 @@ intros; induction H; try inversion IHMC_Precongr_step.
 + right; apply CEtaCond; auto.
 + right; apply CCondEta; auto.
 + right; apply CCondCond; auto.
++ right; apply CEtaRec; auto.
++ right; apply CRecEta; auto.
++ right; apply CCondRec; auto.
++ right; apply CRecCond; auto.
 + left; apply AUnfold; auto.
 + left; apply AGarbage; auto.
 + left; apply ACtxEta; auto.
@@ -1085,6 +1093,14 @@ intros; revert C' H; induction H0; intros.
   (eexists; split; [repeat constructor | apply CCondEta]; auto).
 - inversion H0; inversion H6;
   (eexists; split; [repeat constructor | apply CCondCond]; auto).
+- inversion H; inversion H3;
+  (eexists; split; [repeat constructor | apply CEtaRec]; auto).
+- inversion H; inversion H5;
+  (eexists; split; [repeat constructor | apply CRecEta]; auto).
+- inversion H; inversion H5;
+  (eexists; split; [repeat constructor | apply CCondRec]; auto).
+- inversion H; inversion H5;
+  (eexists; split; [repeat constructor | apply CRecCond]; auto).
 - inversion H.
   elim (IHCongruent _ H4); intros.
   inversion_clear H5; eexists; split; [constructor | apply CCtxEta]; eauto.
@@ -1144,6 +1160,18 @@ revert C1 H0; set (H0:=I); induction H; clear H0; intros.
     * eexists; split; constructor; auto.
     * eexists; split; [apply CCondCond | apply ACtxThen; apply ACtxElse]; auto.
     * eexists; split; [apply CCondCond | apply ACtxElse; apply ACtxElse]; auto.
++ inversion H0. 
+  - eexists. split; constructor.
+  - inversion H3. 
+    * eexists; split; constructor.
+    * eexists; split; repeat constructor; assumption.
+    * eexists. split. constructor. 
+    (* (Def X == CX In (eta; End)) ~<a (eta; End) *) admit. 
+    * eexists; split; repeat constructor; assumption.
+    * eexists; split; repeat constructor; assumption.
++ admit.
++ admit.
++ admit.
 + inversion H0.
   - eexists; split; [apply CCtxEta | apply ARefl]; auto.
   - elim (IHCongruent _ H4); intros C' HC'; inversion_clear HC'.
@@ -1181,7 +1209,7 @@ revert C1 H0; set (H0:=I); induction H; clear H0; intros.
   - elim (IHCongruent _ H5); clear X0 H1 C3 H3 C4 H4; rename C2'0 into C3; intros.
     inversion_clear H1.
     exists (Def X == C1 In x); split; [apply CCtxRec | apply ACtxRec]; auto.
-Qed.
+Admitted.
 
 Lemma MCP_precongruent_congruent_comm : forall n C C', C$n ~<n C' ->
   forall C'', C ~<>~ C'' -> C''$n ~<n C'.
