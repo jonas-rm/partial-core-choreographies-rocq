@@ -841,51 +841,32 @@ Section Weighted_Relations.
     can be split into a sequence of unfoldings and garbage collection followed by
     reversible rewritings. *)
 
-Inductive Congruent : Choreography -> Choreography -> Prop :=
-| CRefl C : Congruent C C
-| CTrans C1 C2 C3 : Congruent C1 C2 -> Congruent C2 C3 -> Congruent C1 C3
-| CEtaEta eta1 eta2 C : independent eta1 eta2 -> Congruent (eta1; eta2; C) (eta2; eta1; C)
-| CEtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Congruent (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
-| CCondEta eta p q C1 C2 : unused p eta -> unused q eta -> Congruent (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
-| CCondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Congruent (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
+Inductive Precongr_Unfold : Choreography -> Choreography -> Prop :=
+| MCP_Unfold X CX C1 C2 : Unfolded X CX C1 C2 -> Precongr_Unfold (Def X == CX In C1) (Def X == CX In C2)
+.
+
+(* Lemma Precongr_Unfold_to_Precongr : forall C1 C2, Precongr C1 C2,  *)
+
+Inductive Precongr_Garbage : Choreography -> Choreography -> Prop :=
+| MCP_Garbage X C : Precongr_Garbage (Def X == C In End) End
+.
+
+Inductive Precongr_Sym : Choreography -> Choreography -> Prop :=
+| MCP_EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr_Sym (eta1; eta2; C) (eta2; eta1; C)
+| MCP_EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_Sym (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
+| MCP_CondEta eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_Sym (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
+| MCP_CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Precongr_Sym (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
                                                               (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
-| CEtaRec eta X CX C : Congruent (eta; Def X == CX In C) (Def X == CX In (eta;C))
-| CRecEta eta X CX C : Congruent (Def X == CX In (eta;C)) (eta; Def X == CX In C)
-| CCondRec p q X CX C1 C2 : Congruent (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
-| CRecCond p q X CX C1 C2 : Congruent (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
-| CCtxEta eta C1 C2 : Congruent C1 C2 -> Congruent (eta; C1) (eta; C2)
-| CCtxThen p q C' C'' C : Congruent C' C'' -> Congruent (If p == q Then C' Else C) (If p == q Then C'' Else C)
-| CCtxElse p q C C' C'' : Congruent C' C'' -> Congruent (If p == q Then C Else C') (If p == q Then C Else C'')
-| CCtxDef X C1 C1' C2 : Congruent C1 C1' -> Congruent (Def X == C1 In C2) (Def X == C1' In C2)
-| CCtxRec X C1 C2 C2' : Congruent C2 C2' -> Congruent (Def X == C1 In C2) (Def X == C1 In C2')
+| MCP_EtaRec eta X CX C : Precongr_Sym (eta; Def X == CX In C) (Def X == CX In (eta;C))
+| MCP_RecEta eta X CX C : Precongr_Sym (Def X == CX In (eta;C)) (eta; Def X == CX In C)
+| MCP_CondRec p q X CX C1 C2 : Precongr_Sym (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
+| MCP_RecCond p q X CX C1 C2 : Precongr_Sym (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
 .
 
 (** Occasionaly we need even finer control of the derivation size. *)
 
-Inductive Congruent_weighted : nat -> Choreography -> Choreography -> Prop :=
-| CWRefl C : Congruent_weighted 0 C C
-| CWTrans n k C1 C2 C3 : Congruent_weighted n C1 C2 -> Congruent_weighted k C2 C3 -> Congruent_weighted (S (n+k)) C1 C3
-| CWEtaEta eta1 eta2 C : independent eta1 eta2 -> Congruent_weighted 1 (eta1; eta2; C) (eta2; eta1; C)
-| CWEtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Congruent_weighted 1 (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
-| CWCondEta eta p q C1 C2 : unused p eta -> unused q eta -> Congruent_weighted 1 (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
-| CWCondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Congruent_weighted 1 (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
-                                                              (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
-| CWEtaRec eta X CX C : Congruent_weighted 1 (eta; Def X == CX In C) (Def X == CX In (eta;C))
-| CWRecEta eta X CX C : Congruent_weighted 1 (Def X == CX In (eta;C)) (eta; Def X == CX In C)
-| CWCondRec p q X CX C1 C2 : Congruent_weighted 1 (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
-| CWRecCond p q X CX C1 C2 : Congruent_weighted 1 (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
-| CWCtxEta n eta C1 C2 : Congruent_weighted n C1 C2 -> Congruent_weighted (S n) (eta; C1) (eta; C2)
-| CWCtxThen n p q C' C'' C : Congruent_weighted n C' C'' -> Congruent_weighted (S n) (If p == q Then C' Else C) (If p == q Then C'' Else C)
-| CWCtxElse n p q C C' C'' : Congruent_weighted n C' C'' -> Congruent_weighted (S n) (If p == q Then C Else C') (If p == q Then C Else C'')
-| CWCtxDef n X C1 C1' C2 : Congruent_weighted n C1 C1' -> Congruent_weighted (S n) (Def X == C1 In C2) (Def X == C1' In C2)
-| CWCtxRec n X C1 C2 C2' : Congruent_weighted n C2 C2' -> Congruent_weighted (S n) (Def X == C1 In C2) (Def X == C1 In C2')
-.
-
 End Weighted_Relations.
 
 (** Pretty-printing. *)
-
-Notation "C '~<>~' C'" := (Congruent C C') (at level 50).
-Notation "C $ n '~<n>~' C'" := (Congruent_weighted n C C') (at level 50).
 
 End MCBase.
