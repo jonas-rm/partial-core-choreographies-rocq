@@ -3,6 +3,235 @@ Require Export Implementation.
 Import MC_Nat.
 Import St.
 
+Section to_be_moved.
+
+Lemma TCtxEta : forall {R n} eta {C C'}, CtxClose R n C C' -> TransClose (CtxClose R) (S (S n)) (eta;C) (eta;C').
+Proof.
+intros.
+replace (S n) with ((S n)+0); auto.
+eapply TStep; eauto; constructor; auto.
+Qed.
+
+Lemma TCtxThen : forall {R n} p q CT {C C'}, CtxClose R n C C' ->
+  TransClose (CtxClose R) (S (S n)) (If p == q Then CT Else C) (If p == q Then CT Else C').
+Proof.
+intros.
+replace (S n) with ((S n)+0); auto.
+eapply TStep; eauto; constructor; auto.
+Qed.
+
+Lemma TCtxElse : forall {R n} p q {C C'} CE, CtxClose R n C C' ->
+  TransClose (CtxClose R) (S (S n)) (If p == q Then C Else CE) (If p == q Then C' Else CE).
+Proof.
+intros.
+replace (S n) with ((S n)+0); auto.
+eapply TStep; eauto; constructor; auto.
+Qed.
+
+Lemma TCtxDef : forall {R n} X {CX CX'} C, CtxClose R n CX CX' ->
+  TransClose (CtxClose R) (S (S n)) (Def X == CX In C) (Def X == CX' In C).
+Proof.
+intros.
+replace (S n) with ((S n)+0); auto.
+eapply TStep; eauto; constructor; auto.
+Qed.
+
+Lemma TCtxRec : forall {R n} X CX {C C'}, CtxClose R n C C' ->
+  TransClose (CtxClose R) (S (S n)) (Def X == CX In C) (Def X == CX In C').
+Proof.
+intros.
+replace (S n) with ((S n)+0); auto.
+eapply TStep; eauto; constructor; auto.
+Qed.
+
+Lemma TCtxEta' : forall {R n} eta {C C'}, TransClose (CtxClose R) n C C' -> 
+  exists n', TransClose (CtxClose R) n' (eta;C) (eta;C').
+Proof.
+intros.
+assert (forall n k C C', k<n -> TransClose (CtxClose R) k C C' -> exists n', TransClose (CtxClose R) n' (eta;C) (eta;C')); eauto.
+clear n C C' H. induction n; intros; [inversion H | inversion H0].
++ exists 0; constructor.
++ rewrite <- H3 in H; apply lt_S_n in H; clear k H3 H0.
+  assert (k0 < n). apply le_lt_trans with (n0+k0); auto with arith.
+  elim (IHn _ _ _ H0 H2); intros n' Hn'.
+  exists (S (S n0) + n'); econstructor; eauto.
+  constructor; auto.
+Qed.
+
+Lemma TCtxThen' : forall {R n} p q CT {C C'}, TransClose (CtxClose R) n C C' ->
+  exists n', TransClose (CtxClose R) n' (If p == q Then CT Else C) (If p == q Then CT Else C').
+Proof.
+intros.
+assert (forall n k C C', k<n -> TransClose (CtxClose R) k C C' -> exists n', TransClose (CtxClose R) n' (If p == q Then CT Else C) (If p == q Then CT Else C')); eauto.
+clear n C C' H. induction n; intros; [inversion H | inversion H0].
++ exists 0; constructor.
++ rewrite <- H3 in H; apply lt_S_n in H; clear k H3 H0.
+  assert (k0 < n). apply le_lt_trans with (n0+k0); auto with arith.
+  elim (IHn _ _ _ H0 H2); intros n' Hn'.
+  exists (S (S n0) + n'); econstructor; eauto.
+  constructor; auto.
+Qed.
+
+Lemma TCtxElse' : forall {R n} p q {C C'} CE, TransClose (CtxClose R) n C C' ->
+  exists n', TransClose (CtxClose R) n' (If p == q Then C Else CE) (If p == q Then C' Else CE).
+Proof.
+intros.
+assert (forall n k C C', k<n -> TransClose (CtxClose R) k C C' -> exists n', TransClose (CtxClose R) n' (If p == q Then C Else CE) (If p == q Then C' Else CE)); eauto.
+clear n C C' H. induction n; intros; [inversion H | inversion H0].
++ exists 0; constructor.
++ rewrite <- H3 in H; apply lt_S_n in H; clear k H3 H0.
+  assert (k0 < n). apply le_lt_trans with (n0+k0); auto with arith.
+  elim (IHn _ _ _ H0 H2); intros n' Hn'.
+  exists (S (S n0) + n'); econstructor; eauto.
+  constructor; auto.
+Qed.
+
+Lemma TCtxDef' : forall {R n} X {CX CX'} C, TransClose (CtxClose R) n CX CX' ->
+  exists n', TransClose (CtxClose R) n' (Def X == CX In C) (Def X == CX' In C).
+Proof.
+intros.
+assert (forall n k CX CX', k<n -> TransClose (CtxClose R) k CX CX' -> exists n', TransClose (CtxClose R) n' (Def X == CX In C) (Def X == CX' In C)); eauto.
+clear n CX CX' H. induction n; intros; [inversion H | inversion H0].
++ exists 0; constructor.
++ rewrite <- H3 in H; apply lt_S_n in H; clear k H3 H0.
+  assert (k0 < n). apply le_lt_trans with (n0+k0); auto with arith.
+  elim (IHn _ _ _ H0 H2); intros n' Hn'.
+  exists (S (S n0) + n'); econstructor; eauto.
+  constructor; auto.
+Qed.
+
+Lemma TCtxRec' : forall {R n} X CX {C C'}, TransClose (CtxClose R) n C C' ->
+  exists n', TransClose (CtxClose R) n' (Def X == CX In C) (Def X == CX In C').
+Proof.
+intros.
+assert (forall n k C C', k<n -> TransClose (CtxClose R) k C C' -> exists n', TransClose (CtxClose R) n' (Def X == CX In C) (Def X == CX In C')); eauto.
+clear n C C' H. induction n; intros; [inversion H | inversion H0].
++ exists 0; constructor.
++ rewrite <- H3 in H; apply lt_S_n in H; clear k H3 H0.
+  assert (k0 < n). apply le_lt_trans with (n0+k0); auto with arith.
+  elim (IHn _ _ _ H0 H2); intros n' Hn'.
+  exists (S (S n0) + n'); econstructor; eauto.
+  constructor; auto.
+Qed.
+
+Lemma Precongr_garbage_Unfolded_comm : forall n X CX C C' C'', C$n g>~ C' -> Unfolded X CX C' C'' ->
+  exists n' C0, Unfolded X CX C C0 /\ C0$n' g>~ C''.
+Proof.
+induction n; intros.
++ revert H0. inversion H. inversion H0.
+  intro. inversion H5.
++ revert H0. inversion H; intro; inversion H4.
+  - elim (IHn _ _ _ _ _ H1 H8); intros.
+    inversion_clear H9.
+    rename x into n'; rename x0 into C4; inversion_clear H10.
+    exists (S n'), (eta;C4); split; constructor; auto.
+  - elim (IHn _ _ _ _ _ H1 H10); intros.
+    inversion_clear H11.
+    rename x into n'; rename x0 into C4; inversion_clear H12.
+    exists (S n'), (If p == q Then C4 Else C0); split; constructor; auto.
+  - exists (S n), (If p == q Then C'0 Else C2); split; constructor; auto.
+  - exists (S n), (If p == q Then C2 Else C'0); split; constructor; auto.
+  - elim (IHn _ _ _ _ _ H1 H10); intros.
+    inversion_clear H11.
+    rename x into n'; rename x0 into C4; inversion_clear H12.
+    exists (S n'), (If p == q Then C0 Else C4); split; constructor; auto.
+  - exists (S n), (Def X0 == C1 In C3); split; try constructor; auto.
+  - elim (IHn _ _ _ _ _ H1 H10); intros.
+    inversion_clear H11.
+    rename x into n'; rename x0 into C4; inversion_clear H12.
+    exists (S n'), (Def X0 == C1 In C4); split; constructor; auto.
+Qed.
+
+Lemma Precongr_garbage_Unfolded_comm' : forall n X CX CX' C C', CX$n g>~ CX' -> Unfolded X CX' C C' ->
+  exists n' C0, Unfolded X CX C C0 /\ C0$n' g>~ C'.
+Proof.
+intros. revert n X CX CX' C' H H0.
+induction C; intros; inversion H0.
++ rewrite H2 in H0; rewrite <- H1; clear H2 X H0 H1 C'; rename r into X.
+  exists n, CX; split; try constructor; auto.
++ elim (IHC _ _ _ _ _ H H4); intros.
+  inversion_clear H5.
+  rename x into n'; rename x0 into C0; inversion_clear H6.
+  exists (S n'), (e; C0); split; try constructor; auto.
++ elim (IHC1 _ _ _ _ _ H H6); intros.
+  inversion_clear H7.
+  rename x into n'; rename x0 into C4; inversion_clear H8.
+  exists (S n'), (If p == p0 Then C4 Else C2); split; try constructor; auto.
++ elim (IHC2 _ _ _ _ _ H H6); intros.
+  inversion_clear H7.
+  rename x into n'; rename x0 into C4; inversion_clear H8.
+  exists (S n'), (If p == p0 Then C1 Else C4); split; try constructor; auto.
++ elim (IHC2 _ _ _ _ _ H H6); intros.
+  inversion_clear H7.
+  rename x into n'; rename x0 into C4; inversion_clear H8.
+  exists (S n'), (Def r == C1 In C4); split; try constructor; auto.
+Qed.
+
+(*
+Lemma Precongr_garbage_Unfolded_comm' : forall n X CX CX' C C', CX$n g>~ CX' -> Unfolded X CX' C C' ->
+  exists n' C0, Unfolded X CX C C0 /\ C0$n' g>=~ C'.
+Proof.
+intros. revert n X CX CX' C' H H0.
+induction C; intros; inversion H0.
++ rewrite H2 in H0; rewrite <- H1; clear H2 X H0 H1 C'; rename r into X.
+  exists (S (n+0)), CX; split; try constructor; auto.
+  apply TStep with CX'; auto; constructor.
++ elim (IHC _ _ _ _ _ H H4); intros.
+  inversion_clear H5.
+  rename x into n'; rename x0 into C0; inversion_clear H6.
+  elim (TCtxEta' e H7); clear n' H7; intros n' Hn'.
+  exists n', (e; C0); split; try constructor; auto.
++ elim (IHC1 _ _ _ _ _ H H6); intros.
+  inversion_clear H7.
+  rename x into n'; rename x0 into C4; inversion_clear H8.
+  elim (TCtxElse' p p0 C2 H9); clear n' H9; intros n' Hn'.
+  exists n', (If p == p0 Then C4 Else C2); split; try constructor; auto.
++ elim (IHC2 _ _ _ _ _ H H6); intros.
+  inversion_clear H7.
+  rename x into n'; rename x0 into C4; inversion_clear H8.
+  elim (TCtxThen' p p0 C1 H9); clear n' H9; intros n' Hn'.
+  exists n', (If p == p0 Then C1 Else C4); split; try constructor; auto.
++ elim (IHC2 _ _ _ _ _ H H6); intros.
+  inversion_clear H7.
+  rename x into n'; rename x0 into C4; inversion_clear H8.
+  elim (TCtxRec' r C1 H9); clear n' H9; intros n' Hn'.
+  exists n', (Def r == C1 In C4); split; try constructor; auto.
+Qed.
+*)
+
+Lemma Precongr_garbage_unfold_comm : forall n1 n2 C C' C'', C$n1 g>~ C' -> C'$n2 ~<u C'' ->
+  exists n1' n2' C0, C$n1' ~<u C0 /\ C0$n2' g>=~ C''.
+Proof.
+induction n1; [intros | induction n2]; intros.
++ inversion H. inversion H1.
+  rewrite <- H5 in H0.
+  clear C0 H3 C'0 H4 C' H5 C H2 H1 H.
+  inversion H0. inversion H.
++ inversion H0. inversion H1.
+  rewrite <- H5 in H, H0. rewrite <- H6 in H0.
+  clear C'' H6 C' H5 C'0 H4 C0 H3 H1.
+  inversion H.
+  - clear H7 C3 H6 C1' X0 H3 C H4 H n H1.
+    elim (Precongr_garbage_Unfolded_comm' _ _ _ _ _ _ H5 H2); intros.
+    inversion_clear H.
+    rename x into n; rename x0 into C3; inversion_clear H1.
+    exists 0, (S (S n) + (S (S n1) + 0)), (Def X == C0 In C3); split.
+    * repeat constructor; auto.
+    * apply TStep with (Def X == C0 In C2). repeat constructor; auto.
+      eapply TStep; try constructor; auto.
+  - clear H7 C2' H6 C0 X0 H3 C H4 H n H1.
+    elim (Precongr_garbage_Unfolded_comm _ _ _ _ _ _ H5 H2); intros.
+    inversion_clear H.
+    rename x into n; rename x0 into C0; inversion_clear H1.
+    exists 0, (S (S n) + 0), (Def X == CX In C0); split.
+    * repeat constructor; auto.
+    * apply TStep with (Def X == CX In C2); constructor; auto.
++ 
+
+(* WHEEEE *)
+
+End to_be_moved.
+
 
 Section to_be_deleted.
 
