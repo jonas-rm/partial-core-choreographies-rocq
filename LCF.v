@@ -3,11 +3,383 @@ Require Export Implementation.
 Import MC_Nat.
 Import St.
 
+Section new_test.
+
+Definition Precongruence := Choreography -> Choreography -> Prop.
+Definition WeightedPrecongruence := nat -> Choreography -> Choreography -> Prop.
+
+Inductive CtxClose (R:Precongruence) : WeightedPrecongruence :=
+| WCtxBase C C' : R C C' -> CtxClose R 0 C C'
+| WCtxEta n eta C1 C2 : CtxClose R n C1 C2 -> CtxClose R (S n) (eta; C1) (eta; C2)
+| WCtxThen n p q C' C'' C : CtxClose R n C' C'' -> CtxClose R (S n) (If p == q Then C' Else C) (If p == q Then C'' Else C)
+| WCtxElse n p q C C' C'' : CtxClose R n C' C'' -> CtxClose R (S n) (If p == q Then C Else C') (If p == q Then C Else C'')
+| WCtxDef n X C1 C1' C2 : CtxClose R n C1 C1' -> CtxClose R (S n) (Def X == C1 In C2) (Def X == C1' In C2)
+| WCtxRec n X C1 C2 C2' : CtxClose R n C2 C2' -> CtxClose R (S n) (Def X == C1 In C2) (Def X == C1 In C2')
+.
+
+Inductive TransClose (R:WeightedPrecongruence) : WeightedPrecongruence :=
+| TBase C : TransClose R 0 C C
+| TStep {n k C} C' {C''} : R n C C' -> TransClose R k C' C'' -> TransClose R (S (n+k)) C C''
+.
+
+Lemma MCP_step_CtxClose : forall (R:Precongruence), (forall C C', R C C' -> C ~< C') ->
+  forall n C C', CtxClose R n C C' -> C ~< C'.
+Proof.
+induction n; intros.
++ inversion H0; auto.
++ inversion H0; try (constructor; auto; fail).
+Qed.
+
+Lemma MCP_CtxClose : forall (R:Precongruence), (forall C C', R C C' -> C ~<= C') ->
+  forall n C C', CtxClose R n C C' -> C ~<= C'.
+Proof.
+induction n; intros; inversion H0; auto.
++ apply CtxEta'; auto.
++ apply CtxThen'; auto.
++ apply CtxElse'; auto.
++ apply CtxDef'; auto.
++ apply CtxRec'; auto.
+Qed.
+
+Lemma MCP_step_TransClose : forall (R:WeightedPrecongruence), (forall n C C', R n C C' -> C ~< C') ->
+  forall n C C', TransClose R n C C' -> C ~<= C'.
+Proof.
+intros R HR.
+assert (forall n k C C', k<n -> TransClose R k C C' -> C ~<= C'); eauto.
+induction n; intros; try (inversion H; fail); inversion H0.
++ constructor.
++ rewrite <- H3 in H; apply lt_S_n in H.
+  apply MCP_Trans with C'0.
+  - apply MCP_step_to; eauto.
+  - apply IHn with k0; auto.
+    apply le_lt_trans with (n0+k0); auto with arith.
+Qed.
+
+Lemma MCP_TransClose : forall (R:WeightedPrecongruence), (forall n C C', R n C C' -> C ~<= C') ->
+  forall n C C', TransClose R n C C' -> C ~<= C'.
+Proof.
+intros R HR.
+assert (forall n k C C', k<n -> TransClose R k C C' -> C ~<= C'); eauto.
+induction n; intros; try (inversion H; fail); inversion H0.
++ constructor.
++ rewrite <- H3 in H; apply lt_S_n in H.
+  apply MCP_Trans with C'0; eauto.
+  apply IHn with k0; auto.
+  apply le_lt_trans with (n0+k0); auto with arith.
+Qed.
+
+End new_test.
+
+
+Section to_be_deleted.
+
+Inductive MCToStar_weighted : nat -> Configuration -> Configuration  -> Prop :=
+  | MCT_W_Refl : forall {c}, MCToStar_weighted 0 c c
+  | MCT_W_Step : forall {c1 c2 c3 n1 n2}, MCTo_weighted n1 c1 c2 -> MCToStar_weighted n2 c2 c3 -> MCToStar_weighted (S (n1+n2)) c1 c3
+.
+
+Lemma MCToStar_to_weighted : forall {c c'}, c --->* c' -> exists n, MCToStar_weighted n c c'.
+Proof.
+intros; induction H.
++ exists 0. constructor.
++ elim IHMCToStar. 
+  elim (MCTo_to_weighted H). 
+  intros.
+  exists (S (x+x0)).
+  apply (MCT_W_Step H1 H2).
+Qed.
+
+Lemma MCToStar_weighted_wf : forall (C: Choreography), WellFormed C -> forall n s C' s', MCToStar_weighted n (C, s) (C', s') -> WellFormed C'.
+Proof.
+(* aux lemmas *)
+assert (MCToStar_weighted_Refl : forall n c1 c2, MCToStar_weighted n c1 c2 -> n = 0 -> c1=c2).
+  intros. induction H.
+  trivial.
+  contradict H0.
+  auto.
+assert (MCToStar_weighted_wf' : forall n, forall k, k<=n -> forall (C: Choreography), WellFormed C -> forall s C' s', MCToStar_weighted k (C, s) (C', s') -> WellFormed C').
+induction n.
+  - intros.
+    apply MCToStar_weighted_Refl in H1.
+    inversion H1.
+    rewrite H3 in H0. auto. apply le_n_0_eq in H. auto.
+  - intros.
+    inversion H1. 
+    + apply MCToStar_weighted_Refl in H1.
+      rewrite H5 in H0. auto. auto.    
+    + rewrite <- H4 in H.
+      apply le_S_n in H.
+      destruct c2.
+      apply (MCTo_weighted_to) in H2.
+      apply (MCTo_wf C H0) in H2.    
+      rewrite <- Nat.add_comm in H.
+      rewrite <- Nat.le_add_r in H.
+      apply IHn in H3; trivial.
+(* end *)
+- intros C HC n.
+apply (MCToStar_weighted_wf' n n); auto.
+Qed.
+
+(** Transitive reduction preserve well-formedness. *)
+Lemma MCToStar_wf : forall C, WellFormed C -> forall s C' s',
+  (C,s) --->* (C',s') -> WellFormed C'.
+Proof.
+intros.
+elim (MCToStar_to_weighted H0). intro n.
+apply MCToStar_weighted_wf. assumption.
+Qed.
+
+End to_be_deleted.
+
+Notation "c $ n -n->* c'" := (MCToStar_weighted n c c') (at level 50).
+
+Section to_replace_in_MC.
+
+Inductive Congruent_step : nat -> Choreography -> Choreography -> Prop :=
+| CWEtaEta eta1 eta2 C : independent eta1 eta2 -> Congruent_step 0 (eta1; eta2; C) (eta2; eta1; C)
+| CWEtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Congruent_step 0 (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
+| CWCondEta eta p q C1 C2 : unused p eta -> unused q eta -> Congruent_step 0 (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
+| CWCondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Congruent_step 0 (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
+                                                              (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
+| CWCtxEta n eta C1 C2 : Congruent_step n C1 C2 -> Congruent_step (S n) (eta; C1) (eta; C2)
+| CWCtxThen n p q C' C'' C : Congruent_step n C' C'' -> Congruent_step (S n) (If p == q Then C' Else C) (If p == q Then C'' Else C)
+| CWCtxElse n p q C C' C'' : Congruent_step n C' C'' -> Congruent_step (S n) (If p == q Then C Else C') (If p == q Then C Else C'')
+| CWCtxDef n X C1 C1' C2 : Congruent_step n C1 C1' -> Congruent_step (S n) (Def X == C1 In C2) (Def X == C1' In C2)
+| CWCtxRec n X C1 C2 C2' : Congruent_step n C2 C2' -> Congruent_step (S n) (Def X == C1 In C2) (Def X == C1 In C2')
+.
+
+Inductive Congruent_weighted' : nat -> Choreography -> Choreography -> Prop :=
+| CWBase C : Congruent_weighted' 0 C C
+| CWStep n k C1 C2 C3 : Congruent_step n C1 C2 -> Congruent_weighted' k C2 C3 -> Congruent_weighted' (S (n+k)) C1 C3
+.
+
+End to_replace_in_MC.
+
+Notation "C $$ n ~<n>~ C'" := (Congruent_step n C C') (at level 50).
+Notation "C $ n ~<n>~ C'" := (Congruent_weighted' n C C') (at level 50).
+
+Section more_to_replace.
+
+Lemma CWTrans : forall n k C1 C2 C3, C1$n ~<n>~ C2 -> C2$k ~<n>~ C3 -> exists m, C1$m ~<n>~ C3.
+Proof.
+assert (forall n n' k C1 C2 C3, n'<n -> C1$n' ~<n>~ C2 -> C2$k ~<n>~ C3 -> exists m, C1$m ~<n>~ C3); eauto.
+induction n; intros; [inversion H | inversion H0].
++ exists k; auto.
++ clear C5 H6 C0 H5; rewrite <- H4 in H; clear H4 n' H0.
+  apply lt_S_n in H.
+  elim (IHn k0 k C4 C2 C3); auto.
+  2: apply le_lt_trans with (n0 + k0); auto with arith.
+  intros.
+  eexists.
+  apply CWStep with C4; eauto.
+Qed.
+
+Lemma MCP_congruent_step_to : forall n {C C'}, C$$n ~<n>~ C' -> C ~<>~ C'.
+Proof.
+intros.
+induction H; constructor; auto.
+Qed.
+
+Lemma MCP_congruent_weighted_to : forall n {C C'}, C$n ~<n>~ C' -> C ~<>~ C'.
+Proof.
+intros.
+induction H; try constructor.
+apply CTrans with C2; auto.
+apply MCP_congruent_step_to with n; auto.
+Qed.
+
+Lemma Congruent_to_weighted : forall {C C'}, C ~<>~ C' -> exists n, C$n ~<n>~ C'.
+Proof.
+intros.
+induction H;
+  try inversion_clear IHCongruent1; try inversion_clear IHCongruent2; try inversion_clear IHCongruent;
+  try (eexists; do 2 econstructor; eauto; fail).
++ apply CWTrans with x x0 C2; auto.
++ 
+
+Qed.
+
+End more_to_replace.
+
+Section to_be_moved.
+
+Lemma Congruent_0 : forall C C', C$0 ~<n>~ C' -> C = C'.
+Proof.
+assert (forall n C C', n = 0 -> C$n ~<n>~ C' -> C = C'); eauto.
+intros; induction H0; auto; try inversion H;
+  rewrite IHCongruent_weighted'; auto.
+Qed.
+
+Lemma MCP_step_to_weighted_str : forall C C', C ~< C' -> C ~<a C' \/ C$0 ~<n>~ C' \/ C$1 ~<n>~ C'.
+Proof.
+intros; induction H; try inversion IHMC_Precongr_step.
++ right; left; apply CWRefl; auto.
++ right; right; apply CWEtaEta; auto.
++ right; right; apply CWEtaCond; auto.
++ right; right; apply CWCondEta; auto.
++ right; right; apply CWCondCond; auto.
++ left; apply AUnfold; auto.
++ left; apply AGarbage; auto.
++ left; apply ACtxEta; auto.
++ right; inversion_clear H0; [left | right]; apply CWCtxEta; auto.
++ left; apply ACtxThen; auto.
++ right; inversion_clear H0; [left | right]; apply CWCtxThen; auto.
++ left; apply ACtxElse; auto.
++ right; inversion_clear H0; [left | right]; apply CWCtxElse; auto.
++ left; apply ACtxDef; auto.
++ right; inversion_clear H0; [left | right]; apply CWCtxDef; auto.
++ left; apply ACtxRec; auto.
++ right; inversion_clear H0; [left | right]; apply CWCtxRec; auto.
+Qed.
+
+Lemma MCToStar_weighted_to : forall n {c c'}, MCToStar_weighted n c c' -> c --->* c'.
+Proof.
+intros; induction H; try constructor.
+apply MCT_Step with c2; auto.
+apply MCTo_weighted_to with n1; auto.
+Qed.
+
 Fixpoint list_to_state (l : list (Pid * Value)) : State :=
 match l with
 | nil => fun _ => 0
 | (p,v)::l' => update (list_to_state l') p v
 end.
+
+Lemma set_add_inl : forall {T T_dec} x A, List.In x (set_add (A:=T) T_dec x A).
+Proof.
+induction A; simpl; intros; auto.
+elim T_dec; intros.
++ rewrite a0; left; auto.
++ right; auto.
+Qed.
+
+Lemma set_add_inr : forall {T T_dec} x y A, List.In x A -> List.In x (set_add (A:=T) T_dec y A).
+Proof.
+induction A; simpl; intros; auto.
+elim T_dec; auto.
+inversion_clear H; auto.
++ rewrite H0; left; auto.
++ right; auto.
+Qed.
+
+Lemma set_union_inl : forall {T T_dec} x A B, List.In x A -> List.In x (set_union (A:=T) T_dec A B).
+Proof.
+induction B; simpl; intros; auto.
+apply set_add_inr; auto.
+Qed.
+
+Lemma set_union_inr : forall {T T_dec} x A B, List.In x B -> List.In x (set_union (A:=T) T_dec A B).
+Proof.
+induction B; simpl; intros; inversion H.
++ rewrite H0; apply set_add_inl; auto.
++ apply set_add_inr; auto.
+Qed.
+
+Lemma in_set_add : forall {T T_dec} x y A, List.In x (set_add (A:=T) T_dec y A) -> x = y \/ List.In x A.
+Proof.
+induction A; simpl; intros.
++ inversion_clear H; auto.
++ revert H; elim T_dec; intros; auto.
+  inversion_clear H; auto.
+  elim IHA; auto.
+Qed.
+
+Lemma in_set_union : forall {T T_dec} x A B, List.In x (set_union (A:=T) T_dec A B) -> List.In x A \/ List.In x B.
+Proof.
+induction B; simpl; auto; intros.
+elim (in_set_add _ _ _ H); intros; auto.
+elim IHB; auto.
+Qed.
+
+Lemma Unfolded_pn : forall X CX C1 C2, Unfolded X CX C1 C2 -> 
+  forall p, List.In p (pn C2) -> List.In p (pn CX) \/ List.In p (pn C1).
+Proof.
+induction C1; intros; simpl; auto; inversion H; auto.
++ rewrite <- H2 in H0; clear eta H1 C0 H3 C2 H2 H.
+  simpl in H0; elim (in_set_union _ _ _ H0).
+  1: right; apply set_union_inl; auto.
+  clear H0; intro.
+  elim (IHC1 C3) with p; auto.
+  right; apply set_union_inr; auto.
++ rewrite <- H2 in H0; clear H2 C' H5 C1 H4 q H3 p2 H1.
+  simpl in H0; repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
+  - right; apply set_union_inl, set_union_inl; auto.
+  - elim IHC1_1 with C0 p1; auto.
+    right; apply set_union_inl, set_union_inr; auto.
+  - right; apply set_union_inr; auto.
++ rewrite <- H2 in H0; clear H2 C' H5 C1 H4 q H3 p2 H1.
+  simpl in H0; repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
+  - right; apply set_union_inl, set_union_inl; auto.
+  - right; apply set_union_inl, set_union_inr; auto.
+  - elim IHC1_2 with C0 p1; auto.
+    right; apply set_union_inr; auto.
++ rewrite <- H3 in H0; clear H3 C1 H4 CY H2 Y H1 H5 H.
+  simpl in H0; repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
+  - right; apply set_union_inl; auto.
+  - elim IHC1_2 with C0 p; auto.
+    right; apply set_union_inr; auto.
+Qed.
+
+Lemma MCP_step_pn : forall C C', C ~< C' ->
+  forall p, List.In p (pn C') -> List.In p (pn C).
+Proof.
+intros; induction H; simpl in H0; simpl; auto.
++ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
+  - apply set_union_inr, set_union_inl; auto.
+  - apply set_union_inl; auto.
+  - apply set_union_inr, set_union_inr; auto.
++ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
+  - apply set_union_inr, set_union_inl, set_union_inl; auto.
+  - apply set_union_inl; auto.
+  - apply set_union_inr, set_union_inl, set_union_inr; auto.
+  - apply set_union_inl; auto.
+  - apply set_union_inr, set_union_inr; auto.
++ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
+  - apply set_union_inl, set_union_inr, set_union_inl; auto.
+  - apply set_union_inl, set_union_inl; auto.
+  - apply set_union_inl, set_union_inr, set_union_inr; auto.
+  - apply set_union_inr, set_union_inr; auto.
++ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
+  - apply set_union_inl, set_union_inr, set_union_inl, set_union_inl; auto.
+  - apply set_union_inl, set_union_inl; auto.
+  - apply set_union_inl, set_union_inr, set_union_inl, set_union_inr; auto.
+  - apply set_union_inr, set_union_inl, set_union_inr; auto.
+  - apply set_union_inl, set_union_inl; auto.
+  - apply set_union_inl, set_union_inr, set_union_inr; auto.
+  - apply set_union_inr, set_union_inr; auto.
++ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
+  - apply set_union_inl; auto.
+  - elim (Unfolded_pn _ _ _ _ H p H0); intro.
+    * apply set_union_inl; auto.
+    * apply set_union_inr; auto.
++ inversion H0.
++ elim (in_set_union _ _ _ H0); clear H0; intros.
+  - apply set_union_inl; auto.
+  - apply set_union_inr; auto.
++ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
+  - apply set_union_inl, set_union_inl; auto.
+  - apply set_union_inl, set_union_inr; auto.
+  - apply set_union_inr; auto.
++ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
+  - apply set_union_inl, set_union_inl; auto.
+  - apply set_union_inl, set_union_inr; auto.
+  - apply set_union_inr; auto.
++ elim (in_set_union _ _ _ H0); clear H0; intros.
+  - apply set_union_inl; auto.
+  - apply set_union_inr; auto.
++ elim (in_set_union _ _ _ H0); clear H0; intros.
+  - apply set_union_inl; auto.
+  - apply set_union_inr; auto.
+Qed.
+
+Lemma MCP_pn : forall C C', C ~<= C' ->
+  forall p, List.In p (pn C') -> List.In p (pn C).
+Proof.
+intros; induction H; auto.
+apply MCP_step_pn with C2; auto.
+Qed.
+
+End to_be_moved.
 
 Fixpoint Definitional_Context (l:list (RecVar * Choreography)) (C:Choreography) : Choreography :=
 match l with
@@ -42,19 +414,6 @@ assert (C2 = End).
   rewrite <- H2; auto with arith.
 Qed.
 
-Lemma MCP_terminated_char : forall C, C ~<= End -> exists l, C = Definitional_Context l End.
-Proof.
-intros.
-elim (MCP_to_weighted H); clear H; intro n; revert C.
-induction n; intros; inversion H.
-+ exists nil; apply MCP_Congruent_End_char; auto.
-+ clear C'' H4 C0 H3 n0 H0 H.
-  elim (IHn C'); auto.
-  intros l Hl.
-  rewrite Hl in H1; clear Hl H2 C' n IHn.
-
-Abort.
-
 Lemma fatsemi_End : forall C, (C;;End) = C.
 Proof.
 induction C; simpl; auto.
@@ -68,33 +427,135 @@ Proof.
 induction C; split; auto; try inversion H.
 Qed.
 
-(*
-Lemma fatsemi_To : forall C C' C'' s s', (C,s) ---> (C'',s') -> (C;;C',s) ---> (C'';;C',s').
+Lemma fatsemi_HeadTo : forall C C' C'' s s' H H', (C,s)$H -H-> (C'',s') -> (C;;C',s)$H' -H-> (C'';;C',s').
+Proof.
+induction C; intros; try inversion H.
++ induction e; inversion H0; auto.
++ simpl; simpl in H0; case_eq (MC_Nat.Value_dec (s p) (s p0)); intros; rewrite H1 in H0; inversion H0; auto.
++ simpl in H, H'.
+  elim (HeadTo_Def_inv _ _ _ _ _ _ _ H0); intros.
+  rename x into C0; inversion_clear H1.
+  generalize (IHC2 _ _ s s' H H' H3); intro.
+  rewrite H2.
+  simpl; simpl in H1; rewrite H1; auto.
+Qed.
+
+Lemma fatsemi_has_head_action : forall C C', has_head_action C -> has_head_action (C;;C').
+Proof.
+induction C; simpl; auto.
+intros; inversion H.
+Qed.
+
+Lemma fatsemi_Unfolded : forall X CX C1 C2 C', Unfolded X CX C1 C2 -> Unfolded X (CX;;C') (C1;;C') (C2;;C').
+Proof.
+intros.
+induction H; constructor; auto.
+Qed.
+
+Lemma fatsemi_MCP_step : forall C C' C'', C ~<a C'' -> (C;;C') ~<a (C'';;C').
+Proof.
+intros.
+induction H; try (constructor; auto; fail).
++ simpl; constructor.
+  apply fatsemi_Unfolded; auto.
++ simpl.
+
+(* needs new case for garbage cleaning *)
+Admitted.
+
+Lemma fatsemi_Congruent : forall C C' C'', C ~<>~ C'' -> (C;;C') ~<>~ (C'';;C').
+Proof.
+intros.
+induction H; try (constructor; auto; fail).
+apply CTrans with (C2;;C'); auto.
+Qed.
+
+Lemma fatsemi_MCP : forall n C C' C'', C$n ~<n C'' -> (C;;C')$n ~<n (C'';;C').
+Proof.
+assert (forall n k C C' C'', k<n -> C$k ~<n C'' -> (C;;C')$k ~<n (C'';;C')); eauto.
+induction n; intros; try (inversion H; fail).
+inversion H0.
++ clear H3 H4; rewrite <- H2 in H0; clear k H H2 C0 C'0.
+  constructor; apply fatsemi_Congruent; auto.
++ clear C''0 C0 H4 H5.
+  rewrite <- H3 in H, H0; clear k H3; rename n0 into k.
+  apply lt_S_n in H.
+  apply PStep with (C'0;;C'); auto.
+  apply fatsemi_MCP_step; auto.
+Qed.
+
+Lemma fatsemi_Precongr : forall C C' C'', C ~<= C'' -> (C;;C') ~<= (C'';;C').
+Proof.
+(* direct proof
+intros.
+elim (MCP_to_weighted H); intros n Hn.
+clear H; revert C C' C'' Hn; assert (forall n k C C' C'', k<n -> C$k ~<n C'' -> (C;;C') ~<= (C'';;C')); eauto.
+clear n; induction n; intros; try (inversion H; fail).
+inversion H0.
++ clear H3 H4; rewrite <- H2 in H0; clear k H H2 C0 C'0.
+  apply MCP_congruent_to_precongr; apply Congruent_fatsemi; auto.
++ clear C''0 C0 H4 H5.
+  rewrite <- H3 in H, H0; clear k H3; rename n0 into k.
+  apply lt_S_n in H.
+  apply MCP_Trans with (C'0;;C'); auto.
+  2: apply IHn with k; auto.
+  apply MCP_step_to; apply MCP_asym_to_step; apply MCP_step_fatsemi; auto.
+*)
+intros.
+elim (MCP_to_weighted H); intros n Hn.
+apply MCP_weighted_to with n.
+apply fatsemi_MCP; auto.
+Qed.
+
+Lemma fatsemi_MCTo_weighted : forall n C C' C'' s s', (C,s)$n -n-> (C'',s') -> (C;;C',s)$n -n-> (C'';;C',s').
+Proof.
+assert (forall n k C C' C'' s s', k < n -> (C,s)$k -n-> (C'',s') -> (C;;C',s)$k -n-> (C'';;C',s')); eauto.
+induction n; intros; try (inversion H; fail).
+inversion H0.
+- apply MBase with (fatsemi_has_head_action _ _ H1).
+  apply fatsemi_HeadTo with H1; auto.
+- clear s2 C2 s1 C2 H5 H3 H2 H1.
+  generalize (fatsemi_MCP _ _ C' _ H6); clear H6; intro HC.
+  generalize (fatsemi_MCP _ _ C' _ H8); clear H8; intro HC''.
+  rewrite <- H4 in H; clear k H0 H4.
+  assert (k0 < n).
+  1: { apply lt_S_n in H.
+       apply le_lt_trans with (n0+k0+m); auto with arith.
+  }
+  generalize (IHn _ _ C' _ _  _ H0 H7); clear H7; intro HTo.
+  apply MStep with (C1';;C') (C2';;C'); auto.
+Qed.
+
+Lemma fatsemi_MCTo : forall C C' C'' s s', (C,s) ---> (C'',s') -> (C;;C',s) ---> (C'';;C',s').
 Proof.
 intros.
 elim (MCTo_to_weighted H); clear H; intros n Hn.
-revert C C' C'' s s' Hn.
-induction n; intros; inversion Hn.
-- induction C; try inversion H; inversion H0; simpl.
-  + induction e; inversion H4; [apply C_Com | apply C_Sel].
-  + revert H4; case_eq (MC_Nat.Value_dec (s p) (s p0)); intros; inversion H4.
-    * apply C_Then; apply MC_Nat.Vdec.eqb_eq; rewrite <- H7; auto.
-    * apply C_Else; apply MC_Nat.Vdec.eqb_neq; rewrite <- H7; auto.
-  + revert H4; simpl in H0; rewrite H0.
-    intro; simpl.
-
-*)
-
-(*
-Lemma fatsemi_ToStar : forall C C' C'' s s', (C,s) --->* (C', s') -> (C;;C'',s) --->* (C';;C'', s').
-intros.
-dependent induction H.
-+ apply ToRefl.
-+ induction c2.
-  apply ToStep with (a;;C'', b); auto.
-  - apply fatsemi_To; auto.
+apply MCTo_weighted_to with n.
+apply fatsemi_MCTo_weighted; auto.
 Qed.
-*)
+
+Lemma fatsemi_MCT_W : forall n C C' C'' s s', (C,s)$n -n->* (C', s') -> (C;;C'',s)$n -n->* (C';;C'', s').
+Proof.
+assert (forall n k C C' C'' s s', k<n -> (C,s)$k -n->* (C', s') -> (C;;C'',s)$k -n->* (C';;C'', s')); eauto.
+induction n; intros.
++ inversion H.
++ inversion H0; try constructor.
+  clear c3 H5 c1 H4; induction c2.
+  rename a into C0; rename b into s0.
+  rewrite <- H3 in H; clear H3 k H0; apply lt_S_n in H.
+  apply (MCT_W_Step (c2:=(C0;;C'',s0))).
+  - apply fatsemi_MCTo_weighted; auto.
+  - apply IHn; auto.
+    apply le_lt_trans with (n1+n2); auto with arith.
+Qed.
+
+Lemma fatsemi_MCToStar : forall C C' C'' s s', (C,s) --->* (C', s') -> (C;;C'',s) --->* (C';;C'', s').
+Proof.
+intros.
+elim (MCToStar_to_weighted H); clear H; intros n Hn.
+apply MCToStar_weighted_to with n.
+apply fatsemi_MCT_W; auto.
+Qed.
 
 Fixpoint size (C:Choreography) : nat :=
   match C with
@@ -105,10 +566,15 @@ Fixpoint size (C:Choreography) : nat :=
   | Def X == C1 In C2 => 1 + size C2
   end.
 
+Lemma size_0_End : forall C, size C = 0 -> C = End.
+Proof.
+induction C; simpl; auto; intros; inversion H.
+Qed.
+
 (*
 Lemma fatsemi_size : forall C C', size C + size C' <= size (C;;C').
 Proof.
-induction C. simpl; auto with arith.
+induction C; simpl; auto with arith.
 intros.
 apply le_n_S.
 rewrite <- Nat.add_min_distr_r.
@@ -118,6 +584,7 @@ apply Nat.min_glb.
 Qed.
 *)
 
+(*
 Lemma has_head_action_not_terminated : forall C, has_head_action C -> ~terminated C.
 Proof.
 induction C; intros; simpl; auto.
@@ -226,8 +693,6 @@ Qed.
 
 (*
 
-Lemma Precongr_pn : forall C C', C ~<= C' ->
-  forall p, In p (pn C') -> In p (pn C).
 
 
 
@@ -280,10 +745,6 @@ clear Hn; revert k H4 C s C' s' H5; induction n; intros.
 Qed.
 
 (** Some useful characterizations using size. *)
-Lemma size_0_End : forall C, size C = 0 -> C = End.
-Proof.
-induction C; simpl; auto; intros; inversion H.
-Qed.
 
 Lemma MCTo_End_size : forall C s s', (C,s) ---> (End, s') -> size C = 1.
 Proof.
@@ -313,13 +774,95 @@ End Applications.
 
 Require Import Coq.Program.Equality.
 
+*)
 Section Representation_principles.
+
+Lemma HeadTo_Unfolded : forall X CX C C' C0 s s' H, (C0, s) $ H -H-> (C, s') ->
+  Unfolded X CX C C' -> exists C'' : Choreography,
+  Unfolded X CX C0 C'' /\ (forall H', (C'', s) $ H' -H-> (C', s')).
+Proof.
+intros. revert C H0 C' H1.
+induction C0; intros; try inversion H; try induction e.
++ inversion H0. exists (p#e-->p0; C'); split; auto. constructor; auto.
++ inversion H0. exists (p-->p0[l]; C'); split; auto. constructor; auto.
++ simpl in H0; case_eq (MC_Nat.Value_dec (s p) (s p0)); intros; rewrite H2 in H0; inversion H0.
+  - exists (If p == p0 Then C' Else C0_2); split; auto.
+    * repeat constructor; auto.
+    * simpl; rewrite <- H5, H2; auto.
+  - exists (If p == p0 Then C0_1 Else C'); split; auto.
+    * repeat constructor; auto.
+    * simpl; rewrite <- H5, H2; auto.
++ elim (HeadTo_Def_inv _ _ _ _ _ _ _ H0); intros.
+  rename x into C0; inversion_clear H2.
+  generalize (IHC0_2 _ _ H4); rewrite H3 in H1.
+  clear C H3 H0 IHC0_1 IHC0_2; intros.
+  inversion H1.
+  generalize (H0 _ H8); intros; clear H0.
+  clear H6 C1 H3 CY H2 Y.
+  inversion_clear H9.
+  rename x into C''; inversion_clear H0.
+  exists (Def r == C0_1 In C''); split.
+  - repeat constructor; auto.
+  - intro; simpl in H'; apply HeadTo_Def with H'; auto.
+Qed.
 
 (** Head reductions propagate by precongruence. *)
 Lemma HeadTo_precongr_one : forall {C C' C'' s s' H}, (C,s)$H -H-> (C',s') -> C' ~< C'' ->
   exists C''', C ~< C''' /\ forall H', (C''',s)$H' -H-> (C'',s').
 Proof.
 intros.
+simpl in H; elim (MCP_step_to_weighted_str _ _ H1); clear H1; intro; [idtac | inversion_clear H1].
+(* Asymmetric case *)
++ revert C' H0 C'' H1. induction C; intros; try inversion H; try induction e.
+  - inversion H0. exists (p#e-->p0; C''); split; auto. constructor; apply MCP_asym_to_step; auto.
+  - inversion H0. exists (p-->p0[l]; C''); split; auto. constructor; apply MCP_asym_to_step; auto.
+  - inversion H0. case_eq (MC_Nat.Value_dec (s p) (s p0)); intros; rewrite H2 in H3; inversion H3.
+    * exists (If p == p0 Then C'' Else C2); split; auto.
+      ++ constructor; apply MCP_asym_to_step; auto.
+      ++ simpl; rewrite <- H6, H2; auto.
+    * exists (If p == p0 Then C1 Else C''); split; auto.
+      ++ constructor; apply MCP_asym_to_step; auto.
+      ++ simpl; rewrite <- H6, H2; auto.
+  - elim (HeadTo_Def_inv _ _ _ _ _ _ _ H0); intros C0 HC0; inversion_clear HC0.
+    rewrite H2 in H0, H1; clear H2 C' IHC1.
+    generalize (IHC2 _ _ H3); clear IHC2; intro.
+    inversion H1.
+    * exists (Def r == C1 In C2); split; try constructor.
+      intro; simpl in H; apply HeadTo_Def with H; auto.
+    * clear CX H6 C3 H7 X H4 C'' H1 H2 H5 H0.
+      elim (HeadTo_Unfolded _ _ _ _ _ _ _ _ H3 H8); intros.
+      rename x into C'''; inversion_clear H0.
+      exists (Def r == C1 In C'''); split; auto.
+      ++ constructor; auto.
+      ++ intro; simpl in H'; apply HeadTo_Def with H'; auto.
+    * (* needs garbage collection *)
+      admit.
+    * exists (Def r == C1' In C2); split.
+      ++ constructor; apply MCP_asym_to_step; auto.
+      ++ intro; simpl in H'; apply HeadTo_Def with H'.
+         rewrite <- H3; apply HeadTo_wd.
+    * clear H7 C4 H6 C3 H4 X.
+      elim (H2 _ H8); clear H2 H8; intros.
+      rename x into C'''; inversion_clear H2.
+      exists (Def r == C1 In C'''); split.
+      ++ apply CtxRec; auto.
+      ++ intro; simpl in H'; apply HeadTo_Def with H'; auto.
+
+(* Reflexivity case *)
++ rewrite <- (Congruent_0 _ _ H2).
+  exists C; split.
+  - constructor.
+  - intro; rewrite <- H0; apply HeadTo_wd.
+
+(* Congruence case *)
++ inversion H2.
+elim (Congruent_to_weighted H1); intros.
+  assert (forall n k, k<n -> forall C C' C'' s s' H, (C,s)$H -H-> (C',s') -> C'$k ~<n>~ C'' ->
+    exists C''', C$k ~<n>~ C''' /\ forall H', (C''',s)$H' -H-> (C'',s')); auto.
+  2: { elim (H3 _ _ (lt_n_Sn _) _ _ _ _ _ _ H0 H2); intros.
+       inversion_clear H4; exists x0; split; auto.
+       apply 
+
 revert C H H0.
 dependent induction H1; intros.
 (* EtaEta *)
@@ -682,7 +1225,6 @@ Fixpoint AST_size (C:Choreography) : nat :=
   | If p == q Then C1 Else C2 => 1 + AST_size C1 + AST_size C2
   | Def X == C1 In C2 => 1 + AST_size C1 + AST_size C2
   end.
-
 
 Lemma fatsemi_To_inv : forall C C' s C'' s'', (C;;C',s) ---> (C'',s'') ->
   (exists C0, (C,s) ---> (C0,s'') /\ (C0;;C') ~<= C'')
