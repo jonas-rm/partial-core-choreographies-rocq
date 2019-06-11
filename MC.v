@@ -837,32 +837,16 @@ Section Weighted_Relations.
     In order to do these proofs faithfully, we clone these types with a weight - the
     size of the derivation.
 
-    For precongruence, we also get a canonical representation: any precongruence proof
-    can be split into a sequence of unfoldings, distributions, and garbage collection 
-    followed by reversible rewritings. *)
+    For precongruence, we also get a canonical representation: any precongruence proof can be split into a sequence of unfoldings followed by reversible rewritings and a sequence of garbage collection steps. *)
 
-(** Auxiliary generator for the unfolding part of precongruence. *)
-Inductive Precongr_unfold : Choreography -> Choreography -> Prop :=
+Definition Precongruence := Choreography -> Choreography -> Prop.
+Definition WeightedPrecongruence := nat -> Choreography -> Choreography -> Prop.
+
+Inductive Precongr_unfold : Precongruence :=
 | MCP_Unfold X CX C1 C2 : Unfolded X CX C1 C2 -> Precongr_unfold (Def X == CX In C1) (Def X == CX In C2)
 .
 
-Lemma Precongr_unfold_to_step : forall C1 C2, Precongr_unfold C1 C2 -> C1 ~< C2.
-Proof.
-intros. inversion H; constructor; auto.
-Qed.
-
-(** Auxiliary generator for the garbage collection part of precongruence. *)
-Inductive Precongr_garbage : Choreography -> Choreography -> Prop :=
-| MCP_Garbage X C : Precongr_garbage (Def X == C In End) End
-.
-
-Lemma Precongr_garbage_to_step : forall C1 C2, Precongr_garbage C1 C2 -> C1 ~< C2.
-Proof.
-intros. inversion H; constructor; auto.
-Qed.
-
-(** Auxiliary generator for the swapping and distributing part of precongruence. *)
-Inductive Precongr_sym : Choreography -> Choreography -> Prop :=
+Inductive Precongr_sym : Precongruence :=
 | MCP_EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr_sym (eta1; eta2; C) (eta2; eta1; C)
 | MCP_EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_sym (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
 | MCP_CondEta eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_sym (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
@@ -874,15 +858,127 @@ Inductive Precongr_sym : Choreography -> Choreography -> Prop :=
 | MCP_RecCond p q X CX C1 C2 : Precongr_sym (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
 .
 
+Inductive Precongr_garbage : Precongruence :=
+| MCP_Garbage X C : Precongr_garbage (Def X == C In End) End
+.
+
+Inductive CtxClose (R:Precongruence) : WeightedPrecongruence :=
+| WCtxBase C C' : R C C' -> CtxClose R 0 C C'
+| WCtxEta n eta C1 C2 : CtxClose R n C1 C2 -> CtxClose R (S n) (eta; C1) (eta; C2)
+| WCtxThen n p q C' C'' C : CtxClose R n C' C'' -> CtxClose R (S n) (If p == q Then C' Else C) (If p == q Then C'' Else C)
+| WCtxElse n p q C C' C'' : CtxClose R n C' C'' -> CtxClose R (S n) (If p == q Then C Else C') (If p == q Then C Else C'')
+| WCtxDef n X C1 C1' C2 : CtxClose R n C1 C1' -> CtxClose R (S n) (Def X == C1 In C2) (Def X == C1' In C2)
+| WCtxRec n X C1 C2 C2' : CtxClose R n C2 C2' -> CtxClose R (S n) (Def X == C1 In C2) (Def X == C1 In C2')
+.
+
+Inductive TransClose (R:WeightedPrecongruence) : WeightedPrecongruence :=
+| TBase C : TransClose R 0 C C
+| TStep {n k C} C' {C''} : R n C C' -> TransClose R k C' C'' -> TransClose R (S (n+k)) C C''
+.
+
+Lemma MCP_step_CtxClose : forall (R:Precongruence), (forall C C', R C C' -> C ~< C') ->
+  forall n C C', CtxClose R n C C' -> C ~< C'.
+Proof.
+induction n; intros.
++ inversion H0; auto.
++ inversion H0; try (constructor; auto; fail).
+Qed.
+
+Lemma MCP_CtxClose : forall (R:Precongruence), (forall C C', R C C' -> C ~<= C') ->
+  forall n C C', CtxClose R n C C' -> C ~<= C'.
+Proof.
+induction n; intros; inversion H0; auto.
++ apply CtxEta'; auto.
++ apply CtxThen'; auto.
++ apply CtxElse'; auto.
++ apply CtxDef'; auto.
++ apply CtxRec'; auto.
+Qed.
+
+Lemma MCP_step_TransClose : forall (R:WeightedPrecongruence), (forall n C C', R n C C' -> C ~< C') ->
+  forall n C C', TransClose R n C C' -> C ~<= C'.
+Proof.
+intros R HR.
+assert (forall n k C C', k<n -> TransClose R k C C' -> C ~<= C'); eauto.
+induction n; intros; try (inversion H; fail); inversion H0.
++ constructor.
++ rewrite <- H3 in H; apply lt_S_n in H.
+  apply MCP_Trans with C'0.
+  - apply MCP_step_to; eauto.
+  - apply IHn with k0; auto.
+    apply le_lt_trans with (n0+k0); auto with arith.
+Qed.
+
+Lemma MCP_TransClose : forall (R:WeightedPrecongruence), (forall n C C', R n C C' -> C ~<= C') ->
+  forall n C C', TransClose R n C C' -> C ~<= C'.
+Proof.
+intros R HR.
+assert (forall n k C C', k<n -> TransClose R k C C' -> C ~<= C'); eauto.
+induction n; intros; try (inversion H; fail); inversion H0.
++ constructor.
++ rewrite <- H3 in H; apply lt_S_n in H.
+  apply MCP_Trans with C'0; eauto.
+  apply IHn with k0; auto.
+  apply le_lt_trans with (n0+k0); auto with arith.
+Qed.
+
+Definition UPrecongr_step := CtxClose Precongr_unfold.
+Definition SPrecongr_step := CtxClose Precongr_sym.
+Definition GPrecongr_step := CtxClose Precongr_garbage.
+
+Definition UPrecongr := TransClose UPrecongr_step.
+Definition SPrecongr := TransClose SPrecongr_step.
+Definition GPrecongr := TransClose GPrecongr_step.
+
+Inductive MC_Precongr_weighted : Choreography -> Choreography -> Prop :=
+| PWIntro n1 n2 n3 C1 C2 C3 C4 : UPrecongr n1 C1 C2 -> SPrecongr n2 C2 C3 -> GPrecongr n3 C3 C4 -> MC_Precongr_weighted C1 C4.
+
+End Weighted_Relations.
+
+(** Pretty-printing. *)
+
+Notation "C $ n ~<u C'" := (UPrecongr_step n C C') (at level 50).
+Notation "C $ n ~<>~ C'" := (SPrecongr_step n C C') (at level 50).
+Notation "C $ n g>~ C'" := (GPrecongr_step n C C') (at level 50).
+Notation "C $ n ~<=u C'" := (UPrecongr n C C') (at level 50).
+Notation "C $ n ~<=>~ C'" := (SPrecongr n C C') (at level 50).
+Notation "C $ n g>=~ C'" := (GPrecongr n C C') (at level 50).
+Notation "C ~<=n C'" := (MC_Precongr_weighted C C') (at level 50).
+
+(** We first show that these relations precisely correspond to the unweighted ones. *)
+
+Section Weighted_Reductions.
+
+(** ** Soundness
+       Weighted relations imply non-weighted ones. *)
+
+Lemma Precongr_unfold_to_step : forall C1 C2, Precongr_unfold C1 C2 -> C1 ~< C2.
+Proof.
+intros. inversion H; constructor; auto.
+Qed.
+
 Lemma Precongr_sym_to_step : forall C1 C2, Precongr_sym C1 C2 -> C1 ~< C2.
 Proof.
 intros. inversion H; constructor; auto.
 Qed.
 
-(** Occasionaly we need even finer control of the derivation size. *)
+Lemma Precongr_garbage_to_step : forall C1 C2, Precongr_garbage C1 C2 -> C1 ~< C2.
+Proof.
+intros. inversion H; constructor; auto.
+Qed.
 
-End Weighted_Relations.
+Lemma MCP_to_weighted : forall C C', C ~<=n C' -> C ~<= C'.
+Proof.
+intros.
+inversion H.
+apply MCP_Trans with C2; [idtac | apply MCP_Trans with C3];
+  eapply MCP_step_TransClose; eauto;
+  eapply MCP_step_CtxClose; eauto.
++ exact Precongr_unfold_to_step.
++ exact Precongr_sym_to_step.
++ exact Precongr_garbage_to_step.
+Qed.
 
-(** Pretty-printing. *)
+End Weighted_Reductions.
 
 End MCBase.
