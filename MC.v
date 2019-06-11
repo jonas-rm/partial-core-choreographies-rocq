@@ -841,27 +841,40 @@ Section Weighted_Relations.
     can be split into a sequence of unfoldings and garbage collection followed by
     reversible rewritings. *)
 
-Inductive Precongr_Unfold : Choreography -> Choreography -> Prop :=
-| MCP_Unfold X CX C1 C2 : Unfolded X CX C1 C2 -> Precongr_Unfold (Def X == CX In C1) (Def X == CX In C2)
+Inductive Precongr_unfold : Choreography -> Choreography -> Prop :=
+| MCP_Unfold X CX C1 C2 : Unfolded X CX C1 C2 -> Precongr_unfold (Def X == CX In C1) (Def X == CX In C2)
 .
 
-(* Lemma Precongr_Unfold_to_Precongr : forall C1 C2, Precongr C1 C2,  *)
+Lemma Precongr_unfold_to_step : forall C1 C2, Precongr_unfold C1 C2 -> C1 ~< C2.
+Proof.
+intros. inversion H; constructor; auto.
+Qed.
 
-Inductive Precongr_Garbage : Choreography -> Choreography -> Prop :=
-| MCP_Garbage X C : Precongr_Garbage (Def X == C In End) End
+Inductive Precongr_garbage : Choreography -> Choreography -> Prop :=
+| MCP_Garbage X C : Precongr_garbage (Def X == C In End) End
 .
 
-Inductive Precongr_Sym : Choreography -> Choreography -> Prop :=
-| MCP_EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr_Sym (eta1; eta2; C) (eta2; eta1; C)
-| MCP_EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_Sym (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
-| MCP_CondEta eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_Sym (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
-| MCP_CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Precongr_Sym (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
+Lemma Precongr_garbage_to_step : forall C1 C2, Precongr_garbage C1 C2 -> C1 ~< C2.
+Proof.
+intros. inversion H; constructor; auto.
+Qed.
+
+Inductive Precongr_sym : Choreography -> Choreography -> Prop :=
+| MCP_EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr_sym (eta1; eta2; C) (eta2; eta1; C)
+| MCP_EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_sym (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
+| MCP_CondEta eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_sym (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
+| MCP_CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> Precongr_sym (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
                                                               (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
-| MCP_EtaRec eta X CX C : Precongr_Sym (eta; Def X == CX In C) (Def X == CX In (eta;C))
-| MCP_RecEta eta X CX C : Precongr_Sym (Def X == CX In (eta;C)) (eta; Def X == CX In C)
-| MCP_CondRec p q X CX C1 C2 : Precongr_Sym (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
-| MCP_RecCond p q X CX C1 C2 : Precongr_Sym (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
+| MCP_EtaRec eta X CX C : Precongr_sym (eta; Def X == CX In C) (Def X == CX In (eta;C))
+| MCP_RecEta eta X CX C : Precongr_sym (Def X == CX In (eta;C)) (eta; Def X == CX In C)
+| MCP_CondRec p q X CX C1 C2 : Precongr_sym (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
+| MCP_RecCond p q X CX C1 C2 : Precongr_sym (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
 .
+
+Lemma Precongr_sym_to_step : forall C1 C2, Precongr_sym C1 C2 -> C1 ~< C2.
+Proof.
+intros. inversion H; constructor; auto.
+Qed.
 
 (** Occasionaly we need even finer control of the derivation size. *)
 
