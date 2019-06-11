@@ -837,9 +837,7 @@ Section Weighted_Relations.
     In order to do these proofs faithfully, we clone these types with a weight - the
     size of the derivation.
 
-    For precongruence, we also get a canonical representation: any precongruence proof
-    can be split into a sequence of unfoldings followed by reversible rewritings and a
-    sequence of garbage collection steps. *)
+    For precongruence, we also get a canonical representation: any precongruence proof can be split into a sequence of unfoldings followed by reversible rewritings and a sequence of garbage collection steps. *)
 
 Definition Precongruence := Choreography -> Choreography -> Prop.
 Definition WeightedPrecongruence := nat -> Choreography -> Choreography -> Prop.
