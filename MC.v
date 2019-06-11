@@ -940,11 +940,11 @@ End Weighted_Relations.
 (** Pretty-printing. *)
 
 Notation "C $ n ~<u C'" := (UPrecongr_step n C C') (at level 50).
-Notation "C $ n ~<s C'" := (SPrecongr_step n C C') (at level 50).
-Notation "C $ n ~<g C'" := (GPrecongr_step n C C') (at level 50).
+Notation "C $ n ~<>~ C'" := (SPrecongr_step n C C') (at level 50).
+Notation "C $ n g>~ C'" := (GPrecongr_step n C C') (at level 50).
 Notation "C $ n ~<=u C'" := (UPrecongr n C C') (at level 50).
-Notation "C $ n ~<=s C'" := (SPrecongr n C C') (at level 50).
-Notation "C $ n ~<=g C'" := (GPrecongr n C C') (at level 50).
+Notation "C $ n ~<=>~ C'" := (SPrecongr n C C') (at level 50).
+Notation "C $ n g>=~ C'" := (GPrecongr n C C') (at level 50).
 Notation "C ~<=n C'" := (MC_Precongr_weighted C C') (at level 50).
 
 (** We first show that these relations precisely correspond to the unweighted ones. *)
