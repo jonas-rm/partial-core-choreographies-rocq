@@ -838,9 +838,10 @@ Section Weighted_Relations.
     size of the derivation.
 
     For precongruence, we also get a canonical representation: any precongruence proof
-    can be split into a sequence of unfoldings and garbage collection followed by
-    reversible rewritings. *)
+    can be split into a sequence of unfoldings, distributions, and garbage collection 
+    followed by reversible rewritings. *)
 
+(** Auxiliary generator for the unfolding part of precongruence. *)
 Inductive Precongr_unfold : Choreography -> Choreography -> Prop :=
 | MCP_Unfold X CX C1 C2 : Unfolded X CX C1 C2 -> Precongr_unfold (Def X == CX In C1) (Def X == CX In C2)
 .
@@ -850,6 +851,7 @@ Proof.
 intros. inversion H; constructor; auto.
 Qed.
 
+(** Auxiliary generator for the garbage collection part of precongruence. *)
 Inductive Precongr_garbage : Choreography -> Choreography -> Prop :=
 | MCP_Garbage X C : Precongr_garbage (Def X == C In End) End
 .
@@ -859,6 +861,7 @@ Proof.
 intros. inversion H; constructor; auto.
 Qed.
 
+(** Auxiliary generator for the swapping and distributing part of precongruence. *)
 Inductive Precongr_sym : Choreography -> Choreography -> Prop :=
 | MCP_EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr_sym (eta1; eta2; C) (eta2; eta1; C)
 | MCP_EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_sym (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
