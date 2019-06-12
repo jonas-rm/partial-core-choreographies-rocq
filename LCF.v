@@ -114,6 +114,19 @@ clear n C C' H. induction n; intros; [inversion H | inversion H0].
   constructor; auto.
 Qed.
 
+Lemma TTrans : forall R n1 n2 C C' C'',
+  TransClose R n1 C C' -> TransClose R n2 C' C'' -> TransClose R (n1+n2) C C''.
+Proof.
+intro.
+assert (forall n1 k n2 C C' C'', k<n1 -> TransClose R k C C' -> TransClose R n2 C' C'' -> TransClose R (k+n2) C C''); eauto.
+induction n1; intros; simpl; [inversion H | inversion H0]; auto.
++ clear C''0 H6 C0 H5 H0.
+  rewrite <- H4 in H; clear k H4; apply lt_S_n in H.
+  assert (k0 < n1). apply le_lt_trans with (n+k0); auto with arith.
+  replace (S (n+k0)+n2) with ((S n) + (k0+n2)). 2: ring.
+  apply TStep with C'0; eauto.
+Qed.
+
 Lemma Precongr_garbage_Unfolded_comm : forall n X CX C C' C'', C$n g>~ C' -> Unfolded X CX C' C'' ->
   exists n' C0, Unfolded X CX C C0 /\ C0$n' g>~ C''.
 Proof.
@@ -167,40 +180,8 @@ induction C; intros; inversion H0.
   exists (S n'), (Def r == C1 In C4); split; try constructor; auto.
 Qed.
 
-(*
-Lemma Precongr_garbage_Unfolded_comm' : forall n X CX CX' C C', CX$n g>~ CX' -> Unfolded X CX' C C' ->
-  exists n' C0, Unfolded X CX C C0 /\ C0$n' g>=~ C'.
-Proof.
-intros. revert n X CX CX' C' H H0.
-induction C; intros; inversion H0.
-+ rewrite H2 in H0; rewrite <- H1; clear H2 X H0 H1 C'; rename r into X.
-  exists (S (n+0)), CX; split; try constructor; auto.
-  apply TStep with CX'; auto; constructor.
-+ elim (IHC _ _ _ _ _ H H4); intros.
-  inversion_clear H5.
-  rename x into n'; rename x0 into C0; inversion_clear H6.
-  elim (TCtxEta' e H7); clear n' H7; intros n' Hn'.
-  exists n', (e; C0); split; try constructor; auto.
-+ elim (IHC1 _ _ _ _ _ H H6); intros.
-  inversion_clear H7.
-  rename x into n'; rename x0 into C4; inversion_clear H8.
-  elim (TCtxElse' p p0 C2 H9); clear n' H9; intros n' Hn'.
-  exists n', (If p == p0 Then C4 Else C2); split; try constructor; auto.
-+ elim (IHC2 _ _ _ _ _ H H6); intros.
-  inversion_clear H7.
-  rename x into n'; rename x0 into C4; inversion_clear H8.
-  elim (TCtxThen' p p0 C1 H9); clear n' H9; intros n' Hn'.
-  exists n', (If p == p0 Then C1 Else C4); split; try constructor; auto.
-+ elim (IHC2 _ _ _ _ _ H H6); intros.
-  inversion_clear H7.
-  rename x into n'; rename x0 into C4; inversion_clear H8.
-  elim (TCtxRec' r C1 H9); clear n' H9; intros n' Hn'.
-  exists n', (Def r == C1 In C4); split; try constructor; auto.
-Qed.
-*)
-
 Lemma Precongr_garbage_unfold_comm : forall n1 n2 C C' C'', C$n1 g>~ C' -> C'$n2 ~<u C'' ->
-  exists n1' n2' C0, C$n1' ~<u C0 /\ C0$n2' g>=~ C''.
+  exists n' C0, C$n2 ~<u C0 /\ C0$n' g>=~ C''.
 Proof.
 induction n1; [intros | induction n2]; intros.
 + inversion H. inversion H1.
@@ -215,7 +196,7 @@ induction n1; [intros | induction n2]; intros.
     elim (Precongr_garbage_Unfolded_comm' _ _ _ _ _ _ H5 H2); intros.
     inversion_clear H.
     rename x into n; rename x0 into C3; inversion_clear H1.
-    exists 0, (S (S n) + (S (S n1) + 0)), (Def X == C0 In C3); split.
+    exists (S (S n) + (S (S n1) + 0)), (Def X == C0 In C3); split.
     * repeat constructor; auto.
     * apply TStep with (Def X == C0 In C2). repeat constructor; auto.
       eapply TStep; try constructor; auto.
@@ -223,12 +204,151 @@ induction n1; [intros | induction n2]; intros.
     elim (Precongr_garbage_Unfolded_comm _ _ _ _ _ _ H5 H2); intros.
     inversion_clear H.
     rename x into n; rename x0 into C0; inversion_clear H1.
-    exists 0, (S (S n) + 0), (Def X == CX In C0); split.
+    exists (S (S n) + 0), (Def X == CX In C0); split.
     * repeat constructor; auto.
     * apply TStep with (Def X == CX In C2); constructor; auto.
-+ 
++ revert H; inversion H0; intros; inversion H4.
+  - clear C'' H3 C' H2 n H H0 C3 H9 eta0 H6 n0 H5 C H7 H4.
+    elim (IHn1 _ _ _ _ H8 H1); intros.
+    destroy_as H H'.
+    elim (TCtxEta' eta H); intros.
+    rename x1 into m; rename x0 into C3; clear H.
+    exists m, (eta;C3); split; try constructor; auto.
+  - clear C1 H11 C''1 H10 q0 H9 p0 H6 C H7 H4 n0 H5 C' C'' H0 H2 H3 n H.
+    elim (IHn1 _ _ _ _ H8 H1); intros.
+    destroy_as H H'.
+    elim (TCtxElse' p q C0 H); intros.
+    rename x1 into m; rename x0 into C3; clear H.
+    exists m, (If p == q Then C3 Else C0); split; try constructor; auto.
+  - exists (S (S n1)), (If p == q Then C''0 Else C'1); split; try constructor; auto.
+    apply TCtxThen; auto.
+  - exists (S (S n1)), (If p == q Then C'1 Else C''0); split; try constructor; auto.
+    apply TCtxElse; auto.
+  - clear C1 H11 C''1 H10 q0 H9 p0 H6 C H7 H4 n0 H5 C' C'' H0 H2 H3 n H.
+    elim (IHn1 _ _ _ _ H8 H1); intros.
+    destroy_as H H'.
+    elim (TCtxThen' p q C0 H); intros.
+    rename x1 into m; rename x0 into C3; clear x H.
+    exists m, (If p == q Then C0 Else C3); split; try constructor; auto.
+  - clear C3 H10 C1'0 H9 X0 H6 C H7 n0 H5 C'' C' H2 H3 H0 H4 n H.
+    elim (IHn1 _ _ _ _ H8 H1); intros.
+    destroy_as H H'.
+    elim (TCtxDef' X C2 H); intros.
+    rename x1 into m; rename x0 into C3; clear x H.
+    exists m, (Def X == C3 In C2); split; try constructor; auto.
+  - exists (S (S n1)), (Def X == C1' In C3); split; try constructor; auto.
+    apply TCtxRec; auto.
+  - exists (S (S n1)), (Def X == C0 In C2'); split; try constructor; auto.
+    apply TCtxDef; auto.
+  - clear C2'0 H10 C0 H9 X0 H6 C H7 n0 H5 C'' C' H2 H3 H0 H4 n H.
+    elim (IHn1 _ _ _ _ H8 H1); intros.
+    destroy_as H H'.
+    elim (TCtxRec' X C1 H); intros.
+    rename x1 into m; rename x0 into C0; clear x H.
+    exists m, (Def X == C1 In C0); split; try constructor; auto.
+Qed.
 
-(* WHEEEE *)
+Lemma Precongr_garbage_unfold_comm' : forall n1 n2 C C' C'', C$n1 g>=~ C' -> C'$n2 ~<u C'' ->
+  exists n' C0, C$n2 ~<u C0 /\ C0$n' g>=~ C''.
+Proof.
+assert (forall n1 k n2 C C' C'', k<n1 -> C$k g>=~ C' -> C'$n2 ~<u C'' ->
+  exists n' C0, C$n2 ~<u C0 /\ C0$n' g>=~ C''); eauto.
+induction n1; intros; [inversion H | inversion H0].
++ exists 0, C''; split; auto; constructor.
++ clear C''0 H6 H5 H0.
+  rewrite <- H4 in H; clear k H4; apply lt_S_n in H.
+  assert (k0 < n1). apply le_lt_trans with (n + k0); auto with arith.
+  elim (IHn1 _ _ _ _ _ H0 H3 H1); intros.
+  destroy_as H4 H'.
+  clear H k0 H3 C' H1 H0.
+  elim (Precongr_garbage_unfold_comm _ _ _ _ _ H2 H5); intros.
+  destroy_as H H'.
+  rename x2 into C1; rename x1 into m; rename x0 into C3.
+  exists (m + x), C1; split; auto.
+  apply TTrans with C3; auto.
+Qed.
+
+Lemma Precongr_garbage_unfold_comm_trans : forall n1 n2 C C' C'', C$n1 g>=~ C' -> C'$n2 ~<=u C'' ->
+  exists n' C0, C$n2 ~<=u C0 /\ C0$n' g>=~ C''.
+Proof.
+assert (forall n2 k n1 C C' C'', k<n2 -> C$n1 g>=~ C' -> C'$k ~<=u C'' -> exists n' C0, C$k ~<=u C0 /\ C0$n' g>=~ C''); eauto.
+induction n2; intros; [inversion H | inversion H1]; intros.
++ rewrite <- H4; exists n1, C; split; auto; constructor.
++ clear C''0 H6 C0 H5 H1.
+  rewrite <- H4 in H; clear k H4; apply lt_S_n in H.
+  assert (k0 < n2). apply le_lt_trans with (n+k0); auto with arith.
+  fold UPrecongr in H3.
+  elim (Precongr_garbage_unfold_comm' _ _ _ _ _ H0 H2); intros.
+  destroy_as H4 H'.
+  clear H0 H2. rename x into n0; rename x0 into C0.
+  elim (IHn2 _ _ _ _ _ H1 H4 H3); intros.
+  destroy_as H0 H'.
+  clear H1 H4 H3. rename x into n'; rename x0 into C1.
+  exists n', C1; split; auto.
+  apply TStep with C0; auto.
+Qed.
+
+Lemma MCP_step_to_weighted_str : forall C C', C ~< C' ->
+  C=C' \/ (exists n, C$n ~<u C') \/ (exists n, C$n ~<>~ C') \/ (exists n, C$n g>~ C').
+Proof.
+intros; induction H;
+  auto;
+  try (right; left; exists 0; constructor; constructor; auto; fail);
+  try (right; right; left; exists 0; constructor; constructor; auto; fail);
+  try (right; right; right; exists 0; constructor; constructor; auto; fail);
+  (elim IHMC_Precongr_step; intro H';
+    [ rewrite H'; auto|
+      elim H'; clear H'; intro H'; [right; left |
+      elim H'; clear H'; intro H'; [right; right; left | right; right; right]]]);
+  elim H'; clear H'; intros n Hn;
+  exists (S n); constructor; auto.
+Qed.
+
+Parameter R R':WeightedPrecongruence.
+Hypothesis RR'_comm : (forall n1 n2 C C' C'', R n1 C C' -> R' n2 C' C'' -> exists C0, R' n2 C C0 /\ R n1 C0 C'').
+
+Lemma TransClose_comm' : forall n1 n2 C C' C'', TransClose R n1 C C' -> R' n2 C' C'' ->
+  exists C0, R' n2 C C0 /\ TransClose R n1 C0 C''.
+Proof.
+set (RT := TransClose R).
+assert (forall n1 k n2 C C' C'', k<n1 -> RT k C C' -> R' n2 C' C'' -> exists C0, R' n2 C C0 /\ RT k C0 C''); eauto.
+induction n1; intros; [inversion H | inversion H0].
++ exists C''; split; auto; constructor.
++ clear C''0 H6 H5 H0.
+  rewrite <- H4 in H; clear k H4; apply lt_S_n in H.
+  assert (k0 < n1). apply le_lt_trans with (n + k0); auto with arith.
+  elim (IHn1 _ _ _ _ _ H0 H3 H1); intros.
+  destroy_as H4 H'.
+  clear H H3 C' H1 H0.
+  elim (RR'_comm _ _ _ _ _ H2 H5); intros.
+  destroy_as H H'.
+  rename x into C1; rename x0 into C3.
+  exists C3; split; auto.
+  change (RT (S n + k0) C3 C''). apply TTrans with C1; auto.
+  replace (S n) with (S n + 0); auto with arith.
+  apply TStep with C1; auto. constructor.
+Qed.
+
+Lemma TransClose_comm : forall n1 n2 C C' C'', TransClose R n1 C C' -> TransClose R' n2 C' C'' ->
+  exists C0, TransClose R' n2 C C0 /\ TransClose R n1 C0 C''.
+Proof.
+set (RT := TransClose R); set (RT' := TransClose R').
+assert (forall n2 k n1 C C' C'', k<n2 -> RT n1 C C' -> RT' k C' C'' -> exists C0, RT' k C C0 /\ RT n1 C0 C''); eauto.
+induction n2; intros; [inversion H | inversion H1]; intros.
++ rewrite <- H4; exists C; split; auto; constructor.
++ clear C''0 H6 C0 H5 H1.
+  rewrite <- H4 in H; clear k H4; apply lt_S_n in H.
+  assert (k0 < n2). apply le_lt_trans with (n+k0); auto with arith.
+  fold UPrecongr in H3.
+  elim (TransClose_comm' _ _ _ _ _ H0 H2); intros.
+  destroy_as H4 H'.
+  clear H0 H2. rename x into C0.
+  elim (IHn2 _ _ _ _ _ H1 H4 H3); intros.
+  destroy_as H0 H'.
+  clear H1 H4 H3. rename x into C1.
+  exists C1; split; auto.
+  apply TStep with C0; auto.
+Qed.
 
 End to_be_moved.
 
@@ -372,27 +492,6 @@ intros; induction H0; auto; try inversion H;
   rewrite IHCongruent_weighted'; auto.
 Qed.
 
-Lemma MCP_step_to_weighted_str : forall C C', C ~< C' -> C ~<a C' \/ C$0 ~<n>~ C' \/ C$1 ~<n>~ C'.
-Proof.
-intros; induction H; try inversion IHMC_Precongr_step.
-+ right; left; apply CWRefl; auto.
-+ right; right; apply CWEtaEta; auto.
-+ right; right; apply CWEtaCond; auto.
-+ right; right; apply CWCondEta; auto.
-+ right; right; apply CWCondCond; auto.
-+ left; apply AUnfold; auto.
-+ left; apply AGarbage; auto.
-+ left; apply ACtxEta; auto.
-+ right; inversion_clear H0; [left | right]; apply CWCtxEta; auto.
-+ left; apply ACtxThen; auto.
-+ right; inversion_clear H0; [left | right]; apply CWCtxThen; auto.
-+ left; apply ACtxElse; auto.
-+ right; inversion_clear H0; [left | right]; apply CWCtxElse; auto.
-+ left; apply ACtxDef; auto.
-+ right; inversion_clear H0; [left | right]; apply CWCtxDef; auto.
-+ left; apply ACtxRec; auto.
-+ right; inversion_clear H0; [left | right]; apply CWCtxRec; auto.
-Qed.
 
 Lemma MCToStar_weighted_to : forall n {c c'}, MCToStar_weighted n c c' -> c --->* c'.
 Proof.
