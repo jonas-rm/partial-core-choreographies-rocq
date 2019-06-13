@@ -827,6 +827,339 @@ Qed.
 
 End Semantics_Props.
 
+Section Applications.
+
+(** We now can prove some more results by induction on canonical proofs
+    of precongruence or reduction. *)
+
+(** Properties of termination. *)
+
+Lemma MCP_step_not_terminated : forall C C', ~terminated C -> C ~< C' -> ~terminated C'.
+Proof.
+intros; intro.
+apply H.
+apply MCP_Step with C'; auto.
+Qed.
+
+Lemma MCP_not_terminated : forall C C', ~terminated C -> C ~<= C' -> ~terminated C'.
+Proof.
+intros; intro.
+apply H.
+apply MCP_Trans with C'; auto.
+Qed.
+
+Lemma Unfolded_head_action : forall C, has_head_action C ->
+  forall X CX C', Unfolded X CX C C' -> has_head_action C'.
+Proof.
+intros; induction H0; auto.
+inversion H.
+Qed.
+
+Lemma MCP_step_head_action : forall C, has_head_action C ->
+  forall C', C ~< C' -> has_head_action C'.
+Proof.
+intros; induction H0; auto.
+simpl; simpl in H.
+eapply Unfolded_head_action; eauto.
+Qed.
+
+Lemma MCP_head_action : forall C, has_head_action C ->
+  forall C', C ~<= C' -> has_head_action C'.
+Proof.
+intros.
+induction H0; auto.
+apply IHMC_Precongr; eapply MCP_step_head_action; eauto.
+Qed.
+
+Lemma eta_not_terminated : forall eta C, ~terminated (eta; C).
+Proof.
+intros; intro.
+apply MCP_head_action in H; simpl; auto.
+Qed.
+
+Lemma cond_not_terminated : forall p q C1 C2, ~terminated (If p == q Then C1 Else C2).
+Proof.
+intros; intro.
+apply MCP_head_action in H; simpl; auto.
+Qed.
+
+Lemma terminated_Def : forall X C1 C2, terminated C2 -> terminated (Def X == C1 In C2).
+Proof.
+intros.
+eapply MCP_Trans.
+2: apply MCP_step_to; apply Garbage.
+apply CtxRec'; auto.
+Qed.
+
+End Applications.
+
+(** * Deadlock-freedom-by-design
+
+  We now prove Theorem 1: every non-terminated choreography can reduce. *)
+
+Section Progress.
+
+(** We start with useful characterizations of being guarded and being a pure call. *)
+
+Lemma guarded_char : forall C, guarded C -> C ~<= End \/ has_head_action C.
+Proof.
+induction C; intros; auto.
++ left; constructor.
++ inversion_clear H.
+  elim IHC2; intros; auto.
+  left; apply terminated_Def; auto.
+Qed.
+
+Lemma pure_call_char : forall C, ~terminated C -> ~has_head_action C -> pure_call C.
+Proof.
+induction C; simpl; auto; intros.
++ contradiction H; constructor.
++ apply IHC2; auto.
+  intro; contradiction H.
+  apply terminated_Def; auto.
+Qed.
+
+(** The idea of the proof is: if C is not terminated, then we can always apply
+    a reduction rule, eventually by unfolding some procedure definition.
+    To take care of this case, we need to be able to unfold a procedure call within the
+    context of the choreography (relation Ctx_Unfolded below). *)
+
+(** A specialization of the remove function from the standard library. *)
+
+Fixpoint remove_Def (X:RecVar) (l:list (RecVar*Choreography)) : list (RecVar*Choreography) :=
+match l with
+| nil => nil
+| (Y,CY) :: l' => if RecVar_dec X Y then remove_Def Y l' else (Y,CY) :: remove_Def X l'
+end.
+
+Definition add_or_replace (X:RecVar) (CX:Choreography) l := (X,CX) :: remove_Def X l.
+
+Inductive Ctx_Unfolded : list (RecVar*Choreography) -> Choreography -> Choreography -> Prop :=
+| Ctx_Unfold X CX l : List.In (X,CX) l -> Ctx_Unfolded l (Call X) CX
+| Ctx_Eta eta C C' l : Ctx_Unfolded l C C' -> Ctx_Unfolded l (eta;C) (eta;C')
+| Ctx_Then p q C C' CE l : Ctx_Unfolded l C C' -> Ctx_Unfolded l (If p == q Then C Else CE) (If p == q Then C' Else CE)
+| Ctx_Else p q CT C C' l : Ctx_Unfolded l C C' -> Ctx_Unfolded l (If p == q Then CT Else C) (If p == q Then CT Else C')
+| Ctx_Rec X CX C C' l : Ctx_Unfolded (add_or_replace X CX l) C C' -> Ctx_Unfolded l (Def X == CX In C) (Def X == CX In C')
+.
+
+(** Membership characterizations for these list functions. *)
+
+Lemma remove_Def_not_in : forall X CX l, ~List.In (X,CX) (remove_Def X l).
+Proof.
+induction l; simpl; auto.
+induction a.
+case_eq (RecVar_dec X a); intros; intro; contradiction IHl.
+- rewrite Rdec.eqb_eq in H; rewrite <- H in H0; auto.
+- inversion_clear H0; auto.
+  revert H; inversion H1; rewrite Rdec.eqb_refl.
+  intro; inversion H.
+Qed.
+
+Lemma remove_Def_in : forall X Y CY l, X <> Y -> List.In (Y,CY) l -> List.In (Y,CY) (remove_Def X l).
+Proof.
+induction l; simpl; auto; intros.
+induction a.
+case_eq (RecVar_dec X a); intros.
+- rewrite Rdec.eqb_eq in H1.
+  rewrite <- H1; apply IHl; auto.
+  inversion_clear H0; auto.
+  contradiction H; inversion H2.
+  transitivity a; auto.
+- simpl; inversion_clear H0; auto.
+Qed.
+
+Lemma in_remove_Def : forall X Y CY l, List.In (Y,CY) (remove_Def X l) -> List.In (Y,CY) l.
+Proof.
+induction l; simpl; auto.
+induction a.
+case_eq (RecVar_dec X a); intros.
+- right; apply IHl.
+  rewrite Rdec.eqb_eq in H; rewrite <- H in H0; auto.
+- inversion_clear H0; auto.
+Qed.
+
+Lemma remove_Def_neq : forall X Y CY l, List.In (Y,CY) (remove_Def X l) -> X <> Y.
+Proof.
+induction l; simpl; auto.
+induction a.
+case_eq (RecVar_dec X a); intros.
+- apply IHl.
+  rewrite Rdec.eqb_eq in H; rewrite <- H in H0; auto.
+- inversion_clear H0; auto.
+  rewrite Rdec.eqb_neq in H; revert H; inversion H1; auto.
+Qed.
+
+Lemma in_add_or_replace : forall l X CX Y CY,
+  List.In (X,CX) (add_or_replace Y CY l) <-> (X = Y /\ CX = CY) \/ (X <> Y /\ List.In (X,CX) l).
+Proof.
+simpl; split; intros; inversion_clear H.
+- inversion H0; auto.
+- right; split.
+  + intro; symmetry in H; revert H.
+    eapply remove_Def_neq; eauto.
+  + eapply in_remove_Def; eauto.
+- inversion H0.
+  rewrite H; rewrite H1; auto.
+- inversion_clear H0; right; apply remove_Def_in; auto.
+Qed.
+
+(** Unlike regular unfolding, contextual unfolding is guaranteed to return something
+    precongruent to the original choreography. *)
+
+Lemma MCP_step_Ctx_Unfolded : forall C C', Ctx_Unfolded nil C C' -> C ~< C'.
+Proof.
+assert (forall C C' l, Ctx_Unfolded l C C' ->
+  C ~< C' \/ exists X CX, List.In (X,CX) l /\ Unfolded X CX C C').
+2: { intros.
+     elim (H C C' nil); intros; auto.
+     destroy_as H1 H'; inversion H2.
+   }
+induction C; intros; inversion H.
++ right.
+  exists r, C'; split; auto; constructor.
++ clear l0 eta C0 H1 H0 H3; rename C'0 into C0.
+  elim (IHC _ _ H4); intros.
+  - left; constructor; auto.
+  - right; destroy_as H0 H'.
+    exists x, x0; split; try constructor; auto.
++ clear l0 p1 q C CE H1 H0 H3 H4 H5.
+  elim (IHC1 _ _ H6); intros.
+  - left; constructor; auto.
+  - right; destroy_as H0 H'.
+    exists x, x0; split; try constructor; auto.
++ clear l0 p1 q C CT H1 H0 H3 H4 H5.
+  elim (IHC2 _ _ H6); intros.
+  - left; constructor; auto.
+  - right; destroy_as H0 H'.
+    exists x, x0; split; try constructor; auto.
++ clear l0 X CX C H1 H0 H3 H4.
+  elim (IHC2 _ _ H5); intros.
+  - left; apply CtxRec; auto.
+  - destroy_as H0 H'.
+    elim (in_add_or_replace l x x0 r C1); intros.
+    clear H4; elim H3; auto; clear H3 H1; intros.
+    * left; constructor.
+      inversion_clear H1.
+      rewrite <- H3, <- H4; auto.
+    * right; inversion_clear H1; exists x, x0; split; try constructor; auto.
+Qed.
+
+Lemma MCP_Ctx_Unfolded : forall C C', Ctx_Unfolded nil C C' -> C ~<= C'.
+Proof.
+intros.
+apply MCP_step_to.
+apply MCP_step_Ctx_Unfolded; auto.
+Qed.
+
+(** Furthermore, it is not a pure function call. *)
+
+Lemma Ctx_Unfolded_guarded : forall C C' l,
+  (forall X CX, List.In (X,CX) l -> guarded CX) ->
+  Ctx_Unfolded l C C' -> WellFormed_ctx C (map fst l) -> guarded C'.
+Proof.
+induction C; intros; inversion H0; simpl; eauto.
+clear C H6 CX H5 X H2 l0 H3.
+rename C'0 into C0.
+destroy_as H1 H'; split; auto.
+apply IHC2 with (add_or_replace r C1 l); auto.
++ intros.
+  inversion_clear H5.
+  - inversion H6.
+    rewrite <- H9; auto.
+  - apply H with X.
+    apply in_remove_Def with r; auto.
++ apply WellFormed_ctx_mon with (r:: map fst l); auto.
+  simpl; intros.
+  inversion_clear H5; auto.
+  rewrite in_map_iff in H6.
+  destroy H6; induction x.
+  elim (R.eq_dec r X); auto.
+  right; replace X with (fst (a,b)).
+  apply in_map; apply remove_Def_in; auto.
+  simpl in H5; rewrite H5; auto.
+Qed.
+
+Lemma Ctx_Unfolded_has_head : forall C C',
+  Ctx_Unfolded nil C C' -> WellFormed C -> ~terminated C -> has_head_action C'.
+Proof.
+intros.
+generalize (MCP_Ctx_Unfolded _ _ H); intro.
+assert (forall (X:RecVar) CX, List.In (X,CX) nil -> guarded CX).
+1: intros; inversion H3.
+generalize (Ctx_Unfolded_guarded _ _ _ H3 H H0); intro.
+assert (~terminated C').
+1: intro; apply H1; apply MCP_Trans with C'; auto.
+induction C'; auto.
+1: inversion H; inversion H6.
+inversion H.
+1: inversion H6.
+clear H11 C'; rename C'2 into C'.
+rewrite H10 in H8; clear H10 CX; rename C'1 into CX.
+rewrite H6 in H8; clear H6 X; rename r into X.
+clear H7 l.
+unfold add_or_replace in H9; simpl in H9.
+inversion_clear H4.
+elim (guarded_char _ H7); intros; auto.
+contradiction H5.
+apply terminated_Def; auto.
+Qed.
+
+Lemma pure_call_Ctx_Unfolded : forall C, pure_call C -> WellFormed C ->
+  exists C', Ctx_Unfolded nil C C'.
+Proof.
+assert (forall C l, pure_call C -> WellFormed_ctx C (map fst l) -> exists C', Ctx_Unfolded l C C'); auto.
+induction C; simpl; intros; try inversion H.
++ rewrite in_map_iff in H0; destroy_as H0 H'.
+  induction x.
+  exists b; constructor.
+  simpl in H1; rewrite <- H1; auto.
++ destroy_as H0 H'.
+  elim IHC2 with (add_or_replace r C1 l); auto.
+  - intros; exists (Def r == C1 In x); constructor; auto.
+  - apply WellFormed_ctx_mon with (r :: map fst l); auto.
+    clear H0 H2 H1 H IHC1 IHC2 C2.
+    simpl; intros.
+    inversion_clear H; auto.
+    elim (R.eq_dec r X); auto.
+    rewrite in_map_iff in H0; destroy H0.
+    induction x.
+    rewrite <- H; right.
+    apply in_map; apply remove_Def_in; auto.
+Qed.
+
+(** Now we can prove that any non-terminated choreography is precongruent
+    to a choreography with head action, which has a head reduction. *)
+
+Lemma not_terminated_has_head_action : forall C, ~terminated C ->
+  WellFormed C -> exists C', has_head_action C' /\ C ~<= C'.
+Proof.
+intros.
+elim (has_head_action_dec C); intro.
++ exists C; split; auto; constructor.
++ elim (pure_call_Ctx_Unfolded C); auto.
+  2: apply pure_call_char; auto.
+  intro C'; intros.
+  exists C'; split; auto.
+  - apply Ctx_Unfolded_has_head with C; auto.
+  - apply MCP_Ctx_Unfolded; auto.
+Qed.
+
+Theorem progress : forall C s, ~(terminated C) -> WellFormed C -> exists c', (C,s) ---> c'.
+Proof.
+intros.
+elim (not_terminated_has_head_action C); auto.
+intros C' HC'; destroy HC'.
+set (c := HeadTo (C',s) H1).
+assert (c = HeadTo (C',s) H1); auto; clearbody c.
+exists c; induction c.
+rename a into C''; rename b into s'.
+apply C_Struct with C' C''; auto.
++ constructor.
++ rewrite H2; apply HeadTo_Soundness.
+Qed.
+
+End Progress.
+
 (** *  Weighted Relations *)
 
 Section Weighted_Relations.
@@ -1180,7 +1513,7 @@ End Transitivity.
 
 (** Unfolding can be pushed before garbage collection.
     Note that one unfolding following a garbage collection possibly switches into an unfolding
-    followed by <i>two</i> garbage collection steps. *)
+    followed by two garbage collection steps. *)
 
 Lemma Precongr_garbage_Unfolded_comm : forall n X CX C C' C'', C$n g>~ C' -> Unfolded X CX C' C'' ->
   exists n' C0, Unfolded X CX C C0 /\ C0$n' g>~ C''.
@@ -1342,7 +1675,6 @@ induction n2; intros; [inversion H | inversion H1]; intros.
   exists n', C1; split; auto.
   apply TStep with C0; auto.
 Qed.
-
 
 End Weighted_Reductions.
 

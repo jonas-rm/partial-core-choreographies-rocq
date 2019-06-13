@@ -3,9 +3,597 @@ Require Export Implementation.
 Import MC_Nat.
 Import St.
 
+Section yet_another_test.
+
+Inductive WMC_Precongr_step : WeightedPrecongruence :=
+ | WPB_Refl C : WMC_Precongr_step 0 C C
+ | WEtaEta eta1 eta2 C : independent eta1 eta2 -> WMC_Precongr_step 1 (eta1; eta2; C) (eta2; eta1; C)
+ | WEtaCond eta p q C1 C2 : unused p eta -> unused q eta -> WMC_Precongr_step 1 (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
+ | WCondEta eta p q C1 C2 : unused p eta -> unused q eta -> WMC_Precongr_step 1 (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
+ | WCondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> WMC_Precongr_step 1 (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
+                                                               (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
+ | WEtaRec eta X CX C : WMC_Precongr_step 1 (eta; Def X == CX In C) (Def X == CX In (eta;C))
+ | WRecEta eta X CX C : WMC_Precongr_step 1 (Def X == CX In (eta;C)) (eta; Def X == CX In C)
+ | WCondRec p q X CX C1 C2 : WMC_Precongr_step 1 (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
+ | WRecCond p q X CX C1 C2 : WMC_Precongr_step 1 (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
+ | WUnfold X CX C1 C2 : Unfolded X CX C1 C2 -> WMC_Precongr_step 1 (Def X == CX In C1) (Def X == CX In C2)
+ | WGarbage X C : WMC_Precongr_step 1 (Def X == C In End) End
+ | WCtxEta n eta C1 C2 : WMC_Precongr_step n C1 C2 -> WMC_Precongr_step (S n) (eta; C1) (eta; C2)
+ | WCtxThen n p q C' C'' C : WMC_Precongr_step n C' C'' -> WMC_Precongr_step (S n) (If p == q Then C' Else C) (If p == q Then C'' Else C)
+ | WCtxElse n p q C C' C'' : WMC_Precongr_step n C' C'' -> WMC_Precongr_step (S n) (If p == q Then C Else C') (If p == q Then C Else C'')
+ | WCtxDef n X C1 C1' C2 : WMC_Precongr_step n C1 C1' -> WMC_Precongr_step (S n) (Def X == C1 In C2) (Def X == C1' In C2)
+ | WCtxRec n X C1 C2 C2' : WMC_Precongr_step n C2 C2' -> WMC_Precongr_step (S n) (Def X == C1 In C2) (Def X == C1 In C2')
+.
+
+Inductive WMC_Precongr : WeightedPrecongruence :=
+ | WMCP_Refl C : WMC_Precongr 0 C C
+ | WMCP_Step n k C1 C2 C3: WMC_Precongr_step n C1 C2 -> WMC_Precongr k C2 C3 -> WMC_Precongr (S (n+k)) C1 C3
+.
+
+Inductive WMCTo : WeightedRelation Configuration :=
+ | WC_Com p e q C s : WMCTo 1 ( Com p e q; C, s ) ( C, (update s q (evaluate_on_state e s p)) )
+ | WC_Sel p q l C s : WMCTo 1 ( Sel p q l; C, s ) ( C, s )
+ | WC_Then p q C1 C2 s : (s p = s q) -> WMCTo 1 ( If p == q Then C1 Else C2, s ) ( C1, s )
+ | WC_Else p q C1 C2 s : (s p <> s q) -> WMCTo 1 ( If p == q Then C1 Else C2, s ) ( C2, s )
+ | WC_Ctx n X C1 C2 C2' s s' : WMCTo n (C2,s) (C2',s') -> WMCTo (S n) ( Def X == C1 In C2,s ) ( Def X == C1 In C2',s')
+ | WC_Struct k n m C1 C1' C2 C2' s1 s2 : WMC_Precongr k C1 C1' -> WMC_Precongr n C2' C2 -> WMCTo m (C1', s1) (C2', s2) -> WMCTo (S (k+n+m)) (C1, s1) (C2, s2)
+.
+
+Inductive WMCToStar : WeightedRelation Configuration :=
+ | WMCT_Refl c : WMCToStar 0 c c
+ | WMCT_Step n k c1 c2 c3 : WMCTo n c1 c2 -> WMCToStar k c2 c3 -> WMCToStar (S (n+k)) c1 c3
+.
+
+Notation "C $ n ~<n C'" := (WMC_Precongr_step n C C') (at level 50).
+Notation "C $ n ~<=n C'" := (WMC_Precongr n C C') (at level 50).
+Notation "c $ n -n-> c'" := (WMCTo n c c') (at level 50).
+Notation "c $ n -n->* c'" := (WMCToStar n c c') (at level 50).
+
+Lemma MCP_step_weighted_to : forall n {C C'}, C$n ~<n C' -> C ~< C'.
+Proof.
+intros.
+induction H; try (constructor; auto; fail).
+Qed.
+
+Lemma MCP_step_to_weighted : forall {C C'}, C ~< C' -> exists n, C$n ~<n C'.
+Proof.
+intros.
+induction H; try inversion_clear IHMC_Precongr_step; try (eexists; constructor; eauto; fail).
+Qed.
+
+Lemma MCP_weighted_to : forall n {C C'}, WMC_Precongr n C C' -> C ~<= C'.
+Proof.
+intros.
+induction H; econstructor; eauto.
+eapply MCP_step_weighted_to; eauto.
+Qed.
+
+Lemma MCP_to_weighted : forall {C C'}, C ~<= C' -> exists n, WMC_Precongr n C C'.
+Proof.
+intros.
+induction H.
++ eexists; constructor; auto.
++ inversion_clear IHMC_Precongr; elim (MCP_step_to_weighted H); intros.
+  try (eexists; econstructor; eauto).
+Qed.
+
+Lemma MCTo_weighted_to : forall n {c c'}, c$n -n-> c' -> c ---> c'.
+Proof.
+intros.
+induction H; try (constructor; auto; fail).
+generalize (MCP_weighted_to _ H); intros.
+generalize (MCP_weighted_to _ H0); intros.
+econstructor; eauto.
+Qed.
+
+Lemma MCTo_to_weighted : forall {c c'}, c ---> c' -> exists n, c$n -n-> c'.
+Proof.
+intros.
+induction H; try inversion_clear IHMCTo; try (eexists; constructor; eauto; fail).
+elim (MCP_to_weighted H); intros.
+elim (MCP_to_weighted H0); intros.
+eexists; econstructor; eauto.
+Qed.
+
+Lemma MCToStar_weighted_to : forall n {c c'}, c$n -n->* c' -> c --->* c'.
+Proof.
+intros.
+induction H; econstructor; eauto.
+eapply MCTo_weighted_to; eauto.
+Qed.
+
+Lemma MCToStar_to_weighted : forall {c c'}, c --->* c' -> exists n, c$n -n->* c'.
+Proof.
+intros.
+induction H.
++ eexists; constructor; auto.
++ inversion_clear IHMCToStar; elim (MCTo_to_weighted H); intros.
+  try (eexists; econstructor; eauto).
+Qed.
+
+End yet_another_test.
+
+Notation "C $ n ~<n C'" := (WMC_Precongr_step n C C') (at level 50).
+Notation "C $ n ~<=n C'" := (WMC_Precongr n C C') (at level 50).
+Notation "c $ n -n-> c'" := (WMCTo n c c') (at level 50).
+Notation "c $ n -n->* c'" := (WMCToStar n c c') (at level 50).
+
+
+Lemma Call_not_terminated : forall X, ~terminated (Call X).
+Proof.
+intros; intro.
+elim (MCP_to_weighted H); intros n Hn.
+clear H. revert n Hn.
+assert (forall n k, k<n -> WMC_Precongr k (Call X) End -> False); eauto.
+induction n; intros; [inversion H | inversion H0; clear H0].
+inversion H1; clear H1.
+rewrite <- H7 in H2.
+rewrite <- H3 in H; apply lt_S_n in H.
+assert (k0 < n). apply le_lt_trans with (n0+k0); auto with arith.
+eauto.
+Qed.
+
+(** Reductions preserve well-formedness. *)
+
+Lemma MCTo_wf : forall C, WellFormed C -> forall s C' s',
+  (C,s) ---> (C',s') -> WellFormed C'.
+Proof.
+intros.
+elim (MCTo_to_weighted H0); intros n Hn; clear H0.
+revert C H s C' s' Hn.
+assert (forall k, k <= n -> forall C s C' s', (C,s)$k -n-> (C',s') -> forall l, WellFormed_ctx C l -> WellFormed_ctx C' l); intros.
+2: apply H with n C s s'; auto.
+revert k H C s C' s' H0 l H1.
+induction n; intros; [inversion H | case_eq k; intros]; rewrite H2 in H0; inversion H0.
+- rewrite <- H7. rewrite <- H5 in H1. inversion H1. auto.
+- rewrite <- H7. rewrite <- H5 in H1. inversion H1. auto.
+- rewrite <- H7. rewrite <- H4 in H1. destroy_as H1 H'. auto.
+- rewrite <- H7. rewrite <- H4 in H1. destroy_as H1 H'. auto.
+- rewrite <- H4 in H1. destroy_as H1 H'.
+  repeat split; auto.
+  rewrite H2 in H. apply le_S_n in H. eauto.
+- rewrite H2 in H; apply le_S_n in H; clear H2 k.
+  clear s2 C2 s1 C2 H7 H6 H5 H4.
+  apply MCP_wf_ctx with C2'.
+  2: eapply MCP_weighted_to; eauto.
+  apply IHn with m C1' s s'; auto.
+  1: transitivity n0; auto; rewrite <- H3; auto with arith.
+  apply MCP_wf_ctx with C; auto.
+  eapply MCP_weighted_to; eauto.
+Qed.
+
+
 Section to_be_moved.
 
+Lemma Precongr_sym_sym : forall C C', Precongr_sym C C' -> Precongr_sym C' C.
+Proof.
+intros; induction H; constructor; auto.
++ apply independent_sym; auto.
++ apply disjoint_sym; auto.
+Qed.
 
+Lemma Congruent_sym : forall n C C', C$n ~<>~ C' -> C'$n ~<>~ C.
+Proof.
+intros; induction H; constructor; auto.
+apply Precongr_sym_sym; auto.
+Qed.
+
+Lemma MCP_step_Congruent_ctx : forall C C' l, WellFormed_ctx C l ->
+  C ~< C' -> C' ~< C -> exists n, C$n ~<=>~ C'.
+Proof.
+intros.
+revert l H; induction H0; intros; try (eexists; eapply TStep; [do 2 constructor | apply TBase]; auto; fail).
++ eexists; constructor.
++ inversion H1; try (eexists; constructor; eauto; fail).
+  - rewrite (Unfolded_antisym _ _ _ _ _ H H3); eexists; constructor; eauto.
+  - destroy_as H0 H'.
+    rewrite (MCP_step_Unfold_ctx _ _ _ _ H H3 _ H0); eexists; constructor; eauto.
++ inversion H1.
++ inversion H1; try (eexists; constructor; eauto; fail).
+  elim IHMC_Precongr_step with l; auto.
+  2: induction eta; inversion H; auto.
+  intros; eapply TCtxEta'; eauto.
++ inversion H1; try (eexists; constructor; eauto; fail).
+  inversion H. inversion_clear H9.
+  elim IHMC_Precongr_step with l; auto.
+  intros; eapply TCtxElse'; eauto.
++ inversion H1; try (eexists; constructor; eauto; fail).
+  inversion H. inversion_clear H9.
+  elim IHMC_Precongr_step with l; auto.
+  intros; eapply TCtxThen'; eauto.
++ inversion H1; try (eexists; constructor; eauto; fail).
+  inversion H. inversion_clear H8.
+  elim IHMC_Precongr_step with (X :: l); auto.
+  intros; eapply TCtxDef'; eauto.
++ inversion H1; try (eexists; constructor; eauto; fail).
+  - destroy_as H H'.
+    generalize (MCP_step_wf_ctx _ _ _ H H0); intro.
+    rewrite (MCP_step_Unfold_ctx _ _ _ _ H3 H0 _ H9); eexists; constructor; eauto.
+  - inversion H. inversion_clear H8.
+    elim IHMC_Precongr_step with (X :: l); auto.
+    intros; eapply TCtxRec'; eauto.
+Qed.
+
+Lemma Precongr_sym_Unfolded_comm : forall n X CX C C' C'', C$n ~<>~ C' -> Unfolded X CX C' C'' ->
+  exists n' C0, Unfolded X CX C C0 /\ C0$n' ~<>~ C''.
+Proof.
+induction n; intros.
++ revert H0. inversion H. inversion H0; intros.
+  - inversion H6. inversion H10.
+    eexists; eexists; split; [repeat constructor | constructor; apply MCP_EtaEta]; auto.
+  - inversion H7; inversion H13;
+      (eexists; eexists; split; [repeat constructor | constructor; apply MCP_EtaCond]; auto).
+  - inversion H7. inversion H11;
+      (eexists; eexists; split; [repeat constructor | constructor; apply MCP_CondEta]; auto).
+  - inversion H6; inversion H12;
+      (eexists; eexists; split; [repeat constructor | constructor; apply MCP_CondCond]; auto).
+  - inversion H5. inversion H11.
+    eexists; eexists; split; [repeat constructor | constructor; apply MCP_EtaRec]; auto.
+  - inversion H5. inversion H9.
+    eexists; eexists; split; [repeat constructor | constructor; apply MCP_RecEta]; auto.
+  - inversion H5. inversion H11;
+      (eexists; eexists; split; [repeat constructor | constructor; apply MCP_CondRec]; auto).
+  - inversion H5; inversion H11;
+      (eexists; eexists; split; [repeat constructor | constructor; apply MCP_RecCond]; auto).
++ revert H0. inversion H; intro; inversion H4.
+  - elim (IHn _ _ _ _ _ H1 H8); intros.
+    inversion_clear H9.
+    rename x into n'; rename x0 into C4; inversion_clear H10.
+    exists (S n'), (eta;C4); split; constructor; auto.
+  - elim (IHn _ _ _ _ _ H1 H10); intros.
+    inversion_clear H11.
+    rename x into n'; rename x0 into C4; inversion_clear H12.
+    exists (S n'), (If p == q Then C4 Else C0); split; constructor; auto.
+  - exists (S n), (If p == q Then C'0 Else C2); split; constructor; auto.
+  - exists (S n), (If p == q Then C2 Else C'0); split; constructor; auto.
+  - elim (IHn _ _ _ _ _ H1 H10); intros.
+    inversion_clear H11.
+    rename x into n'; rename x0 into C4; inversion_clear H12.
+    exists (S n'), (If p == q Then C0 Else C4); split; constructor; auto.
+  - exists (S n), (Def X0 == C1 In C3); split; try constructor; auto.
+  - elim (IHn _ _ _ _ _ H1 H10); intros.
+    inversion_clear H11.
+    rename x into n'; rename x0 into C4; inversion_clear H12.
+    exists (S n'), (Def X0 == C1 In C4); split; constructor; auto.
+Qed.
+
+Lemma Precongr_sym_Unfolded_comm' : forall n X CX CX' C C', CX$n ~<>~ CX' -> Unfolded X CX' C C' ->
+  exists n' C0, Unfolded X CX C C0 /\ C0$n' ~<>~ C'.
+Proof.
+intros. revert n X CX CX' C' H H0.
+induction C; intros; inversion H0.
++ rewrite H2 in H0; rewrite <- H1; clear H2 X H0 H1 C'; rename r into X.
+  exists n, CX; split; try constructor; auto.
++ elim (IHC _ _ _ _ _ H H4); intros.
+  inversion_clear H5.
+  rename x into n'; rename x0 into C0; inversion_clear H6.
+  exists (S n'), (e; C0); split; try constructor; auto.
++ elim (IHC1 _ _ _ _ _ H H6); intros.
+  inversion_clear H7.
+  rename x into n'; rename x0 into C4; inversion_clear H8.
+  exists (S n'), (If p == p0 Then C4 Else C2); split; try constructor; auto.
++ elim (IHC2 _ _ _ _ _ H H6); intros.
+  inversion_clear H7.
+  rename x into n'; rename x0 into C4; inversion_clear H8.
+  exists (S n'), (If p == p0 Then C1 Else C4); split; try constructor; auto.
++ elim (IHC2 _ _ _ _ _ H H6); intros.
+  inversion_clear H7.
+  rename x into n'; rename x0 into C4; inversion_clear H8.
+  exists (S n'), (Def r == C1 In C4); split; try constructor; auto.
+Qed.
+
+Lemma Precongr_sym_unfold_comm : forall n1 n2 C C' C'', C$n1 ~<>~ C' -> C'$n2 ~<u C'' ->
+  exists n1' n2' C0, C$n1' ~<u C0 /\ C0$n2' ~<=>~ C''.
+Proof.
+intros.
+revert n1 C C' C'' H0 H. induction n2; do 5 intro.
++ inversion H0. clear C0 C'0 H2 H3 H0.
+  inversion H. clear C' C'' H1 H2 H.
+  intro. inversion H; clear H.
+  - clear C' H4 C0 H3 n1 H2.
+    revert H0; inversion H1; intro; inversion H0.
+    * exists 1; eexists; eexists; split;
+       [repeat constructor; eauto | eapply TStep; [constructor; apply MCP_EtaRec | apply TBase]].
+    * exists 1; eexists; eexists; split;
+       [repeat constructor; eauto | eapply TStep; [constructor; apply MCP_CondRec | apply TBase]].
+    * exists 1; eexists; eexists; split;
+       [repeat constructor; eauto | eapply TStep; [constructor; apply MCP_CondRec | apply TBase]].
+  - clear C3 C1' H6 H5 X0 H1 C H3 n1 H2.
+    fold SPrecongr_step in H4.
+    elim (Precongr_sym_Unfolded_comm' _ _ _ _ _ _ H4 H0); intros.
+    inversion_clear H. inversion_clear H1.
+    exists 0; eexists; eexists; split. repeat constructor; eauto.
+    eapply TTrans; (eapply TStep; [try (constructor; eauto; fail) | apply TBase]).
+  - clear C2' H6 C0 H5 X0 H1 C H3 n1 H2.
+    fold SPrecongr_step in H4.
+    elim (Precongr_sym_Unfolded_comm _ _ _ _ _ _ H4 H0); intros.
+    inversion_clear H. inversion_clear H1.
+    exists 0; eexists; eexists; split. repeat constructor; eauto.
+    eapply TStep; [try (constructor; eauto; fail) | apply TBase].
++ inversion H0; fold UPrecongr_step in H1; clear C' C'' H2 H3 H0 n H; intros.
+  - inversion H; clear H; [inversion H0; clear H0 | idtac].
+    * clear eta2 H C0 H3 n1 H2 C H5.
+      rewrite <- H7 in H1; clear H7 H4 C' C1.
+      inversion H1.
+      ++ inversion H.
+      ++ fold UPrecongr_step in H4.
+         eexists; eexists; eexists; split;
+         [do 2 apply WCtxEta; eauto | eapply TStep; [constructor; apply MCP_EtaEta; auto | apply TBase]].
+    * rewrite <- H5 in H1. clear H5 C' H4 C1.
+      rewrite H in H6; clear eta0 H C0 H3 n1 H2 H6 C.
+      inversion H1.
+      ++ inversion H.
+      ++ fold UPrecongr_step in H6.
+         eexists; eexists; eexists; split;
+         [apply WCtxThen; apply WCtxEta; eauto | eapply TStep; [constructor; apply MCP_CondEta; auto | apply TBase]].
+      ++ fold UPrecongr_step in H6.
+         eexists; eexists; eexists; split;
+         [apply WCtxElse; apply WCtxEta; eauto | eapply TStep; [constructor; apply MCP_CondEta; auto | apply TBase]].
+    * rewrite <- H7 in H1. clear H7 C' H4 C1.
+      rewrite H6 in H; clear eta0 H6 H C C0 H3 n1 H2.
+      inversion H1; clear H1.
+      ++ inversion H.
+         eexists; eexists; eexists; split;
+         [do 3 constructor; eauto | eapply TStep; [constructor; apply MCP_RecEta; auto | apply TBase]].
+      ++ fold UPrecongr_step in H5.
+         eexists; eexists; eexists; split;
+         [apply WCtxDef; eauto | eapply TStep; [constructor; apply MCP_RecEta; auto | apply TBase]].
+      ++ fold UPrecongr_step in H5.
+         eexists; eexists; eexists; split;
+         [apply WCtxRec; apply WCtxEta; eauto | eapply TStep; [constructor; apply MCP_RecEta; auto | apply TBase]].
+    * fold SPrecongr_step in H4.
+      clear C3 H5 eta0 H0 C H3 n1 H2.
+      elim (IHn2 _ _ _ _ H1 H4); intros.
+      inversion_clear H. inversion_clear H0. inversion_clear H.
+      generalize (TCtxEta' eta H2); intro.
+      inversion_clear H.
+      do 3 eexists; split; [apply WCtxEta; eauto | eauto].
+  - inversion H; clear H; [inversion H0; clear H0 | idtac | idtac].
+    * rewrite <- H8 in H1.
+      clear C0 C'0 H8 H9 C H6 C' H4 C1 H3 q0 H5 p0 H n1 H2.
+      inversion H1.
+      ++ inversion H.
+      ++ fold UPrecongr_step in H4.
+         eexists; eexists; eexists; split;
+         [apply WCtxEta; apply WCtxThen; eauto | eapply TStep; [constructor; apply MCP_EtaCond; auto | apply TBase]].
+    * clear C' C0 H4 H9 s H7 r H C H5 C1 H3 n1 H2.
+      rewrite <- H8 in H1; clear H8 C'0.
+      inversion H1.
+      ++ inversion H.
+      ++ fold UPrecongr_step in H7.
+         eexists; eexists; eexists; split;
+         [do 2 apply WCtxThen; eauto | eapply TStep; [constructor; apply MCP_CondCond; auto | apply TBase]].
+      ++ fold UPrecongr_step in H7.
+         eexists; eexists; eexists; split;
+         [apply WCtxElse; apply WCtxThen; eauto | eapply TStep; [constructor; apply MCP_CondCond; auto | apply TBase]].
+    * rewrite <- H8 in H1.
+      clear C0 H9 C'0 H8 q0 H7 p0 H6 C H C' H4 C1 H3 n1 H2.
+      inversion H1.
+      ++ inversion H.
+         eexists; eexists; eexists; split;
+         [do 3 constructor; eauto | eapply TStep; [constructor; apply MCP_RecCond; auto | apply TBase]].
+      ++ fold UPrecongr_step in H5.
+         clear C''0 H1 H2 C0 H4 C1 H3 X0 H.
+         (*** MEGA FAIL ***)
+         eexists; eexists; eexists; split;
+         [eauto | eapply TStep; [constructor; apply MCP_CondRec; auto | apply TBase]].
+      ++ fold UPrecongr_step in H7.
+         eexists; eexists; eexists; split;
+         [apply WCtxElse; apply WCtxThen; eauto | eapply TStep; [constructor; apply MCP_CondCond; auto | apply TBase]].
+
+
+
+
+
+Lemma Precongr_garbage_unfold_comm' : forall n1 n2 C C' C'', C$n1 g>=~ C' -> C'$n2 ~<u C'' ->
+  exists n' C0, C$n2 ~<u C0 /\ C0$n' g>=~ C''.
+Proof.
+assert (forall n1 k n2 C C' C'', k<n1 -> C$k g>=~ C' -> C'$n2 ~<u C'' ->
+  exists n' C0, C$n2 ~<u C0 /\ C0$n' g>=~ C''); eauto.
+induction n1; intros; [inversion H | inversion H0].
++ exists 0, C''; split; auto; constructor.
++ clear C''0 H6 H5 H0.
+  rewrite <- H4 in H; clear k H4; apply lt_S_n in H.
+  assert (k0 < n1). apply le_lt_trans with (n + k0); auto with arith.
+  elim (IHn1 _ _ _ _ _ H0 H3 H1); intros.
+  destroy_as H4 H'.
+  clear H k0 H3 C' H1 H0.
+  elim (Precongr_garbage_unfold_comm _ _ _ _ _ H2 H5); intros.
+  destroy_as H H'.
+  rename x2 into C1; rename x1 into m; rename x0 into C3.
+  exists (m + x), C1; split; auto.
+  apply TTrans with C3; auto.
+Qed.
+
+Lemma Precongr_garbage_unfold_comm_trans : forall n1 n2 C C' C'', C$n1 g>=~ C' -> C'$n2 ~<=u C'' ->
+  exists n' C0, C$n2 ~<=u C0 /\ C0$n' g>=~ C''.
+Proof.
+assert (forall n2 k n1 C C' C'', k<n2 -> C$n1 g>=~ C' -> C'$k ~<=u C'' -> exists n' C0, C$k ~<=u C0 /\ C0$n' g>=~ C''); eauto.
+induction n2; intros; [inversion H | inversion H1]; intros.
++ rewrite <- H4; exists n1, C; split; auto; constructor.
++ clear C''0 H6 C0 H5 H1.
+  rewrite <- H4 in H; clear k H4; apply lt_S_n in H.
+  assert (k0 < n2). apply le_lt_trans with (n+k0); auto with arith.
+  fold UPrecongr in H3.
+  elim (Precongr_garbage_unfold_comm' _ _ _ _ _ H0 H2); intros.
+  destroy_as H4 H'.
+  clear H0 H2. rename x into n0; rename x0 into C0.
+  elim (IHn2 _ _ _ _ _ H1 H4 H3); intros.
+  destroy_as H0 H'.
+  clear H1 H4 H3. rename x into n'; rename x0 into C1.
+  exists n', C1; split; auto.
+  apply TStep with C0; auto.
+Qed.
+*)
+
+(** For forcing unfolding in the "same place" *)
+
+Lemma Unfolded_with : forall X CX C C', Unfolded X CX C C' ->
+  forall CX', exists U, Unfolded X CX' C U /\
+    (forall n, CX$n ~<>~ CX' -> exists n', C'$n' ~<>~ U).
+Proof.
+intros.
+induction H.
+- exists CX'; split; try constructor; eauto.
+- destroy IHUnfolded; exists (eta; x); split; intros; try constructor; auto.
+  elim (IHUnfolded _ H1); intros.
+  exists (S x0); constructor; auto.
+- destroy IHUnfolded; exists (If p == q Then x Else C'); split; intros; try constructor; auto.
+  elim (IHUnfolded _ H1); intros.
+  exists (S x0); constructor; auto.
+- destroy IHUnfolded; exists (If p == q Then C' Else x); split; intros; try constructor; auto.
+  elim (IHUnfolded _ H1); intros.
+  exists (S x0); constructor; auto.
+- destroy IHUnfolded; exists (Def Y == CY In x); split; intros; try constructor; auto.
+  elim (IHUnfolded _ H2); intros.
+  exists (S x0); constructor; auto.
+Qed.
+
+Lemma Unfolded_with_Congruent : forall X CX C C', Unfolded X CX C C' ->
+  forall n C'', C$n ~<>~ C'' -> exists U n', Unfolded X CX C'' U /\ C'$n' ~<>~ U.
+Proof.
+intros; revert C C' C'' H0 H.
+induction n; do 4 intro; inversion H0; clear H0; intros; inversion H; clear H.
+(* Base rules *)
+- rewrite <- H4 in H0; clear C C0 H4 H2.
+  inversion H0. inversion H6.
+  eexists; eexists; split; [repeat constructor | constructor; apply MCP_EtaEta]; auto.
+- rewrite <- H5 in H0; clear C C0 H5 H2.
+  inversion H0. inversion H7;
+    (eexists; eexists; split; [repeat constructor | constructor; apply MCP_EtaCond]; auto).
+- rewrite <- H5 in H0; clear C C0 H5 H2.
+  inversion H0; inversion H9;
+    (eexists; eexists; split; [repeat constructor | constructor; apply MCP_CondEta]; auto).
+- rewrite <- H4 in H0; clear C C0 H4 H2.
+  inversion H0; inversion H8;
+    (eexists; eexists; split; [repeat constructor | constructor; apply MCP_CondCond]; auto).
+- rewrite <- H1 in H0; clear C C0 H1 H2.
+  inversion H0. inversion H5.
+  eexists; eexists; split; [repeat constructor | constructor; apply MCP_EtaRec]; auto.
+- rewrite <- H1 in H0; clear C C0 H1 H2.
+  inversion H0. inversion H7.
+  eexists; eexists; split; [repeat constructor | constructor; apply MCP_RecEta]; auto.
+- rewrite <- H1 in H0; clear C C0 H1 H2.
+  inversion H0; inversion H7;
+    (eexists; eexists; split; [repeat constructor | constructor; apply MCP_CondRec]; auto).
+- rewrite <- H1 in H0; clear C C0 H1 H2.
+  inversion H0. inversion H7;
+    (eexists; eexists; split; [repeat constructor | constructor; apply MCP_RecCond]; auto).
+(* Context rules *)
+- inversion H0.
+  elim (IHn _ _ _ H1 H7); intros.
+  inversion_clear H8. inversion_clear H9.
+  eexists; eexists; split; [constructor | apply WCtxEta]; eauto.
+- inversion H0.
+  + elim (IHn _ _ _ H1 H9); intros.
+    inversion_clear H10. inversion_clear H11.
+    eexists; eexists; split; [constructor | apply WCtxThen]; eauto.
+  + eexists; eexists; split; [constructor | apply WCtxThen]; eauto.
+- inversion H0.
+  + eexists; eexists; split; [constructor | apply WCtxElse]; eauto.
+  + elim (IHn _ _ _ H1 H9); intros.
+    inversion_clear H10. inversion_clear H11.
+    eexists; eexists; split; [apply UElse | apply WCtxElse]; eauto.
+- inversion H0.
+  eexists; eexists; split; [constructor | apply WCtxDef]; eauto.
+- inversion H0.
+  elim (IHn _ _ _ H1 H9); intros.
+  inversion_clear H10. inversion_clear H11.
+  eexists; eexists; split; [constructor | apply WCtxRec]; eauto.
+Qed.
+
+Lemma Precongr_unfolded_sym_comm : forall C C' C1, C ~<>~ C' -> C ~<u C1 ->
+  exists C1', C1 ~<>~ C1' /\ C' ~<u C1'.
+Proof.
+intros.
+revert C1 H0; set (H0:=I); induction H; clear H0; intros.
++ (* Reflexivity *)
+  exists C1; split; auto; constructor.
++ (* Transitivity *)
+  elim (IHCongruent1 _ H0); intros C' HC'; inversion_clear HC'.
+  elim (IHCongruent2 _ H3); intros C'' HC''; inversion_clear HC''.
+  exists C''; split; auto.
+  apply CTrans with C'; auto.
++ inversion H0.
+  - eexists; split; constructor; auto.
+  - inversion H4.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CEtaEta | repeat apply ACtxEta]; auto.
++ inversion H0.
+  - eexists; split; constructor; auto.
+  - inversion H5.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CEtaCond | apply ACtxThen; apply ACtxEta]; auto.
+    * eexists; split; [apply CEtaCond | apply ACtxElse; apply ACtxEta]; auto.
++ inversion H0.
+  - eexists; split; constructor; auto.
+  - inversion H7.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CCondEta | apply ACtxEta; apply ACtxThen]; auto.
+  - inversion H7.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CCondEta | apply ACtxEta; apply ACtxElse]; auto.
++ inversion H0.
+  - eexists; split; [apply CCondCond; auto | apply ARefl].
+  - clear p0 q0 H1 H3; inversion H6.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CCondCond | apply ACtxThen; apply ACtxThen]; auto.
+    * eexists; split; [apply CCondCond | apply ACtxElse; apply ACtxThen]; auto.
+  - inversion H6.
+    * eexists; split; constructor; auto.
+    * eexists; split; [apply CCondCond | apply ACtxThen; apply ACtxElse]; auto.
+    * eexists; split; [apply CCondCond | apply ACtxElse; apply ACtxElse]; auto.
++ inversion H0.
+  - eexists; split; [apply CCtxEta | apply ARefl]; auto.
+  - elim (IHCongruent _ H4); intros C' HC'; inversion_clear HC'.
+    exists (eta;C'); split; [apply CCtxEta | apply ACtxEta]; auto.
++ inversion H0.
+  - eexists; split; [apply CCtxThen | apply ARefl]; auto.
+  - elim (IHCongruent _ H6); intros C1' HC'; inversion_clear HC'.
+    exists (If p == q Then C1' Else C); split; [apply CCtxThen | apply ACtxThen]; auto.
+  - exists (If p == q Then C'' Else C''0); split; [apply CCtxThen | apply ACtxElse]; auto.
++ inversion H0.
+  - eexists; split; [apply CCtxElse | apply ARefl]; auto.
+  - exists (If p == q Then C''0 Else C''); split; [apply CCtxElse | apply ACtxThen]; auto.
+  - elim (IHCongruent _ H6); intros C1' HC'; inversion_clear HC'.
+    exists (If p == q Then C Else C1'); split; [apply CCtxElse | apply ACtxElse]; auto.
++ inversion H0.
+  - eexists; split; [apply CCtxDef | apply ARefl]; auto.
+  - elim (Unfolded_with _ _ _ _ H5 C1'); intros U HU; destroy HU.
+    exists (Def X == C1' In U); split; [eapply CTrans | apply AUnfold; auto].
+    * apply CCtxDef; eauto.
+    * apply CCtxRec; auto.
+  - exists End; split; constructor.
+  - elim (IHCongruent _ H5); intros C' HC'; inversion_clear HC'.
+    exists (Def X == C' In C2); split; constructor; auto.
+  - exists (Def X == C1' In C2'); split; [apply CCtxDef | apply ACtxRec]; auto.
++ inversion H0.
+  - eexists; split; [apply CCtxRec | apply ARefl]; auto.
+  - elim (Unfolded_with_Congruent _ _ _ _ H5 _ H); intros C' HC'; inversion_clear HC'.
+    exists (Def X == C1 In C'); split; constructor; auto.
+  - exists End; split; try constructor.
+    replace C2' with End; try constructor.
+    symmetry; apply End_MCP.
+    apply MCP_congruent_to_precongr.
+    rewrite H4; auto.
+  - exists (Def X == C1' In C2'); split; constructor; auto.
+  - elim (IHCongruent _ H5); clear X0 H1 C3 H3 C4 H4; rename C2'0 into C3; intros.
+    inversion_clear H1.
+    exists (Def X == C1 In x); split; [apply CCtxRec | apply ACtxRec]; auto.
+Qed.
+
+Lemma MCP_precongruent_congruent_comm : forall n C C', C$n ~<n C' ->
+  forall C'', C ~<>~ C'' -> C''$n ~<n C'.
+Proof.
+induction n; intros; inversion H.
++ apply PBase.
+  apply CTrans with C; auto.
+  apply Congruent_sym; auto.
++ clear n0 H1 C0 H4 C''0 H5; rename C'0 into C1.
+  generalize (IHn _ _ H3); clear IHn; intro IHn.
+  elim (MCP_asym_congruent_comm _ _ _ H0 H2); intros C0 HC0; inversion_clear HC0.
+  apply PStep with C0; auto.
+Qed.
 
 
 End to_be_moved.
