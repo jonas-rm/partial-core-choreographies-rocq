@@ -479,8 +479,8 @@ intros.
 induction H; inversion H0; auto; try rewrite IHUnfolded; auto.
 Qed.
 
-Lemma Unfolded_pn : forall X CX C C', Unfolded X CX C C' ->
-  forall p, List.In p (pn C') <-> (List.In p (pn C) \/ List.In p (pn CX)).
+Lemma Unfolded_pn_iff : forall X CX C C', Unfolded X CX C C' ->
+  forall p, set_In p (pn C') <-> (set_In p (pn C) \/ set_In p (pn CX)).
 Proof.
 intros.
 induction H; simpl; split; auto; intros; try inversion_clear IHUnfolded.
@@ -526,6 +526,14 @@ induction H; simpl; split; auto; intros; try inversion_clear IHUnfolded.
   - apply set_union_intro1; auto.
   - apply set_union_intro2; apply H3; auto.
   - apply set_union_intro2; apply H3; auto.
+Qed.
+
+Lemma Unfolded_pn : forall X CX C1 C2, Unfolded X CX C1 C2 -> 
+  forall p, set_In p (pn C2) -> set_In p (pn CX) \/ set_In p (pn C1).
+Proof.
+intros.
+elim (Unfolded_pn_iff _ _ _ _ H p); intros.
+elim H1; auto.
 Qed.
 
 Lemma Unfolded_wf_ctx : forall X CX C C' l lX l',
@@ -723,6 +731,91 @@ induction H; inversion H0.
   inversion H3; auto; try apply PB_Refl.
   apply CtxRec; apply IHUnfolded; auto.
   inversion H6; apply Unfold; auto.
+Qed.
+
+(** Precongruence preserves process names. *)
+
+Lemma MCP_step_pn : forall C C', C ~< C' ->
+  forall p, set_In p (pn C') -> set_In p (pn C).
+Proof.
+intros; induction H; simpl in H0; simpl; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - apply set_union_intro2, set_union_intro1; auto.
+  - apply set_union_intro1; auto.
+  - apply set_union_intro2, set_union_intro2; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - apply set_union_intro2, set_union_intro1, set_union_intro1; auto.
+  - apply set_union_intro1; auto.
+  - apply set_union_intro2, set_union_intro1, set_union_intro2; auto.
+  - apply set_union_intro1; auto.
+  - apply set_union_intro2, set_union_intro2; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - apply set_union_intro1, set_union_intro2, set_union_intro1; auto.
+  - apply set_union_intro1, set_union_intro1; auto.
+  - apply set_union_intro1, set_union_intro2, set_union_intro2; auto.
+  - apply set_union_intro2, set_union_intro2; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - apply set_union_intro1, set_union_intro2, set_union_intro1, set_union_intro1; auto.
+  - apply set_union_intro1, set_union_intro1; auto.
+  - apply set_union_intro1, set_union_intro2, set_union_intro1, set_union_intro2; auto.
+  - apply set_union_intro2, set_union_intro1, set_union_intro2; auto.
+  - apply set_union_intro1, set_union_intro1; auto.
+  - apply set_union_intro1, set_union_intro2, set_union_intro2; auto.
+  - apply set_union_intro2, set_union_intro2; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - apply set_union_intro2, set_union_intro1; auto.
+  - elim (set_union_elim _ _ _ _ H); clear H; intros.
+    * apply set_union_intro1; auto.
+    * apply set_union_intro2, set_union_intro2; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - apply set_union_intro2, set_union_intro1; auto.
+  - elim (set_union_elim _ _ _ _ H); clear H; intros.
+    * apply set_union_intro1; auto.
+    * apply set_union_intro2, set_union_intro2; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - apply set_union_intro2, set_union_intro1; auto.
+  - repeat (elim (set_union_elim _ _ _ _ H); clear H; intros).
+    * apply set_union_intro1, set_union_intro1; auto.
+    * apply set_union_intro1, set_union_intro2, set_union_intro2; auto.
+    * apply set_union_intro2, set_union_intro2; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - repeat (elim (set_union_elim _ _ _ _ H); clear H; intros).
+    * apply set_union_intro2, set_union_intro1, set_union_intro1; auto.
+    * apply set_union_intro1; auto.
+    * apply set_union_intro2, set_union_intro1, set_union_intro2; auto.
+  - repeat (elim (set_union_elim _ _ _ _ H); clear H; intros).
+    * apply set_union_intro1; auto.
+    * apply set_union_intro2, set_union_intro2; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - apply set_union_intro1; auto.
+  - elim (Unfolded_pn _ _ _ _ H p H0); intro.
+    * apply set_union_intro1; auto.
+    * apply set_union_intro2; auto.
++ inversion H0.
++ elim (set_union_elim _ _ _ _ H0); clear H0; intros.
+  - apply set_union_intro1; auto.
+  - apply set_union_intro2; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - apply set_union_intro1, set_union_intro1; auto.
+  - apply set_union_intro1, set_union_intro2; auto.
+  - apply set_union_intro2; auto.
++ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
+  - apply set_union_intro1, set_union_intro1; auto.
+  - apply set_union_intro1, set_union_intro2; auto.
+  - apply set_union_intro2; auto.
++ elim (set_union_elim _ _ _ _ H0); clear H0; intros.
+  - apply set_union_intro1; auto.
+  - apply set_union_intro2; auto.
++ elim (set_union_elim _ _ _ _ H0); clear H0; intros.
+  - apply set_union_intro1; auto.
+  - apply set_union_intro2; auto.
+Qed.
+
+Lemma MCP_pn : forall C C', C ~<= C' ->
+  forall p, set_In p (pn C') -> set_In p (pn C).
+Proof.
+intros; induction H; auto.
+apply MCP_step_pn with C2; auto.
 Qed.
 
 (** Precongruence vs well-formedness. *)

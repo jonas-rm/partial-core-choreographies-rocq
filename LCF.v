@@ -282,6 +282,7 @@ induction C; intros; inversion H0.
   exists (S n'), (Def r == C1 In C4); split; try constructor; auto.
 Qed.
 
+(*
 Lemma Precongr_sym_unfold_comm : forall n1 n2 C C' C'', C$n1 ~<>~ C' -> C'$n2 ~<u C'' ->
   exists n1' n2' C0, C$n1' ~<u C0 /\ C0$n2' ~<=>~ C''.
 Proof.
@@ -375,13 +376,8 @@ revert n1 C C' C'' H0 H. induction n2; do 5 intro.
       ++ fold UPrecongr_step in H5.
          clear C''0 H1 H2 C0 H4 C1 H3 X0 H.
          (*** MEGA FAIL ***)
-         eexists; eexists; eexists; split;
-         [eauto | eapply TStep; [constructor; apply MCP_CondRec; auto | apply TBase]].
-      ++ fold UPrecongr_step in H7.
-         eexists; eexists; eexists; split;
-         [apply WCtxElse; apply WCtxThen; eauto | eapply TStep; [constructor; apply MCP_CondCond; auto | apply TBase]].
-
-
+Abort.
+*)
 
 
 
@@ -424,7 +420,6 @@ induction n2; intros; [inversion H | inversion H1]; intros.
   exists n', C1; split; auto.
   apply TStep with C0; auto.
 Qed.
-*)
 
 (** For forcing unfolding in the "same place" *)
 
@@ -449,6 +444,7 @@ induction H.
   exists (S x0); constructor; auto.
 Qed.
 
+(*
 Lemma Unfolded_with_Congruent : forall X CX C C', Unfolded X CX C C' ->
   forall n C'', C$n ~<>~ C'' -> exists U n', Unfolded X CX C'' U /\ C'$n' ~<>~ U.
 Proof.
@@ -594,11 +590,11 @@ induction n; intros; inversion H.
   elim (MCP_asym_congruent_comm _ _ _ H0 H2); intros C0 HC0; inversion_clear HC0.
   apply PStep with C0; auto.
 Qed.
-
+*)
 
 End to_be_moved.
 
-
+(*
 Section to_be_deleted.
 
 Inductive MCToStar_weighted : nat -> Configuration -> Configuration  -> Prop :=
@@ -639,7 +635,7 @@ induction n.
       apply le_S_n in H.
       destruct c2.
       apply (MCTo_weighted_to) in H2.
-      apply (MCTo_wf C H0) in H2.    
+      apply (MCTo_wf C H0) in H2.
       rewrite <- Nat.add_comm in H.
       rewrite <- Nat.le_add_r in H.
       apply IHn in H3; trivial.
@@ -745,6 +741,7 @@ intros; induction H; try constructor.
 apply MCT_Step with c2; auto.
 apply MCTo_weighted_to with n1; auto.
 Qed.
+*)
 
 Fixpoint list_to_state (l : list (Pid * Value)) : State :=
 match l with
@@ -760,6 +757,7 @@ elim T_dec; intros.
 + right; auto.
 Qed.
 
+(*
 Lemma set_add_inr : forall {T T_dec} x y A, List.In x A -> List.In x (set_add (A:=T) T_dec y A).
 Proof.
 induction A; simpl; intros; auto.
@@ -769,20 +767,20 @@ inversion_clear H; auto.
 + right; auto.
 Qed.
 
-Lemma set_union_inl : forall {T T_dec} x A B, List.In x A -> List.In x (set_union (A:=T) T_dec A B).
+Lemma set_union_intro1 : forall {T T_dec} x A B, List.In x A -> List.In x (set_union (A:=T) T_dec A B).
 Proof.
 induction B; simpl; intros; auto.
-apply set_add_inr; auto.
+apply set_add_intro1; auto.
 Qed.
 
-Lemma set_union_inr : forall {T T_dec} x A B, List.In x B -> List.In x (set_union (A:=T) T_dec A B).
+Lemma set_union_intro2 : forall {T T_dec} x A B, List.In x B -> List.In x (set_union (A:=T) T_dec A B).
 Proof.
 induction B; simpl; intros; inversion H.
 + rewrite H0; apply set_add_inl; auto.
-+ apply set_add_inr; auto.
++ apply set_add_intro1; auto.
 Qed.
 
-Lemma in_set_add : forall {T T_dec} x y A, List.In x (set_add (A:=T) T_dec y A) -> x = y \/ List.In x A.
+Lemma set_add_elim : forall {T T_dec} x y A, List.In x (set_add (A:=T) T_dec y A) -> x = y \/ List.In x A.
 Proof.
 induction A; simpl; intros.
 + inversion_clear H; auto.
@@ -791,100 +789,13 @@ induction A; simpl; intros.
   elim IHA; auto.
 Qed.
 
-Lemma in_set_union : forall {T T_dec} x A B, List.In x (set_union (A:=T) T_dec A B) -> List.In x A \/ List.In x B.
+Lemma set_union_elim : forall {T T_dec} x A B, List.In x (set_union (A:=T) T_dec A B) -> List.In x A \/ List.In x B.
 Proof.
 induction B; simpl; auto; intros.
-elim (in_set_add _ _ _ H); intros; auto.
+elim (set_add_elim _ _ _ H); intros; auto.
 elim IHB; auto.
 Qed.
-
-Lemma Unfolded_pn : forall X CX C1 C2, Unfolded X CX C1 C2 -> 
-  forall p, List.In p (pn C2) -> List.In p (pn CX) \/ List.In p (pn C1).
-Proof.
-induction C1; intros; simpl; auto; inversion H; auto.
-+ rewrite <- H2 in H0; clear eta H1 C0 H3 C2 H2 H.
-  simpl in H0; elim (in_set_union _ _ _ H0).
-  1: right; apply set_union_inl; auto.
-  clear H0; intro.
-  elim (IHC1 C3) with p; auto.
-  right; apply set_union_inr; auto.
-+ rewrite <- H2 in H0; clear H2 C' H5 C1 H4 q H3 p2 H1.
-  simpl in H0; repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
-  - right; apply set_union_inl, set_union_inl; auto.
-  - elim IHC1_1 with C0 p1; auto.
-    right; apply set_union_inl, set_union_inr; auto.
-  - right; apply set_union_inr; auto.
-+ rewrite <- H2 in H0; clear H2 C' H5 C1 H4 q H3 p2 H1.
-  simpl in H0; repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
-  - right; apply set_union_inl, set_union_inl; auto.
-  - right; apply set_union_inl, set_union_inr; auto.
-  - elim IHC1_2 with C0 p1; auto.
-    right; apply set_union_inr; auto.
-+ rewrite <- H3 in H0; clear H3 C1 H4 CY H2 Y H1 H5 H.
-  simpl in H0; repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
-  - right; apply set_union_inl; auto.
-  - elim IHC1_2 with C0 p; auto.
-    right; apply set_union_inr; auto.
-Qed.
-
-Lemma MCP_step_pn : forall C C', C ~< C' ->
-  forall p, List.In p (pn C') -> List.In p (pn C).
-Proof.
-intros; induction H; simpl in H0; simpl; auto.
-+ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
-  - apply set_union_inr, set_union_inl; auto.
-  - apply set_union_inl; auto.
-  - apply set_union_inr, set_union_inr; auto.
-+ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
-  - apply set_union_inr, set_union_inl, set_union_inl; auto.
-  - apply set_union_inl; auto.
-  - apply set_union_inr, set_union_inl, set_union_inr; auto.
-  - apply set_union_inl; auto.
-  - apply set_union_inr, set_union_inr; auto.
-+ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
-  - apply set_union_inl, set_union_inr, set_union_inl; auto.
-  - apply set_union_inl, set_union_inl; auto.
-  - apply set_union_inl, set_union_inr, set_union_inr; auto.
-  - apply set_union_inr, set_union_inr; auto.
-+ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
-  - apply set_union_inl, set_union_inr, set_union_inl, set_union_inl; auto.
-  - apply set_union_inl, set_union_inl; auto.
-  - apply set_union_inl, set_union_inr, set_union_inl, set_union_inr; auto.
-  - apply set_union_inr, set_union_inl, set_union_inr; auto.
-  - apply set_union_inl, set_union_inl; auto.
-  - apply set_union_inl, set_union_inr, set_union_inr; auto.
-  - apply set_union_inr, set_union_inr; auto.
-+ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
-  - apply set_union_inl; auto.
-  - elim (Unfolded_pn _ _ _ _ H p H0); intro.
-    * apply set_union_inl; auto.
-    * apply set_union_inr; auto.
-+ inversion H0.
-+ elim (in_set_union _ _ _ H0); clear H0; intros.
-  - apply set_union_inl; auto.
-  - apply set_union_inr; auto.
-+ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
-  - apply set_union_inl, set_union_inl; auto.
-  - apply set_union_inl, set_union_inr; auto.
-  - apply set_union_inr; auto.
-+ repeat (elim (in_set_union _ _ _ H0); clear H0; intros).
-  - apply set_union_inl, set_union_inl; auto.
-  - apply set_union_inl, set_union_inr; auto.
-  - apply set_union_inr; auto.
-+ elim (in_set_union _ _ _ H0); clear H0; intros.
-  - apply set_union_inl; auto.
-  - apply set_union_inr; auto.
-+ elim (in_set_union _ _ _ H0); clear H0; intros.
-  - apply set_union_inl; auto.
-  - apply set_union_inr; auto.
-Qed.
-
-Lemma MCP_pn : forall C C', C ~<= C' ->
-  forall p, List.In p (pn C') -> List.In p (pn C).
-Proof.
-intros; induction H; auto.
-apply MCP_step_pn with C2; auto.
-Qed.
+*)
 
 End to_be_moved.
 
