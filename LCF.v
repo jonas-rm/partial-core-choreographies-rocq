@@ -827,27 +827,6 @@ intros.
 induction H; constructor; auto.
 Qed.
 
-Fixpoint Free (X:RecVar) (C:Choreography) : Prop :=
-match C with
-| End                       => False
-| Call Y                    => X = Y
-| eta;C'                    => Free X C'
-| If p == q Then C1 Else C2 => Free X C1 \/ Free X C2
-| Def Y == CY In C'         => X <> Y /\ (Free X CY \/ Free X C')
-end.
-
-Lemma NotFreeThen : forall X p q C1 C2, ~Free X (If p == q Then C1 Else C2) -> ~Free X C1.
-Proof. intros. intro. apply H. constructor. auto. Qed.
-
-Lemma NotFreeElse : forall X p q C1 C2, ~Free X (If p == q Then C1 Else C2) -> ~Free X C2.
-Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
-
-Lemma NotFreeDef : forall X Y CY C, X <> Y -> ~Free X (Def Y == CY In C) -> ~Free X CY.
-Proof. intros. intro. apply H0. constructor; auto. Qed.
-
-Lemma NotFreeRec : forall X Y CY C, X <> Y -> ~Free X (Def Y == CY In C) -> ~Free X C.
-Proof. intros. intro. apply H0. try (constructor; auto; fail). Qed.
-
 Lemma NotFree_wf_ctx : forall C l, WellFormed_ctx C l -> forall X, List.In X l \/ ~Free X C.
 Proof.
 induction C; simpl; intros.
@@ -911,30 +890,6 @@ elim (GarbageCollect_ctx _ CX _ _ H H0); auto.
 intros. destroy_as H1 H'.
 Qed.
 
-
-Fixpoint Bound (X:RecVar) (C:Choreography) : Prop :=
-match C with
-| End                       => False
-| Call Y                    => False
-| eta;C'                    => Bound X C'
-| If p == q Then C1 Else C2 => Bound X C1 \/ Bound X C2
-| Def Y == CY In C'         => X = Y \/ Bound X CY \/ Bound X C'
-end.
-
-Lemma NotBoundThen : forall X p q C1 C2, ~Bound X (If p == q Then C1 Else C2) -> ~Bound X C1.
-Proof. intros. intro. apply H. constructor. auto. Qed.
-
-Lemma NotBoundElse : forall X p q C1 C2, ~Bound X (If p == q Then C1 Else C2) -> ~Bound X C2.
-Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
-
-Lemma NotBound_neq : forall X Y CY C, ~Bound X (Def Y == CY In C) -> X <> Y.
-Proof. intros. intro. apply H. constructor; auto. Qed.
-
-Lemma NotBoundDef : forall X Y CY C, ~Bound X (Def Y == CY In C) -> ~Bound X CY.
-Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
-
-Lemma NotBoundRec : forall X Y CY C, ~Bound X (Def Y == CY In C) -> ~Bound X C.
-Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
 
 Lemma fatsemi_MCP_step : forall C C'', C ~< C'' ->
   forall C', WellFormed C' -> (C;;C') ~<= (C'';;C').
