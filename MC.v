@@ -254,6 +254,32 @@ induction C; simpl; intros; auto.
     intros X HX; inversion_clear HX; simpl; auto.
 Qed.
 
+Lemma WellFormed_ctx_simpl : forall C l X, WellFormed_ctx C (X::l) ->
+  ~Free X C -> WellFormed_ctx C l.
+Proof.
+induction C; simpl; intros; auto.
++ inversion_clear H; auto.
+  elim H0; auto.
++ induction e; inversion_clear H; split; eauto.
++ destroy_as H H'; split; auto.
+  split; [eapply IHC1 | eapply IHC2]; eauto.
++ destroy_as H H'.
+  case_eq (RecVar_dec X r); intro.
+  - rewrite Rdec.eqb_eq in H3.
+    assert (forall Y, List.In Y (r::X::l) -> List.In Y (r::l)).
+    intros. inversion_clear H4; try rewrite H5; [left | rewrite <- H3]; auto.
+    repeat split; auto; apply WellFormed_ctx_mon with (r::X::l); auto.
+  - rewrite Rdec.eqb_neq in H3. 
+    generalize (NotFreeDef _ _ _ _ H3 H0).
+    generalize (NotFreeRec _ _ _ _ H3 H0).
+    assert (forall Y, List.In Y (r::X::l) -> List.In Y (X::r::l)).
+    1: { intros. inversion_clear H4; try rewrite H5; [right; left | idtac]; auto.
+         inversion_clear H5; try rewrite H6; [left | right; right]; auto.
+    }
+    repeat split; auto; [apply IHC1 with X | apply IHC2 with X]; auto;
+      eapply WellFormed_ctx_mon; eauto.
+Qed.
+
 Lemma DefEta_wf_ctx : forall X CX eta C l,
   WellFormed_ctx (Def X == CX In (eta;C)) l <-> WellFormed_ctx (eta; Def X == CX In C) l.
 Proof.
@@ -766,80 +792,33 @@ induction H; inversion H0.
   inversion H6; apply Unfold; auto.
 Qed.
 
-(** Precongruence preserves process names. *)
+Ltac l := apply set_union_intro1; auto; fail.
+Ltac r := apply set_union_intro2; auto; fail.
+Ltac ll := apply set_union_intro1, set_union_intro1; auto; fail.
+Ltac lr := apply set_union_intro1, set_union_intro2; auto; fail.
+Ltac rl := apply set_union_intro2, set_union_intro1; auto; fail.
+Ltac rr := apply set_union_intro2, set_union_intro2; auto; fail.
+Ltac lll := apply set_union_intro1, set_union_intro1, set_union_intro1; auto; fail.
+Ltac llr := apply set_union_intro1, set_union_intro1, set_union_intro2; auto; fail.
+Ltac lrl := apply set_union_intro1, set_union_intro2, set_union_intro1; auto; fail.
+Ltac lrr := apply set_union_intro1, set_union_intro2, set_union_intro2; auto; fail.
+Ltac rll := apply set_union_intro2, set_union_intro1, set_union_intro1; auto; fail.
+Ltac rlr := apply set_union_intro2, set_union_intro1, set_union_intro2; auto; fail.
+Ltac rrl := apply set_union_intro2, set_union_intro2, set_union_intro1; auto; fail.
+Ltac rrr := apply set_union_intro2, set_union_intro2, set_union_intro2; auto; fail.
 
-(** FIX ME
+Ltac kill_it H := repeat (elim (set_union_elim _ _ _ _ H); clear H; intros);
+     try l; try r; try ll; try lr; try rl; try rr;
+     try lll; try llr; try lrl; try lrr; try rll; try rlr; try rrl; try rrr.
+
+(** Precongruence preserves process names. *)
 Lemma MCP_step_pn : forall C C', C ~< C' ->
   forall p, set_In p (pn C') -> set_In p (pn C).
 Proof.
-intros; induction H; simpl in H0; simpl; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - apply set_union_intro2, set_union_intro1; auto.
-  - apply set_union_intro1; auto.
-  - apply set_union_intro2, set_union_intro2; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - apply set_union_intro2, set_union_intro1, set_union_intro1; auto.
-  - apply set_union_intro1; auto.
-  - apply set_union_intro2, set_union_intro1, set_union_intro2; auto.
-  - apply set_union_intro1; auto.
-  - apply set_union_intro2, set_union_intro2; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - apply set_union_intro1, set_union_intro2, set_union_intro1; auto.
-  - apply set_union_intro1, set_union_intro1; auto.
-  - apply set_union_intro1, set_union_intro2, set_union_intro2; auto.
-  - apply set_union_intro2, set_union_intro2; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - apply set_union_intro1, set_union_intro2, set_union_intro1, set_union_intro1; auto.
-  - apply set_union_intro1, set_union_intro1; auto.
-  - apply set_union_intro1, set_union_intro2, set_union_intro1, set_union_intro2; auto.
-  - apply set_union_intro2, set_union_intro1, set_union_intro2; auto.
-  - apply set_union_intro1, set_union_intro1; auto.
-  - apply set_union_intro1, set_union_intro2, set_union_intro2; auto.
-  - apply set_union_intro2, set_union_intro2; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - apply set_union_intro2, set_union_intro1; auto.
-  - elim (set_union_elim _ _ _ _ H); clear H; intros.
-    * apply set_union_intro1; auto.
-    * apply set_union_intro2, set_union_intro2; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - apply set_union_intro2, set_union_intro1; auto.
-  - elim (set_union_elim _ _ _ _ H); clear H; intros.
-    * apply set_union_intro1; auto.
-    * apply set_union_intro2, set_union_intro2; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - apply set_union_intro2, set_union_intro1; auto.
-  - repeat (elim (set_union_elim _ _ _ _ H); clear H; intros).
-    * apply set_union_intro1, set_union_intro1; auto.
-    * apply set_union_intro1, set_union_intro2, set_union_intro2; auto.
-    * apply set_union_intro2, set_union_intro2; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - repeat (elim (set_union_elim _ _ _ _ H); clear H; intros).
-    * apply set_union_intro2, set_union_intro1, set_union_intro1; auto.
-    * apply set_union_intro1; auto.
-    * apply set_union_intro2, set_union_intro1, set_union_intro2; auto.
-  - repeat (elim (set_union_elim _ _ _ _ H); clear H; intros).
-    * apply set_union_intro1; auto.
-    * apply set_union_intro2, set_union_intro2; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - apply set_union_intro1; auto.
-  - elim (Unfolded_pn _ _ _ _ H p H0); intro.
-    * apply set_union_intro1; auto.
-    * apply set_union_intro2; auto.
+intros; induction H; simpl in H0; simpl; auto; (kill_it H0; try kill_it H).
++ apply set_union_intro1, set_union_intro2, set_union_intro1, set_union_intro2; auto.
++ elim (Unfolded_pn _ _ _ _ H p H0); intro; [l | r].
 + inversion H0.
-+ elim (set_union_elim _ _ _ _ H0); clear H0; intros.
-  - apply set_union_intro1; auto.
-  - apply set_union_intro2; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - apply set_union_intro1, set_union_intro1; auto.
-  - apply set_union_intro1, set_union_intro2; auto.
-  - apply set_union_intro2; auto.
-+ repeat (elim (set_union_elim _ _ _ _ H0); clear H0; intros).
-  - apply set_union_intro1, set_union_intro1; auto.
-  - apply set_union_intro1, set_union_intro2; auto.
-  - apply set_union_intro2; auto.
-+ elim (set_union_elim _ _ _ _ H0); clear H0; intros.
-  - apply set_union_intro1; auto.
-  - apply set_union_intro2; auto.
 Qed.
 
 Lemma MCP_pn : forall C C', C ~<= C' ->
@@ -848,7 +827,6 @@ Proof.
 intros; induction H; auto.
 apply MCP_step_pn with C2; auto.
 Qed.
-*)
 
 (** Precongruence vs well-formedness. *)
 
@@ -863,7 +841,6 @@ intros C C' H; induction H; simpl; intros; auto.
 - inversion_clear H0; split; eauto; eapply IHMC_Precongr_step; eauto; apply H1.
 Qed.
 
-(** FIX ME
 Lemma MCP_step_wf_ctx : forall C C' l, WellFormed_ctx C l -> C ~< C' -> WellFormed_ctx C' l.
 Proof.
 intros.
@@ -877,6 +854,18 @@ revert l H; induction H0; intros; auto.
 + simpl. simpl in H. repeat split; apply H.
 + simpl. simpl in H. repeat split; apply H.
 + destroy_as H2 H'; repeat split; auto.
+  - apply WellFormed_ctx_simpl with X; auto.
+    eapply WellFormed_ctx_mon; eauto.
+    intros.
+    inversion_clear H7; try rewrite H8; [right; left | idtac]; auto.
+    inversion_clear H8; try rewrite H9; [left | right; right]; auto.
+  - eapply WellFormed_ctx_mon; eauto.
+    intros.
+    inversion_clear H7; try rewrite H8; [left | right; right]; auto.
+  - eapply WellFormed_ctx_mon; eauto.
+    intros.
+    inversion_clear H7; try rewrite H8; [right; left | idtac]; auto.
+    inversion_clear H8; try rewrite H7; [left | right; right]; auto.
 + destroy_as H0 H'; repeat split; auto.
   apply (Unfolded_wf_ctx X CX C1 C2 (X::l) (X::l) (X::l)); auto.
 + simpl; auto.
@@ -899,7 +888,6 @@ Proof.
 intros.
 apply MCP_wf_ctx with C; auto.
 Qed.
-*)
 
 (** Auxiliary result about unfolding - requires previous results on precongruence. *)
 
@@ -1306,7 +1294,6 @@ Inductive Precongr_unfold : Precongruence :=
 | MCP_Unfold X CX C1 C2 : Unfolded X CX C1 C2 -> Precongr_unfold (Def X == CX In C1) (Def X == CX In C2)
 .
 
-Print RecRec.
 Inductive Precongr_sym : Precongruence :=
 | MCP_EtaEta eta1 eta2 C : independent eta1 eta2 -> Precongr_sym (eta1; eta2; C) (eta2; eta1; C)
 | MCP_EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> Precongr_sym (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
@@ -1615,37 +1602,32 @@ Qed.
 
 End Transitivity.
 
-(** Unfolding can be pushed before garbage collection.
-    Note that one unfolding following a garbage collection possibly switches into an unfolding
-    followed by two garbage collection steps. *)
+(** Unfolding can be pushed before garbage collection. *)
 
 Lemma Precongr_garbage_Unfolded_comm : forall n X CX C C' C'', C$n g>~ C' -> Unfolded X CX C' C'' ->
-  exists n' C0, Unfolded X CX C C0 /\ C0$n' g>~ C''.
+  exists C0, Unfolded X CX C C0 /\ C0$n g>~ C''.
 Proof.
 induction n; intros.
 + revert H0. inversion H. inversion H0.
   intro. inversion H5.
 + revert H0. inversion H; intro; inversion H4.
   - elim (IHn _ _ _ _ _ H1 H8); intros.
-    inversion_clear H9.
-    rename x into n'; rename x0 into C4; inversion_clear H10.
-    exists (S n'), (eta;C4); split; constructor; auto.
+    inversion_clear H9. rename x into C4.
+    exists (eta;C4); split; constructor; auto.
   - elim (IHn _ _ _ _ _ H1 H10); intros.
-    inversion_clear H11.
-    rename x into n'; rename x0 into C4; inversion_clear H12.
-    exists (S n'), (If p == q Then C4 Else C0); split; constructor; auto.
-  - exists (S n), (If p == q Then C'0 Else C2); split; constructor; auto.
-  - exists (S n), (If p == q Then C2 Else C'0); split; constructor; auto.
+    inversion_clear H11. rename x into C4.
+    exists (If p == q Then C4 Else C0); split; constructor; auto.
+  - exists (If p == q Then C'0 Else C2); split; constructor; auto.
+  - exists (If p == q Then C2 Else C'0); split; constructor; auto.
   - elim (IHn _ _ _ _ _ H1 H10); intros.
-    inversion_clear H11.
-    rename x into n'; rename x0 into C4; inversion_clear H12.
-    exists (S n'), (If p == q Then C0 Else C4); split; constructor; auto.
+    inversion_clear H11. rename x into C4.
+    exists (If p == q Then C0 Else C4); split; constructor; auto.
   - elim (IHn _ _ _ _ _ H1 H10); intros.
-    inversion_clear H11.
-    rename x into n'; rename x0 into C4; inversion_clear H12.
-    exists (S n'), (Def X0 == C1 In C4); split; constructor; auto.
+    inversion_clear H11. rename x into C4.
+    exists (Def X0 == C1 In C4); split; constructor; auto.
 Qed.
 
+(* OBSOLETE - BUT TRUE :-)
 Lemma Precongr_garbage_Unfolded_comm' : forall n X CX CX' C C', CX$n g>~ CX' -> Unfolded X CX' C C' ->
   exists n' C0, Unfolded X CX C C0 /\ C0$n' g>~ C'.
 Proof.
@@ -1670,9 +1652,10 @@ induction C; intros; inversion H0.
   rename x into n'; rename x0 into C4; inversion_clear H8.
   exists (S n'), (Def r == C1 In C4); split; try constructor; auto.
 Qed.
+*)
 
 Lemma Precongr_garbage_unfold_comm : forall n1 n2 C C' C'', C$n1 g>~ C' -> C'$n2 ~<u C'' ->
-  exists n' C0, C$n2 ~<u C0 /\ C0$n' g>=~ C''.
+  exists C0, C$n2 ~<u C0 /\ C0$n1 g>~ C''.
 Proof.
 induction n1; [intros | induction n2]; intros.
 + inversion H. inversion H1.
@@ -1685,80 +1668,35 @@ induction n1; [intros | induction n2]; intros.
   inversion H.
   clear H7 C2' H6 C0 X0 H3 C H4 H n H1.
   elim (Precongr_garbage_Unfolded_comm _ _ _ _ _ _ H5 H2); intros.
-  inversion_clear H.
-  rename x into n; rename x0 into C0; inversion_clear H1.
-  exists (S (S n) + 0), (Def X == CX In C0); split.
-  * repeat constructor; auto.
-  * apply TStep with (Def X == CX In C2); constructor; auto.
+  inversion_clear H. rename x into C0.
+  exists (Def X == CX In C0); split; repeat constructor; auto.
 + revert H; inversion H0; intros; inversion H4.
   - clear C'' H3 C' H2 n H H0 C3 H9 eta0 H6 n0 H5 C H7 H4.
     elim (IHn1 _ _ _ _ H8 H1); intros.
-    destroy_as H H'.
-    elim (TCtxEta' eta H); intros.
-    rename x1 into m; rename x0 into C3; clear H.
-    exists m, (eta;C3); split; try constructor; auto.
+    inversion_clear H. rename x into C3.
+    exists (eta;C3); split; constructor; auto.
   - clear C1 H11 C''1 H10 q0 H9 p0 H6 C H7 H4 n0 H5 C' C'' H0 H2 H3 n H.
     elim (IHn1 _ _ _ _ H8 H1); intros.
-    destroy_as H H'.
-    elim (TCtxElse' p q C0 H); intros.
-    rename x1 into m; rename x0 into C3; clear H.
-    exists m, (If p == q Then C3 Else C0); split; try constructor; auto.
-  - exists (S (S n1)), (If p == q Then C''0 Else C'1); split; try constructor; auto.
-    apply TCtxThen; auto.
-  - exists (S (S n1)), (If p == q Then C'1 Else C''0); split; try constructor; auto.
-    apply TCtxElse; auto.
+    inversion_clear H. rename x into C3.
+    exists (If p == q Then C3 Else C0); split; constructor; auto.
+  - exists (If p == q Then C''0 Else C'1); split; try constructor; auto.
+  - exists (If p == q Then C'1 Else C''0); split; try constructor; auto.
   - clear C1 H11 C''1 H10 q0 H9 p0 H6 C H7 H4 n0 H5 C' C'' H0 H2 H3 n H.
     elim (IHn1 _ _ _ _ H8 H1); intros.
-    destroy_as H H'.
-    elim (TCtxThen' p q C0 H); intros.
-    rename x1 into m; rename x0 into C3; clear x H.
-    exists m, (If p == q Then C0 Else C3); split; try constructor; auto.
+    inversion_clear H. rename x into C3.
+    exists (If p == q Then C0 Else C3); split; constructor; auto.
   - clear C2'0 H10 C0 H9 X0 H6 C H7 n0 H5 C'' C' H2 H3 H0 H4 n H.
     elim (IHn1 _ _ _ _ H8 H1); intros.
-    destroy_as H H'.
-    elim (TCtxRec' X C1 H); intros.
-    rename x1 into m; rename x0 into C0; clear x H.
-    exists m, (Def X == C1 In C0); split; try constructor; auto.
-Qed.
-
-Lemma Precongr_garbage_unfold_comm' : forall n1 n2 C C' C'', C$n1 g>=~ C' -> C'$n2 ~<u C'' ->
-  exists n' C0, C$n2 ~<u C0 /\ C0$n' g>=~ C''.
-Proof.
-assert (forall n1 k n2 C C' C'', k<n1 -> C$k g>=~ C' -> C'$n2 ~<u C'' ->
-  exists n' C0, C$n2 ~<u C0 /\ C0$n' g>=~ C''); eauto.
-induction n1; intros; [inversion H | inversion H0].
-+ exists 0, C''; split; auto; constructor.
-+ clear C''0 H6 H5 H0.
-  rewrite <- H4 in H; clear k H4; apply lt_S_n in H.
-  assert (k0 < n1). apply le_lt_trans with (n + k0); auto with arith.
-  elim (IHn1 _ _ _ _ _ H0 H3 H1); intros.
-  destroy_as H4 H'.
-  clear H k0 H3 C' H1 H0.
-  elim (Precongr_garbage_unfold_comm _ _ _ _ _ H2 H5); intros.
-  destroy_as H H'.
-  rename x2 into C1; rename x1 into m; rename x0 into C3.
-  exists (m + x), C1; split; auto.
-  apply TTrans with C3; auto.
+    inversion_clear H. rename x into C0.
+    exists (Def X == C1 In C0); split; constructor; auto.
 Qed.
 
 Lemma Precongr_garbage_unfold_comm_trans : forall n1 n2 C C' C'', C$n1 g>=~ C' -> C'$n2 ~<=u C'' ->
-  exists n' C0, C$n2 ~<=u C0 /\ C0$n' g>=~ C''.
+  exists C0, C$n2 ~<=u C0 /\ C0$n1 g>=~ C''.
 Proof.
-assert (forall n2 k n1 C C' C'', k<n2 -> C$n1 g>=~ C' -> C'$k ~<=u C'' -> exists n' C0, C$k ~<=u C0 /\ C0$n' g>=~ C''); eauto.
-induction n2; intros; [inversion H | inversion H1]; intros.
-+ rewrite <- H4; exists n1, C; split; auto; constructor.
-+ clear C''0 H6 C0 H5 H1.
-  rewrite <- H4 in H; clear k H4; apply lt_S_n in H.
-  assert (k0 < n2). apply le_lt_trans with (n+k0); auto with arith.
-  fold UPrecongr in H3.
-  elim (Precongr_garbage_unfold_comm' _ _ _ _ _ H0 H2); intros.
-  destroy_as H4 H'.
-  clear H0 H2. rename x into n0; rename x0 into C0.
-  elim (IHn2 _ _ _ _ _ H1 H4 H3); intros.
-  destroy_as H0 H'.
-  clear H1 H4 H3. rename x into n'; rename x0 into C1.
-  exists n', C1; split; auto.
-  apply TStep with C0; auto.
+intros.
+eapply TransClose_comm; eauto.
+apply Precongr_garbage_unfold_comm.
 Qed.
 
 End Weighted_Reductions.
