@@ -1,54 +1,159 @@
+Require Import Kleene.
 Require Export MC.
-Require Export Kleene.
 
-Section to_be_moved.
+Local Open Scope nat_scope.
 
-Lemma max_lt_l : forall k m n, max m n < k -> m < k.
-intro; case_eq k; intros.
-inversion H0.
-generalize (le_S_n _ _ H0); intros.
-apply le_n_S.
-eapply Nat.max_lub_l; exact H1.
-Qed.
+(** * The concrete language we have in mind for Turing completeness. *)
+Inductive Expr : Type :=
+ | this : Expr
+ | zero : Expr
+ | succ_this : Expr
+.
 
-Lemma max_lt_r : forall k m n, max m n < k -> n < k.
-intros; apply max_lt_l with m.
-rewrite Nat.max_comm; auto.
-Qed.
+Module MC_Expressions <: DecType.
 
-Lemma vmax_lt : forall n v x, vmax (n:=n) v < x -> forall p, v[@p] < x.
+Definition t := Expr.
+
+Lemma eq_dec : forall (e e' : Expr), { e = e' } + { e <> e' }.
 Proof.
-induction p.
-* revert n v H; refine (@caseS _ _ _); simpl; intros.
-  eapply max_lt_l; exact H.
-* revert n v H p IHp; refine (@caseS _ _ _); simpl; intros.
-  apply IHp; eapply max_lt_r; exact H.
+decide equality.
 Qed.
 
-(** Vector containing the numbers k to k+n. *)
-Fixpoint vec_k_to_n n k : t nat n :=
-  match n with
-  | 0 => []
-  | S m => k :: vec_k_to_n m (S k)
-  end.
-
-Definition vec_1_to_n n : t nat n := vec_k_to_n n 1.
-
-(** Vector of vectors with values [[m; ...; m+n-1] [m+n; ...; m+2n-1] ... [m+(k-1)n; ...; m+kn-1]]. *)
-Fixpoint vec_m_with_k m k n :=
-  match k with
-  | 0 => []
-  | S k' => (vec_k_to_n n m :: vec_m_with_k (m+n) k' n)
-  end.
-
-(** Sum of a vector of natural numbers. *)
-Fixpoint vsum {n} (v:t nat n) :=
-  match v with
-  | [] => 0
-  | x :: xs => x + vsum xs
+(*
+Definition eqb (e:Expr) (e':Expr) : bool :=
+match e, e' with
+ | this, this => true
+ | zero, zero => true
+ | succ_this, succ_this => true
+ | _, _ => false
 end.
 
-End to_be_moved.
+Lemma eqb_eq : forall e e', eqb e e' = true <-> e = e'.
+Proof.
+induction e; induction e'; split; intros; auto; discriminate H.
+Qed.
+*)
+
+End MC_Expressions.
+
+Module Export MC_Eval <: Eval MC_Expressions Nat.
+
+(** Expression evaluation given a value for the place-holder this *)
+Definition eval (e:Expr) (v:nat) : nat :=
+match e with
+ | zero => 0
+ | this => v
+ | succ_this => S v
+end.
+
+End MC_Eval.
+
+Module Export MC_Nat := MCBase Nat MC_Expressions Nat Nat MC_Eval.
+Import St.
+
+Example sanity_check : ( Com 0 this 1; If 2 == 3 Then (Com 4 succ_this 3; End) Else (Com 3 zero 2; End) )
+                       ~<=
+                       ( If 2 == 3 Then (Com 0 this 1; Com 4 succ_this 3; End) Else (Com 3 zero 2; Com 0 this 1; End) ).
+Proof.
+ eapply MCP_Step.
+ apply EtaCond; split; auto.
+ apply CtxCond'.
+ constructor.
+ apply MCP_step_to; apply EtaEta.
+ split; auto.
+Qed.
+
+Example MCToStar_sanity_check : forall p e q s1 C, exists s2,
+  (Com p e q ; Com p zero q ; C, s1) --->* (C, s2) /\  (eq_state_ext s2 (update s1 q 0)).
+Proof.
+intros.
+set (c0 := (p#e --> q ; p#zero --> q ; C, s1)).
+generalize (HeadTo_Soundness c0 (eta_has_head_action _ _ )).
+set (c1 := HeadTo c0 (eta_has_head_action _ _ )); intros.
+assert (c1 = HeadTo c0 (eta_has_head_action _ _ )); auto.
+induction c1.
+inversion H0.
+rewrite H2, H3 in H; clear a b H0 H2 H3.
+generalize (HeadTo_Soundness (p#zero-->q;C,s1) (eta_has_head_action _ _ )).
+set (c2 := HeadTo (p#zero-->q;C,s1) (eta_has_head_action _ _)); intros.
+assert (c2 = HeadTo (p#zero-->q;C,s1) (eta_has_head_action _ _)); auto.
+induction c2.
+inversion H1.
+rewrite H3, H4 in H0; clear a b H1 H3 H4.
+eexists; split.
++ eapply MCT_Step; [apply C_Com | eapply MCT_Step; [apply C_Com | apply MCT_Refl]].
++ intro; simpl.
+  rewrite update_update_ext; auto.
+Qed.
+
+Section Implementation.
+
+(** The type of partial functions and the notion of a choreography implementing one.
+    We can only represent computable functions, but this is not a problem. *)
+
+Definition PFunction (n:nat) := t nat n -> option nat.
+
+Definition implements (C:Choreography) {n} (f:PFunction n) (ps:t Pid n) (q:Pid) :=
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
+  (forall y, f xs = Some y -> exists s', (C,s) --->* (End,s') /\ s' q = y) /\
+  (f xs = None -> ~exists s', (C,s) --->* (End,s')).
+
+(** For convenience. *)
+Lemma implements_None : forall C {n} f ps q, implements C f ps q -> 
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
+  f xs = None -> ~exists s', (C,s) --->* (End,s').
+Proof.
+unfold implements; intros.
+elim (H _ _ H0); auto.
+Qed.
+
+Lemma implements_Some : forall C {n} f ps q, implements C f ps q -> 
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
+  forall y, f xs = Some y -> exists s', (C,s) --->* (End,s') /\ s' q = y.
+Proof.
+unfold implements; intros.
+elim (H _ _ H0); auto.
+Qed.
+
+(** Currying for simple cases. *)
+Definition make_pf_1 (f:nat -> nat) : PFunction 1
+  := fun xs => Some (f (hd xs)).
+
+Definition make_pf_2 (f:nat -> nat -> nat) : PFunction 2
+  := fun xs => Some (f (hd xs) (hd (tl xs))).
+
+Definition make_pf_3 (f:nat -> nat -> nat -> nat) : PFunction 3
+  := fun xs => Some (f (hd xs) (hd (tl xs)) (hd (tl (tl xs)))).
+
+(** We recover the examples from the paper. *)
+Definition C_Inc (p t:Pid) := p # this --> t; t # succ_this --> p; End.
+
+Lemma C_Inc_char : forall p t s, let s1 := update s t (evaluate_on_state this s p) in
+  (C_Inc p t, s) --->* (End, (update s1 p (evaluate_on_state succ_this s1 t))).
+Proof.
+intros; eapply MCT_Step; [apply C_Com | eapply MCT_Step]; [apply C_Com | apply MCT_Refl].
+Qed.
+
+Lemma C_Inc_correct : forall p t, implements (C_Inc p t) (make_pf_1 (fun n => S n)) [p] p.
+Proof.
+unfold make_pf_1; split; intros; inversion H0.
+set (s1 := update s t (evaluate_on_state this s p)).
+unfold C_Inc; exists (update s1 p (evaluate_on_state succ_this s1 t)).
+split.
++ apply C_Inc_char.
++ assert (xs = [s p]).
+  - apply eq_nth_iff; intros.
+    rewrite <- H.
+    repeat rewrite nth_hd'; auto.
+  - unfold s1; clear s1; simpl.
+    rewrite H1; clear H1 H2 H0 H.
+    rewrite update_read; simpl.
+    unfold evaluate_on_state; simpl.
+    rewrite update_read; simpl.
+    repeat rewrite MC_Nat.Pdec.eqb_refl; auto.
+Qed.
+
+End Implementation.
 
 (** * Extensions of MC
     We require some additional operators on MC for our encoding. *)
@@ -59,18 +164,35 @@ Section MC_plus.
 Fixpoint fatsemi (C C':Choreography) : Choreography :=
   match C with
   | End => C'
+  | Call X => Call X
   | eta; C0 => eta; fatsemi C0 C'
   | If p == q Then C1 Else C2 => If p == q Then (fatsemi C1 C') Else (fatsemi C2 C')
+  | Def X == C1 In C2 => Def X == (fatsemi C1 C') In (fatsemi C2 C')
   end.
 
-Fixpoint single_exit_point (C:Choreography) : bool :=
+Notation "C ;; C'" := (fatsemi C C') (at level 90).
+
+Fixpoint no_exit_point (C:Choreography) : Prop :=
   match C with
-  | End => true
-  | eta; C' => single_exit_point C'
-  | If p == q Then C1 Else C2 => xorb (single_exit_point C1) (single_exit_point C2)
+  | End => False
+  | Call X => True
+  | eta; C' => no_exit_point C'
+  | If p == q Then C1 Else C2 => (no_exit_point C1) /\ (no_exit_point C2)
+  | Def X == C1 In C2 => (no_exit_point C1) /\ (no_exit_point C2)
   end.
 
-(** Missing semantic characterization. *)
+Fixpoint single_exit_point (C:Choreography) : Prop :=
+  match C with
+  | End => True
+  | Call X => False
+  | eta; C' => single_exit_point C'
+  | If p == q Then C1 Else C2 =>
+      ((single_exit_point C1) /\ (no_exit_point C2))
+    \/ ((no_exit_point C1) /\ (single_exit_point C2))
+  | Def X == C1 In C2 =>
+      ((single_exit_point C1) /\ (no_exit_point C2))
+    \/ ((no_exit_point C1) /\ (single_exit_point C2))
+  end.
 
 (** ** Function Pi *)
 
@@ -157,20 +279,33 @@ induction d.
 
   (* Composition *)
   - simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
-    generalize (max_lt_l _ _ _ Hd').
-    generalize (max_lt_r _ _ _ Hd').
-    intros Hdfs Hdf.
+    pose (max_lt_l _ _ _ Hd') as Hdf.
+    pose (max_lt_r _ _ _ Hd') as Hdfs.
     assert (forall i, depth fs[@i] < d).
     intros; rewrite <- nth_map'; apply vmax_lt; auto.
     apply
-    (seq_compose fs _ H ps init (init+k) (fun m f => Implementation_aux m f d);;
+    ((seq_compose fs _ H ps init (init+k) (fun m f => Implementation_aux m f d));;
       Implementation_aux _ f _ Hdf (seq_labels init fs) q (init + (vsum (map Pi fs)))).
 
   (* Recursion *)
-  - apply End.
+  - rename f1 into f; rename f2 into g.
+    simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
+    pose (max_lt_l _ _ _ Hd') as Hf.
+    pose (max_lt_r _ _ _ Hd') as Hg.
+    apply
+    (Def 0 == (If (S init) == ps[@Fin.F1]
+               Then (init # this --> q; End)
+               Else ((Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f)) ;;
+                    (init+2 # this --> init); (S init # this --> (init+2)); (init+2 # succ_this --> S init); Call 0))
+     In ((Implementation_aux _ f _ Hf (tl ps) init (init+3));; (init+2 # zero --> S init); Call 0)).
 
   (* Minimization *)
-  - apply End.
+  - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
+    apply
+    (Def 0 == (Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3));; init+1 # zero --> (init+2);
+              If (init+2) == init Then (init+1 # this --> q; End)
+                 Else (init+1 # this --> (init+2); init+2 # succ_this --> (init+1); Call 0)
+    In (init+2 # zero --> (init+1); Call 0)).
 Defined.
 
 (** The definition in the paper uses auxiliary process names distinct from the ps and q,
@@ -186,6 +321,7 @@ Definition Implementation' {m} (f:PRFunction m) : Choreography :=
 Eval compute in (Implementation' (Composition Successor [Zero])).
 Eval compute in (Implementation' (Composition Zero [Projection aux13])).
 Eval compute in (Implementation' (Composition (Projection aux22) (Zero :: [Successor]))).
+Eval compute in (Implementation' PR_add).
 *)
 
 (** There is also a parallel variant for composition. This is defined in the same steps, but
@@ -252,10 +388,24 @@ induction d.
       Par_Implementation_aux _ f _ Hdf (seq_labels init' fs) q (init' + (vsum (map Pi fs)))).
 
   (* Recursion *)
-  - apply End.
+  - rename f1 into f; rename f2 into g.
+    simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
+    pose (max_lt_l _ _ _ Hd') as Hf.
+    pose (max_lt_r _ _ _ Hd') as Hg.
+    apply
+    (Def 0 == (If (S init) == ps[@Fin.F1]
+               Then (init # this --> q; End)
+               Else ((Par_Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f)) ;;
+                    (init+2 # this --> init); (S init # this --> (init+2)); (init+2 # succ_this --> S init); Call 0))
+     In ((Par_Implementation_aux _ f _ Hf (tl ps) init (init+3));; (init+2 # zero --> S init); Call 0)).
 
   (* Minimization *)
-  - apply End.
+  - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
+    apply
+    (Def 0 == (Par_Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3));; init+1 # zero --> (init+2);
+              If (init+2) == init Then (init+1 # this --> q; End)
+                 Else (init+1 # this --> (init+2); init+2 # succ_this --> (init+1); Call 0)
+    In (init+2 # zero --> (init+1); Call 0)).
 Defined.
 
 Definition Par_Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Choreography :=
@@ -271,9 +421,8 @@ Eval compute in (Implementation' (Composition Zero [Projection aux13])).
 Eval compute in (Par_Implementation' (Composition Zero [Projection aux13])).
 Eval compute in (Implementation' (Composition (Projection aux22) (Zero :: [Successor]))).
 Eval compute in (Par_Implementation' (Composition (Projection aux22) (Zero :: [Successor]))).
+Eval compute in (Implementation' PR_add).
+Eval compute in (Par_Implementation' PR_add).
 *)
 
 End Definitions.
-
-(* We could also prove the converse: every choreography computes a computable function.
-   At least without recursion... *)

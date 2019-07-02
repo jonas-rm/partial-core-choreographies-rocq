@@ -7,7 +7,6 @@ Require Export Arith.
 Require Import Coq.Program.Equality.
 
 Ltac destroy H := repeat (elim H; clear H; intro; intro H).
-Ltac destroy_as H H' := rename H into H'; set (H:=True); destroy H'; clear H; rename H' into H.
 
 Section Logical.
 
@@ -89,18 +88,6 @@ Theorem beq_sym: forall n m : nat, (n =? m) = (m =? n).
 Proof.
   induction n as [|n' IH]; destruct m; auto.
   apply IH.
-Qed.
-
-Lemma O_plus_O : forall {n m}, n+m = 0 -> n = 0.
-Proof.
-double induction n m; auto; clear n m; intros.
-- inversion H0.
-- inversion H1.
-Qed.
-
-Lemma O_plus_O' : forall {n m}, n+m = 0 -> m = 0.
-Proof.
-intros n m; rewrite plus_comm; apply O_plus_O.
 Qed.
 
 End Natural_Numbers.
