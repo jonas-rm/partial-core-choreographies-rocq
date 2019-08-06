@@ -25,6 +25,9 @@ Definition RecVar := R.t.
 Definition RecVar_dec := Rdec.eqb.
 Definition State := St.State.
 
+Parameter R_fresh : list RecVar -> RecVar.
+Parameter R_fresh_sound : forall l, ~In (R_fresh l) l.
+
 (** ** Syntax of MC choreographies. *)
 
 Section Syntax.
@@ -116,19 +119,20 @@ match C with
 | Rec X CX C' => guarded CX /\ guarded C'
 end.
 
-Fixpoint WellFormed_ctx (C:Choreography) (l:list RecVar) : Prop :=
+Fixpoint WellFormed_fix (C:Choreography) : Prop :=
 match C with
 | End => True
-| Call X => In X l
+| Call X => True
 | Interaction eta C' => match eta with
-                        | Com p _ q => p <> q /\ WellFormed_ctx C' l
-                        | Sel p q _ => p <> q /\ WellFormed_ctx C' l
+                        | Com p _ q => p <> q /\ WellFormed_fix C'
+                        | Sel p q _ => p <> q /\ WellFormed_fix C'
                         end
-| Cond p q C1 C2 => p <> q /\ WellFormed_ctx C1 l /\ WellFormed_ctx C2 l
-| Rec X C1 C2 => WellFormed_ctx C1 (X::l) /\ (guarded C1) /\ WellFormed_ctx C2 (X::l)
+| Cond p q C1 C2 => p <> q /\ WellFormed_fix C1 /\ WellFormed_fix C2
+| Rec X C1 C2 => guarded C1 /\ ~Bound X C1 /\ ~Bound X C2 /\
+    (forall Y, ~(Bound Y C1 /\ Bound Y C2)) /\ WellFormed_fix C1 /\ WellFormed_fix C2
 end.
 
-Definition WellFormed (C:Choreography) : Prop := WellFormed_ctx C nil.
+Definition WellFormed (C:Choreography) : Prop := WellFormed_fix C /\ forall X, ~Free X C.
 
 (** Set of process names in a choreography. *)
 
@@ -148,50 +152,6 @@ match C with
 | Cond p q C1 C2 => (set_union_pid (set_union_pid (cons p (cons q nil)) (pn C1)) (pn C2))
 | Rec X C1 C2 => (set_union_pid (pn C1) (pn C2))
 end.
-
-Lemma pn_is_set (C:Choreography) : WellFormed C -> NoDup(pn C).
-Proof.
-intro.
-red in H.
-assert (forall l, WellFormed_ctx C l -> NoDup (pn C)); eauto.
-clear H; induction C; intros.
-+ (* End *)
-  apply NoDup_nil.
-+ (* X *)
-  apply NoDup_nil.
-+ (* e; C *)
-  simpl.
-  apply set_union_nodup.
-  simpl in H.
-  induction e; inversion_clear H.
-  - (* Com *)
-    simpl; repeat apply NoDup_cons; simpl; auto.
-    intro.
-    inversion_clear H; auto.
-    apply NoDup_nil.
-  - (* Sel *)
-    simpl; repeat apply NoDup_cons; simpl; auto.
-    intro.
-    inversion_clear H; auto.
-    apply NoDup_nil.
-   - induction e; inversion H; eauto.
-+ (* Cond *)
-  inversion H.
-  inversion_clear H1.
-  simpl.
-  repeat apply set_union_nodup; eauto.
-  simpl; repeat apply NoDup_cons; simpl; auto.
-  intro.
-  inversion_clear H1; auto.
-  apply NoDup_nil.
-+ (* Def *)
-  inversion H.
-  inversion_clear H1.
-  simpl.
-  repeat apply set_union_nodup; auto.
-  simpl; repeat apply NoDup_cons; simpl; eauto.
-  simpl; repeat apply NoDup_cons; simpl; eauto.
-Qed.
 
 End Syntax.
 
@@ -239,75 +199,214 @@ Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
 Lemma NotBoundRec : forall X Y CY C, ~Bound X (Def Y == CY In C) -> ~Bound X C.
 Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
 
-(** Properties of well-formedness. *)
+(** Process names form a set. *)
 
-Lemma WellFormed_ctx_mon : forall C l, WellFormed_ctx C l ->
-  forall l', (forall X, List.In X l -> List.In X l') -> WellFormed_ctx C l'.
-Proof.
-induction C; simpl; intros; auto.
-+ induction e; destroy_as H H'; split; eauto.
-+ destroy_as H H'; repeat split; eauto.
-+ destroy_as H H'; repeat split; auto.
-  - apply IHC1 with (r::l); auto.
-    intros X HX; inversion_clear HX; simpl; auto.
-  - apply IHC2 with (r::l); auto.
-    intros X HX; inversion_clear HX; simpl; auto.
-Qed.
-
-Lemma WellFormed_ctx_simpl : forall C l X, WellFormed_ctx C (X::l) ->
-  ~Free X C -> WellFormed_ctx C l.
-Proof.
-induction C; simpl; intros; auto.
-+ inversion_clear H; auto.
-  elim H0; auto.
-+ induction e; inversion_clear H; split; eauto.
-+ destroy_as H H'; split; auto.
-  split; [eapply IHC1 | eapply IHC2]; eauto.
-+ destroy_as H H'.
-  case_eq (RecVar_dec X r); intro.
-  - rewrite Rdec.eqb_eq in H3.
-    assert (forall Y, List.In Y (r::X::l) -> List.In Y (r::l)).
-    intros. inversion_clear H4; try rewrite H5; [left | rewrite <- H3]; auto.
-    repeat split; auto; apply WellFormed_ctx_mon with (r::X::l); auto.
-  - rewrite Rdec.eqb_neq in H3. 
-    generalize (NotFreeDef _ _ _ _ H3 H0).
-    generalize (NotFreeRec _ _ _ _ H3 H0).
-    assert (forall Y, List.In Y (r::X::l) -> List.In Y (X::r::l)).
-    1: { intros. inversion_clear H4; try rewrite H5; [right; left | idtac]; auto.
-         inversion_clear H5; try rewrite H6; [left | right; right]; auto.
-    }
-    repeat split; auto; [apply IHC1 with X | apply IHC2 with X]; auto;
-      eapply WellFormed_ctx_mon; eauto.
-Qed.
-
-Lemma DefEta_wf_ctx : forall X CX eta C l,
-  WellFormed_ctx (Def X == CX In (eta;C)) l <-> WellFormed_ctx (eta; Def X == CX In C) l.
+Lemma pn_is_set: forall C, WellFormed C -> NoDup(pn C).
 Proof.
 intros.
-induction eta; simpl; split; intro H'; destroy H'; repeat split; auto.
+inversion_clear H. clear H1.
+induction C; intros.
++ (* End *)
+  apply NoDup_nil.
++ (* X *)
+  apply NoDup_nil.
++ (* e; C *)
+  simpl.
+  apply set_union_nodup.
+  induction e; inversion_clear H0.
+  - (* Com *)
+    simpl; repeat apply NoDup_cons; simpl; auto.
+    intro.
+    inversion_clear H0; auto.
+    apply NoDup_nil.
+  - (* Sel *)
+    simpl; repeat apply NoDup_cons; simpl; auto.
+    intro.
+    inversion_clear H0; auto.
+    apply NoDup_nil.
+   - induction e; inversion H0; eauto.
++ (* Cond *)
+  destroy_as H0 H'.
+  simpl.
+  repeat apply set_union_nodup; eauto.
+  simpl; repeat apply NoDup_cons; simpl; auto.
+  intro.
+  inversion_clear H2; auto.
+  apply NoDup_nil.
++ (* Def *)
+  destroy_as H0 H'.
+  simpl.
+  repeat apply set_union_nodup; auto.
+Qed.
+
+(** Properties of well-formedness. *)
+
+Lemma DefEta_wf_fix : forall X CX eta C,
+  WellFormed_fix (Def X == CX In (eta;C)) <-> WellFormed_fix (eta; Def X == CX In C).
+Proof.
+intros.
+split; intros; 
+  induction eta; destroy_as H H'; repeat split; auto.
+Qed.
+
+Lemma DefEta_Free : forall X CX eta C Y, Free Y (Def X == CX In (eta;C)) <-> Free Y (eta; Def X == CX In C).
+Proof.
+intros.
+split; intros;
+  inversion_clear H; inversion_clear H1; simpl; auto.
 Qed.
 
 Lemma DefEta_wf : forall X CX eta C,
   WellFormed (Def X == CX In (eta;C)) <-> WellFormed (eta; Def X == CX In C).
 Proof.
-intros; apply DefEta_wf_ctx.
+intros.
+elim (DefEta_wf_fix X CX eta C); intros.
+generalize (DefEta_Free X CX eta C); intros.
+split; split; inversion_clear H2; auto.
 Qed.
 
-Lemma CondEta_wf_ctx : forall X CX p q C1 C2 l,
-  WellFormed_ctx (Def X == CX In (If p == q Then C1 Else C2)) l <-> WellFormed_ctx (If p == q Then Def X == CX In C1 Else Def X == CX In C2) l.
+Lemma CondEta_wf_fix : forall X CX p q C1 C2,
+  WellFormed_fix (Def X == CX In (If p == q Then C1 Else C2)) <-> WellFormed_fix (If p == q Then Def X == CX In C1 Else Def X == CX In C2).
 Proof.
 intros.
-simpl; split; intro H'; destroy H'; repeat split; auto.
-destroy_as H0 H''; auto.
+split; intros.
++ destroy_as H H'; repeat split; auto.
+  - eapply NotBoundThen; eauto.
+  - intro; intro. inversion_clear H7. elim (H3 Y); simpl; auto.
+  - eapply NotBoundElse; eauto.
+  - intro; intro. inversion_clear H7. elim (H3 Y); simpl; auto.
++ destroy_as H H'. destroy_as H1 H'; repeat split; simpl; auto.
+  - intro. inversion_clear H12; auto.
+  - intro. intro. inversion_clear H12. inversion_clear H14; [elim (H10 Y) | elim (H5 Y)]; auto.
+Qed.
+
+Lemma CondEta_Free : forall X CX p q C1 C2 Y,
+  Free Y (Def X == CX In (If p == q Then C1 Else C2)) <-> Free Y (If p == q Then Def X == CX In C1 Else Def X == CX In C2).
+Proof.
+intros.
+split; intros.
++ inversion_clear H; inversion_clear H1; repeat split; simpl; auto.
+  inversion_clear H; auto.
++ inversion_clear H; inversion_clear H0; inversion_clear H1; simpl; auto.
 Qed.
 
 Lemma CondEta_wf : forall X CX p q C1 C2,
   WellFormed (Def X == CX In (If p == q Then C1 Else C2)) <-> WellFormed (If p == q Then Def X == CX In C1 Else Def X == CX In C2).
 Proof.
-intros; apply CondEta_wf_ctx.
+intros.
+elim (CondEta_wf_fix X CX p q C1 C2); intros.
+generalize (CondEta_Free X CX p q C1 C2); intro.
+split; split; intros; inversion_clear H2; auto;
+  elim (H1 X0); intros; intro; apply (H4 X0); auto.
 Qed.
 
 End Syntactic_Properties.
+
+(** We work with a slightly relaxed form of the Barendregt convention: there are no nested
+  binders on the same variable. This requires alpha-renaming when unfolding recursive definitions,
+  in case the procedure definition itself defines new procedures. *)
+
+Section Alpha_Renaming.
+
+Fixpoint Var_subst X Y (C:Choreography) : Choreography :=
+match C with
+| End => End
+| Call Z => if (RecVar_dec X Z) then Call Y else Call Z
+| eta; C' => eta; Var_subst X Y C'
+| If p == q Then C1 Else C2 => If p == q Then (Var_subst X Y C1) Else (Var_subst X Y C2)
+| Def Z == CZ In C' => if (RecVar_dec X Z)
+                       then (Def Z == CZ In C')
+                       else (Def Z == (Var_subst X Y CZ) In (Var_subst X Y C'))
+end.
+
+Lemma Var_subst_idemp : forall X Y Z C, X <> Z -> Var_subst X Y (Var_subst X Z C) = Var_subst X Z C.
+Proof.
+induction C; simpl; auto; intros.
+- case_eq (RecVar_dec X r); intro; simpl; auto.
+  + case_eq (RecVar_dec X Z); intro; simpl; auto.
+    elim H. apply Rdec.eqb_eq; auto.
+  + rewrite H0; auto.
+- rewrite IHC; auto.
+- rewrite IHC1; auto; rewrite IHC2; auto.
+- case_eq (RecVar_dec X r); intro; simpl; rewrite H0; auto.
+  rewrite IHC1; auto. rewrite IHC2; auto.
+Qed.
+
+Lemma Var_subst_comm : forall X Y Z W C, Y <> Z -> X <> W -> X <> Z ->
+  Var_subst X Y (Var_subst Z W C) = Var_subst Z W (Var_subst X Y C).
+Proof.
+induction C; simpl; auto; intros.
+- assert (Z <> Y). auto.
+  clear H. rewrite <- Rdec.eqb_neq in H2, H0.
+  case_eq (RecVar_dec X r); case_eq (RecVar_dec Z r); simpl; unfold RecVar_dec; intros;
+    try rewrite H2; try rewrite H0; try rewrite H; try rewrite H3; auto.
+  elim H1. transitivity r; [idtac | symmetry]; apply Rdec.eqb_eq; auto.
+- rewrite IHC; auto.
+- rewrite IHC1; auto; rewrite IHC2; auto.
+- case_eq (RecVar_dec X r); case_eq (RecVar_dec Z r); intros; simpl;
+  rewrite H2; rewrite H3; auto.
+  rewrite IHC1; auto. rewrite IHC2; auto.
+Qed.
+
+Fixpoint Var_list (C:Choreography) : list RecVar:=
+match C with
+| End => nil
+| Call Z => (Z::nil)
+| eta; C' => Var_list C'
+| If p == q Then C1 Else C2 => set_union R.eq_dec (Var_list C1) (Var_list C2)
+| Def Z == CZ In C' => set_add R.eq_dec Z (set_union R.eq_dec (Var_list CZ) (Var_list C'))
+end.
+
+(* new strategy:
+   - add alpha-renaming to the precongruence;
+   - rule DefDef changes the name of the variable moving outwards to something fresh
+   - rule CUnfold requires Barendregt convention (well-formedness doesn't)
+*)
+
+(* revamp : Choreography -> (forbiddenVariables : list RecVar) -> (mapNewNames : list RecVar*RecVar -> Choreography. *)
+
+Fixpoint revamp (C:Choreography) (l:list RecVar) : Choreography :=
+match C with
+| End => End
+| Call Z => Call Z
+| eta; C' => eta; revamp C' l
+| If p == q Then C1 Else C2 => If p == q Then (revamp C1 l) Else (revamp C2 l)
+| Def Z == CZ In C' => if (In_dec R.eq_dec Z l)
+                       then let Z' := R_fresh l in let l' := set_add R.eq_dec Z' l in
+                            Def Z' == (Var_subst Z Z' (revamp CZ l')) In (Var_subst Z Z' (revamp C' l'))
+                       else let l' := set_add R.eq_dec Z l in
+                            Def Z == (revamp CZ l') In (revamp C' l')
+end.
+
+Lemma revamp_hack : forall C X l, List.In X l ->
+  let Y := R_fresh l in let l' := set_add R.eq_dec Y l in
+  Var_subst X Y (revamp C l') = revamp (Var_subst X Y C) l'.
+Proof.
+induction C; simpl; intros; auto.
++ elim RecVar_dec; auto.
++ rewrite IHC; auto.
++ rewrite IHC1; auto; rewrite IHC2; auto.
++ rename r into Z.
+  set (Y := R_fresh l).
+  set (l' := set_add R.eq_dec Y l).
+  set (W := R_fresh l').
+  set (l'' := set_add R.eq_dec Z l').
+  elim in_dec; intro; simpl;
+  case_eq (RecVar_dec X W); intro HXW; case_eq (RecVar_dec X Z); intro HXZ; simpl;
+  elim in_dec; intro; fold W l' l'';
+  try rewrite Rdec.eqb_eq in HXW; try rewrite Rdec.eqb_neq in HXW;
+  try rewrite Rdec.eqb_eq in HXZ; try rewrite Rdec.eqb_neq in HXZ; auto;
+  try (elim b; auto; fail).
+  - elim (R_fresh_sound l'). fold W. rewrite <- HXW. apply set_add_intro1; auto.
+  - rewrite <- HXZ. repeat rewrite Var_subst_idemp; auto.
+  - assert (Y <> Z).
+    rewrite Var_subst_comm; try rewrite IHC1; auto;
+      try (apply set_add_intro1; auto; fail).
+    rewrite Var_subst_comm; try rewrite IHC2; auto;
+      try (apply set_add_intro1; auto; fail).
+    2: apply set_add_intro2; auto.
+
+End Alpha_Remaming.
 
 (** ** Semantics of MC. *)
 
@@ -610,24 +709,69 @@ elim (Unfolded_pn_iff _ _ _ _ H p); intros.
 elim H1; auto.
 Qed.
 
-Lemma Unfolded_wf_ctx : forall X CX C C' l lX l',
-  (forall Y, List.In Y l -> List.In Y l') -> (forall Y, List.In Y lX -> List.In Y l') ->
-  WellFormed_ctx CX lX -> WellFormed_ctx C l -> Unfolded X CX C C' -> WellFormed_ctx C' l'.
+Lemma Unfolded_Free : forall X CX C C', Unfolded X CX C C' ->
+  forall Y, Free Y C' -> Free Y CX \/ Free Y C.
+Proof.
+induction C; intros; simpl; inversion H; auto.
+- rewrite <- H2 in H0. eapply IHC; eauto.
+- rewrite <- H2 in H0. inversion_clear H0; auto.
+  elim IHC1 with C3 Y; auto.
+- rewrite <- H2 in H0. inversion_clear H0; auto.
+  elim IHC2 with C3 Y; auto.
+- rewrite <- H3 in H0. inversion_clear H0. inversion_clear H8; auto.
+  elim IHC2 with C3 Y; auto.
+Qed.
+
+Lemma Unfolded_Bound : forall X CX C C', Unfolded X CX C C' ->
+  forall Y, Bound Y C' -> Bound Y CX \/ Bound Y C.
+Proof.
+induction C; intros; simpl; inversion H; auto.
+- rewrite <- H2 in H0. eapply IHC; eauto.
+- rewrite <- H2 in H0. inversion_clear H0; auto.
+  elim IHC1 with C3 Y; auto.
+- rewrite <- H2 in H0. inversion_clear H0; auto.
+  elim IHC2 with C3 Y; auto.
+- rewrite <- H3 in H0. inversion_clear H0; auto. inversion_clear H7; auto.
+  elim IHC2 with C3 Y; auto.
+Qed.
+
+Lemma Unfolded_wf_fix : forall X CX C C', Unfolded X CX C C' -> WellFormed_fix CX -> WellFormed_fix C ->
+  (forall Y, ~(Bound Y CX /\ Bound Y C')) -> WellFormed_fix C'.
+Proof.
+induction C; intros C' HU HX HC HB; inversion HU; auto.
+- rewrite <- H1; auto.
+- rewrite <- H0 in HB. simpl in HB.
+  induction e; destroy HC; try split; auto.
+- rewrite <- H0 in HB. simpl in HB.
+  destroy HC. repeat split; eauto.
+  eapply IHC1; eauto.
+  intro. intro. inversion_clear H7.
+  eapply HB; eauto.
+- rewrite <- H0 in HB. simpl in HB.
+  destroy HC. repeat split; eauto.
+  eapply IHC2; eauto.
+  intro. intro. inversion_clear H7.
+  eapply HB; eauto.
+- rewrite <- H1 in HB. simpl in HB.
+  destroy HC. repeat split; eauto.
+  + intro. elim (Unfolded_Bound _ _ _ _ H4 _ H10); auto.
+    intro; eapply HB; eauto.
+  + intro Z. intro. inversion_clear H10.
+    elim (Unfolded_Bound _ _ _ _ H4 _ H12); intro; [eapply HB | eapply H8]; eauto.
+  + eapply IHC2; eauto.
+    intro Z; intro. inversion_clear H10.
+    eapply HB; eauto.
+Qed.
+
+Lemma Unfolded_wf : forall X CX C C', WellFormed CX -> WellFormed C -> Unfolded X CX C C' ->
+  (forall Y, ~(Bound Y CX /\ Bound Y C')) -> WellFormed C'.
 Proof.
 intros.
-revert dependent l'; revert dependent l.
-induction H3; simpl; intros.
-+ apply WellFormed_ctx_mon with lX; auto.
-+ induction eta; inversion_clear H2; eauto.
-+ destroy_as H2 H'; repeat split; eauto.
-  apply WellFormed_ctx_mon with l; auto.
-+ destroy_as H2 H'; repeat split; eauto.
-  apply WellFormed_ctx_mon with l; auto.
-+ destroy_as H2 H'; repeat split; auto.
-  - apply WellFormed_ctx_mon with (Y::l); auto.
-    intros Z HZ; inversion_clear HZ; simpl; auto.
-  - apply IHUnfolded with (Y::l); simpl; auto.
-    intros Z HZ; inversion_clear HZ; simpl; auto.
+inversion_clear H; inversion_clear H0.
+split.
++ eapply Unfolded_wf_fix; eauto.
++ intro Z; intro.
+  elim (Unfolded_Free _ _ _ _ H1 _ H0); [apply H4 | apply H5].
 Qed.
 
 Lemma Unfolded_guarded : forall X CX C C', Unfolded X CX C C' ->
@@ -830,29 +974,116 @@ Qed.
 
 (** Precongruence vs well-formedness. *)
 
-Lemma MCP_step_guarded : forall C C', C ~< C' ->
-  guarded C -> forall l, WellFormed_ctx C l -> guarded C'.
-Proof.
-intros C C' H; induction H; simpl; intros; auto.
-- split. 2: apply H. induction eta; apply H0.
-- inversion_clear H0; split; eauto; apply H2.
-- destroy_as H2 H'; auto.
-- inversion_clear H0; split; eauto; eapply Unfolded_guarded; eauto.
-- inversion_clear H0; split; eauto; eapply IHMC_Precongr_step; eauto; apply H1.
-Qed.
-
-Lemma MCP_step_wf_ctx : forall C C' l, WellFormed_ctx C l -> C ~< C' -> WellFormed_ctx C' l.
+Lemma MCP_step_guarded : forall C C', C ~< C' -> guarded C -> WellFormed C -> guarded C'.
 Proof.
 intros.
-revert l H; induction H0; intros; auto.
+inversion_clear H1. clear H3.
+induction H; simpl; auto.
+- split; auto. induction eta; destroy_as H2 H'; auto.
+- split; eauto. destroy_as H2 H'; auto.
+- destroy_as H0 H'; auto.
+- inversion_clear H0; split; eauto; eapply Unfolded_guarded; eauto.
+- inversion_clear H0; split; eauto; eapply IHMC_Precongr_step; eauto.
+  destroy_as H2 H'; auto.
+Qed.
+
+Lemma MCP_step_wf_fix : forall C C', WellFormed_fix C -> C ~< C' -> WellFormed_fix C'.
+Proof.
+intros.
+revert H; induction H0; intros; auto.
 + induction eta1; induction eta2; destroy_as H0 H'; repeat split; auto.
 + induction eta; destroy_as H1 H'; repeat split; auto.
 + induction eta; destroy_as H1 H'; destroy_as H3 H''; repeat split; auto.
-+ destroy_as H0 H'; destroy_as H2 H''; repeat split; auto.
-+ simpl. simpl in H. induction eta; repeat split; apply H.
-+ simpl. simpl in H. induction eta; repeat split; apply H.
-+ simpl. simpl in H. repeat split; apply H.
-+ simpl. simpl in H. repeat split; apply H.
++ destroy_as H0 H'. destroy_as H2 H''. repeat split; auto.
++ induction eta; destroy_as H H'; repeat split; auto.
++ induction eta; destroy_as H H'; repeat split; auto.
++ destroy_as H H'. destroy_as H1 H'. repeat split; auto.
+  - intro H'; inversion_clear H'; auto.
+  - intros; intro; inversion_clear H12; auto.
+    inversion_clear H14; [elim (H10 Y) | elim (H5 Y)]; eauto.
++ destroy_as H H'. repeat split; auto.
+  - eapply NotBoundThen; eauto.
+  - intro; intro. inversion_clear H7; eapply H3; split; simpl; eauto.
+  - eapply NotBoundElse; eauto.
+  - intro; intro. inversion_clear H7; eapply H3; split; simpl; eauto.
++ destroy_as H2 H'. repeat split; auto.
+  - intro. inversion_clear H13; auto.
+    inversion_clear H14; auto.
+    elim (H6 Y); split; simpl; auto.
+  - intro; intro. inversion_clear H13.
+    inversion_clear H15. apply H5. rewrite <- H13; simpl; auto.
+    inversion_clear H13. elim (H6 Y0); simpl; auto.
+    elim (H11 Y0); auto.
+  - eapply NotBoundRec; eauto.
+  - intro; intro. inversion_clear H13.
+    elim (H6 Y0); simpl; auto.
++ destroy_as H0 H'. repeat split; auto.
+  - intro. elim (Unfolded_Bound _ _ _ _ H _ H6); auto.
+  - intro; intro. inversion_clear H6.
+
+  (* OH SHIT *)
+    elim (Unfolded_Bound _ _ _ _ H _ H8); auto.
+inversion_clear H13; auto.
+    inversion_clear H14; auto.
+    elim (H6 Y); split; simpl; auto.
+  - intro; intro. inversion_clear H13.
+    inversion_clear H15. apply H5. rewrite <- H13; simpl; auto.
+    inversion_clear H13. elim (H6 Y0); simpl; auto.
+    elim (H11 Y0); auto.
+  - eapply NotBoundRec; eauto.
+  - intro; intro. inversion_clear H13.
+    elim (H6 Y0); simpl; auto.
+
+
+
+(* HMMM... *)
++ destroy_as H2 H'; repeat split; auto.
+  - apply WellFormed_ctx_simpl with X; auto.
+    eapply WellFormed_ctx_mon; eauto.
+    intros.
+    inversion_clear H7; try rewrite H8; [right; left | idtac]; auto.
+    inversion_clear H8; try rewrite H9; [left | right; right]; auto.
+  - eapply WellFormed_ctx_mon; eauto.
+    intros.
+    inversion_clear H7; try rewrite H8; [left | right; right]; auto.
+  - eapply WellFormed_ctx_mon; eauto.
+    intros.
+    inversion_clear H7; try rewrite H8; [right; left | idtac]; auto.
+    inversion_clear H8; try rewrite H7; [left | right; right]; auto.
++ destroy_as H0 H'; repeat split; auto.
+  apply (Unfolded_wf_ctx X CX C1 C2 (X::l) (X::l) (X::l)); auto.
++ simpl; auto.
++ induction eta; destroy_as H H'; split; auto.
++ destroy_as H H'; split; auto.
++ destroy_as H H'; split; auto.
++ destroy_as H H'; repeat split; eauto.
+Qed.
+
+Lemma MCP_step_wf : forall C C', WellFormed C -> C ~< C' -> WellFormed C'.
+Proof.
+intros.
+inversion_clear H; split; [clear H2; revert H1 | clear H1; revert H2].
+(* Syntactic conditions *)
+induction H0; intros; auto.
++ induction eta1; induction eta2; destroy_as H1 H'; repeat split; auto.
++ induction eta; destroy_as H1 H'; repeat split; auto.
++ induction eta; destroy_as H1 H'; destroy_as H3 H''; repeat split; auto.
++ destroy_as H1 H'. destroy_as H2 H''. repeat split; auto.
++ induction eta; destroy_as H1 H'; repeat split; auto.
++ induction eta; destroy_as H1 H'; repeat split; auto.
++ destroy_as H1 H'. destroy_as H0 H'. repeat split; auto.
+  - intro H'; inversion_clear H'; auto.
+  - intros; intro; inversion_clear H12; auto.
+    inversion_clear H14; [elim (H10 Y) | elim (H5 Y)]; eauto.
++ destroy_as H1 H'. repeat split; auto.
+  - eapply NotBoundThen; eauto.
+  - eapply NotBoundElse; eauto.
++ destroy_as H2 H'. repeat split; auto.
+  2: eapply NotBoundRec; eauto.
+  intro. inversion_clear H11; auto. inversion_clear H12; auto.
+
+
+(* HMMM... *)
 + destroy_as H2 H'; repeat split; auto.
   - apply WellFormed_ctx_simpl with X; auto.
     eapply WellFormed_ctx_mon; eauto.

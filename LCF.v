@@ -617,34 +617,6 @@ intros.
 induction H; constructor; auto.
 Qed.
 
-Lemma NotFree_wf_ctx : forall C l, WellFormed_ctx C l -> forall X, List.In X l \/ ~Free X C.
-Proof.
-induction C; simpl; intros.
-- auto.
-- case_eq (RecVar_dec r X).
-  + rewrite Rdec.eqb_eq. left. rewrite <- H0; auto.
-  + rewrite Rdec.eqb_neq. auto.
-- apply IHC. induction e; inversion_clear H; auto.
-- destroy_as H H'. elim (IHC1 _ H1 X); auto. elim (IHC2 _ H X); auto.
-  right; intro. inversion H4; auto.
-- destroy_as H H'. elim (IHC1 _ H0 X); intros.
-  1: { inversion_clear H2; auto.
-       right; rewrite H3; intro. inversion H2; auto.
-  }
-  elim (IHC2 _ H X); intros.
-  1: {
-       inversion_clear H3; auto.
-       right; rewrite H4; intro. inversion H3; auto.
-  }
-  right; intro. inversion_clear H4. inversion_clear H6; auto.
-Qed.
-
-Lemma NotFree_wf : forall C, WellFormed C -> forall X, ~Free X C.
-Proof.
-intros.
-elim (NotFree_wf_ctx _ _ H X); auto.
-Qed.
-
 Lemma GarbageCollect_ctx : forall X CX C l, WellFormed_ctx C l -> ~Free X C ->
   (exists Y, Free Y C /\ List.In Y l) \/ (Def X == CX In C) ~<= C.
 Proof.
