@@ -4,9 +4,308 @@ Require Import Coq.Arith.Arith.
 Require Import Coq.Lists.List.
 
 Module Import MC_Plus (P E V R: DecType) (Ev : Eval E V).
+(* Module Import MC_Plus (P E R V: DecentType) (Ev : Eval E V). *)
 
 Module Import agh := MCBase P E V R Ev.
 
+
+Lemma Precongr_garbage_EtaEta_comm : forall eta1 eta2 n C1 C2, 
+  C1 $ n g>~ (eta1; eta2; C2) ->
+  exists C3, C1 = (eta1; eta2; C3) /\ (eta2; eta1; C3) $ n g>~ (eta2; eta1; C2).
+Proof.
+intros.
+inversion H. 
++ inversion H0.
++ inversion H3. 
+  - inversion H5.
+  - eexists. split. auto. repeat constructor. trivial.
+Qed.
+
+Lemma Precongr_garbage_EtaCond_comm : forall eta p q n C1 C2 C2', 
+  C1 $ n g>~ (eta; If p == q Then C2 Else C2') ->
+    exists C3 C3', C1 = (eta; If p == q Then C3 Else C3') /\ 
+      (If p == q Then (eta; C3) Else (eta; C3')) $ n g>~ (If p == q Then (eta; C2) Else (eta; C2')).
+Proof.
+intros.
+inversion H. 
++ inversion H0.
++ inversion H3. 
+  - inversion H5.
+  - repeat eexists. repeat constructor. trivial.
+  - repeat eexists. repeat constructor. trivial.
+Qed.
+
+Lemma Precongr_garbage_CondEta_comm : forall eta p q n C1 C2 C2', 
+  C1 $ n g>~ (If p == q Then (eta; C2) Else (eta; C2')) ->
+    exists C3 C3', C1 = (If p == q Then (eta; C3) Else (eta; C3')) /\ 
+       (eta; If p == q Then C3 Else C3') $ n g>~ (eta; If p == q Then C2 Else C2').
+Proof.
+intros.
+inversion H. 
++ inversion H0.
++ inversion H3. 
+  - inversion H7.
+  - repeat eexists. try (repeat constructor; trivial; fail).
++ inversion H3. 
+  - inversion H7.
+  - repeat eexists. try (repeat constructor; trivial; fail).
+Qed.
+
+
+Lemma Precongr_garbage_CondCond_comm : forall p q r s n C1 C2 C2' C3 C3', 
+  C1 $ n g>~ (If p == q Then (If r == s Then C2 Else C2') Else (If r == s Then C3 Else C3')) ->
+    exists C4 C4' C5 C5', C1 = (If p == q Then (If r == s Then C4 Else C4') Else (If r == s Then C5 Else C5')) /\ 
+      (If r == s Then (If p == q Then C4 Else C5) Else (If p == q Then C4' Else C5')) $ n g>~
+        (If r == s Then (If p == q Then C2 Else C3) Else (If p == q Then C2' Else C3')).
+Proof.
+intros.
+inversion H. 
++ inversion H0.
++ inversion H3. 
+  - inversion H7.
+  - repeat eexists. try (repeat constructor; trivial; fail).
+  - repeat eexists. try (repeat constructor; trivial; fail).
++ inversion H3. 
+  - inversion H7.
+  - repeat eexists. try (repeat constructor; trivial; fail).
+  - repeat eexists. try (repeat constructor; trivial; fail).
+Qed.
+
+Lemma Precongr_garbage_EtaRec_comm : forall eta X CX n C1 C2, 
+  C1 $ n g>~ (eta; Def X == CX In C2) ->
+    exists C3, C1 = (eta; Def X == CX In C3) /\ (Def X == CX In (eta; C3)) $ n g>~ (Def X == CX In (eta; C2)).
+Proof.
+intros.
+inversion H. 
++ inversion H0.
++ inversion H3.
+  - inversion H5.
+  - eexists. repeat constructor. trivial.
+Qed.
+
+Lemma Precongr_garbage_RecEta_comm : forall eta X CX n C1 C2, 
+  C1 $ n g>~ (Def X == CX In (eta; C2)) ->
+    exists C3, C1 = (Def X == CX In (eta; C3)) /\ (eta; Def X == CX In C3) $ n g>~ (eta; Def X == CX In C2).
+Proof.
+intros.
+inversion H. 
++ inversion H0.
++ inversion H3.
+  - inversion H6.
+  - eexists. repeat constructor. trivial.
+Qed.
+
+Lemma Precongr_garbage_CondRec_comm : forall p q X CX n C1 C2 C2', 
+  C1 $ n g>~ (If p == q Then Def X == CX In C2 Else Def X == CX In C2') ->
+    exists C3 C3',  C1 = (If p == q Then Def X == CX In C3 Else Def X == CX In C3') /\ 
+      (Def X == CX In If p == q Then C3 Else C3') $ n g>~ (Def X == CX In If p == q Then C2 Else C2').
+Proof.
+intros. inversion H.
++ inversion H0.
++ inversion_clear H3.
+  - inversion H7.
+  - eexists. eexists.
+    split; auto.
+    repeat constructor. trivial.
++ inversion_clear H3.
+  - inversion H7.
+  - eexists. eexists.
+    split; auto.
+    repeat constructor. trivial.
+Qed.
+
+Lemma Precongr_garbage_RecCond_comm : forall p q X CX n C1 C2 C2', 
+  C1 $ n g>~ (Def X == CX In If p == q Then C2 Else C2') ->
+    exists C3 C3', C1 = (Def X == CX In If p == q Then C3 Else C3') /\ 
+      (If p == q Then Def X == CX In C3 Else Def X == CX In C3') $ n g>~ (If p == q Then Def X == CX In C2 Else Def X == CX In C2').
+Proof.
+intros. inversion H.
++ inversion H0.
++ inversion_clear H3.
+  - inversion H6.
+  - eexists. eexists.
+    split; auto.
+    repeat constructor. trivial.
+  - eexists. eexists.
+    split; auto.
+    repeat constructor. trivial.
+Qed.
+
+Lemma Precongr_garbage_DefDef_comm : forall X CX Y CY n C1 C2, 
+  C1 $ n g>~ (Def X == CX In Def Y == CY In C2) ->
+    exists C3, C1 = (Def X == CX In Def Y == CY In C3) /\ 
+      (Def Y == CY In Def X == CX In C3) $ n g>~ (Def Y == CY In Def X == CX In C2).
+Proof.
+intros. inversion H.
++ inversion H0.
++ inversion_clear H3.
+  - inversion H6.
+  - eexists. 
+    split; auto.
+    repeat constructor. trivial.
+Qed.
+
+
+Lemma Precongr_garbage_sym_base : forall n C1 C2 C3, C1 $ n g>~ C2 -> Precongr_sym C2 C3 ->
+  exists C2', Precongr_sym C1 C2' /\ C2' $ n g>~ C3.
+Proof.
+intros.
+inversion H0.
++ rewrite <- H2 in H.
+  apply Precongr_garbage_EtaEta_comm in H.
+  inversion_clear H.
+  eexists.
+  inversion_clear H4.
+  rewrite H.
+  split; repeat constructor; trivial.
++ rewrite <- H3 in H.
+  apply Precongr_garbage_EtaCond_comm in H.
+  inversion_clear H.
+  inversion_clear H5.
+  eexists.
+  inversion_clear H.
+  rewrite H5.
+  split; repeat constructor; trivial.
++ rewrite <- H3 in H.
+  apply Precongr_garbage_CondEta_comm in H.
+  repeat (inversion_clear H; inversion_clear H5).
+  eexists.
+  split; repeat constructor; trivial.
++ rewrite <- H2 in H.
+  apply Precongr_garbage_CondCond_comm in H.
+  repeat (inversion_clear H; inversion_clear H4).
+  eexists.
+  split; repeat constructor; auto; apply H1.
++ rewrite <- H1 in H.
+  apply Precongr_garbage_EtaRec_comm in H.
+  inversion_clear H. 
+  inversion_clear H3.
+  eexists.
+  rewrite H.
+  split; repeat constructor; auto. 
++ rewrite <- H1 in H.
+  apply Precongr_garbage_RecEta_comm in H.
+  inversion_clear H. 
+  inversion_clear H3.
+  eexists.
+  rewrite H.
+  split; repeat constructor; auto.
++ rewrite <- H1 in H.
+  apply Precongr_garbage_CondRec_comm in H.
+  inversion_clear H.
+  inversion_clear H3.
+  eexists.
+  inversion_clear H.
+  rewrite H3.
+  split; repeat constructor; trivial.
++ rewrite <- H1 in H.
+  apply Precongr_garbage_RecCond_comm in H.
+  inversion_clear H.
+  inversion_clear H3.
+  eexists.
+  inversion_clear H.
+  rewrite H3.
+  split; repeat constructor; trivial.
++ rewrite <- H4 in H.
+  apply Precongr_garbage_DefDef_comm in H.
+  inversion_clear H.
+  inversion_clear H6.
+  eexists.
+  inversion_clear H.
+  split; repeat constructor; trivial.
+Qed.
+
+Lemma Precongr_garbage_sym_comm : forall n1 n2 C1 C2 C3, C1 $ n1 g>~ C2 -> C2 $ n2 ~<>~ C3 ->
+  exists C2', C1 $ n2 ~<>~ C2' /\ C2' $ n1 g>~ C3.
+Proof.
+intros n1 n2.
+revert n1.
+induction n2.
++ intros.
+  elim (Precongr_garbage_sym_base n1 C1 C2 C3); intros.
+  inversion_clear H1.
+  exists x; split; [constructor;trivial|trivial].
+  trivial.
+  inversion_clear H0.
+  trivial.
++ intro n1.
+  induction n1.
+  - intros.
+    inversion_clear H.
+    inversion H1.
+    rewrite <- H2 in H0.
+    inversion H0.
+  - intros. 
+    inversion H; inversion H0; rewrite <- H4 in H7; inversion H7. 
+    * fold GPrecongr_step in H2.
+      fold SPrecongr_step in H6.
+      rewrite H11 in H6.
+      elim (IHn2 _ _ _ _ H2 H6).
+      intros.
+      exists (eta; x).
+      inversion H9.
+      split; constructor; trivial.
+    * fold GPrecongr_step in H2.
+      fold SPrecongr_step in H6.
+      rewrite H12 in H6.
+      elim (IHn2 _ _ _ _ H2 H6).
+      intros.
+      eexists (If p == q Then x Else C).
+      inversion H9.
+      split; constructor; trivial.
+    * eexists (If p == q Then C' Else C''0).
+      rewrite H13 in H6.
+      split; constructor; trivial.
+    * eexists (If p == q Then C''0 Else C').
+      rewrite H12 in H6.
+      split; constructor; trivial.
+    * fold GPrecongr_step in H2.
+      fold SPrecongr_step in H6.
+      rewrite H13 in H6.
+      elim (IHn2 _ _ _ _ H2 H6).
+      intros.
+      eexists (If p == q Then C Else x).
+      inversion H9.
+      split; constructor; trivial.
+    * fold GPrecongr_step in H2.
+      fold SPrecongr_step in H6.
+      rewrite H12 in H6.
+      elim (IHn2 _ _ _ _ H2 H6).
+      intros.
+      eexists (Def X == C0 In x).
+      inversion H9.
+      split; constructor; trivial.
+Qed.
+
+(*
+Lemma Precongr_garbage_dec : forall C C', (Precongr_garbage C C') + ~((Precongr_garbage C C')).
+Proof. 
+intros C C'. case C,C'; try (right; intro; inversion H; fail).
+case C2; try (right; intro; inversion H; fail).
+left. constructor.
+Qed.
+
+Lemma Precongr_sym_dec : forall C C', (Precongr_sym C C') + ~((Precongr_sym C C')).
+Proof. 
+intros C C'. 
+case C,C'; try (right; intro; inversion H; auto; fail).
+case (exists C'', C = e;e0)
+
+induction C2; try (right; intro; inversion H; fail).
+left. constructor.
+Qed.
+
+
+Lemma Precongr_unfold_dec : forall C C', (Precongr_unfold C C') + ~((Precongr_unfold C C')).
+Proof. 
+induction C, C'; try (right; intro; inversion H; fail).
+case (R.eq_dec r r0).
++ 
++ right. intro; inversion H; auto.
+Qed.
+
+
+(*
 Inductive MCToStar_weighted : nat -> Configuration -> Configuration  -> Prop :=
   | MCT_W_Refl : forall {c}, MCToStar_weighted 0 c c
   | MCT_W_Step : forall {c1 c2 c3 n1 n2}, MCTo_weighted n1 c1 c2 -> MCToStar_weighted n2 c2 c3 -> MCToStar_weighted (S (n1+n2)) c1 c3
