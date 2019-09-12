@@ -3,15 +3,17 @@ Require Export List.
 Require Export Sorting.Permutation.
 Require Export Arith.
 
-(* Kill me. *)
+(* Kill me.
 Require Import Coq.Program.Equality.
+*)
 
 Ltac destroy H := repeat (elim H; clear H; intro; intro H).
 Ltac destroy_as H H' := rename H into H'; set (H:=True); destroy H'; clear H; rename H' into H.
 
 Section Logical.
 
-(** De Morgan law *)
+(** Logical stuff.
+    De Morgan law *)
 Lemma deMorganNotOr : forall P Q : Prop,
   ~(P \/ Q) -> ~P /\ ~Q.
 Proof.
@@ -32,9 +34,10 @@ tauto.
 Qed.
 
 Definition or_add_left : forall A B C, B \/ C -> (A \/ B) \/ C.
+Proof.
 intros.
 inversion H; auto.
-Qed.
+Defined.
 
 Definition is_defined (A:Type) (o:option A) : bool :=
 match o with
@@ -109,7 +112,10 @@ Section Lists.
 
 Variable T:Type.
 
+(** Random stuff about lists. *)
+
 Lemma Permutation_NoDup : forall P Q: list T, Permutation P Q -> NoDup P -> NoDup Q.
+Proof.
 intros.
 induction H; auto.
 inversion_clear H0; apply NoDup_cons; auto.
@@ -127,6 +133,7 @@ Qed.
 
 Lemma NoDup_app_char : forall l l':list T, NoDup l -> NoDup l' ->
                       (forall x, In x l -> ~In x l') -> NoDup (l++l').
+Proof.
 Proof.
 induction l; simpl; auto.
 intros.
@@ -328,12 +335,14 @@ Fixpoint eta_elim_aux {A n} (v:t A (S n)) H :=
   | Fin.FS H' => (tl v)[@H]
 end.
 
-(** A variant of the eta lemma from the standard library. *)
+(* A variant of the eta lemma from the standard library.
 Lemma eta_elim : forall {A} {n} (v:t A (S n)) x Hi, v[@Hi] = x -> hd v = x \/ exists Hi', (tl v)[@Hi'] = x.
+Proof.
 dependent induction Hi; intros.
 - left; rewrite nth_hd in H; auto.
 - right; rewrite nth_tl in H; eauto.
 Qed.
+*)
 
 (** Hopefully self-explanatory. *)
 Lemma map_shiftin : forall {A} {B} {n} (f:A->B) (v:t A n) x, map f (shiftin x v) = shiftin (f x) (map f v).
