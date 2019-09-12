@@ -39,6 +39,15 @@ Parameter eq_dec : forall x y:t, {x = y} + {x <> y}.
 
 End DecType.
 
+(** * Booleans as a decidable type *)
+
+Module Bool : DecType.
+
+Definition t := bool.
+Definition eq_dec := bool_dec.
+
+End Bool.
+
 Module DecidableType (Import M:DecType).
 
 Definition eqb (x y:t) := if (eq_dec x y) then true else false.
@@ -76,10 +85,8 @@ End DecidableType.
     Evaluation is parameterized on the types of expressions and values.
     Decidability of expressions makes choreography equality decidable. *)
 
-Module Type Eval.
-
-Parameter Expression Value : Type.
-Parameter eval : Expression -> Value -> Value.
+Module Type Eval (Expression Value : DecType).
+Parameter eval : Expression.t -> Value.t -> Value.t.
 
 End Eval.
 
@@ -316,11 +323,13 @@ End GState.
     process's local set of variables to values.
     The set of variables needs to be decidable. *)
 
-Module LState (X : DecType).
+Module LState (V X : DecType).
 
-Parameter Value : Type.
-
+Module Vdec := DecidableType V.
 Module Xdec := DecidableType X.
+
+Definition Value := V.t.
+Definition Value_dec := Vdec.eqb.
 Definition Var := X.t.
 Definition Var_dec := Xdec.eqb.
 
@@ -433,16 +442,14 @@ End LState.
     Note that all processes are required to use the same sets of variables
     and values. *)
 
-Module GState (P X : DecType).
+Module GState (P V X : DecType).
 
-Module Import LSt := LState X.
+Module Import LSt := LState V X.
+
 Module Pdec := DecidableType P.
-Module Xdec := DecidableType X.
 
 Definition Pid := P.t.
 Definition Pid_dec := Pdec.eqb.
-Definition Var := X.t.
-Definition Var_dec := Xdec.eqb.
 
 Definition State := Pid -> LSt.State.
 
