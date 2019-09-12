@@ -4,6 +4,10 @@ Require Export Permutation.
 Require Export Setoid.
 Require Export Basic.
 
+(** * Labels
+    We require that there be exactly two labels (left and right), as this
+    is the default practice in many choreography languages. *)
+
 Section Labels.
 
 Inductive Label : Type :=
@@ -23,6 +27,10 @@ match l, l' with
 end.
 
 End Labels.
+
+(** * Decidable types
+    Several structures need to be decidable.
+    For some annoying reason, the standard library version does not work. *)
 
 Module Type DecType.
 
@@ -64,18 +72,16 @@ Qed.
 
 End DecidableType.
 
-Module Type Eval (Expression Value : DecType).
+(** * Evaluation
+    Evaluation is parameterized on the types of expressions and values.
+    Decidability of expressions makes choreography equality decidable. *)
 
-Parameter eval : Expression.t -> Value.t -> Value.t.
+Module Type Eval.
+
+Parameter Expression Value : Type.
+Parameter eval : Expression -> Value -> Value.
 
 End Eval.
-
-(*
-Definition set_add_pid := set_add eq_pid_dec.
-Definition set_inter_pid := set_inter eq_pid_dec.
-
-Definition eq_pidset (s:set Pid) (s':set Pid) : Prop := Permutation s s'.
-*)
 
 (*
 Module GState (P V X : DecType).
@@ -305,19 +311,23 @@ Qed.
 End GState.
 *)
 
-Module LState (V X : DecType).
+(** * Local states
+    This is the state of a particular process. It maps the values in the
+    process's local set of variables to values.
+    The set of variables needs to be decidable. *)
 
-Module Vdec := DecidableType V.
+Module LState (X : DecType).
+
+Parameter Value : Type.
+
 Module Xdec := DecidableType X.
-
-Definition Value := V.t.
-Definition Value_dec := Vdec.eqb.
 Definition Var := X.t.
 Definition Var_dec := Xdec.eqb.
 
 Definition State := Var -> Value.
 
-(** Equivalence of states *)
+(** ** Equivalence of states *)
+
 Definition eq_state (s s': State) : Prop := forall x, s x = s' x.
 
 Lemma eq_state_neq : forall x s s', s x <> s' x -> ~ eq_state s s'.
@@ -374,6 +384,8 @@ Add Parametric Relation : State eq_state
 
 (* TODO: Perhaps Add Parametric Morphism *)
 
+(** ** Updating states *)
+
 Definition update (s:State) (x:Var) (v:Value) : State :=
   fun (y:Var) => if (Var_dec x y) then v else (s y).
 
@@ -415,23 +427,29 @@ Qed.
 
 End LState.
 
-Module GState (P V X : DecType).
+(** * Global states
+    These are states for a choreography, or for a network as a whole:
+    they map each process name to its state.
+    Note that all processes are required to use the same sets of variables
+    and values. *)
 
-Module Import LSt := LState V X.
+Module GState (P X : DecType).
+
+Module Import LSt := LState X.
 Module Pdec := DecidableType P.
-Module Vdec := DecidableType V.
 Module Xdec := DecidableType X.
 
 Definition Pid := P.t.
 Definition Pid_dec := Pdec.eqb.
-Definition Value := V.t.
-Definition Value_dec := Vdec.eqb.
 Definition Var := X.t.
 Definition Var_dec := Xdec.eqb.
 
 Definition State := Pid -> LSt.State.
 
-(** Equivalence of states up to a set of processes *)
+(** ** Equivalence of states
+    We now define equivalence up to a set of processes: we are often only
+    interested in some of those. *)
+
 Definition eq_state (P : list Pid) (s: State) (s': State) : Prop := 
   forall p, In p P -> LSt.eq_state (s p) (s' p).
 
@@ -549,6 +567,9 @@ Add Parametric Relation P : State (eq_state P)
 
 (* TODO: Perhaps Add Parametric Morphism *)
 
+(** ** Updating the state
+    This function updates the local state of the given process. *)
+
 Definition update (s:State) (p:Pid) (x:Var) (v:Value) : State :=
   fun (q:Pid) => if (Pid_dec p q) then (LSt.update (s p) x v)
                                   else (s q).
@@ -608,6 +629,9 @@ induction P.
     elim H. contradiction.
   - apply IHP, H0.
 Qed.
+
+(** ** Extensional equivalence
+    Equivalence of states not up to. *)
 
 Definition eq_state_ext (s s': State) : Prop :=
   forall p, LSt.eq_state (s p) (s' p).

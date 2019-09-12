@@ -10,10 +10,10 @@ Require Import Coq.Program.Equality.
 Ltac destroy H := repeat (elim H; clear H; intro; intro H).
 Ltac destroy_as H H' := rename H into H'; set (H:=True); destroy H'; clear H; rename H' into H.
 
+(** * Logical stuff. *)
 Section Logical.
 
-(** Logical stuff.
-    De Morgan law *)
+(** De Morgan law *)
 Lemma deMorganNotOr : forall P Q : Prop,
   ~(P \/ Q) -> ~P /\ ~Q.
 Proof.
@@ -47,9 +47,9 @@ end.
 
 End Logical.
 
+(** * Natural numbers *)
 Section Natural_Numbers.
 
-(** Random stuff about natural numbers. *)
 Lemma minus_S : forall m n, n - S m = pred (n - m).
 Proof.
 double induction m n; simpl; auto.
@@ -108,11 +108,13 @@ Qed.
 
 End Natural_Numbers.
 
+(** * Lists *)
+
 Section Lists.
 
 Variable T:Type.
 
-(** Random stuff about lists. *)
+(** ** A result about permutations. *)
 
 Lemma Permutation_NoDup : forall P Q: list T, Permutation P Q -> NoDup P -> NoDup Q.
 Proof.
@@ -249,9 +251,9 @@ Require Import Vector.
 
 Import VectorNotations.
 
+(** * Vectors *)
+
 Section Vectors.
-(** * Vectors
-    Random stuff about vectors to be placed elsewhere. *)
 
 (** ** Equality.
     This is a specialization of a lemma from the standard library. *)
