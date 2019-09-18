@@ -7,12 +7,12 @@ Local Open Scope nat_scope.
   This type is parameterized over sets of process identifiers,
   values, expressions and recursion variables. *)
 
-Module MCBase (P X V E B R: DecType)
-    (Import Ev : Eval E V)
-    (Import BEv : Eval B Bool).
+Module MCBase (P X V E B R: DecType).
 
 Module Import LSt := LState V X.
 Module Import St := GState P V X.
+Module Import Ev := Eval E X V V.
+Module Import BEv := Eval B X V Bool.
 
 Module Bdec := DecidableType B.
 Module Edec := DecidableType E.
@@ -25,10 +25,10 @@ Definition BExpr_dec := Bdec.eqb.
 Definition RecVar := R.t.
 Definition RecVar_dec := Rdec.eqb.
 
-(*
-Parameter R_fresh : list RecVar -> RecVar.
-Parameter R_fresh_sound : forall l, ~In (R_fresh l) l.
-*)
+Definition State := St.State.
+
+Definition eval := Ev.eval.
+Definition beval := BEv.eval.
 
 (** ** Syntax of MC choreographies. *)
 
@@ -37,13 +37,14 @@ Section Syntax.
 (** Communication actions. *)
 
 Inductive Eta : Type :=
- | Com : Pid -> Expr -> Pid -> Eta
+ | Com : Pid -> Expr -> Pid -> Var -> Eta
  | Sel : Pid -> Pid -> Label -> Eta
 .
 
 Lemma eta_eq_dec : forall (eta eta':Eta), { eta = eta' } + { eta <> eta' }.
 Proof.
 decide equality; try apply P.eq_dec.
++ apply X.eq_dec.
 + apply E.eq_dec.
 + decide equality.
 Qed.
@@ -57,37 +58,38 @@ Qed.
 
 Definition independent (eta1 eta2:Eta) : Prop :=
 match eta1, eta2 with
- | Com p _ q, Com r _ s => disjoint p q r s
- | Com p _ q, Sel r s _ => disjoint p q r s
- | Sel p q _, Com r _ s => disjoint p q r s
- | Sel p q _, Sel r s _ => disjoint p q r s
+ | Com p _ q _, Com r _ s _ => disjoint p q r s
+ | Com p _ q _, Sel r s _   => disjoint p q r s
+ | Sel p q _, Com r _ s _   => disjoint p q r s
+ | Sel p q _, Sel r s _     => disjoint p q r s
 end.
 
-Lemma independent_sym : forall eta eta', independent eta eta' -> independent eta' eta.
+Lemma independent_sym : forall eta eta', independent eta eta' ->
+  independent eta' eta.
 Proof.
 intros; induction eta; induction eta'; inversion H; inversion_clear H1; inversion_clear H3; repeat split; auto.
 Qed.
 
 Definition unused (r:Pid) (eta:Eta) : Prop :=
 match eta with
- | Com p _ q => p <> r /\ q <> r
- | Sel p q _ => p <> r /\ q <> r
+ | Com p _ q _ => p <> r /\ q <> r
+ | Sel p q _   => p <> r /\ q <> r
 end.
 
 (** Choreographies. *)
 
 Inductive Choreography : Type :=
- | End : Choreography
- | Call : RecVar -> Choreography
+ | End         : Choreography
+ | Call        : RecVar -> Choreography
  | Interaction : Eta -> Choreography -> Choreography
- | Cond : Pid -> BExpr -> Choreography -> Choreography -> Choreography
+ | Cond        : Pid -> BExpr -> Choreography -> Choreography -> Choreography
 .
 
 (** A program is a pair containing all procedure definitions and the main
     choreography. *)
 Record Program : Type :=
   { Procedures : RecVar -> Choreography;
-    Main : Choreography }.
+    Main       : Choreography }.
 
 Lemma chor_eq_dec : forall (C C':Choreography), { C = C' } + { C <> C' }.
 Proof.
@@ -125,8 +127,8 @@ match C with
 | End                => True
 | Call _             => True
 | Interaction eta C' => match eta with
-                        | Com p _ q => p <> q
-                        | Sel p q _ => p <> q
+                        | Com p _ q _ => p <> q
+                        | Sel p q _   => p <> q
                         end /\ no_self_comm C'
 | Cond _ _ C1 C2     => no_self_comm C1 /\ no_self_comm C2
 end.
@@ -188,7 +190,8 @@ end.
 Fixpoint Program_WF_rec (Xs Ys:list RecVar) (P:Program) : Prop :=
 match Xs with
 | nil     => Choreography_WF (Main P) /\ within_Xs Ys (Main P)
-| (X::Zs) => Choreography_WF (Procedures P X) /\ within_Xs Ys (Procedures P X) /\ Program_WF_rec Zs Ys P
+| (X::Zs) => Choreography_WF (Procedures P X) /\
+               within_Xs Ys (Procedures P X) /\ Program_WF_rec Zs Ys P
 end.
 
 Definition Program_WF (Xs:list RecVar) (P:Program) : Prop :=
@@ -202,7 +205,8 @@ induction C; simpl; auto.
   right; intro; inversion_clear H1; auto.
 Qed.
 
-Lemma Program_WF_rec_dec : forall Xs Ys P, {Program_WF_rec Xs Ys P} + {~Program_WF_rec Xs Ys P}.
+Lemma Program_WF_rec_dec : forall Xs Ys P,
+  {Program_WF_rec Xs Ys P} + {~Program_WF_rec Xs Ys P}.
 Proof.
 induction Xs; simpl; intros.
 + elim (Choreography_WF_dec (Main P)); intros.
@@ -228,20 +232,20 @@ Qed.
 
 (** Set of process names in a choreography. *)
 
+Definition set_union_pid := set_union P.eq_dec.
+
 Definition pn_eta (e:Eta) : list Pid :=
 match e with
-| Com p _ q => (cons p (cons q nil))
-| Sel p q _ => (cons p (cons q nil))
+| Com p _ q _ => (set_union_pid (p::nil) (q::nil))
+| Sel p q _   => (set_union_pid (p::nil) (q::nil))
 end.
-
-Definition set_union_pid := set_union P.eq_dec.
 
 Fixpoint MCC_pn (C:Choreography) : list Pid :=
 match C with
 | End                => nil
 | Call _             => nil
 | Interaction eta C' => (set_union_pid (pn_eta eta) (MCC_pn C'))
-| Cond p _ C1 C2     => (set_union_pid (set_union_pid (cons p nil) (MCC_pn C1)) (MCC_pn C2))
+| Cond p _ C1 C2     => (set_union_pid (set_union_pid (p::nil) (MCC_pn C1)) (MCC_pn C2))
 end.
 
 Fixpoint MCP_pn (Xs:list RecVar) (P:Program) : list Pid :=
@@ -252,19 +256,12 @@ end.
 
 End Syntax.
 
-(******** WE ARE HERE **********)
-
-
 (** Pretty-printing rules for choreographies. *)
 
-Notation "p # e --> q" := (Com p e q) (at level 50, e at level 9, format "p # e --> q").
-Notation "p --> q [ l ]" := (Sel p q l) (at level 50, format "p --> q [ l ]").
+Notation "p # e --> q $ x" := (Com p e q x) (at level 50, e at level 9).
+Notation "p --> q [ l ]" := (Sel p q l) (at level 50).
 Notation "eta ';' C" := (Interaction eta C) (at level 60, right associativity).
-Notation "'If' p '==' q 'Then' C1 'Else' C2" := (Cond p q C1 C2) (at level 60).
-Notation "'Def' X '==' C1 'In' C2" := (Rec X C1 C2) (at level 60).
-
-(* Check (1-->2[left]). *)
-(* Check (1#this--> 2). *)
+Notation "'If' p '?' b 'Then' C1 'Else' C2" := (Cond p b C1 C2) (at level 60).
 
 (** ** Syntactic properties *)
 
@@ -272,241 +269,44 @@ Section Syntactic_Properties.
 
 (** Inversion results for free and bound variables. *)
 
-Lemma NotFreeThen : forall X p q C1 C2, ~Free X (If p == q Then C1 Else C2) -> ~Free X C1.
+Lemma NotFreeThen : forall X p b C1 C2,
+  ~X_Free X (If p ? b Then C1 Else C2) -> ~X_Free X C1.
 Proof. intros. intro. apply H. constructor. auto. Qed.
 
-Lemma NotFreeElse : forall X p q C1 C2, ~Free X (If p == q Then C1 Else C2) -> ~Free X C2.
-Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
-
-Lemma NotFreeDef : forall X Y CY C, X <> Y -> ~Free X (Def Y == CY In C) -> ~Free X CY.
-Proof. intros. intro. apply H0. constructor; auto. Qed.
-
-Lemma NotFreeRec : forall X Y CY C, X <> Y -> ~Free X (Def Y == CY In C) -> ~Free X C.
-Proof. intros. intro. apply H0. try (constructor; auto; fail). Qed.
-
-Lemma NotBoundThen : forall X p q C1 C2, ~Bound X (If p == q Then C1 Else C2) -> ~Bound X C1.
-Proof. intros. intro. apply H. constructor. auto. Qed.
-
-Lemma NotBoundElse : forall X p q C1 C2, ~Bound X (If p == q Then C1 Else C2) -> ~Bound X C2.
-Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
-
-Lemma NotBound_neq : forall X Y CY C, ~Bound X (Def Y == CY In C) -> X <> Y.
-Proof. intros. intro. apply H. constructor; auto. Qed.
-
-Lemma NotBoundDef : forall X Y CY C, ~Bound X (Def Y == CY In C) -> ~Bound X CY.
-Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
-
-Lemma NotBoundRec : forall X Y CY C, ~Bound X (Def Y == CY In C) -> ~Bound X C.
+Lemma NotFreeElse : forall X p b C1 C2,
+  ~X_Free X (If p ? b Then C1 Else C2) -> ~X_Free X C2.
 Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
 
 (** Process names form a set. *)
 
-Lemma pn_is_set: forall C, WellFormed C -> NoDup(pn C).
+Lemma NoDup_MCC_pn: forall C, NoDup (MCC_pn C).
 Proof.
-intros.
-inversion_clear H. clear H1.
-induction C; intros.
+induction C.
 + (* End *)
   apply NoDup_nil.
 + (* X *)
   apply NoDup_nil.
 + (* e; C *)
-  simpl.
-  apply set_union_nodup.
-  induction e; inversion_clear H0.
-  - (* Com *)
-    simpl; repeat apply NoDup_cons; simpl; auto.
-    intro.
-    inversion_clear H0; auto.
-    apply NoDup_nil.
-  - (* Sel *)
-    simpl; repeat apply NoDup_cons; simpl; auto.
-    intro.
-    inversion_clear H0; auto.
-    apply NoDup_nil.
-   - induction e; inversion H0; eauto.
+  simpl; apply set_union_nodup; auto.
+  induction e;
+    apply set_union_nodup; apply NoDup_cons; auto; apply NoDup_nil.
 + (* Cond *)
-  destroy_as H0 H'.
-  simpl.
   repeat apply set_union_nodup; eauto.
-  simpl; repeat apply NoDup_cons; simpl; auto.
-  intro.
-  inversion_clear H2; auto.
-  apply NoDup_nil.
-+ (* Def *)
-  destroy_as H0 H'.
-  simpl.
-  repeat apply set_union_nodup; auto.
+  apply NoDup_cons; auto; apply NoDup_nil.
 Qed.
 
-(** Properties of well-formedness. *)
-
-Lemma DefEta_wf_fix : forall X CX eta C,
-  WellFormed_fix (Def X == CX In (eta;C)) <-> WellFormed_fix (eta; Def X == CX In C).
+Lemma NoDup_MCP_pn: forall Xs P, NoDup (MCP_pn Xs P).
 Proof.
-intros.
-split; intros; 
-  induction eta; destroy_as H H'; repeat split; auto.
+induction Xs; intros; simpl.
++ apply NoDup_MCC_pn.
++ apply set_union_nodup; auto.
+  apply NoDup_MCC_pn.
 Qed.
 
-Lemma DefEta_Free : forall X CX eta C Y, Free Y (Def X == CX In (eta;C)) <-> Free Y (eta; Def X == CX In C).
-Proof.
-intros.
-split; intros;
-  inversion_clear H; inversion_clear H1; simpl; auto.
-Qed.
-
-Lemma DefEta_wf : forall X CX eta C,
-  WellFormed (Def X == CX In (eta;C)) <-> WellFormed (eta; Def X == CX In C).
-Proof.
-intros.
-elim (DefEta_wf_fix X CX eta C); intros.
-generalize (DefEta_Free X CX eta C); intros.
-split; split; inversion_clear H2; auto.
-Qed.
-
-Lemma CondEta_wf_fix : forall X CX p q C1 C2,
-  WellFormed_fix (Def X == CX In (If p == q Then C1 Else C2)) <-> WellFormed_fix (If p == q Then Def X == CX In C1 Else Def X == CX In C2).
-Proof.
-intros.
-split; intros.
-+ destroy_as H H'; repeat split; auto.
-  - eapply NotBoundThen; eauto.
-  - intro; intro. inversion_clear H7. elim (H3 Y); simpl; auto.
-  - eapply NotBoundElse; eauto.
-  - intro; intro. inversion_clear H7. elim (H3 Y); simpl; auto.
-+ destroy_as H H'. destroy_as H1 H'; repeat split; simpl; auto.
-  - intro. inversion_clear H12; auto.
-  - intro. intro. inversion_clear H12. inversion_clear H14; [elim (H10 Y) | elim (H5 Y)]; auto.
-Qed.
-
-Lemma CondEta_Free : forall X CX p q C1 C2 Y,
-  Free Y (Def X == CX In (If p == q Then C1 Else C2)) <-> Free Y (If p == q Then Def X == CX In C1 Else Def X == CX In C2).
-Proof.
-intros.
-split; intros.
-+ inversion_clear H; inversion_clear H1; repeat split; simpl; auto.
-  inversion_clear H; auto.
-+ inversion_clear H; inversion_clear H0; inversion_clear H1; simpl; auto.
-Qed.
-
-Lemma CondEta_wf : forall X CX p q C1 C2,
-  WellFormed (Def X == CX In (If p == q Then C1 Else C2)) <-> WellFormed (If p == q Then Def X == CX In C1 Else Def X == CX In C2).
-Proof.
-intros.
-elim (CondEta_wf_fix X CX p q C1 C2); intros.
-generalize (CondEta_Free X CX p q C1 C2); intro.
-split; split; intros; inversion_clear H2; auto;
-  elim (H1 X0); intros; intro; apply (H4 X0); auto.
-Qed.
+(* Properties of well-formedness.
+   Nothing here at the moment. *)
 
 End Syntactic_Properties.
-
-(** We work with a slightly relaxed form of the Barendregt convention: there are no nested
-  binders on the same variable. This requires alpha-renaming when unfolding recursive definitions,
-  in case the procedure definition itself defines new procedures. *)
-
-Section Alpha_Renaming.
-
-Fixpoint Var_subst X Y (C:Choreography) : Choreography :=
-match C with
-| End => End
-| Call Z => if (RecVar_dec X Z) then Call Y else Call Z
-| eta; C' => eta; Var_subst X Y C'
-| If p == q Then C1 Else C2 => If p == q Then (Var_subst X Y C1) Else (Var_subst X Y C2)
-| Def Z == CZ In C' => if (RecVar_dec X Z)
-                       then (Def Z == CZ In C')
-                       else (Def Z == (Var_subst X Y CZ) In (Var_subst X Y C'))
-end.
-
-Lemma Var_subst_idemp : forall X Y Z C, X <> Z -> Var_subst X Y (Var_subst X Z C) = Var_subst X Z C.
-Proof.
-induction C; simpl; auto; intros.
-- case_eq (RecVar_dec X r); intro; simpl; auto.
-  + case_eq (RecVar_dec X Z); intro; simpl; auto.
-    elim H. apply Rdec.eqb_eq; auto.
-  + rewrite H0; auto.
-- rewrite IHC; auto.
-- rewrite IHC1; auto; rewrite IHC2; auto.
-- case_eq (RecVar_dec X r); intro; simpl; rewrite H0; auto.
-  rewrite IHC1; auto. rewrite IHC2; auto.
-Qed.
-
-Lemma Var_subst_comm : forall X Y Z W C, Y <> Z -> X <> W -> X <> Z ->
-  Var_subst X Y (Var_subst Z W C) = Var_subst Z W (Var_subst X Y C).
-Proof.
-induction C; simpl; auto; intros.
-- assert (Z <> Y). auto.
-  clear H. rewrite <- Rdec.eqb_neq in H2, H0.
-  case_eq (RecVar_dec X r); case_eq (RecVar_dec Z r); simpl; unfold RecVar_dec; intros;
-    try rewrite H2; try rewrite H0; try rewrite H; try rewrite H3; auto.
-  elim H1. transitivity r; [idtac | symmetry]; apply Rdec.eqb_eq; auto.
-- rewrite IHC; auto.
-- rewrite IHC1; auto; rewrite IHC2; auto.
-- case_eq (RecVar_dec X r); case_eq (RecVar_dec Z r); intros; simpl;
-  rewrite H2; rewrite H3; auto.
-  rewrite IHC1; auto. rewrite IHC2; auto.
-Qed.
-
-Fixpoint Var_list (C:Choreography) : list RecVar:=
-match C with
-| End => nil
-| Call Z => (Z::nil)
-| eta; C' => Var_list C'
-| If p == q Then C1 Else C2 => set_union R.eq_dec (Var_list C1) (Var_list C2)
-| Def Z == CZ In C' => set_add R.eq_dec Z (set_union R.eq_dec (Var_list CZ) (Var_list C'))
-end.
-
-(* new strategy:
-   - add alpha-renaming to the precongruence;
-   - rule DefDef changes the name of the variable moving outwards to something fresh
-   - rule CUnfold requires Barendregt convention (well-formedness doesn't)
-*)
-
-(* revamp : Choreography -> (forbiddenVariables : list RecVar) -> (mapNewNames : list RecVar*RecVar -> Choreography. *)
-
-Fixpoint revamp (C:Choreography) (l:list RecVar) : Choreography :=
-match C with
-| End => End
-| Call Z => Call Z
-| eta; C' => eta; revamp C' l
-| If p == q Then C1 Else C2 => If p == q Then (revamp C1 l) Else (revamp C2 l)
-| Def Z == CZ In C' => if (In_dec R.eq_dec Z l)
-                       then let Z' := R_fresh l in let l' := set_add R.eq_dec Z' l in
-                            Def Z' == (Var_subst Z Z' (revamp CZ l')) In (Var_subst Z Z' (revamp C' l'))
-                       else let l' := set_add R.eq_dec Z l in
-                            Def Z == (revamp CZ l') In (revamp C' l')
-end.
-
-Lemma revamp_hack : forall C X l, List.In X l ->
-  let Y := R_fresh l in let l' := set_add R.eq_dec Y l in
-  Var_subst X Y (revamp C l') = revamp (Var_subst X Y C) l'.
-Proof.
-induction C; simpl; intros; auto.
-+ elim RecVar_dec; auto.
-+ rewrite IHC; auto.
-+ rewrite IHC1; auto; rewrite IHC2; auto.
-+ rename r into Z.
-  set (Y := R_fresh l).
-  set (l' := set_add R.eq_dec Y l).
-  set (W := R_fresh l').
-  set (l'' := set_add R.eq_dec Z l').
-  elim in_dec; intro; simpl;
-  case_eq (RecVar_dec X W); intro HXW; case_eq (RecVar_dec X Z); intro HXZ; simpl;
-  elim in_dec; intro; fold W l' l'';
-  try rewrite Rdec.eqb_eq in HXW; try rewrite Rdec.eqb_neq in HXW;
-  try rewrite Rdec.eqb_eq in HXZ; try rewrite Rdec.eqb_neq in HXZ; auto;
-  try (elim b; auto; fail).
-  - elim (R_fresh_sound l'). fold W. rewrite <- HXW. apply set_add_intro1; auto.
-  - rewrite <- HXZ. repeat rewrite Var_subst_idemp; auto.
-  - assert (Y <> Z).
-    rewrite Var_subst_comm; try rewrite IHC1; auto;
-      try (apply set_add_intro1; auto; fail).
-    rewrite Var_subst_comm; try rewrite IHC2; auto;
-      try (apply set_add_intro1; auto; fail).
-    2: apply set_add_intro2; auto.
-
-End Alpha_Remaming.
 
 (** ** Semantics of MC. *)
 
@@ -519,101 +319,124 @@ Section Semantics_Definitions.
 Inductive Unfolded X CX : Choreography -> Choreography -> Prop :=
   | UVar : Unfolded X CX (Call X) CX
   | UEta eta C1 C2 : Unfolded X CX C1 C2 -> Unfolded X CX (eta;C1) (eta;C2)
-  | UThen p q C1 C2 C' : Unfolded X CX C1 C2 -> Unfolded X CX (If p == q Then C1 Else C') (If p == q Then C2 Else C')
-  | UElse p q C' C1 C2 : Unfolded X CX C1 C2 -> Unfolded X CX (If p == q Then C' Else C1) (If p == q Then C' Else C2)
-  | URec Y CY C1 C2: X <> Y -> Unfolded X CX C1 C2 -> Unfolded X CX (Def Y == CY In C1) (Def Y == CY In C2)
+  | UThen p b C1 C2 C' : Unfolded X CX C1 C2 ->
+        Unfolded X CX (If p ? b Then C1 Else C') (If p ? b Then C2 Else C')
+  | UElse p b C' C1 C2 : Unfolded X CX C1 C2 ->
+        Unfolded X CX (If p ? b Then C' Else C1) (If p ? b Then C' Else C2)
 .
 
-Inductive MC_Precongr_step : Choreography -> Choreography -> Prop :=
- | PB_Refl C : MC_Precongr_step C C
- | EtaEta eta1 eta2 C : independent eta1 eta2 -> MC_Precongr_step (eta1; eta2; C) (eta2; eta1; C)
- | EtaCond eta p q C1 C2 : unused p eta -> unused q eta -> MC_Precongr_step (eta; (If p == q Then C1 Else C2)) (If p == q Then (eta; C1) Else (eta; C2))
- | CondEta eta p q C1 C2 : unused p eta -> unused q eta -> MC_Precongr_step (If p == q Then (eta; C1) Else (eta; C2)) (eta; (If p == q Then C1 Else C2))
- | CondCond p q r s C1 C2 C3 C4 : disjoint p q r s -> MC_Precongr_step (If p == q Then (If r == s Then C1 Else C2) Else (If r == s Then C3 Else C4))
-                                                               (If r == s Then (If p == q Then C1 Else C3) Else (If p == q Then C2 Else C4))
- | EtaRec eta X CX C : MC_Precongr_step (eta; Def X == CX In C) (Def X == CX In (eta;C))
- | RecEta eta X CX C : MC_Precongr_step (Def X == CX In (eta;C)) (eta; Def X == CX In C)
- | CondRec p q X CX C1 C2 : MC_Precongr_step (If p == q Then Def X == CX In C1 Else Def X == CX In C2) (Def X == CX In If p == q Then C1 Else C2)
- | RecCond p q X CX C1 C2 : MC_Precongr_step (Def X == CX In If p == q Then C1 Else C2) (If p == q Then Def X == CX In C1 Else Def X == CX In C2)
- | RecRec X CX Y CY C : X <> Y -> ~Free X CY -> ~Free Y CX -> MC_Precongr_step (Def X == CX In (Def Y == CY In C)) (Def Y == CY In (Def X == CX In C))
- | Unfold X CX C1 C2 : Unfolded X CX C1 C2 -> MC_Precongr_step (Def X == CX In C1) (Def X == CX In C2)
- | Garbage X C : MC_Precongr_step (Def X == C In End) End
- | CtxEta eta C1 C2 : MC_Precongr_step C1 C2 -> MC_Precongr_step (eta; C1) (eta; C2)
- | CtxThen p q C' C'' C : MC_Precongr_step C' C'' -> MC_Precongr_step (If p == q Then C' Else C) (If p == q Then C'' Else C)
- | CtxElse p q C C' C'' : MC_Precongr_step C' C'' -> MC_Precongr_step (If p == q Then C Else C') (If p == q Then C Else C'')
- | CtxRec X C1 C2 C2' : MC_Precongr_step C2 C2' -> MC_Precongr_step (Def X == C1 In C2) (Def X == C1 In C2')
+Inductive MC_Precongr_step (Procs : RecVar -> Choreography)
+ : Choreography -> Choreography -> Prop :=
+ | Refl C : MC_Precongr_step Procs C C
+ | EtaEta eta1 eta2 C : independent eta1 eta2 ->
+        MC_Precongr_step Procs (eta1; eta2; C) (eta2; eta1; C)
+ | EtaCond eta p b C1 C2 : unused p eta ->
+        MC_Precongr_step Procs (eta; (If p ? b Then C1 Else C2))
+                        (If p ? b Then (eta; C1) Else (eta; C2))
+ | CondEta p b C1 C2 eta : unused p eta ->
+        MC_Precongr_step Procs (If p ? b Then (eta; C1) Else (eta; C2))
+                                      (eta; (If p ? b Then C1 Else C2))
+ | CondCond p q b b' C1 C2 C3 C4 : p <> q -> MC_Precongr_step Procs
+        (If p ? b Then (If q ? b' Then C1 Else C2) Else (If q ? b' Then C3 Else C4))
+        (If q ? b' Then (If p ? b Then C1 Else C3) Else (If p ? b Then C2 Else C4))
+ | Unfold X C1 C2 : Unfolded X (Procs X) C1 C2 -> MC_Precongr_step Procs C1 C2
+ | CtxEta eta C1 C2 : MC_Precongr_step Procs C1 C2 ->
+        MC_Precongr_step Procs (eta; C1) (eta; C2)
+ | CtxThen p b C' C'' C : MC_Precongr_step Procs C' C'' ->
+        MC_Precongr_step Procs (If p ? b Then C' Else C) (If p ? b Then C'' Else C)
+ | CtxElse p b C C' C'' : MC_Precongr_step Procs C' C'' ->
+        MC_Precongr_step Procs (If p ? b Then C Else C') (If p ? b Then C Else C'')
 .
 
-Inductive MC_Precongr : Choreography -> Choreography -> Prop :=
- | MCP_Refl C : MC_Precongr C C
- | MCP_Step C1 C2 C3: MC_Precongr_step C1 C2 -> MC_Precongr C2 C3 -> MC_Precongr C1 C3
+Inductive MC_Precongr (Procs : RecVar -> Choreography) :
+  Choreography -> Choreography -> Prop :=
+ | MCP_Refl C : MC_Precongr Procs C C
+ | MCP_Step C1 C2 C3: MC_Precongr_step Procs C1 C2 ->
+         MC_Precongr Procs C2 C3 -> MC_Precongr Procs C1 C3
 .
 
+(*
 Definition Configuration : Type := Choreography * State.
 
 Definition WellFormedConf (conf:Configuration) : Prop := WellFormed (fst conf).
+*)
 
 (** Expression evaluation on the state of a process *)
 
-Definition evaluate_on_state (e:Expr) (s:State) (p:Pid) : Value := eval e (s p).
+Definition eval_on_state (e:Expr) (s:State) (p:Pid) : Value := eval e (s p).
+Definition beval_on_state (b:BExpr) (s:State) (p:Pid) : bool := beval b (s p).
 
 (** One-step and multi-step reduction. Multi-step reduction is simply a reflexive and transitive closure. *)
 
-Inductive MCTo : Configuration -> Configuration -> Prop :=
- | C_Com p e q C s : MCTo ( Com p e q; C, s ) ( C, (update s q (evaluate_on_state e s p)) )
- | C_Sel p q l C s : MCTo ( Sel p q l; C, s ) ( C, s )
- | C_Then p q C1 C2 s : (s p = s q) -> MCTo ( If p == q Then C1 Else C2, s ) ( C1, s )
- | C_Else p q C1 C2 s : (s p <> s q) -> MCTo ( If p == q Then C1 Else C2, s ) ( C2, s )
- | C_Ctx X C1 C2 C2' s s' : MCTo (C2,s) (C2',s') -> MCTo ( Def X == C1 In C2,s ) ( Def X == C1 In C2',s')
- | C_Struct C1 C1' C2 C2' s1 s2 : MC_Precongr C1 C1' -> MC_Precongr C2' C2 -> MCTo (C1', s1) (C2', s2) -> MCTo (C1, s1) (C2, s2)
+Inductive MCC_To (Procs : RecVar -> Choreography) :
+  Choreography -> State -> Choreography -> State -> Prop :=
+ | C_Com p e q x C s : MCC_To Procs (p # e --> q $ x; C) s
+                                  C (update s q x (eval_on_state e s p))
+ | C_Sel p q l C s : MCC_To Procs (p --> q [l]; C) s C s
+ | C_Then p b C1 C2 s : (beval_on_state b s p = true) ->
+        MCC_To Procs (If p ? b Then C1 Else C2) s C1 s
+ | C_Else p b C1 C2 s : (beval_on_state b s p = false) ->
+        MCC_To Procs (If p ? b Then C1 Else C2) s C2 s
+ | C_Struct C1 C1' C2 C2' s1 s2 :
+        MC_Precongr Procs C1 C1' -> MC_Precongr Procs C2' C2 ->
+        MCC_To Procs C1' s1 C2' s2 -> MCC_To Procs C1 s1 C2 s2
 .
 
-(* We'd love to use the library definitions, but they just don't work -- and give horrible names. *)
+Definition Configuration : Type := Program * State.
 
-Inductive MCToStar : Configuration -> Configuration -> Prop :=
- | MCT_Refl c : MCToStar c c
- | MCT_Step c1 c2 c3 : MCTo c1 c2 -> MCToStar c2 c3 -> MCToStar c1 c3
+Inductive MCP_To : Configuration -> Configuration -> Prop :=
+ | MCP_To_intro Procs C s C' s' : MCC_To Procs C s C' s' ->
+     MCP_To (Build_Program Procs C,s) (Build_Program Procs C',s').
+
+Inductive MCP_ToStar : Configuration -> Configuration -> Prop :=
+ | MCT_Refl c : MCP_ToStar c c
+ | MCT_Step c1 c2 c3 : MCP_To c1 c2 -> MCP_ToStar c2 c3 -> MCP_ToStar c1 c3
 .
 
-Definition terminated (C:Choreography) : Prop := MC_Precongr C End.
+Definition terminated (P:Program) : Prop :=
+  MC_Precongr (Procedures P) (Main P) End.
 
 (** ** Head reductions
 
     Head reductions do not use structural precongruence.
 *)
 
-Fixpoint pure_call (C:Choreography) : Prop :=
-match C with
-| Call _ => True
-| Def _ == _ In C2 => pure_call C2
-| _ => False
-end.
-
-Lemma pure_call_dec : forall C, {pure_call C} + {~pure_call C}.
-Proof.
-induction C; simpl; auto.
-Qed.
-
-Fixpoint has_head_action (C:Choreography) : Prop :=
+Fixpoint choreography_has_head_action
+  (Procs: RecVar -> Choreography) (C:Choreography) : Prop :=
 match C with
 | End => False
-| Call X => False
+| Call X => Procs X <> End
 | eta; C' => True
-| If p == q Then C1 Else C2 => True
-| Def X == C1 In C2 => has_head_action C2
+| If p ? b Then C1 Else C2 => True
 end.
 
-Lemma has_head_action_dec : forall C, {has_head_action C} + {~has_head_action C}.
+Definition has_head_action (P : Program) : Prop :=
+  choreography_has_head_action (Procedures P) (Main P).
+
+Lemma has_head_action_dec : forall P, {has_head_action P} + {~has_head_action P}.
 Proof.
-induction C; simpl; auto.
+induction P; unfold has_head_action; simpl.
+induction Main0; simpl; auto.
+case_eq (Procedures0 r); auto; left; discriminate.
 Qed.
 
-Definition HeadTo (c:Configuration) : has_head_action (fst c) -> Configuration.
+(*** CHANGE Program_WF to encapsulate Xs ***)
+
+Definition HeadTo (c:Configuration) : let P := fst c in
+  has_head_action P -> Program_WF P -> Configuration.
 Proof.
-destruct c; induction c; intros.
+destruct c; destruct p; intros.
+simpl in H.
+rename Procedures0 into Procs, Main0 into C.
+unfold has_head_action in H; simpl in H.
+induction C; simpl in H.
 + inversion H.
-+ inversion H.
-+ destruct e.
++ set (C' := Procs r).
+  fold C' in H.
+  induction C'.
+  - elim H; auto.
+  - 
+destruct e.
   - apply (c, update s p0 (evaluate_on_state e s p)).
   - apply (c, s).
 + apply (if (Value_dec (s p) (s p0)) then (c1, s) else (c2, s)).

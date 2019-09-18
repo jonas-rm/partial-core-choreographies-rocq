@@ -161,7 +161,8 @@ induction l; simpl; intros; auto.
 inversion H; auto.
 Qed.
 
-Lemma NoDup_app_both : forall l l':list T, NoDup (l++l') -> forall x, ~(In x l /\ In x l').
+Lemma NoDup_app_both : forall l l':list T, NoDup (l++l') ->
+  forall x, ~(In x l /\ In x l').
 Proof.
 induction l; simpl; intros; auto.
 + intro; inversion_clear H0; auto.
@@ -214,7 +215,8 @@ inversion H.
 elim IHP; auto.
 Qed.
 
-Lemma NoDup_app_not_in : forall l l':list T, NoDup (l ++ l') -> forall x, In x l -> ~In x l'.
+Lemma NoDup_app_not_in : forall l l':list T, NoDup (l ++ l') ->
+  forall x, In x l -> ~In x l'.
 Proof.
 intros; intro.
 apply (NoDup_app_both _ _ H) with x; auto.
@@ -257,7 +259,8 @@ Section Vectors.
 
 (** ** Equality.
     This is a specialization of a lemma from the standard library. *)
-Lemma eq_nth_iff' {A} {n} (v1 v2:t A n) : (forall (p:Fin.t n), v1[@p] = v2[@p]) <-> v1 = v2.
+Lemma eq_nth_iff' {A} {n} (v1 v2:t A n) :
+  (forall (p:Fin.t n), v1[@p] = v2[@p]) <-> v1 = v2.
 Proof.
 split.
 intro; apply eq_nth_iff; intros; rewrite H0; auto.
@@ -271,7 +274,8 @@ Proof.
 intros; rewrite H; auto.
 Qed.
 
-Lemma vector_2_equal : forall {A} (x x' y y':A), x = x' -> y = y' -> forall Hi, [x; y][@Hi] = [x'; y'][@Hi].
+Lemma vector_2_equal : forall {A} (x x' y y':A), x = x' -> y = y' ->
+  forall Hi, [x; y][@Hi] = [x'; y'][@Hi].
 Proof.
 intros; rewrite H, H0; auto.
 Qed.
@@ -347,7 +351,8 @@ Qed.
 *)
 
 (** Hopefully self-explanatory. *)
-Lemma map_shiftin : forall {A} {B} {n} (f:A->B) (v:t A n) x, map f (shiftin x v) = shiftin (f x) (map f v).
+Lemma map_shiftin : forall {A} {B} {n} (f:A->B) (v:t A n) x,
+  map f (shiftin x v) = shiftin (f x) (map f v).
 Proof.
 induction v; simpl; auto.
 intro.
@@ -384,7 +389,8 @@ subst p2; induction p1.
 + revert n f p1 IHp1; refine (@caseS _  _ _); now simpl.
 Qed.
 
-Lemma nth_map_inv' {A} {B} {n} (f:t (A->B) n) v (p: Fin.t n) : (map_inv f v) [@p] = f[@p] v.
+Lemma nth_map_inv' {A} {B} {n} (f:t (A->B) n) v (p: Fin.t n) :
+  (map_inv f v) [@p] = f[@p] v.
 Proof.
 apply nth_map_inv; auto.
 Qed.

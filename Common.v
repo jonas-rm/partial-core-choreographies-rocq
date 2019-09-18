@@ -40,8 +40,7 @@ Parameter eq_dec : forall x y:t, {x = y} + {x <> y}.
 End DecType.
 
 (** * Booleans as a decidable type *)
-
-Module Bool : DecType.
+Module Bool <: DecType.
 
 Definition t := bool.
 Definition eq_dec := bool_dec.
@@ -80,15 +79,6 @@ intros. case_eq (x =? y); intro; symmetry.
 Qed.
 
 End DecidableType.
-
-(** * Evaluation
-    Evaluation is parameterized on the types of expressions and values.
-    Decidability of expressions makes choreography equality decidable. *)
-
-Module Type Eval (Expression Value : DecType).
-Parameter eval : Expression.t -> Value.t -> Value.t.
-
-End Eval.
 
 (*
 Module GState (P V X : DecType).
@@ -681,3 +671,14 @@ elim Pid_dec.
 Qed.
 
 End GState.
+
+(** * Evaluation
+    Evaluation is parameterized on the types of expressions and values.
+    Decidability of expressions makes choreography equality decidable. *)
+
+Module Eval (Expression Vars Input Output : DecType).
+
+Parameter eval : Expression.t -> (Vars.t -> Input.t) -> Output.t.
+
+End Eval.
+
