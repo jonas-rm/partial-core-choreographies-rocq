@@ -9,8 +9,8 @@ Local Open Scope nat_scope.
 
 Module MCBase (P X V E B R: DecType).
 
-Module Import LSt := LState V X.
-Module Import St := GState P V X.
+Module Import PSt := LState V X.
+Module Import CSt := GState P V X.
 Module Import Ev := Eval E X V V.
 Module Import BEv := Eval B X V Bool.
 
@@ -25,7 +25,7 @@ Definition BExpr_dec := Bdec.eqb.
 Definition RecVar := R.t.
 Definition RecVar_dec := Rdec.eqb.
 
-Definition State := St.State.
+Definition Store := CSt.State.
 
 Definition eval := Ev.eval.
 Definition beval := BEv.eval.
@@ -49,6 +49,7 @@ decide equality; try apply P.eq_dec.
 + decide equality.
 Qed.
 
+(*
 Definition disjoint (p q r s:Pid) :=  p <> r /\ p <> s /\ q <> r /\ q <> s.
 
 Lemma disjoint_sym : forall p q r s, disjoint p q r s -> disjoint r s p q.
@@ -75,12 +76,14 @@ match eta with
  | Com p _ q _ => p <> r /\ q <> r
  | Sel p q _   => p <> r /\ q <> r
 end.
+*)
 
 (** Choreographies. *)
 
 Inductive Choreography : Type :=
  | End         : Choreography
  | Call        : RecVar -> Choreography
+ | RT_Call     : RecVar -> (list Pid) -> Choreography -> Choreography
  | Interaction : Eta -> Choreography -> Choreography
  | Cond        : Pid -> BExpr -> Choreography -> Choreography -> Choreography
 .
@@ -88,36 +91,94 @@ Inductive Choreography : Type :=
 (** A program is a pair containing all procedure definitions and the main
     choreography. *)
 Record Program : Type :=
-  { Procedures : RecVar -> Choreography;
+  { Procedures : RecVar -> (list Pid)*Choreography;
     Main       : Choreography }.
+
+Definition Vars := fun P X => fst (Procedures P X).
+Definition Procs := fun P X => snd (Procedures P X).
 
 Lemma chor_eq_dec : forall (C C':Choreography), { C = C' } + { C <> C' }.
 Proof.
 decide equality.
++ apply R.eq_dec.
++ apply list_eq_dec.
+  apply P.eq_dec.
 + apply R.eq_dec.
 + apply eta_eq_dec.
 + apply B.eq_dec.
 + apply P.eq_dec.
 Qed.
 
-(** Free procedure names in a choreography. *)
-Fixpoint X_Free (X:RecVar) (C:Choreography) : Prop :=
+(** An initial choreography is what a programmer should write. *)
+Fixpoint initial (C:Choreography) : Prop :=
 match C with
-| End              => False
-| Call Y           => X = Y
-| Interaction _ C' => X_Free X C'
-| Cond _ _ C1 C2   => X_Free X C1 \/ X_Free X C2
+| End              => True
+| Call _           => True
+| RT_Call _ _ _    => False
+| Interaction _ C' => initial C'
+| Cond _ _ C1 C2   => initial C1 /\ initial C2
 end.
+
+(** Free procedure names in a choreography. *)
+Definition set_union_rv := set_union R.eq_dec.
+
+Fixpoint Free_RecVar (C:Choreography) : list RecVar :=
+match C with
+| End              => nil
+| Call Y           => (Y::nil)
+| RT_Call Y _ C'   => set_union_rv (Y::nil) (Free_RecVar C')
+| Interaction _ C' => Free_RecVar C'
+| Cond _ _ C1 C2   => set_union_rv (Free_RecVar C1) (Free_RecVar C2)
+end.
+
+Definition X_Free (X:RecVar) (C:Choreography) : Prop :=
+  In X (Free_RecVar C).
+
 
 (** A choreography is well-formed if:
     - it does not contain self-communications;
-    - all recursive calls are guarded.
+    - all recursive calls are guarded;
+    - annotations are correct;
+    - annotations of runtime terms are not empty.
 *)
+
+(** We start with the set of process names in a choreography. *)
+
+Definition set_union_pid := set_union P.eq_dec.
+
+Definition pn_eta (e:Eta) : list Pid :=
+match e with
+| Com p _ q _ => (set_union_pid (p::nil) (q::nil))
+| Sel p q _   => (set_union_pid (p::nil) (q::nil))
+end.
+
+Fixpoint MCC_pn (C:Choreography) (Pids:RecVar -> list Pid) : list Pid :=
+match C with
+| End                => nil
+| Call X             => Pids X
+| RT_Call _ l C'     => set_union_pid l (MCC_pn C' Pids)
+| Interaction eta C' => (set_union_pid (pn_eta eta) (MCC_pn C' Pids))
+| Cond p _ C1 C2     => (set_union_pid (set_union_pid (p::nil) (MCC_pn C1 Pids)) (MCC_pn C2 Pids))
+end.
+
+(*
+Fixpoint MCP_pn (Xs:list RecVar) (P:Program) : list Pid :=
+match Xs with
+| nil   => MCC_pn (Main P)
+| Y::Ys => set_union_pid (MCC_pn (Procedures P Y)) (MCP_pn Ys P)
+end.
+*)
+
+Definition set_equals_Pid := set_equals P.eq_dec.
+
+Definition well_ann (P:Program) : Prop :=
+  forall X, set_equals_Pid (MCC_pn (Procs P X) (Vars P)) (Vars P X).
 
 Fixpoint guarded (C:Choreography) : Prop :=
 match C with
 | End             => True
 | Call _          => False
+| RT_Call _ _ _   => False
 | Interaction _ _ => True
 | Cond _ _ _ _    => True
 end.
@@ -126,6 +187,7 @@ Fixpoint no_self_comm (C:Choreography) : Prop :=
 match C with
 | End                => True
 | Call _             => True
+| RT_Call _ _ C'     => no_self_comm C'
 | Interaction eta C' => match eta with
                         | Com p _ q _ => p <> q
                         | Sel p q _   => p <> q
@@ -133,8 +195,17 @@ match C with
 | Cond _ _ C1 C2     => no_self_comm C1 /\ no_self_comm C2
 end.
 
+Fixpoint no_empty_ann (C:Choreography) : Prop :=
+match C with
+| End                => True
+| Call _             => True
+| RT_Call _ l C'     => l <> nil /\ no_empty_ann C'
+| Interaction eta C' => no_empty_ann C'
+| Cond _ _ C1 C2     => no_empty_ann C1 /\ no_empty_ann C2
+end.
+
 Definition Choreography_WF (C:Choreography) : Prop :=
-  no_self_comm C /\ guarded C.
+  no_self_comm C /\ no_empty_ann C /\ guarded C.
 
 Lemma guarded_dec : forall C, {guarded C} + {~guarded C}.
 Proof.
@@ -164,34 +235,56 @@ induction C; simpl; auto.
   right; intro; inversion_clear H1; auto.
 Qed.
 
+Lemma no_empty_ann_dec : forall C, {no_empty_ann C} + {~no_empty_ann C}.
+Proof.
+induction C; simpl; auto.
++ inversion_clear IHC.
+  - elim (destruct_list l).
+    * left; split; auto.
+      inversion_clear a.
+      inversion_clear X.
+      rewrite H0; discriminate.
+    * right; intro.
+      inversion_clear H0; auto.
+  - right; intro.
+    inversion_clear H0; auto.
++ inversion_clear IHC1; inversion_clear IHC2; auto;
+  right; intro; inversion_clear H1; auto.
+Qed.
+
 Lemma Choreography_WF_dec : forall C, {Choreography_WF C} + {~Choreography_WF C}.
 Proof.
 intros.
 unfold Choreography_WF.
 elim (guarded_dec C); intro.
-2: right; intro; inversion_clear H; auto.
+2: right; intro; inversion_clear H; inversion_clear H1; auto.
 elim (no_self_comm_dec C); intro.
-2: right; intro; inversion_clear H; auto.
+2: right; intro; inversion_clear H; inversion_clear H1; auto.
+elim (no_empty_ann_dec C); intro.
+2: right; intro; inversion_clear H; inversion_clear H1; auto.
 auto.
 Qed.
 
 (** A program is well-formed if there is a finite set of procedures Xs such that:
     - main and all procedures in Xs are well-formed
-    - main and all procedures in Xs only call procedures in Xs. *)
+    - main and all procedures in Xs only call procedures in Xs
+    - annotations are consistent
+*)
 
 Fixpoint within_Xs (Xs:list RecVar) (C:Choreography) : Prop :=
 match C with
 | End              => True
 | Call X           => In X Xs
+| RT_Call X _ C'   => In X Xs /\ within_Xs Xs C'
 | Interaction _ C' => within_Xs Xs C'
 | Cond _ _ C1 C2   => within_Xs Xs C1 /\ within_Xs Xs C2
 end.
 
 Fixpoint Program_WF_rec (Xs Ys:list RecVar) (P:Program) : Prop :=
 match Xs with
-| nil     => no_self_comm (Main P) /\ within_Xs Ys (Main P)
-| (X::Zs) => Choreography_WF (Procedures P X) /\
-               within_Xs Ys (Procedures P X) /\ Program_WF_rec Zs Ys P
+| nil     => Choreography_WF (Main P) /\ within_Xs Ys (Main P)
+| (X::Zs) => Choreography_WF (Procs P X) /\
+               within_Xs Ys (Procs P X) /\ Program_WF_rec Zs Ys P
 end.
 
 Definition Program_WF (Xs:list RecVar) (P:Program) : Prop :=
@@ -201,6 +294,12 @@ Lemma within_Xs_dec : forall Xs C, {within_Xs Xs C} + {~within_Xs Xs C}.
 Proof.
 induction C; simpl; auto.
 + apply In_dec; apply R.eq_dec.
++ inversion_clear IHC; [elim (In_dec R.eq_dec r Xs) | idtac]; intros.
+  - left; split; auto.
+  - right; intro; apply b.
+    inversion_clear H0; auto.
+  - right; intro; apply H.
+    inversion_clear H0; auto.
 + inversion_clear IHC1; inversion_clear IHC2; auto;
   right; intro; inversion_clear H1; auto.
 Qed.
@@ -209,17 +308,17 @@ Lemma Program_WF_rec_dec : forall Xs Ys P,
   {Program_WF_rec Xs Ys P} + {~Program_WF_rec Xs Ys P}.
 Proof.
 induction Xs; simpl; intros.
-+ elim (no_self_comm_dec (Main P)); intros.
++ elim (Choreography_WF_dec (Main P)); intros.
   2: right; intro; inversion_clear H; auto.
   elim (within_Xs_dec Ys (Main P)); intros.
-  2: right; intro; inversion_clear H; auto.
+  2: right; intro; inversion_clear H; inversion_clear H0; auto.
   auto.
 + elim (IHXs Ys P); intros.
   2: right; intro; inversion_clear H; inversion_clear H1; auto.
   clear IHXs.
-  elim (Choreography_WF_dec (Procedures P a)); intros.
+  elim (Choreography_WF_dec (Procs P a)); intros.
   2: right; intro; inversion_clear H; auto.
-  elim (within_Xs_dec Ys (Procedures P a)); intros.
+  elim (within_Xs_dec Ys (Procs P a)); intros.
   2: right; intro; inversion_clear H; inversion_clear H1; auto.
   auto.
 Qed.
@@ -232,31 +331,23 @@ Qed.
 
 (** This one is not decidable. *)
 
-Definition MCP_WF (P:Program) := exists Xs, Program_WF Xs P.
+Definition MCP_WF (P:Program) := exists Xs, Program_WF Xs P /\ well_ann P.
 
-(** Set of process names in a choreography. *)
-
-Definition set_union_pid := set_union P.eq_dec.
-
-Definition pn_eta (e:Eta) : list Pid :=
-match e with
-| Com p _ q _ => (set_union_pid (p::nil) (q::nil))
-| Sel p q _   => (set_union_pid (p::nil) (q::nil))
-end.
-
-Fixpoint MCC_pn (C:Choreography) : list Pid :=
-match C with
-| End                => nil
-| Call _             => nil
-| Interaction eta C' => (set_union_pid (pn_eta eta) (MCC_pn C'))
-| Cond p _ C1 C2     => (set_union_pid (set_union_pid (p::nil) (MCC_pn C1)) (MCC_pn C2))
-end.
-
-Fixpoint MCP_pn (Xs:list RecVar) (P:Program) : list Pid :=
-match Xs with
-| nil   => MCC_pn (Main P)
-| Y::Ys => set_union_pid (MCC_pn (Procedures P Y)) (MCP_pn Ys P)
-end.
+Lemma MCP_WF_Main : forall P, MCP_WF P -> Choreography_WF (Main P).
+Proof.
+induction P.
+rename Procedures0 into Ps, Main0 into C.
+simpl; intros.
+inversion_clear H.
+inversion_clear H0.
+clear H1.
+red in H.
+assert (forall y, Program_WF_rec y x {|Procedures := Ps; Main := C|} -> Choreography_WF C).
+2: apply H0 with x; auto.
+clear H; induction y; simpl; intros.
++ inversion_clear H; auto.
++ inversion_clear H; inversion_clear H1; auto.
+Qed.
 
 End Syntax.
 
@@ -275,13 +366,17 @@ Section Syntactic_Properties.
 
 Lemma NotFreeThen : forall X p b C1 C2,
   ~X_Free X (If p ? b Then C1 Else C2) -> ~X_Free X C1.
-Proof. intros. intro. apply H. constructor. auto. Qed.
+Proof.
+intros. intro. apply H. red. simpl. apply set_union_intro1. auto.
+Qed.
 
 Lemma NotFreeElse : forall X p b C1 C2,
   ~X_Free X (If p ? b Then C1 Else C2) -> ~X_Free X C2.
-Proof. intros. intro. apply H. try (constructor; auto; fail). Qed.
+Proof.
+intros. intro. apply H. red. simpl. apply set_union_intro2. auto.
+Qed.
 
-(** Process names form a set. *)
+(** Process names form a set.
 
 Lemma NoDup_MCC_pn: forall C, NoDup (MCC_pn C).
 Proof.
@@ -306,6 +401,7 @@ induction Xs; intros; simpl.
 + apply set_union_nodup; auto.
   apply NoDup_MCC_pn.
 Qed.
+*)
 
 (* Properties of well-formedness.
    Nothing here at the moment. *)
@@ -316,6 +412,7 @@ End Syntactic_Properties.
 
 Section Semantics_Definitions.
 
+(** NONE OF THIS ANYMORE.
 (* Structural precongruence is defined in two steps.
    One-step congruence contains exactly one swap or unfolding; then we close
    under reflexivity and transitivity. For unfolding, we need some previous work. *)
@@ -364,6 +461,7 @@ Definition Configuration : Type := Choreography * State.
 
 Definition WellFormedConf (conf:Configuration) : Prop := WellFormed (fst conf).
 *)
+*)
 
 (** Expression evaluation on the state of a process *)
 
@@ -372,33 +470,79 @@ Definition beval_on_state (b:BExpr) (s:State) (p:Pid) : bool := beval b (s p).
 
 (** One-step and multi-step reduction. Multi-step reduction is simply a reflexive and transitive closure. *)
 
-Inductive MCC_To (Procs : RecVar -> Choreography) :
-  Choreography -> State -> Choreography -> State -> Prop :=
- | C_Com p e q x C s : MCC_To Procs (p # e --> q $ x; C) s
-                                  C (update s q x (eval_on_state e s p))
- | C_Sel p q l C s : MCC_To Procs (p --> q [l]; C) s C s
+Inductive TransitionLabel : Type :=
+| L_Com (p:Pid) (v:Value) (q:Pid) : TransitionLabel
+| L_Sel (p:Pid) (q:Pid) (l:Label) : TransitionLabel
+| L_Tau (p:Pid) : TransitionLabel
+.
+
+Definition disjoint_p_tl (p:Pid) (t:TransitionLabel) : Prop :=
+match t with
+| L_Com r _ s => p <> r /\ p <> s
+| L_Sel r s _ => p <> r /\ p <> s
+| L_Tau r     => p <> r
+end.
+
+Definition disjoint_eta_tl (eta:Eta) (t:TransitionLabel) : Prop :=
+match eta with
+| (p # _ --> q $ _) => disjoint_p_tl p t /\ disjoint_p_tl q t
+| (p --> q [_])     => disjoint_p_tl p t /\ disjoint_p_tl q t
+end.
+
+Definition set_remove_pid := set_remove P.eq_dec.
+
+Inductive MCC_To (Procs : RecVar -> (list Pid)*Choreography) :
+  Choreography -> State -> TransitionLabel -> Choreography -> State -> Prop :=
+ | C_Com p e q x C s : let v := (eval_on_state e s p) in
+        MCC_To Procs (p # e --> q $ x; C) s
+               (L_Com p v q)
+               C (update s q x v)
+ | C_Sel p q l C s : MCC_To Procs (p --> q [l]; C) s (L_Sel p q l) C s
  | C_Then p b C1 C2 s : (beval_on_state b s p = true) ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s C1 s
+        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C1 s
  | C_Else p b C1 C2 s : (beval_on_state b s p = false) ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s C2 s
- | C_Struct C1 C1' C2 C2' s1 s2 :
-        MC_Precongr Procs C1 C1' -> MC_Precongr Procs C2' C2 ->
-        MCC_To Procs C1' s1 C2' s2 -> MCC_To Procs C1 s1 C2 s2
+        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C2 s
+ | C_Delay_Eta eta C C' s s' t: disjoint_eta_tl eta t -> 
+        MCC_To Procs C s t C' s' ->
+        MCC_To Procs (eta; C) s t (eta; C') s'
+ | C_Delay_Cond p b C1 C2 C1' C2' s s' t: disjoint_p_tl p t -> 
+        MCC_To Procs C1 s t C1' s' ->
+        MCC_To Procs C2 s t C2' s' ->
+        MCC_To Procs (If p ? b Then C1 Else C2) s t (If p ? b Then C1' Else C2') s'
+ | C_Call_Start p X s: In p (fst (Procs X)) ->
+        MCC_To Procs
+               (Call X) s
+               (L_Tau p)
+               (RT_Call X (set_remove_pid p (fst (Procs X))) (snd (Procs X))) s
+ | C_Call_Enter p ps X C s : In p ps ->
+        MCC_To Procs
+               (RT_Call X ps C) s
+               (L_Tau p)
+               (RT_Call X (set_remove_pid p ps) C) s
+ | C_Call_Finish p X C s: 
+        MCC_To Procs
+               (RT_Call X (p::nil) C) s (L_Tau p) C s
 .
 
 Definition Configuration : Type := Program * State.
 
-Inductive MCP_To : Configuration -> Configuration -> Prop :=
- | MCP_To_intro Procs C s C' s' : MCC_To Procs C s C' s' ->
-     MCP_To (Build_Program Procs C,s) (Build_Program Procs C',s').
+Inductive MCP_To : Configuration -> TransitionLabel -> Configuration -> Prop :=
+ | MCP_To_intro Procs C s t C' s' : MCC_To Procs C s t C' s' ->
+     MCP_To (Build_Program Procs C,s) t (Build_Program Procs C',s').
 
 Inductive MCP_ToStar : Configuration -> Configuration -> Prop :=
  | MCT_Refl c : MCP_ToStar c c
- | MCT_Step c1 c2 c3 : MCP_To c1 c2 -> MCP_ToStar c2 c3 -> MCP_ToStar c1 c3
+ | MCT_Step c1 t c2 c3 : MCP_To c1 t c2 -> MCP_ToStar c2 c3 -> MCP_ToStar c1 c3
 .
 
 Definition terminated (P:Program) : Prop :=
-  MC_Precongr (Procedures P) (Main P) End.
+match Main P with
+| End    => True
+| Call X => (Vars P X) = nil
+| _      => False
+end.
+
+(*** PROBABLY NOT NEEDED
 
 (** ** Head reductions
 
@@ -456,16 +600,53 @@ Example HeadTo_Sel : forall P p q l C s,
   HeadTo (Build_Program P (p --> q [l]; C), s) = (Build_Program P C, s).
 Proof. auto. Qed.
 *)
+*)
 
 End Semantics_Definitions.
 
 (** Notations for precongruence and reductions. *)
 
-Notation "C1 ~< ( P ) C2" := (MC_Precongr_step P C1 C2) (at level 50, left associativity).
-Notation "C1 ~<= ( P ) C2" := (MC_Precongr P C1 C2) (at level 50, left associativity).
-Notation "c ---> c'" := (MCP_To c c') (at level 50, left associativity).
+Notation "c --[ tl ]--> c'" := (MCP_To c tl c') (at level 50, left associativity).
 Notation "c --->* c'" := (MCP_ToStar c c') (at level 50, left associativity).
-Notation "c -H-> c'" := (HeadTo c = c') (at level 50).
+
+Lemma not_terminated_reduces : forall P, ~terminated P ->
+  MCP_WF P -> forall s, exists tl c', (P,s) --[tl]--> c'.
+Proof.
+induction P.
+rename Procedures0 into Ps, Main0 into C.
+induction C; intros.
++ elim H.
+  red; simpl; auto.
++ rename r into X; set (ps := fst (Ps X)).
+  unfold terminated in H; simpl in H.
+  unfold Vars in H; simpl in H.
+  case_eq ps.
+  - intro; elim H; auto.
+  - intros.
+    do 2 eexists.
+    do 2 constructor.
+    fold ps; rewrite H1.
+    left; auto.
++ case_eq l.
+  - clear H IHC.
+    intro; exfalso.
+    generalize (MCP_WF_Main _ H0).
+    simpl; intros.
+    inversion_clear H1.
+    inversion_clear H3.
+    simpl in H1.
+    rewrite H in H1; auto.
+  - do 2 eexists.
+    do 2 constructor.
+    left; auto.
++ case_eq e; do 2 eexists; do 2 constructor.
++ case_eq (beval_on_state b s p).
+  - do 2 eexists; constructor; apply C_Then; auto.
+  - do 2 eexists; constructor; apply C_Else; auto.
+Qed.
+
+(*** WE ARE HERE ***)
+
 
 (** ** Semantic properties *)
 

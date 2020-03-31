@@ -1,5 +1,6 @@
 Require Export Bool.
 Require Export List.
+Require Export ListSet.
 Require Export Sorting.Permutation.
 Require Export Arith.
 
@@ -245,6 +246,56 @@ Proof.
 split.
 apply not_in_app.
 apply not_in_app'.
+Qed.
+
+(** On sets. *)
+
+Set Implicit Arguments.
+
+Definition set_equals (T_dec : forall x y:T, {x=y}+{x<>y})
+  (X Y:set T) := forall z, In z X <-> In z Y.
+
+Definition set_incl (T_dec : forall x y:T, {x=y}+{x<>y})
+  (X Y:set T) := forall z, In z X -> In z Y.
+
+Hypothesis T_dec : forall x y:T, {x=y}+{x<>y}.
+
+Lemma set_incl_dec  :
+  forall X Y, {set_incl T_dec X Y}+{~set_incl T_dec X Y}.
+Proof.
+intros X Y; revert X; induction X.
++ left; red; simpl; intros.
+  inversion H.
++ inversion_clear IHX; [elim (set_In_dec T_dec a Y) | idtac]; intros.
+  - left; red; simpl; intros.
+    inversion_clear H0; auto.
+    rewrite <- H1; auto.
+  - right; intro.
+    apply b; apply H0; simpl; auto.
+  - right; intro.
+    red in H0.
+    apply H; red; intros.
+    apply H0; simpl; auto.
+Qed.
+
+Lemma set_equals_char : forall X Y, set_equals T_dec X Y <-> (set_incl T_dec X Y /\ set_incl T_dec Y X).
+Proof.
+split; intros.
++ split; red; intros; apply H; auto.
++ inversion_clear H.
+  split; auto.
+Qed.
+
+Lemma set_equals_dec  :
+  forall X Y, {set_equals T_dec X Y}+{~set_equals T_dec X Y}.
+Proof.
+intros.
+elim (set_incl_dec X Y); [elim (set_incl_dec Y X) | idtac]; intros.
++ left; apply set_equals_char; auto.
++ right; intro; apply b.
+  rewrite set_equals_char in H; inversion_clear H; auto.
++ right; intro; apply b.
+  rewrite set_equals_char in H; inversion_clear H; auto.
 Qed.
 
 End Lists.
