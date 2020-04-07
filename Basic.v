@@ -252,13 +252,13 @@ Qed.
 
 Set Implicit Arguments.
 
+Hypothesis T_dec : forall x y:T, {x=y}+{x<>y}.
+
 Definition set_equals (T_dec : forall x y:T, {x=y}+{x<>y})
   (X Y:set T) := forall z, In z X <-> In z Y.
 
 Definition set_incl (T_dec : forall x y:T, {x=y}+{x<>y})
   (X Y:set T) := forall z, In z X -> In z Y.
-
-Hypothesis T_dec : forall x y:T, {x=y}+{x<>y}.
 
 Lemma set_incl_dec  :
   forall X Y, {set_incl T_dec X Y}+{~set_incl T_dec X Y}.
@@ -391,15 +391,6 @@ Fixpoint eta_elim_aux {A n} (v:t A (S n)) H :=
   | Fin.F1 => hd v
   | Fin.FS H' => (tl v)[@H]
 end.
-
-(* A variant of the eta lemma from the standard library.
-Lemma eta_elim : forall {A} {n} (v:t A (S n)) x Hi, v[@Hi] = x -> hd v = x \/ exists Hi', (tl v)[@Hi'] = x.
-Proof.
-dependent induction Hi; intros.
-- left; rewrite nth_hd in H; auto.
-- right; rewrite nth_tl in H; eauto.
-Qed.
-*)
 
 (** Hopefully self-explanatory. *)
 Lemma map_shiftin : forall {A} {B} {n} (f:A->B) (v:t A n) x,
