@@ -146,6 +146,39 @@ Qed.
 
 (** Inversion results for bound variables. *)
 
+Lemma X_Free_Eta : forall X eta C,
+  X_Free X (eta;C) -> X_Free X C.
+Proof.
+intros. apply H.
+Qed.
+
+Lemma set_union_elim : forall A A_dec (a:A) (x y:set A),
+  In a (set_union A_dec x y) -> {In a x} + {In a y}.
+Proof.
+induction y.
++ left; simpl; auto.
++ elim (A_dec a a0).
+  - right. rewrite a1; simpl; auto.
+  - intros; elim IHy; auto.
+    right; simpl; auto.
+    simpl in H.
+    elim (set_add_elim _ _ _ _ H); auto.
+    intros; elim b; auto.
+Qed.
+
+Lemma X_Free_Cond : forall X p b C1 C2,
+  X_Free X (If p ? b Then C1 Else C2) -> {X_Free X C1} + {X_Free X C2}.
+Proof.
+intros. red in H. simpl in H.
+elim (set_union_elim _ _ _ _ _ H); auto.
+Qed.
+
+Lemma Not_X_Free_Eta : forall X eta C,
+  ~X_Free X (eta;C) -> ~X_Free X C.
+Proof.
+intros. intro. apply H. red. simpl. auto.
+Qed.
+
 Lemma Not_X_Free_Then : forall X p b C1 C2,
   ~X_Free X (If p ? b Then C1 Else C2) -> ~X_Free X C1.
 Proof.
@@ -171,8 +204,8 @@ Definition set_union_pid := set_union P.eq_dec.
 
 Definition eta_pn (e:Eta) : list Pid :=
 match e with
-| Com p _ q _ => (set_union_pid (p::nil) (q::nil))
-| Sel p q _   => (set_union_pid (p::nil) (q::nil))
+| Com p _ q _ => (p::q::nil)
+| Sel p q _   => (p::q::nil)
 end.
 
 Fixpoint MCC_pn (C:Choreography) (Pids:RecVar -> list Pid) : list Pid :=
@@ -336,7 +369,7 @@ Qed.
 Fixpoint Program_WF_rec (Xs Ys:list RecVar) (P:Program) : Prop :=
 match Xs with
 | nil     => Choreography_WF (Main P) /\ within_Xs Ys (Main P)
-| (X::Zs) => Choreography_WF (Procs P X) /\
+| (X::Zs) => Choreography_WF (Procs P X) /\ (Vars P X) <> nil /\
                within_Xs Ys (Procs P X) /\ Program_WF_rec Zs Ys P
 end.
 
@@ -350,13 +383,16 @@ induction Xs; simpl; intros.
   2: right; intro; inversion_clear H; inversion_clear H0; auto.
   auto.
 + elim (IHXs Ys P); intros.
-  2: right; intro; inversion_clear H; inversion_clear H1; auto.
+  2: right; intro; inversion_clear H; inversion_clear H1; inversion_clear H2; auto.
   clear IHXs.
   elim (Choreography_WF_dec (Procs P a)); intros.
-  2: right; intro; inversion_clear H; auto.
-  elim (within_Xs_dec Ys (Procs P a)); intros.
   2: right; intro; inversion_clear H; inversion_clear H1; auto.
-  auto.
+  elim (within_Xs_dec Ys (Procs P a)); intros.
+  2: right; intro; inversion_clear H; inversion_clear H1; inversion_clear H2; auto.
+  case_eq (Vars P a); intros.
+  right; intro; inversion_clear H0; inversion_clear H2; inversion_clear H3; auto.
+  left; repeat (split; auto).
+  discriminate.
 Qed.
 
 Definition Program_WF (Xs:list RecVar) (P:Program) : Prop :=
@@ -379,8 +415,8 @@ assert (forall y, Program_WF_rec y Xs (Build_Program Ps C) -> In X y -> Choreogr
 2: apply H1 with Xs; auto.
 clear H; induction y; simpl; intros.
 + inversion H1.
-+ inversion_clear H; inversion_clear H1; inversion_clear H3; auto.
-  rewrite <- H; auto.
++ inversion_clear H1; inversion_clear H; inversion_clear H3; inversion_clear H4; auto.
+  rewrite <- H2; auto.
 Qed.
 
 Lemma Program_WF_Main : forall P Xs, Program_WF Xs P -> Choreography_WF (Main P).
@@ -393,7 +429,52 @@ assert (forall y, Program_WF_rec y Xs (Build_Program Ps C) -> Choreography_WF C)
 2: apply H0 with Xs; auto.
 clear H; induction y; simpl; intros.
 + inversion H; auto.
-+ inversion_clear H; inversion_clear H1; auto.
++ inversion_clear H; inversion_clear H1; inversion_clear H2; auto.
+Qed.
+
+Lemma Program_WF_Vars_In : forall P Xs, Program_WF Xs P ->
+  forall X, X_Free X (Main P) -> In X Xs.
+Proof.
+intros.
+induction P.
+rename Procedures0 into Procs, Main0 into C.
+assert (forall Ys, Program_WF_rec Xs Ys (Build_Program Procs C) -> In X Ys).
+2: eauto.
+clear H; induction Xs; simpl; intros.
++ inversion_clear H.
+  clear H1.
+  induction C; simpl in H0, H2; auto.
+  - inversion H0.
+  - inversion H0.
+    * rewrite <- H; auto.
+    * inversion H.
+  - red in H0. simpl in H0.
+    inversion_clear H2.
+    elim (set_union_elim _ _ _ _ _ H0); intros; auto.
+    inversion a.
+    2: inversion H2.
+    rewrite <- H2; auto.
+  - inversion H2.
+    elim (X_Free_Cond _ _ _ _ _ H0); intros; auto.
++ inversion_clear H; inversion_clear H2; inversion_clear H3.
+  auto.
+Qed.
+
+Lemma Program_WF_Vars : forall P Xs, Program_WF Xs P ->
+  forall X, In X Xs -> Vars P X <> nil.
+Proof.
+intros.
+assert (forall Ys, Program_WF_rec Xs Ys P -> Vars P X <> nil).
+2: eauto.
+clear H.
+induction Xs.
++ inversion H0.
++ intros.
+  inversion_clear H0.
+  - rewrite H1 in H; clear a H1.
+    inversion_clear H; inversion_clear H1; auto.
+  - apply IHXs with Ys; auto.
+    inversion_clear H; inversion_clear H2; inversion_clear H3; auto.
 Qed.
 
 (** This one is not decidable. *)
@@ -406,6 +487,17 @@ intros.
 inversion_clear H.
 inversion_clear H0.
 apply Program_WF_Main with x; auto.
+Qed.
+
+Lemma MCP_WF_Vars : forall P, MCP_WF P ->
+  forall X, X_Free X (Main P) -> Vars P X <> nil.
+Proof.
+intros.
+inversion_clear H.
+rename x into Xs; inversion_clear H1.
+clear H2.
+apply Program_WF_Vars with Xs; auto.
+apply Program_WF_Vars_In with P; auto.
 Qed.
 
 End Syntactic_Properties.
@@ -462,7 +554,9 @@ Inductive MCC_To (Procs : RecVar -> (list Pid)*Choreography) :
         MCC_To Procs C1 s t C1' s' ->
         MCC_To Procs C2 s t C2' s' ->
         MCC_To Procs (If p ? b Then C1 Else C2) s t (If p ? b Then C1' Else C2') s'
- | C_Call_Start p X s: In p (fst (Procs X)) ->
+ | C_Call_Local p X s : (fst (Procs X) = (p::nil)) ->
+        MCC_To Procs (Call X) s (L_Tau p) (snd (Procs X)) s
+ | C_Call_Start p X s: (length (fst (Procs X)) > 1) -> In p (fst (Procs X)) ->
         MCC_To Procs
                (Call X) s
                (L_Tau p)
@@ -483,11 +577,12 @@ Inductive MCP_To : Configuration -> TransitionLabel -> Configuration -> Prop :=
  | MCP_To_intro Procs C s t C' s' : MCC_To Procs C s t C' s' ->
      MCP_To (Build_Program Procs C,s) t (Build_Program Procs C',s').
 
-Inductive MCP_ToStar : Configuration -> Configuration -> Prop :=
- | MCT_Refl c : MCP_ToStar c c
- | MCT_Step c1 t c2 c3 : MCP_To c1 t c2 -> MCP_ToStar c2 c3 -> MCP_ToStar c1 c3
+Inductive MCP_ToStar : Configuration -> list TransitionLabel -> Configuration -> Prop :=
+ | MCT_Refl c : MCP_ToStar c nil c
+ | MCT_Step c1 t c2 l c3 : MCP_To c1 t c2 -> MCP_ToStar c2 l c3 -> MCP_ToStar c1 (t::l) c3
 .
 
+(*
 (** A well-formed program is terminated if its main choreography is either 0 or a call to a terminated procedure. *)
 
 Definition terminated (P:Program) : Prop :=
@@ -496,13 +591,14 @@ match Main P with
 | Call X => (Vars P X) = nil
 | _      => False
 end.
+*)
 
 End Semantics_Definitions.
 
 (** Notations for precongruence and reductions. *)
 
 Notation "c --[ tl ]--> c'" := (MCP_To c tl c') (at level 50, left associativity).
-Notation "c --->* c'" := (MCP_ToStar c c') (at level 50, left associativity).
+Notation "c --[ ts ]-->* c'" := (MCP_ToStar c ts c') (at level 50, left associativity).
 
 Section Sanity_Checks.
 
@@ -516,24 +612,36 @@ Proof. constructor. constructor. Qed.
 
 End Sanity_Checks.
 
-Theorem progress : forall P, ~terminated P -> MCP_WF P ->
+Theorem progress : forall P, Main P <> End -> MCP_WF P ->
   forall s, exists tl c', (P,s) --[tl]--> c'.
 Proof.
 induction P.
 rename Procedures0 into Ps, Main0 into C.
 induction C; intros.
-+ elim H.
-  red; simpl; auto.
++ simpl in H. elim H; auto.
 + rename r into X; set (ps := fst (Ps X)).
-  unfold terminated in H; simpl in H.
-  unfold Vars in H; simpl in H.
-  case_eq ps.
-  - intro; elim H; auto.
+  simpl in H.
+  case_eq ps; [idtac | intros; case_eq l].
+  - intro. exfalso.
+    unfold ps in H1.
+    generalize (MCP_WF_Vars _ H0 X); intros.
+    simpl in H2.
+    unfold Vars in H2; simpl in H2.
+    rewrite H1 in H2.
+    apply H2; auto.
+    red. simpl. auto.
+  - intros.
+    rewrite H2 in H1; clear H2 l.
+    do 2 eexists.
+    constructor; apply C_Call_Local.
+    unfold ps in H1; rewrite H1.
+    reflexivity.
   - intros.
     do 2 eexists.
-    do 2 constructor.
-    fold ps; rewrite H1.
-    left; auto.
+    constructor; apply C_Call_Start;
+    fold ps; rewrite H1, H2.
+    * simpl; auto with arith.
+    * left; auto.
 + case_eq l.
   - clear H IHC.
     intro; exfalso.
@@ -553,3 +661,7 @@ induction C; intros.
 Qed.
 
 End MCBase.
+
+(** To prove:
+ - reductions preserve well-formedness
+*)
