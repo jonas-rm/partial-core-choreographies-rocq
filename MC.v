@@ -193,7 +193,6 @@ Qed.
 
 (** A choreography is well-formed if:
     - it does not contain self-communications;
-    - all recursive calls are guarded;
     - annotations are correct;
     - annotations of runtime terms are not empty.
 *)
@@ -224,20 +223,13 @@ Definition set_equals_Pid := set_equals P.eq_dec.
 Definition well_ann (P:Program) : Prop :=
   forall X, set_equals_Pid (MCC_pn (Procs P X) (Vars P)) (Vars P X).
 
-(** All procedure calls are guarded. *)
-
-Fixpoint guarded (C:Choreography) : Prop :=
-match C with
-| End             => True
-| Call _          => False
-| RT_Call _ _ _   => False
-| Interaction _ _ => True
-| Cond _ _ _ _    => True
-end.
-
-Lemma guarded_dec : forall C, {guarded C} + {~guarded C}.
+Lemma well_ann_Main_change : forall Defs C C',
+  well_ann (Build_Program Defs C) -> well_ann (Build_Program Defs C').
 Proof.
-induction C; simpl; auto.
+intros.
+intro.
+unfold Procs, Vars; simpl.
+apply H.
 Qed.
 
 (** No process attempts to communicate with itself. *)
@@ -308,18 +300,16 @@ Qed.
 (** Choreography well-formedness. *)
 
 Definition Choreography_WF (C:Choreography) : Prop :=
-  no_self_comm C /\ no_empty_ann C /\ guarded C.
+  no_self_comm C /\ no_empty_ann C.
 
 Lemma Choreography_WF_dec : forall C, {Choreography_WF C} + {~Choreography_WF C}.
 Proof.
 intros.
 unfold Choreography_WF.
-elim (guarded_dec C); intro.
-2: right; intro; inversion_clear H; inversion_clear H1; auto.
 elim (no_self_comm_dec C); intro.
-2: right; intro; inversion_clear H; inversion_clear H1; auto.
+2: right; intro; inversion_clear H; auto.
 elim (no_empty_ann_dec C); intro.
-2: right; intro; inversion_clear H; inversion_clear H1; auto.
+2: right; intro; inversion_clear H; auto.
 auto.
 Qed.
 
@@ -329,11 +319,31 @@ Proof. intros. inversion_clear H. auto. Qed.
 
 Lemma Choreography_WF_no_empty_ann : forall C,
   Choreography_WF C -> no_empty_ann C.
-Proof. intros. inversion_clear H. inversion_clear H1. auto. Qed.
+Proof. intros. inversion_clear H. auto. Qed.
 
-Lemma Choreography_WF_guarded : forall C,
-  Choreography_WF C -> guarded C.
-Proof. intros. inversion_clear H. inversion_clear H1. auto. Qed.
+(** Inversion results. *)
+Lemma Choreography_WF_eta : forall eta C,
+  Choreography_WF (eta;C) -> Choreography_WF C.
+Proof.
+intros.
+inversion_clear H; simpl in H0, H1.
+split; auto.
+inversion_clear H0; auto.
+Qed.
+
+Lemma Choreography_WF_Then : forall p b C1 C2,
+  Choreography_WF (If p ? b Then C1 Else C2) -> Choreography_WF C1.
+Proof.
+intros.
+inversion_clear H; inversion_clear H0; inversion_clear H1; split; auto.
+Qed.
+
+Lemma Choreography_WF_Else : forall p b C1 C2,
+  Choreography_WF (If p ? b Then C1 Else C2) -> Choreography_WF C2.
+Proof.
+intros.
+inversion_clear H; inversion_clear H0; inversion_clear H1; split; auto.
+Qed.
 
 (** A program is well-formed if there is a finite set of procedures Xs such that:
     - main and all procedures in Xs are well-formed
@@ -380,7 +390,7 @@ induction Xs; simpl; intros.
 + elim (Choreography_WF_dec (Main P)); intros.
   2: right; intro; inversion_clear H; auto.
   elim (within_Xs_dec Ys (Main P)); intros.
-  2: right; intro; inversion_clear H; inversion_clear H0; auto.
+  2: right; intro; inversion_clear H; auto.
   auto.
 + elim (IHXs Ys P); intros.
   2: right; intro; inversion_clear H; inversion_clear H1; inversion_clear H2; auto.
@@ -432,13 +442,27 @@ clear H; induction y; simpl; intros.
 + inversion_clear H; inversion_clear H1; inversion_clear H2; auto.
 Qed.
 
+Lemma Program_WF_Main_within_Xs : forall P Xs, Program_WF Xs P ->
+  within_Xs Xs (Main P).
+Proof.
+induction P.
+rename Procedures0 into Ps, Main0 into C.
+simpl; intros.
+red in H.
+assert (forall y, Program_WF_rec y Xs (Build_Program Ps C) -> within_Xs Xs C).
+2: apply H0 with Xs; auto.
+clear H; induction y; simpl; intros.
++ inversion H; auto.
++ inversion_clear H; inversion_clear H1; inversion_clear H2; auto.
+Qed.
+
 Lemma Program_WF_Vars_In : forall P Xs, Program_WF Xs P ->
   forall X, X_Free X (Main P) -> In X Xs.
 Proof.
 intros.
 induction P.
-rename Procedures0 into Procs, Main0 into C.
-assert (forall Ys, Program_WF_rec Xs Ys (Build_Program Procs C) -> In X Ys).
+rename Procedures0 into Defs, Main0 into C.
+assert (forall Ys, Program_WF_rec Xs Ys (Build_Program Defs C) -> In X Ys).
 2: eauto.
 clear H; induction Xs; simpl; intros.
 + inversion_clear H.
@@ -475,6 +499,69 @@ induction Xs.
     inversion_clear H; inversion_clear H1; auto.
   - apply IHXs with Ys; auto.
     inversion_clear H; inversion_clear H2; inversion_clear H3; auto.
+Qed.
+
+Lemma Program_WF_within_Xs : forall P Xs, Program_WF Xs P ->
+  forall X, In X Xs -> within_Xs Xs (Procs P X).
+Proof.
+assert (forall P Xs Ys, Program_WF_rec Xs Ys P ->
+  forall X, In X Xs -> within_Xs Ys (Procs P X)).
+2: eauto.
+induction Xs; intros.
++ inversion H0.
++ inversion_clear H0.
+  - rewrite H1 in H; clear a H1.
+    inversion_clear H; inversion_clear H1; inversion_clear H2; auto.
+  - apply IHXs; auto.
+    inversion_clear H; inversion_clear H2; inversion_clear H3; auto.
+Qed.
+
+(** Inversion results. *)
+Lemma Program_WF_Main_change : forall Xs Defs C C',
+  Choreography_WF C' -> within_Xs Xs C' ->
+  Program_WF Xs (Build_Program Defs C) -> Program_WF Xs (Build_Program Defs C').
+Proof.
+intros.
+revert H1.
+unfold Program_WF.
+assert (forall Ys, Program_WF_rec Ys Xs (Build_Program Defs C) -> Program_WF_rec Ys Xs (Build_Program Defs C')); eauto.
+induction Ys; simpl; auto.
+intros.
+inversion_clear H1; inversion_clear H3; inversion_clear H4.
+repeat (split; auto).
+Qed.
+
+Lemma Program_WF_eta : forall Xs Defs C eta,
+  Program_WF Xs (Build_Program Defs (eta;C)) -> Program_WF Xs (Build_Program Defs C).
+Proof.
+intros.
+elim (Program_WF_Main _ _ H); simpl; intros.
+inversion_clear H0.
+eapply Program_WF_Main_change; eauto.
+eapply Choreography_WF_eta; repeat split; eauto.
+apply (Program_WF_Main_within_Xs _ _ H).
+Qed.
+
+Lemma Program_WF_Then : forall Xs Defs p b C1 C2,
+  Program_WF Xs (Build_Program Defs (If p ? b Then C1 Else C2)) -> Program_WF Xs (Build_Program Defs C1).
+Proof.
+intros.
+elim (Program_WF_Main _ _ H); simpl; intros.
+inversion_clear H0; inversion_clear H1.
+eapply Program_WF_Main_change; eauto.
+apply Choreography_WF_Then with p b C2; repeat split; auto.
+apply (Program_WF_Main_within_Xs _ _ H).
+Qed.
+
+Lemma Program_WF_Else : forall Xs Defs p b C1 C2,
+  Program_WF Xs (Build_Program Defs (If p ? b Then C1 Else C2)) -> Program_WF Xs (Build_Program Defs C2).
+Proof.
+intros.
+elim (Program_WF_Main _ _ H); simpl; intros.
+inversion_clear H0; inversion_clear H1.
+eapply Program_WF_Main_change; eauto.
+apply Choreography_WF_Else with p b C1; repeat split; auto.
+apply (Program_WF_Main_within_Xs _ _ H).
 Qed.
 
 (** This one is not decidable. *)
@@ -561,7 +648,7 @@ Inductive MCC_To (Procs : RecVar -> (list Pid)*Choreography) :
                (Call X) s
                (L_Tau p)
                (RT_Call X (set_remove_pid p (fst (Procs X))) (snd (Procs X))) s
- | C_Call_Enter p ps X C s : In p ps ->
+ | C_Call_Enter p ps X C s : length ps > 1 -> In p ps ->
         MCC_To Procs
                (RT_Call X ps C) s
                (L_Tau p)
@@ -651,17 +738,111 @@ induction C; intros.
     inversion_clear H3.
     simpl in H1.
     rewrite H in H1; auto.
-  - do 2 eexists.
-    do 2 constructor.
-    left; auto.
+  - intros.
+    case l0; do 2 eexists; constructor.
+    * apply C_Call_Finish.
+    * constructor; simpl; auto with arith.
 + case_eq e; do 2 eexists; do 2 constructor.
 + case_eq (beval_on_state b s p).
   - do 2 eexists; constructor; apply C_Then; auto.
   - do 2 eexists; constructor; apply C_Else; auto.
 Qed.
 
-End MCBase.
+Lemma MCC_To_within_Xs : forall P s l P' s' Xs,
+  Program_WF Xs P -> (P,s) --[l]--> (P',s') -> within_Xs Xs (Main P').
+Proof.
+intros.
+revert H.
+inversion_clear H0.
+rename Procs0 into Defs.
+simpl; intros.
+generalize (Program_WF_within_Xs _ _ H0); intros.
+unfold Procs in H1; simpl in H1.
+generalize (Program_WF_Main_within_Xs _ _ H0); simpl; intros.
+clear H0.
+induction H; auto.
++ inversion_clear H2; auto.
++ inversion_clear H2; auto.
++ inversion_clear H2; split; auto.
++ simpl; auto.
++ inversion_clear H2; auto.
+Qed.
 
-(** To prove:
- - reductions preserve well-formedness
-*)
+Lemma MCC_To_Program_WF : forall P s l P' s' Xs,
+  Program_WF Xs P -> (P,s) --[l]--> (P',s') -> Program_WF Xs P'.
+Proof.
+intros.
+generalize (MCC_To_within_Xs _ _ _ _ _ Xs H H0); intro HXs.
+inversion H0; auto.
+rewrite <- H1 in H; rewrite <- H5 in HXs.
+clear s'0 H6 s0 H3 H5 H0 P' H1 P H2 t.
+rename Procs0 into Defs.
+apply Program_WF_Main_change with C; auto.
+clear HXs.
+generalize (Program_WF_Main _ _ H); simpl; intro HC.
+(* generalize (Program_WF_within_Xs _ _ H); simpl; intro HXs.
+generalize (Program_WF_Vars_In _ _ H); simpl; intro HX. *)
+induction H4.
++ eapply Choreography_WF_eta; eauto.
++ eapply Choreography_WF_eta; eauto.
++ eapply Choreography_WF_Then; eauto.
++ eapply Choreography_WF_Else; eauto.
++ inversion_clear HC.
+  inversion_clear H1; simpl in H2.
+  elim IHMCC_To; repeat split; auto.
+  eapply Program_WF_eta; eauto.
++ inversion_clear HC.
+  inversion_clear H1; inversion_clear H2.
+  assert (Choreography_WF C1). split; auto.
+  assert (Choreography_WF C2). split; auto.
+  generalize (Program_WF_Then _ _ _ _ _ _ H); intro.
+  generalize (Program_WF_Else _ _ _ _ _ _ H); intro.
+  elim IHMCC_To1; auto; elim IHMCC_To2; auto; intros.
+  split; split; auto.
++ change (Choreography_WF (Procs (Build_Program Defs (Call X)) X)).
+  apply Program_WF_Proc with Xs; auto.
+  apply (Program_WF_Vars_In _ _ H). red; simpl; auto.
++ elim (Program_WF_Proc _ _ H X); intros.
+  2: apply (Program_WF_Vars_In _ _ H); red; simpl; auto.
+  split; simpl; auto.
+  split; auto.
+  revert H0; case (fst (Defs X)); intros.
+  1: exfalso; inversion H0.
+  revert H0; case l; intros.
+  1: exfalso; inversion H0; inversion H5.
+  simpl.
+  elim P.eq_dec; try discriminate.
++ elim (Program_WF_Proc _ _ H X); intros.
+  2: {
+    apply (Program_WF_Vars_In _ _ H); red; simpl.
+    apply set_union_intro1; simpl; auto.
+  }
+  inversion_clear HC.
+  simpl in H4, H5.
+  split; simpl; auto.
+  inversion_clear H5; split; auto.
+  revert H0; case ps; intros.
+  1: exfalso; inversion H0.
+  revert H0; case l; intros.
+  1: exfalso; inversion H0; inversion H8.
+  simpl.
+  elim P.eq_dec; try discriminate.
++ elim HC; intros.
+  inversion_clear H1; red; auto.
+Qed.
+
+Lemma MCC_To_MCP_WF : forall P s l P' s',
+  MCP_WF P -> (P,s) --[l]--> (P',s') -> MCP_WF P'.
+Proof.
+intros.
+inversion H0.
+inversion_clear H.
+rename x into Xs; exists Xs; inversion_clear H7.
+simpl; split.
+rewrite H5.
+apply (MCC_To_Program_WF _ _ _ _ _ _ H H0).
+rewrite <- H1 in H8.
+apply well_ann_Main_change with C; auto.
+Qed.
+
+End MCBase.
