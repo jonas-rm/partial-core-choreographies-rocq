@@ -248,6 +248,54 @@ apply not_in_app.
 apply not_in_app'.
 Qed.
 
+(** Disjoint lists. *)
+
+Definition disjoint {A:Type} (l l':list A) :=
+  forall a, ~(In a l /\ In a l').
+
+Lemma disjoint_dec : forall A (A_dec:forall x y:A,{x=y}+{x<>y}) l l',
+  {disjoint (A:=A) l l'} + {~disjoint l l'}.
+Proof.
+induction l; auto.
++ left; repeat intro.
+  inversion_clear H. inversion H0.
++ intro; elim IHl with l'.
+  - intro. elim (In_dec A_dec a l'); intros.
+    * right; intro. apply (H a); split; simpl; auto.
+    * left; intro; intro; inversion_clear H.
+      inversion_clear H0; auto.
+      1: rewrite H in b; auto.
+      apply a0 with a1; auto.
+  - right; intro. apply b. repeat intro.
+    inversion_clear H0; elim (H a0); split; simpl; auto.
+Qed.
+
+Lemma disjoint_not_in_fst : forall A (l l':list A),
+  disjoint l l' -> forall a, In a l -> ~In a l'.
+Proof.
+intros; intro.
+apply (H a); auto.
+Qed.
+
+Lemma disjoint_not_in_snd : forall A (l l':list A),
+  disjoint l l' -> forall a, In a l' -> ~In a l.
+Proof.
+intros. intro.
+apply (H a); auto.
+Qed.
+
+Lemma disjoint_char : forall A (l l':list A),
+  (forall a, In a l -> ~In a l') -> disjoint l l'.
+Proof. repeat intro. inversion_clear H0. apply (H a); auto. Qed.
+
+Lemma disjoint_sym : forall A (l l':list A),
+  disjoint l l' -> disjoint l' l.
+Proof.
+intros.
+apply disjoint_char.
+apply disjoint_not_in_snd; auto.
+Qed.
+
 (** On sets. *)
 
 Set Implicit Arguments.

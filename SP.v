@@ -42,6 +42,15 @@ apply H; intro.
 apply H0; simpl; auto.
 Qed.
 
+Lemma within_ps_rev : forall ps N, within_ps ps N ->
+  forall p, N p <> End -> In p ps.
+Proof.
+intros.
+elim (In_dec P.eq_dec p ps); auto.
+intro. rewrite H in H0; auto.
+elim H0; auto.
+Qed.
+
 Definition finite_support (N:Network) := exists ps, within_ps ps N.
 
 Definition Network_eq (N N':Network) : Prop := forall p, N p = N' p.
@@ -73,110 +82,44 @@ Proof. red; auto. Qed.
 Lemma EmptyNet_finite_supp : finite_support EmptyNet.
 Proof. exists nil. apply EmptyNet_within_ps. Qed.
 
-Definition Par {N N':Network} {ps ps':list Pid} :
-  within_ps ps N -> within_ps ps' N' -> Network :=
-  fun _ _ p => if (In_dec P.eq_dec p ps)
-               then N p else N' p.
+Definition Par (N N':Network) :=
+  fun p => if (Behaviour_eq_End_dec (N p)) then N' p else N p.
 
-Lemma Par_proj1 : forall N N' ps ps'
-  (HN:within_ps ps N) (HN':within_ps ps' N') p, In p ps -> Par HN HN' p = N p.
+Lemma Par_proj1 : forall N N' p, N p <> End -> Par N N' p = N p.
 Proof.
 intros.
-unfold Par. elim in_dec; auto.
-intro. elim b; auto.
-Qed.
-
-Lemma Par_proj2 : forall N N' ps ps'
-  (HN:within_ps ps N) (HN':within_ps ps' N') p,
-  ~In p ps -> In p ps' -> Par HN HN' p = N' p.
-Proof.
-intros.
-unfold Par. elim in_dec; auto.
+unfold Par. elim Behaviour_eq_End_dec; auto.
 intro. elim H; auto.
 Qed.
 
-Lemma Par_outside : forall N N' ps ps'
-  (HN:within_ps ps N) (HN':within_ps ps' N') p,
-  ~In p ps -> ~In p ps' -> Par HN HN' p = End.
+Lemma Par_proj2 : forall N N' p, N p = End -> Par N N' p = N' p.
 Proof.
 intros.
-unfold Par. elim in_dec; auto.
+unfold Par. elim Behaviour_eq_End_dec; auto.
+intro. elim b; auto.
 Qed.
 
-(* MOVE ME TO Basics.v *)
-Definition disjoint {A:Type} (l l':list A) :=
-  forall a, ~(In a l /\ In a l').
-
-Lemma disjoint_dec : forall A (A_dec:forall x y:A,{x=y}+{x<>y}) l l',
-  {disjoint (A:=A) l l'} + {~disjoint l l'}.
-Proof.
-induction l; auto.
-+ left; repeat intro.
-  inversion_clear H. inversion H0.
-+ intro; elim IHl with l'.
-  - intro. elim (In_dec A_dec a l'); intros.
-    * right; intro. apply (H a); split; simpl; auto.
-    * left; intro; intro; inversion_clear H.
-      inversion_clear H0; auto.
-      1: rewrite H in b; auto.
-      apply a0 with a1; auto.
-  - right; intro. apply b. repeat intro.
-    inversion_clear H0; elim (H a0); split; simpl; auto.
-Qed.
-
-Lemma disjoint_not_in_fst : forall A (l l':list A),
-  disjoint l l' -> forall a, In a l -> ~In a l'.
-Proof.
-intros; intro.
-apply (H a); auto.
-Qed.
-
-Lemma disjoint_not_in_snd : forall A (l l':list A),
-  disjoint l l' -> forall a, In a l' -> ~In a l.
-Proof.
-intros. intro.
-apply (H a); auto.
-Qed.
-
-Lemma disjoint_char : forall A (l l':list A),
-  (forall a, In a l -> ~In a l') -> disjoint l l'.
-Proof. repeat intro. inversion_clear H0. apply (H a); auto. Qed.
-
-Lemma disjoint_sym : forall A (l l':list A),
-  disjoint l l' -> disjoint l' l.
-Proof.
-intros.
-apply disjoint_char.
-apply disjoint_not_in_snd; auto.
-Qed.
-
-Lemma Par_sym : forall N N' ps ps' (HN:within_ps ps N) (HN':within_ps ps' N'),
-  disjoint ps ps' -> Network_eq (Par HN HN') (Par HN' HN).
+Lemma Par_sym : forall N N' ps ps', within_ps ps N -> within_ps ps' N' ->
+  disjoint ps ps' -> Network_eq (Par N N') (Par N' N).
 Proof.
 red; intros.
-apply Network_eq_within_ps with (ps++ps').
-+ intro; intros.
-  elim (not_in_app _ _ _ _ H0); intros.
-  unfold Par; elim in_dec; intros; auto.
-+ intro; intros.
-  elim (not_in_app _ _ _ _ H0); intros.
-  unfold Par; elim in_dec; intros; auto.
-+ intros.
-  elim (in_app_or _ _ _ H0); intros.
-  - rewrite Par_proj1; auto. rewrite Par_proj2; auto.
-    intro; apply (H p0); auto.
-  - rewrite Par_proj2; auto. rewrite Par_proj1; auto.
-    intro; apply (H p0); auto.
+unfold Par.
+do 2 elim Behaviour_eq_End_dec; intros; auto.
++ transitivity End; auto.
++ exfalso.
+  red in H, H0, H1.
+  elim (H1 p); split; eapply within_ps_rev; eauto.
 Qed.
+
+Definition Process (p:Pid) (b:Behaviour) : Network :=
+  fun p' => if (P.eq_dec p p') then b else End.
 
 End Syntax.
 
-(*
 Delimit Scope SP_scope with SP.
 
 Bind Scope SP_scope with Behaviour.
 Bind Scope SP_scope with Network.
-*)
 
 Notation "N | N'" := (Par N N') (at level 202, right associativity) : SP_scope.
 Notation "p [ v , B ]" := (Process p v B) (at level 201, v at level 9, no associativity) : SP_scope.
@@ -186,10 +129,11 @@ Notation "p (+) l ; B" := (Sel p l B) (at level 49, l at level 9, right associat
 Notation "p & f" := (Branching p f) (at level 60, no associativity) : SP_scope.
 Notation "'If' p 'Then' B1 'Else' B2" := (Cond p B1 B2) (at level 60) : SP_scope.
 Notation "'bnil'" := (End) : SP_scope.
-Notation "'nnil'" := (Empty) : SP_scope.
+Notation "'nnil'" := (EmptyNet) : SP_scope.
 
 (*
-Check (Empty | Empty)%SP.
+These do not work - we now have parameters everywhere.
+Check (EmptyNet | EmptyNet)%SP.
 Check (0 [1, bnil])%SP.
 Check (Empty | 0 [1, bnil])%SP.
 Check (If 0 Then bnil Else bnil)%SP.
