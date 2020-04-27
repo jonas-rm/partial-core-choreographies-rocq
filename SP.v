@@ -22,6 +22,12 @@ Inductive Behaviour : Type :=
 
 Definition Branch : Type := option Behaviour.
 
+(** Equality of behaviours is not decidable because of branching... *)
+Lemma Behaviour_eq_End_dec : forall (b:Behaviour), {b=End} + {b<>End}.
+Proof.
+induction b; auto; right; discriminate.
+Qed.
+
 Definition Network := Pid -> Behaviour.
 
 Definition within_ps (ps:list Pid) (N:Network) :=
@@ -89,44 +95,52 @@ unfold Par. elim in_dec; auto.
 intro. elim H; auto.
 Qed.
 
+Lemma Par_outside : forall N N' ps ps'
+  (HN:within_ps ps N) (HN':within_ps ps' N') p,
+  ~In p ps -> ~In p ps' -> Par HN HN' p = End.
+Proof.
+intros.
+unfold Par. elim in_dec; auto.
+Qed.
+
 (* MOVE ME TO Basics.v *)
-Fixpoint disjoint {A:Type} (l l':list A) :=
-  match l with
-  | nil => True
-  | z::zs => ~In z l' /\ disjoint zs l'
-  end.
+Definition disjoint {A:Type} (l l':list A) :=
+  forall a, ~(In a l /\ In a l').
 
 Lemma disjoint_dec : forall A (A_dec:forall x y:A,{x=y}+{x<>y}) l l',
   {disjoint (A:=A) l l'} + {~disjoint l l'}.
 Proof.
-induction l; simpl; auto.
-intros.
-elim IHl with l'.
-2: { right; intro. inversion_clear H. apply b; auto. }
-intro. elim (In_dec A_dec a l'); auto.
-right; intro. inversion_clear H. apply H0; auto.
+induction l; auto.
++ left; repeat intro.
+  inversion_clear H. inversion H0.
++ intro; elim IHl with l'.
+  - intro. elim (In_dec A_dec a l'); intros.
+    * right; intro. apply (H a); split; simpl; auto.
+    * left; intro; intro; inversion_clear H.
+      inversion_clear H0; auto.
+      1: rewrite H in b; auto.
+      apply a0 with a1; auto.
+  - right; intro. apply b. repeat intro.
+    inversion_clear H0; elim (H a0); split; simpl; auto.
 Qed.
 
 Lemma disjoint_not_in_fst : forall A (l l':list A),
   disjoint l l' -> forall a, In a l -> ~In a l'.
 Proof.
-induction l; auto.
-simpl; intros.
-inversion_clear H.
-inversion_clear H0; auto.
-rewrite <- H; auto.
+intros; intro.
+apply (H a); auto.
 Qed.
 
 Lemma disjoint_not_in_snd : forall A (l l':list A),
   disjoint l l' -> forall a, In a l' -> ~In a l.
 Proof.
 intros. intro.
-apply (disjoint_not_in_fst A l l') with a; auto.
+apply (H a); auto.
 Qed.
 
 Lemma disjoint_char : forall A (l l':list A),
   (forall a, In a l -> ~In a l') -> disjoint l l'.
-Proof. induction l; simpl; auto. Qed.
+Proof. repeat intro. inversion_clear H0. apply (H a); auto. Qed.
 
 Lemma disjoint_sym : forall A (l l':list A),
   disjoint l l' -> disjoint l' l.
@@ -136,13 +150,24 @@ apply disjoint_char.
 apply disjoint_not_in_snd; auto.
 Qed.
 
-Lemma disjoint_char' : forall A (l l':list A),
-  (forall a, In a l' -> ~In a l) -> disjoint l l'.
-Proof. intros. apply disjoint_sym. apply disjoint_char; auto. Qed.
-
-Lemma Par_sym : forall N N' ps ps',
-  within_ps ps N -> within_ps ps' N' -> disjoint ps ps' ->
-  Network_eq (ps++ps') (Par N N') (Par N' N).
+Lemma Par_sym : forall N N' ps ps' (HN:within_ps ps N) (HN':within_ps ps' N'),
+  disjoint ps ps' -> Network_eq (Par HN HN') (Par HN' HN).
+Proof.
+red; intros.
+apply Network_eq_within_ps with (ps++ps').
++ intro; intros.
+  elim (not_in_app _ _ _ _ H0); intros.
+  unfold Par; elim in_dec; intros; auto.
++ intro; intros.
+  elim (not_in_app _ _ _ _ H0); intros.
+  unfold Par; elim in_dec; intros; auto.
++ intros.
+  elim (in_app_or _ _ _ H0); intros.
+  - rewrite Par_proj1; auto. rewrite Par_proj2; auto.
+    intro; apply (H p0); auto.
+  - rewrite Par_proj2; auto. rewrite Par_proj1; auto.
+    intro; apply (H p0); auto.
+Qed.
 
 End Syntax.
 
