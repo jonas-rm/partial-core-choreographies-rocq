@@ -34,13 +34,18 @@ Qed.
 
 End Bool_Expressions.
 
+(** The two variables in each process. *)
+
+Definition xx := true.
+Definition yy := false.
+
 Module MC_Eval <: (Eval MC_Expressions Bool Nat Nat).
 
 Definition eval (e:Expr) (f:bool -> nat) : nat :=
 match e with
  | zero => 0
- | this => f true
- | succ_this => S (f true)
+ | this => f xx
+ | succ_this => S (f xx)
 end.
 
 End MC_Eval.
@@ -48,22 +53,17 @@ End MC_Eval.
 Module MC_BEval <: (Eval Bool_Expressions Bool Nat Bool).
 
 Definition eval (b:BExpr) (f:bool -> nat) : bool :=
-  (f true =? f false).
+  (f xx =? f yy).
 
 End MC_BEval.
 
 Module Import MC_Nat :=
   MCBase Nat Bool Nat MC_Expressions Bool_Expressions Nat MC_Eval MC_BEval.
 
-(** The two variables in each process. *)
-
-Definition xx := true.
-Definition yy := false.
-
 (** Restricted conditional. *)
 
 Definition Send p e q := p#e --> q$xx.
-Definition IfEq p q C1 C2 := p#this --> q$yy; If p ? compare Then C1 Else C2.
+Definition IfEq p q C1 C2 := q#this --> p$yy; If p ? compare Then C1 Else C2.
 
 (* Probably means something.
 Import St.
@@ -102,6 +102,12 @@ exists s''; split.
 + unfold s'', s'.
   apply CSt.update_update_ext.
 Qed.
+
+(** Changes to do before continuing:
+ - implementation needs an extra paramenter (first undefined procedure)
+ - all "functions" end with a call to a fixed procedure
+ - fatsemi replaces the definition of the call ending the choreography
+*)
 
 Section Implementation.
 

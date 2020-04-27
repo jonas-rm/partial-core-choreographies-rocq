@@ -9,8 +9,8 @@ Local Open Scope nat_scope.
 
 Module MCBase (P X V E B R: DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
-Module Import PSt := LState V X.
-Module Import CSt := GState P V X.
+Module Export PSt := LState V X.
+Module Export CSt := GState P V X.
 
 Module Bdec := DecidableType B.
 Module Edec := DecidableType E.
