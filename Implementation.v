@@ -81,8 +81,10 @@ apply C_Delay_Eta.
 apply C_Sel.
 Qed.
 
-Example MCToStar_sanity_check : forall p e q s1 C P, exists s2,
-  (Build_Program P (Send p e q; Send p zero q; C), s1) --->* (Build_Program P C, s2) /\ (CSt.eq_state_ext s2 (CSt.update s1 q xx 0)).
+Example MCToStar_sanity_check : forall p e q s1 C P, exists s2 v,
+  (Build_Program P (Send p e q; Send p zero q; C), s1)
+  --[ (List.cons (L_Com p v q) (List.cons (L_Com p 0 q) List.nil)) ]-->*
+  (Build_Program P C, s2) /\ (CSt.eq_state_ext s2 (CSt.update s1 q xx 0)).
 Proof.
 intros.
 unfold Send.
@@ -93,7 +95,7 @@ generalize (C_Com P p zero q xx C s').
 set (C'' := p # zero --> q $ xx; C).
 fold C'' in H.
 simpl. set (s'' := CSt.update s' q xx 0). intros.
-exists s''; split.
+exists s'', (eval_on_state e s1 p); split.
 + eapply MCT_Step.
   1: constructor. apply H.
   eapply MCT_Step.
@@ -103,12 +105,6 @@ exists s''; split.
   apply CSt.update_update_ext.
 Qed.
 
-(** Changes to do before continuing:
- - implementation needs an extra paramenter (first undefined procedure)
- - all "functions" end with a call to a fixed procedure
- - fatsemi replaces the definition of the call ending the choreography
-*)
-
 Section Implementation.
 
 (** The type of partial functions and the notion of a choreography implementing one.
@@ -116,23 +112,23 @@ Section Implementation.
 
 Definition PFunction (n:nat) := t nat n -> option nat.
 
-Definition implements (C:Choreography) {n} (f:PFunction n) (ps:t Pid n) (q:Pid) :=
-  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
-  (forall y, f xs = Some y -> exists s', (C,s) --->* (End,s') /\ s' q = y) /\
-  (f xs = None -> ~exists s', (C,s) --->* (End,s')).
+Definition implements (P:Program) {n} (f:PFunction n) (ps:t Pid n) (q:Pid) :=
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
+  (forall y, f xs = Some y -> exists s' ts P', (P,s) --[ts]-->* (P',s') /\ s' q xx = y /\ Main P' = End) /\
+  (f xs = None -> forall s' ts P', (P,s) --[ts]-->* (P',s') -> Main P' <> End).
 
 (** For convenience. *)
-Lemma implements_None : forall C {n} f ps q, implements C f ps q -> 
-  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
-  f xs = None -> ~exists s', (C,s) --->* (End,s').
+Lemma implements_None : forall P {n} f ps q, implements P f ps q -> 
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
+  f xs = None -> forall s' ts P', (P,s) --[ts]-->* (P',s') -> Main P' <> End.
 Proof.
 unfold implements; intros.
-elim (H _ _ H0); auto.
+elim (H _ _ H0); eauto.
 Qed.
 
-Lemma implements_Some : forall C {n} f ps q, implements C f ps q -> 
-  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) = xs[@Hi]) ->
-  forall y, f xs = Some y -> exists s', (C,s) --->* (End,s') /\ s' q = y.
+Lemma implements_Some : forall P {n} f ps q, implements P f ps q -> 
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
+  forall y, f xs = Some y -> exists s' ts P', (P,s) --[ts]-->* (P',s') /\ s' q xx = y /\ Main P' = End.
 Proof.
 unfold implements; intros.
 elim (H _ _ H0); auto.
@@ -148,35 +144,65 @@ Definition make_pf_2 (f:nat -> nat -> nat) : PFunction 2
 Definition make_pf_3 (f:nat -> nat -> nat -> nat) : PFunction 3
   := fun xs => Some (f (hd xs) (hd (tl xs)) (hd (tl (tl xs)))).
 
-(** We recover the examples from the paper. *)
-Definition C_Inc (p t:Pid) := p # this --> t; t # succ_this --> p; End.
+(** Macros for writing choreographies the way we like them. *)
+Definition Pack0 (p:Pid) (C:Choreography) :=
+  Build_Program (fun (X:RecVar) => (List.cons p List.nil,End)) C.
 
-Lemma C_Inc_char : forall p t s, let s1 := update s t (evaluate_on_state this s p) in
-  (C_Inc p t, s) --->* (End, (update s1 p (evaluate_on_state succ_this s1 t))).
+Definition Pack1 (p:Pid) X pidsX CX (C:Choreography) :=
+  Build_Program (fun (R:RecVar) =>
+    if RecVar_dec R X then (pidsX,CX) else (List.cons p List.nil,End)) C.
+
+Definition Pack2 (p:Pid) X pidsX CX Y pidsY CY (C:Choreography) :=
+  Build_Program (fun (R:RecVar) =>
+    if RecVar_dec R X then (pidsX,CX)
+    else if RecVar_dec R Y then (pidsY,CY) else (List.cons p List.nil,End)) C.
+
+(** We recover the examples from the paper. *)
+Definition C_Inc (p t:Pid) := Send p this t; Send t succ_this p; End.
+
+Definition P_Inc p t := Pack0 p (C_Inc p t).
+
+Lemma P_Inc_char : forall p t s,
+  let s1 := update s t xx (s p xx) in
+  let tl := (List.cons (L_Com p (s p xx) t) (List.cons (L_Com t (S (s p xx)) p) List.nil)) in
+  (P_Inc p t, s) --[ tl ]-->* (Pack0 p End, (update s1 p xx (S (s p xx)))).
 Proof.
-intros; eapply MCT_Step; [apply C_Com | eapply MCT_Step]; [apply C_Com | apply MCT_Refl].
+intros; eapply MCT_Step.
+1: { constructor. apply C_Com. }
+assert (S (s p xx) = eval_on_state succ_this s1 t).
+1: { unfold s1; simpl. rewrite update_read; auto. }
+eapply MCT_Step.
+- constructor. simpl. rewrite H. apply C_Com.
+- rewrite H. apply MCT_Refl.
 Qed.
 
-Lemma C_Inc_correct : forall p t, implements (C_Inc p t) (make_pf_1 (fun n => S n)) [p] p.
+Lemma P_Inc_correct : forall p t, implements (P_Inc p t) (make_pf_1 (fun n => S n)) [p] p.
 Proof.
 unfold make_pf_1; split; intros; inversion H0.
-set (s1 := update s t (evaluate_on_state this s p)).
-unfold C_Inc; exists (update s1 p (evaluate_on_state succ_this s1 t)).
-split.
-+ apply C_Inc_char.
-+ assert (xs = [s p]).
-  - apply eq_nth_iff; intros.
-    rewrite <- H.
-    repeat rewrite nth_hd'; auto.
-  - unfold s1; clear s1; simpl.
-    rewrite H1; clear H1 H2 H0 H.
-    rewrite update_read; simpl.
-    unfold evaluate_on_state; simpl.
-    rewrite update_read; simpl.
-    repeat rewrite MC_Nat.Pdec.eqb_refl; auto.
+generalize (P_Inc_char p t s).
+set (s1 := update s t xx (s p xx)).
+set (s2 := update s1 p xx (S (s p xx))).
+set (tl1 := L_Com p (s p xx) t).
+set (tl2 := L_Com t (S (s p xx)) p).
+set (tls := List.cons tl1 (List.cons tl2 List.nil)).
+simpl; intros.
+exists s2, tls, (Pack0 p End).
+repeat split; auto.
+unfold s2, s1; simpl.
+rewrite update_read.
+replace xs with [s p xx]; auto.
+apply eq_nth_iff; intros.
+rewrite <- H.
+repeat rewrite nth_hd'; auto.
 Qed.
 
 End Implementation.
+
+(** Changes to do before continuing:
+ - implementation needs an extra paramenter (first undefined procedure)
+ - all "functions" end with a call to a fixed procedure
+ - fatsemi replaces the definition of the call ending the choreography
+*)
 
 (** * Extensions of MC
     We require some additional operators on MC for our encoding. *)
