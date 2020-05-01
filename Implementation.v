@@ -62,17 +62,18 @@ Module Import MC_Nat :=
 
 (** Restricted conditional. *)
 
-Definition Send p e q := p#e --> q$xx.
-Definition IfEq p q C1 C2 := q#this --> p$yy; If p ? compare Then C1 Else C2.
+Definition Send p e q : Eta := p#e --> q$xx.
+Definition IfEq p q C1 C2 : Choreography :=
+  q#this --> p$yy;; If p ? compare Then C1 Else C2.
 
 (* Probably means something.
 Import St.
 *)
 
 Example sanity_check : forall P s,
-  (Build_Program P (3#this --> 2$yy; Sel 0 1 left; If 2 ? compare Then (4#succ_this --> 3$xx; End) Else (3#zero --> 2$xx;End)),s)
+  (Build_Program P (3#this --> 2$yy;; Sel 0 1 left;; If 2 ? compare Then (4#succ_this --> 3$xx;; End) Else (3#zero --> 2$xx;; End)),s)
   --[ L_Sel 0 1 left ]-->
-  (Build_Program P (3#this --> 2$yy; If 2 ? compare Then (4#succ_this --> 3$xx; End) Else (3#zero --> 2$xx; End)), s).
+  (Build_Program P (3#this --> 2$yy;; If 2 ? compare Then (4#succ_this --> 3$xx;; End) Else (3#zero --> 2$xx;; End)), s).
 Proof.
 intros.
 constructor.
@@ -82,17 +83,17 @@ apply C_Sel.
 Qed.
 
 Example MCToStar_sanity_check : forall p e q s1 C P, exists s2 v,
-  (Build_Program P (Send p e q; Send p zero q; C), s1)
+  (Build_Program P (Send p e q;; Send p zero q;; C), s1)
   --[ (List.cons (L_Com p v q) (List.cons (L_Com p 0 q) List.nil)) ]-->*
   (Build_Program P C, s2) /\ (CSt.eq_state_ext s2 (CSt.update s1 q xx 0)).
 Proof.
 intros.
 unfold Send.
-generalize (C_Com P p e q xx (p#zero --> q$xx;C) s1).
-set (C' := p # e --> q $ xx; p # zero --> q $ xx; C).
+generalize (C_Com P p e q xx (p#zero --> q$xx;;C) s1).
+set (C' := (p # e --> q $ xx;; p # zero --> q $ xx;; C)%MC).
 simpl. set (s' := CSt.update s1 q xx (eval_on_state e s1 p)). intros.
 generalize (C_Com P p zero q xx C s').
-set (C'' := p # zero --> q $ xx; C).
+set (C'' := (p # zero --> q $ xx;; C)%MC).
 fold C'' in H.
 simpl. set (s'' := CSt.update s' q xx 0). intros.
 exists s'', (eval_on_state e s1 p); split.
@@ -158,7 +159,8 @@ Definition Pack2 (p:Pid) X pidsX CX Y pidsY CY (C:Choreography) :=
     else if RecVar_dec R Y then (pidsY,CY) else (List.cons p List.nil,End)) C.
 
 (** We recover the examples from the paper. *)
-Definition C_Inc (p t:Pid) := Send p this t; Send t succ_this p; End.
+Definition C_Inc (p t:Pid) : Choreography :=
+  Send p this t;; Send t succ_this p;; End.
 
 Definition P_Inc p t := Pack0 p (C_Inc p t).
 
@@ -208,6 +210,20 @@ End Implementation.
     We require some additional operators on MC for our encoding. *)
 
 Section MC_plus.
+
+Fixpoint EndFree (C:Choreography) :=
+  match C with
+  | End => False
+  | Call _ => True
+  | RT_Call _ _ _ => True
+  | (Eta;; C')%MC => EndFree C'
+  | If p ? b Then C1 Else C2 => EndFree C1 /\ EndFree C2
+end.
+
+Definition Implementation_Program (P:Program) (m n:nat) :=
+    Main P = Call m /\
+    (forall k, m<=k<n -> EndFree (Procs P m)) /\
+    (forall k, (k<m \/ n<=k) -> Procs P m = End).
 
 (** ** Fat-semi. *)
 Fixpoint fatsemi (C C':Choreography) : Choreography :=

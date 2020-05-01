@@ -71,9 +71,14 @@ End Syntax.
 
 (** Pretty-printing rules for choreographies. *)
 
-Notation "p # e --> q $ x" := (Com p e q x) (at level 50, e at level 9).
-Notation "p --> q [ l ]" := (Sel p q l) (at level 50).
-Notation "eta ';' C" := (Interaction eta C) (at level 60, right associativity).
+Delimit Scope MC_scope with MC.
+
+Bind Scope MC_scope with Choreography.
+Bind Scope MC_scope with Eta.
+
+Notation "p # e --> q $ x" := (Com p e q x) (at level 50, e at level 9) : MC_scope.
+Notation "p --> q [ l ]" := (Sel p q l) (at level 50) : MC_scope.
+Notation "eta ';;' C" := (Interaction eta C) (at level 60, right associativity) : MC_scope.
 Notation "'If' p '?' b 'Then' C1 'Else' C2" := (Cond p b C1 C2) (at level 60).
 
 Section Syntactic_Properties.
@@ -147,7 +152,7 @@ Qed.
 (** Inversion results for bound variables. *)
 
 Lemma X_Free_Eta : forall X eta C,
-  X_Free X (eta;C) -> X_Free X C.
+  X_Free X (eta;;C) -> X_Free X C.
 Proof.
 intros. apply H.
 Qed.
@@ -174,7 +179,7 @@ elim (set_union_elim _ _ _ _ _ H); auto.
 Qed.
 
 Lemma Not_X_Free_Eta : forall X eta C,
-  ~X_Free X (eta;C) -> ~X_Free X C.
+  ~X_Free X (eta;;C) -> ~X_Free X C.
 Proof.
 intros. intro. apply H. red. simpl. auto.
 Qed.
@@ -323,7 +328,7 @@ Proof. intros. inversion_clear H. auto. Qed.
 
 (** Inversion results. *)
 Lemma Choreography_WF_eta : forall eta C,
-  Choreography_WF (eta;C) -> Choreography_WF C.
+  Choreography_WF (eta;;C) -> Choreography_WF C.
 Proof.
 intros.
 inversion_clear H; simpl in H0, H1.
@@ -532,7 +537,7 @@ repeat (split; auto).
 Qed.
 
 Lemma Program_WF_eta : forall Xs Defs C eta,
-  Program_WF Xs (Build_Program Defs (eta;C)) -> Program_WF Xs (Build_Program Defs C).
+  Program_WF Xs (Build_Program Defs (eta;;C)) -> Program_WF Xs (Build_Program Defs C).
 Proof.
 intros.
 elim (Program_WF_Main _ _ H); simpl; intros.
@@ -615,8 +620,8 @@ end.
 
 Definition disjoint_eta_tl (eta:Eta) (t:TransitionLabel) : Prop :=
 match eta with
-| (p # _ --> q $ _) => disjoint_p_tl p t /\ disjoint_p_tl q t
-| (p --> q [_])     => disjoint_p_tl p t /\ disjoint_p_tl q t
+| (p # _ --> q $ _)%MC => disjoint_p_tl p t /\ disjoint_p_tl q t
+| (p --> q [_])%MC     => disjoint_p_tl p t /\ disjoint_p_tl q t
 end.
 
 Definition set_remove_pid := set_remove P.eq_dec.
@@ -626,17 +631,17 @@ Definition set_remove_pid := set_remove P.eq_dec.
 Inductive MCC_To (Procs : RecVar -> (list Pid)*Choreography) :
   Choreography -> State -> TransitionLabel -> Choreography -> State -> Prop :=
  | C_Com p e q x C s : let v := (eval_on_state e s p) in
-        MCC_To Procs (p # e --> q $ x; C) s
+        MCC_To Procs (p # e --> q $ x;; C) s
                (L_Com p v q)
                C (update s q x v)
- | C_Sel p q l C s : MCC_To Procs (p --> q [l]; C) s (L_Sel p q l) C s
+ | C_Sel p q l C s : MCC_To Procs (p --> q [l];; C) s (L_Sel p q l) C s
  | C_Then p b C1 C2 s : (beval_on_state b s p = true) ->
         MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C1 s
  | C_Else p b C1 C2 s : (beval_on_state b s p = false) ->
         MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C2 s
  | C_Delay_Eta eta C C' s s' t: disjoint_eta_tl eta t -> 
         MCC_To Procs C s t C' s' ->
-        MCC_To Procs (eta; C) s t (eta; C') s'
+        MCC_To Procs (eta;; C) s t (eta;; C') s'
  | C_Delay_Cond p b C1 C2 C1' C2' s s' t: disjoint_p_tl p t -> 
         MCC_To Procs C1 s t C1' s' ->
         MCC_To Procs C2 s t C2' s' ->
@@ -690,11 +695,11 @@ Notation "c --[ ts ]-->* c'" := (MCP_ToStar c ts c') (at level 50, left associat
 Section Sanity_Checks.
 
 Example Com_reduction : forall P p e q x C s,
-  (Build_Program P (p # e --> q $ x; C), s) --[ L_Com p (eval_on_state e s p) q ]--> (Build_Program P C, update s q x (eval_on_state e s p)).
+  (Build_Program P (p # e --> q $ x;; C), s) --[ L_Com p (eval_on_state e s p) q ]--> (Build_Program P C, update s q x (eval_on_state e s p)).
 Proof. constructor. constructor. Qed.
 
 Example Sel_reduction : forall P p q l C s, 
-  (Build_Program P (p --> q [l]; C), s) --[ L_Sel p q l ]--> (Build_Program P C, s).
+  (Build_Program P (p --> q [l];; C), s) --[ L_Sel p q l ]--> (Build_Program P C, s).
 Proof. constructor. constructor. Qed.
 
 End Sanity_Checks.

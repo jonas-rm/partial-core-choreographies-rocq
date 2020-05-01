@@ -16,8 +16,9 @@ Inductive Behaviour : Type :=
 | Send : Pid -> Expr -> Behaviour -> Behaviour
 | Recv : Pid -> Var -> Behaviour -> Behaviour
 | Sel : Pid -> Label -> Behaviour -> Behaviour
-| Branching : Pid -> (Label -> (option Behaviour)) -> Behaviour
+| Branching : Pid -> (Label -> option Behaviour) -> Behaviour
 | Cond : Pid -> Behaviour -> Behaviour -> Behaviour
+| Call : RecVar -> Behaviour
 .
 
 Definition Branch : Type := option Behaviour.
@@ -111,8 +112,22 @@ do 2 elim Behaviour_eq_End_dec; intros; auto.
   elim (H1 p); split; eapply within_ps_rev; eauto.
 Qed.
 
+Lemma Par_assoc : forall N N' N'' ps ps' ps'',
+  within_ps ps N -> within_ps ps' N' -> within_ps ps'' N'' ->
+  disjoint ps ps' -> Network_eq (Par N (Par N' N'')) (Par (Par N N') N'').
+Proof.
+red; intros.
+unfold Par.
+do 2 elim Behaviour_eq_End_dec; intros; auto.
+elim b; auto.
+Qed.
+
 Definition Process (p:Pid) (b:Behaviour) : Network :=
   fun p' => if (P.eq_dec p p') then b else End.
+
+Record Program : Type :=
+  { Procedures : Pid -> RecVar -> Behaviour;
+    Net        : Network }.
 
 End Syntax.
 
@@ -124,10 +139,10 @@ Bind Scope SP_scope with Network.
 Notation "N | N'" := (Par N N') (at level 202, right associativity) : SP_scope.
 Notation "p [ v , B ]" := (Process p v B) (at level 201, v at level 9, no associativity) : SP_scope.
 Notation "p ! e ; B" := (Send p e B) (at level 60, e at level 9, right associativity) : SP_scope.
-Notation "p ? ; B" := (Recv p B) (at level 60, right associativity) : SP_scope.
+Notation "p ? xx ; B" := (Recv p xx B) (at level 60, right associativity) : SP_scope.
 Notation "p (+) l ; B" := (Sel p l B) (at level 49, l at level 9, right associativity) : SP_scope.
 Notation "p & f" := (Branching p f) (at level 60, no associativity) : SP_scope.
-Notation "'If' p 'Then' B1 'Else' B2" := (Cond p B1 B2) (at level 60) : SP_scope.
+Notation "'If' e 'Then' B1 'Else' B2" := (Cond e B1 B2) (at level 60) : SP_scope.
 Notation "'bnil'" := (End) : SP_scope.
 Notation "'nnil'" := (EmptyNet) : SP_scope.
 
@@ -142,25 +157,144 @@ Check (0!zero; 0?; 1+left; bnil)%SP.
 
 Section SyntacticProperties.
 
-Fixpoint WellFormedBehaviour (p:Pid) (B:Behaviour) : Prop :=
+Fixpoint Behaviour_WF (p:Pid) (B:Behaviour) : Prop :=
 match B with
 | bnil%SP => True
-| (q!e; B)%SP => p <> q /\ WellFormedBehaviour p B
-| (q?; B)%SP => p <> q /\ WellFormedBehaviour p B
-| (q (+) l; B)%SP => p <> q /\ WellFormedBehaviour p B
-| (If q Then B1 Else B2)%SP => p <> q /\ WellFormedBehaviour p B1 /\ WellFormedBehaviour p B2
-| (q & f)%SP => p <> q /\ forall l, match (f l) with | inl B' => WellFormedBehaviour p B' | _ => True end
+| Call _ => True
+| (q ! _; B)%SP => p <> q /\ Behaviour_WF p B
+| (q ? _; B)%SP => p <> q /\ Behaviour_WF p B
+| (q (+) l; B)%SP => p <> q /\ Behaviour_WF p B
+| (q & f)%SP => p <> q /\ (forall l,
+    match (f l) with | Some B' => Behaviour_WF p B' | _ => True end)
+| (If e Then B1 Else B2)%SP => Behaviour_WF p B1 /\ Behaviour_WF p B2
 end.
 
-Fixpoint NoSelfCommunications (N:Network) : Prop :=
-match N with
-| nnil%SP => True
-| (p [ v, B ])%SP => WellFormedBehaviour p B
-| Par M M' => NoSelfCommunications M /\ NoSelfCommunications M'
+Fixpoint B_size (B:Behaviour) :=
+match B with
+| bnil%SP => 0
+| Call _ => 0
+| (_ ! _; B')%SP => 1 + B_size B'
+| (_ ? _; B')%SP => 1 + B_size B'
+| (_ (+) _; B')%SP => 1 + B_size B'
+| (_ & f)%SP =>
+  (match (f left) with | Some B' => B_size B' | _ => 0 end)
+  + (match (f right) with | Some B' => B_size B' | _ => 0 end)
+  + 1
+| (If e Then B1 Else B2)%SP => B_size B1 + B_size B2 + 1
 end.
 
-(** A well-formed network has no duplicate process names and no self-communications. *)
-Definition WellFormedNetwork (N:Network) : Prop := NoDup (SPpn N) /\ NoSelfCommunications N.
+Lemma Behaviour_WF_dec : forall p B,
+  {Behaviour_WF p B} + {~Behaviour_WF p B}.
+Proof.
+assert (forall p p0 B, {Behaviour_WF p B}+{~Behaviour_WF p B} -> {p<>p0 /\ Behaviour_WF p B}+{~(p<>p0 /\ Behaviour_WF p B)}).
++ intros.
+  elim (P.eq_dec p p0); intro.
+  - right; rewrite a; intro. inversion H0; auto.
+  - inversion_clear H; auto.
+    right; intro. inversion H; auto.
++ intros.
+  set (n := B_size B).
+  assert (B_size B <= n); auto.
+  clearbody n.
+  revert dependent B.
+  induction n; intros; induction B; simpl in H; simpl; auto with arith;
+    try (exfalso; inversion H; fail).
+  - exfalso.
+    assert (1<=0).
+    2: inversion H0.
+    etransitivity; eauto with arith.
+  - exfalso.
+    inversion H.
+    apply (lt_irrefl 0).
+    eapply lt_le_trans. 2: apply H. auto with arith.
+  - elim (P.eq_dec p p0); intro.
+    1: { right; rewrite a; intro. inversion H0; auto. }
+    revert H; case_eq (o left); case_eq (o right); simpl; intros.
+    * assert (B_size b0 <= n).
+      1: { apply le_S_n. etransitivity.
+           2: apply H1.
+           rewrite plus_comm. auto with arith. }
+      assert (B_size b1 <= n).
+      1: { apply le_S_n. etransitivity.
+           2: apply H1.
+           rewrite plus_comm. auto with arith. }
+      elim (IHn _ H2); elim (IHn _ H3); intros.
+      ++ left; split; auto.
+         induction l; try rewrite H; try rewrite H0; auto.
+      ++ right; intro; inversion_clear H4.
+         generalize (H6 left); rewrite H0; auto.
+      ++ right; intro; inversion_clear H4.
+         generalize (H6 right); rewrite H; auto.
+      ++ right; intro; inversion_clear H4.
+         generalize (H6 left); rewrite H0; auto.
+    * assert (B_size b0 <= n).
+      1: { apply le_S_n. etransitivity.
+           2: apply H1.
+           rewrite plus_comm. auto with arith. }
+      elim (IHn _ H2); intros.
+      ++ left; split; auto.
+         induction l; try rewrite H; try rewrite H0; auto.
+      ++ right; intro; inversion_clear H3.
+         generalize (H5 left); rewrite H0; auto.
+    * assert (B_size b0 <= n).
+      1: { apply le_S_n. etransitivity.
+           2: apply H1.
+           rewrite plus_comm. auto with arith. }
+      elim (IHn _ H2); intros.
+      ++ left; split; auto.
+         induction l; try rewrite H; try rewrite H0; auto.
+      ++ right; intro; inversion_clear H3.
+         generalize (H5 right); rewrite H; auto.
+    * left; split; auto.
+      induction l; try rewrite H; try rewrite H0; auto.
+  - assert (B_size B1 <= S n).
+      1: { etransitivity.
+           2: apply H.
+           auto with arith. }
+    assert (B_size B2 <= S n).
+      1: { etransitivity.
+           2: apply H.
+           auto with arith. }
+    elim IHB1; elim IHB2; intros; auto;
+      right; intro; inversion_clear H2; auto.
+Qed.
+
+Definition Network_WF (N:Network) : Prop :=
+  forall p, Behaviour_WF p (N p).
+
+Lemma Network_WF_dec : forall ps N, within_ps ps N ->
+  {Network_WF N} + {~Network_WF N}.
+Proof.
+intros ps N.
+assert (ps<>nil -> {forall p, In p ps -> Behaviour_WF p (N p)} + {~forall p, In p ps -> Behaviour_WF p (N p)}).
++ induction ps; simpl.
+  1: right; auto.
+  elim (Behaviour_WF_dec a (N a)); intro.
+  2: right; auto.
+  revert IHps; case ps; intro.
+  * left; intros.
+    inversion_clear H0; [rewrite <- H1; auto | inversion H1].
+  * intros.
+    elim IHps; intros; auto.
+    3: discriminate.
+    1: { left; intros. inversion_clear H0; try rewrite <- H1; auto. }
+    right; intro; auto.
++ intros.
+  red in H0.
+  case_eq ps; intros.
+  1: { left; intros. red; intros. rewrite H0; try rewrite H1; simpl; auto. }
+  elim H; auto.
+  2: rewrite H1; discriminate.
+  left; red; intros.
+  elim (In_dec P.eq_dec p0 ps); auto.
+  intro; rewrite H0; simpl; auto.
+Qed.
+
+Definition Program_WF (P:Program) := 
+  (forall X p, Behaviour_WF p (Procedures P p X)) /\
+  (forall p, Network_WF (Net p)).
+
+(* add within_Xs and decidability *)
 
 End SyntacticProperties.
 
