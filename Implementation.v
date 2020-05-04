@@ -145,29 +145,30 @@ Definition make_pf_2 (f:nat -> nat -> nat) : PFunction 2
 Definition make_pf_3 (f:nat -> nat -> nat -> nat) : PFunction 3
   := fun xs => Some (f (hd xs) (hd (tl xs)) (hd (tl (tl xs)))).
 
-(** Macros for writing choreographies the way we like them. *)
-Definition Pack0 (p:Pid) (C:Choreography) :=
-  Build_Program (fun (X:RecVar) => (List.cons p List.nil,End)) C.
+(** Useful macros for writing choreographies. *)
+Definition Pack0 (ps:list Pid) (C:Choreography) :=
+  Build_Program (fun (X:RecVar) => (ps,End)) C.
 
-Definition Pack1 (p:Pid) X pidsX CX (C:Choreography) :=
-  Build_Program (fun (R:RecVar) =>
-    if RecVar_dec R X then (pidsX,CX) else (List.cons p List.nil,End)) C.
+Definition Pack1 X CX : RecVar -> Choreography :=
+  (fun (R:RecVar) => if RecVar_dec R X then CX else End).
 
-Definition Pack2 (p:Pid) X pidsX CX Y pidsY CY (C:Choreography) :=
+(*
+Definition Pack2 (ps:list Pid) X CX Y CY (C:Choreography) :=
   Build_Program (fun (R:RecVar) =>
-    if RecVar_dec R X then (pidsX,CX)
-    else if RecVar_dec R Y then (pidsY,CY) else (List.cons p List.nil,End)) C.
+    if RecVar_dec R X then (ps,CX)
+    else if RecVar_dec R Y then (ps,CY) else (ps,End)) C.
+*)
 
 (** We recover the examples from the paper. *)
 Definition C_Inc (p t:Pid) : Choreography :=
   Send p this t;; Send t succ_this p;; End.
 
-Definition P_Inc p t := Pack0 p (C_Inc p t).
+Definition P_Inc ps p t := Pack0 ps (C_Inc p t).
 
-Lemma P_Inc_char : forall p t s,
+Lemma P_Inc_char : forall ps p t s,
   let s1 := update s t xx (s p xx) in
   let tl := (List.cons (L_Com p (s p xx) t) (List.cons (L_Com t (S (s p xx)) p) List.nil)) in
-  (P_Inc p t, s) --[ tl ]-->* (Pack0 p End, (update s1 p xx (S (s p xx)))).
+  (P_Inc ps p t, s) --[ tl ]-->* (Pack0 ps End, (update s1 p xx (S (s p xx)))).
 Proof.
 intros; eapply MCT_Step.
 1: { constructor. apply C_Com. }
@@ -178,17 +179,17 @@ eapply MCT_Step.
 - rewrite H. apply MCT_Refl.
 Qed.
 
-Lemma P_Inc_correct : forall p t, implements (P_Inc p t) (make_pf_1 (fun n => S n)) [p] p.
+Lemma P_Inc_correct : forall ps p t, implements (P_Inc ps p t) (make_pf_1 (fun n => S n)) [p] p.
 Proof.
 unfold make_pf_1; split; intros; inversion H0.
-generalize (P_Inc_char p t s).
+generalize (P_Inc_char ps p t s).
 set (s1 := update s t xx (s p xx)).
 set (s2 := update s1 p xx (S (s p xx))).
 set (tl1 := L_Com p (s p xx) t).
 set (tl2 := L_Com t (S (s p xx)) p).
 set (tls := List.cons tl1 (List.cons tl2 List.nil)).
 simpl; intros.
-exists s2, tls, (Pack0 p End).
+exists s2, tls, (Pack0 ps End).
 repeat split; auto.
 unfold s2, s1; simpl.
 rewrite update_read.
@@ -211,55 +212,21 @@ End Implementation.
 
 Section MC_plus.
 
-Fixpoint EndFree (C:Choreography) :=
+Fixpoint Implementation_Choreography (m n:nat) (C:Choreography) :=
   match C with
   | End => False
-  | Call _ => True
-  | RT_Call _ _ _ => True
-  | (Eta;; C')%MC => EndFree C'
-  | If p ? b Then C1 Else C2 => EndFree C1 /\ EndFree C2
+  | Call X => m <= X <= n
+  | RT_Call X _ C' => m <= X <= n /\ Implementation_Choreography m n C'
+  | (Eta;; C')%MC => Implementation_Choreography m n C'
+  | If p ? b Then C1 Else C2 => Implementation_Choreography m n C1 /\ Implementation_Choreography m n C2
 end.
 
 Definition Implementation_Program (P:Program) (m n:nat) :=
     Main P = Call m /\
-    (forall k, m<=k<n -> EndFree (Procs P m)) /\
+    (forall k, m<=k<n -> Implementation_Choreography m n (Procs P k)) /\
     (forall k, (k<m \/ n<=k) -> Procs P m = End).
 
-(** ** Fat-semi. *)
-Fixpoint fatsemi (C C':Choreography) : Choreography :=
-  match C with
-  | End => C'
-  | Call X => Call X
-  | eta; C0 => eta; fatsemi C0 C'
-  | If p == q Then C1 Else C2 => If p == q Then (fatsemi C1 C') Else (fatsemi C2 C')
-  | Def X == C1 In C2 => Def X == (fatsemi C1 C') In (fatsemi C2 C')
-  end.
-
-Notation "C ;; C'" := (fatsemi C C') (at level 90).
-
-Fixpoint no_exit_point (C:Choreography) : Prop :=
-  match C with
-  | End => False
-  | Call X => True
-  | eta; C' => no_exit_point C'
-  | If p == q Then C1 Else C2 => (no_exit_point C1) /\ (no_exit_point C2)
-  | Def X == C1 In C2 => (no_exit_point C1) /\ (no_exit_point C2)
-  end.
-
-Fixpoint single_exit_point (C:Choreography) : Prop :=
-  match C with
-  | End => True
-  | Call X => False
-  | eta; C' => single_exit_point C'
-  | If p == q Then C1 Else C2 =>
-      ((single_exit_point C1) /\ (no_exit_point C2))
-    \/ ((no_exit_point C1) /\ (single_exit_point C2))
-  | Def X == C1 In C2 =>
-      ((single_exit_point C1) /\ (no_exit_point C2))
-    \/ ((no_exit_point C1) /\ (single_exit_point C2))
-  end.
-
-(** ** Function Pi *)
+(** ** Functions Pi and Gamma *)
 
 Fixpoint Pi {m} (f:PRFunction m) : nat :=
   match f with
@@ -271,19 +238,34 @@ Fixpoint Pi {m} (f:PRFunction m) : nat :=
   | Minimization f => Pi f + 3
   end.
 
+Fixpoint Gamma {m} (f:PRFunction m) : nat :=
+  match f with
+  | Zero => 1
+  | Successor => 1
+  | Projection _ => 1
+  | @Composition _ _ g fs => Gamma g + vsum (map Gamma fs)
+  | Recursion f g => Gamma f + Gamma g + 3
+  | Minimization f => Gamma f + 2
+  end.
+
 (*
 Eval compute in (Pi PR_sub).
+Eval compute in (Gamma PR_sub).
 *)
 
 End MC_plus.
-
-Notation "C ;; C'" := (fatsemi C C') (at level 90).
 
 (** * Definitions
     We have the usual problems with defining implementation: we need information about the size
     of the vector of processes that we only get with an interactive definition. *sigh*
     Even worse, because of composition we need to do induction on the depth of the function... *)
 Section Definitions.
+
+Fixpoint all_pids (n:Pid) :=
+  match n with
+  | O => List.cons 0 List.nil
+  | S k => List.cons (S k) (all_pids k)
+  end.
 
 Fixpoint seq_labels (n:nat) {k} {m} (fs:t (PRFunction m) k) : t Pid k :=
   match fs with
@@ -303,44 +285,49 @@ Fixpoint skip_labels (n:nat) {k} {m} (fs:t (PRFunction m) k) : t Pid k :=
     - ps are the (fixed) argument processes
     - target is the output process for the first function to implement
     - init is the label l_i
+    - k is the first free procedure definition
 *)
-Fixpoint seq_compose {m} {k} (fs:t (PRFunction m) k) d (Hd:forall i, depth fs[@i] < d) (ps:t Pid m) (target init:nat)
-  (Implement : forall m' (f:PRFunction m') (Hd:depth f < d) (ps':t Pid m') (q' i':nat), Choreography) {struct fs} : Choreography.
+Fixpoint seq_compose {m} {k} (fs:t (PRFunction m) k) d (Hd:forall i, depth fs[@i] < d) (ps:t Pid m) (target init:nat) (X:RecVar)
+  (Implement : forall m' (f:PRFunction m') (Hd:depth f < d) (ps':t Pid m') (q' i':nat) (k':RecVar), RecVar -> Choreography) {struct fs} : RecVar -> Choreography.
 (*
   match fs with
   | [] => End
-  | f :: fs') => Implement m f d (Hd Fin.F1) ps target init ;; compose_args fs' ps (S target) (init + Pi f) Implement
+  | f :: fs' => Implement m f d (Hd Fin.F1) ps target init ;; compose_args fs' ps (S target) (init + Pi f) Implement
   end.
 *)
 Proof.
 destruct fs.
-- apply End.
-- apply (fatsemi (Implement m h (Hd Fin.F1) ps target init)).
-  assert (forall i, depth fs[@i] < d).
+- apply (fun _ => End).
+- assert (forall i, depth fs[@i] < d).
   intro; apply (Hd (Fin.FS i)).
-  apply (seq_compose _ _ fs d H ps (S target) (init + Pi h) Implement).
+  pose (Implement m h (Hd Fin.F1) ps target init X) as Ph.
+  pose (seq_compose _ _ fs d H ps (S target) (init + Pi h) (X + Gamma h) Implement) as Pfs.
+  apply (fun Y => if Y <? X + Gamma h then (Ph Y) else (Pfs Y)).
 Defined.
 
 (** Relationship to the arguments in the paper:
     - f is the function (f)
+    - pids is the list of all processes used in the choreography
     - ps are the input processes p
     - q is the output process q
     - init is the label l
+    - k is the first free recursion variable
 *)
-Fixpoint Implementation_aux {m} (f:PRFunction m) d (Hd:depth f<d) (ps:t Pid m) (q:Pid) (init:nat) {struct d}: Choreography.
+Fixpoint Implementation_aux {m} (f:PRFunction m) d (Hd:depth f<d)
+  (ps:t Pid m) (q:Pid) (init:nat) (X:RecVar) {struct d}: RecVar -> Choreography.
 Proof.
 induction d.
 + elim (Nat.nlt_0_r _ Hd).
-+ destruct f; intros.
++ destruct f; intros; revert X0.
 
   (* Zero *)
-  - apply (ps[@Fin.F1] # zero --> q; End).
+  - apply (Pack1 X (Send ps[@Fin.F1] zero q;; Call (S X))).
 
   (* Successor *)
-  - apply (ps[@Fin.F1] # succ_this --> q; End).
+  - apply (Pack1 X (Send ps[@Fin.F1] succ_this q;; Call (S X))).
 
   (* Projection *)
-  - apply (ps[@Fin.of_nat_lt l] # this --> q; End).
+  - apply (Pack1 X (Send ps[@Fin.of_nat_lt l] this q;; Call (S X))).
 
   (* Composition *)
   - simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
@@ -348,45 +335,65 @@ induction d.
     pose (max_lt_r _ _ _ Hd') as Hdfs.
     assert (forall i, depth fs[@i] < d).
     intros; rewrite <- nth_map'; apply vmax_lt; auto.
-    apply
-    ((seq_compose fs _ H ps init (init+k) (fun m f => Implementation_aux m f d));;
-      Implementation_aux _ f _ Hdf (seq_labels init fs) q (init + (vsum (map Pi fs)))).
+    pose (seq_compose fs _ H ps init (init+k) X (fun m f => Implementation_aux m f d)) as Pfs.
+    pose (Implementation_aux _ f _ Hdf (seq_labels init fs) q (init + (vsum (map Pi fs))) (X + (vsum (map Gamma fs)))) as Pf.
+    apply (fun Y => if Y <? X + vsum (map Gamma fs) then Pfs Y else Pf Y).
 
   (* Recursion *)
   - rename f1 into f; rename f2 into g.
     simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
     pose (max_lt_l _ _ _ Hd') as Hf.
     pose (max_lt_r _ _ _ Hd') as Hg.
-    apply
-    (Def 0 == (If (S init) == ps[@Fin.F1]
-               Then (init # this --> q; End)
-               Else ((Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f)) ;;
-                    (init+2 # this --> init); (S init # this --> (init+2)); (init+2 # succ_this --> S init); Call 0))
-     In ((Implementation_aux _ f _ Hf (tl ps) init (init+3));; (init+2 # zero --> S init); Call 0)).
+    pose (Implementation_aux _ f _ Hf (tl ps) init (init+3) X) as Pf.
+    pose (Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f) (X + Gamma f + 2)) as Pg.
+    apply (fun Y =>
+      if (Y <? X + Gamma f) then Pf Y
+      else if (RecVar_dec Y (X + Gamma f)) then
+         (Send (init+2) zero (S init);; Call (X + Gamma f + 1))%MC
+      else if (RecVar_dec Y (X + Gamma f + 1)) then 
+         (IfEq (S init) ps[@Fin.F1] (Send init this q;; Call (X + Gamma f + Gamma g + 3)) (Call (X + Gamma f + 2)))%MC
+      else if (RecVar_dec Y (X + Gamma f + Gamma g + 2)) then
+         (Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma f + 1))%MC
+      else Pg Y).
 
   (* Minimization *)
   - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
-    apply
-    (Def 0 == (Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3));; init+1 # zero --> (init+2);
-              If (init+2) == init Then (init+1 # this --> q; End)
-                 Else (init+1 # this --> (init+2); init+2 # succ_this --> (init+1); Call 0)
-    In (init+2 # zero --> (init+1); Call 0)).
+    pose (Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3) (X + 1)) as Pf.
+    apply (fun Y =>
+      if (RecVar_dec Y X) then
+         (Send (init+2) zero (init+1);; Call (X + 1))%MC
+      else if (RecVar_dec Y (X + Gamma f + 1)) then
+         (Send (init+1) zero (init+2);; IfEq (init+2) init
+            (Send (init+1) this q;; Call (X + Gamma f + 2))
+            (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1)))%MC
+        else Pf Y).
 Defined.
 
 (** The definition in the paper uses auxiliary process names distinct from the ps and q,
     numbered from 0. We model this by using auxiliary processes higher than the ps and q. *)
-Definition Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Choreography :=
-  Implementation_aux f _ (lt_n_Sn (depth f)) ps q (S (max q (vmax ps))).
+Definition Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Program :=
+  Build_Program
+    (fun X => (all_pids ((max q (vmax ps)) + Pi f),
+               Implementation_aux f _ (lt_n_Sn (depth f)) ps q (S (max q (vmax ps))) 0 X))
+    (Call 0).
 
 (** By default, we take process 0 for q and 1..m for the ps. *)
-Definition Implementation' {m} (f:PRFunction m) : Choreography :=
+Definition Implementation' {m} (f:PRFunction m) : Program :=
   Implementation f (vec_1_to_n m) 0.
 
 (* Sanity checks.
-Eval compute in (Implementation' (Composition Successor [Zero])).
-Eval compute in (Implementation' (Composition Zero [Projection aux13])).
-Eval compute in (Implementation' (Composition (Projection aux22) (Zero :: [Successor]))).
-Eval compute in (Implementation' PR_add).
+Eval compute in (Main (Implementation' (Composition Successor [Zero]))).
+Eval compute in (map snd (map (Procedures (Implementation' (Composition Successor [Zero]))) [0;1;2])).
+
+Eval compute in (Main (Implementation' (Composition Zero [Projection aux13]))).
+Eval compute in (map snd (map (Procedures (Implementation' (Composition Zero [Projection aux13]))) [0;1;2])).
+
+Eval compute in (Main (Implementation' (Composition (Projection aux22) (Zero :: [Successor])))).
+Eval compute in (map snd (map (Procedures (Implementation' (Composition (Projection aux22) (Zero :: [Successor])))) [0;1;2;3])).
+
+Eval compute in (Main (Implementation' PR_add)).
+Eval compute in (map snd (map (Procedures (Implementation' PR_add)) [0;1;2;3;4;5;6])).
+Eval compute in (map snd (map (Procedures (Implementation' (Composition Successor [Projection aux23]))) [0;1;2])).
 *)
 
 (** There is also a parallel variant for composition. This is defined in the same steps, but
@@ -457,20 +464,32 @@ induction d.
     simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
     pose (max_lt_l _ _ _ Hd') as Hf.
     pose (max_lt_r _ _ _ Hd') as Hg.
-    apply
-    (Def 0 == (If (S init) == ps[@Fin.F1]
-               Then (init # this --> q; End)
-               Else ((Par_Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f)) ;;
-                    (init+2 # this --> init); (S init # this --> (init+2)); (init+2 # succ_this --> S init); Call 0))
-     In ((Par_Implementation_aux _ f _ Hf (tl ps) init (init+3));; (init+2 # zero --> S init); Call 0)).
+    pose (Implementation_aux _ f _ Hf pids (tl ps) init (init+3) k) as Pf.
+    pose (Implementation_aux _ g _ Hg pids (S init :: init :: tl ps) (init+2) (init+3 + Pi f) (k + Gamma f + 2)) as Pg.
+    apply (Build_Program
+      (fun X =>
+        if (RecVar_dec X (k + Gamma f)) then
+           (pids,(Send (init+2) zero (S init);; Call (k + Gamma f + 1))%MC)
+        else if (RecVar_dec X (k + Gamma f + 1)) then 
+           (pids,(IfEq (S init) ps[@Fin.F1] (Send init this q;; Call (k + Gamma f + Gamma g + 3)) (Call (k + Gamma f + 2)))%MC)
+        else if (RecVar_dec X (k + Gamma f + Gamma g + 2)) then
+           (pids,(Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (k + Gamma f + 1))%MC)
+        else if (X <=? k + Gamma f) then (Procedures Pf X)
+        else (Procedures Pg X))
+      (Call k)).
 
   (* Minimization *)
   - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
-    apply
-    (Def 0 == (Par_Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3));; init+1 # zero --> (init+2);
-              If (init+2) == init Then (init+1 # this --> q; End)
-                 Else (init+1 # this --> (init+2); init+2 # succ_this --> (init+1); Call 0)
-    In (init+2 # zero --> (init+1); Call 0)).
+    pose (Implementation_aux _ f _ Hf pids (shiftin (S init) ps) init (init+3) (k + 1)) as Pf.
+    apply (Build_Program
+      (fun X =>
+        if (RecVar_dec X k) then
+           (pids,(Send (init+2) zero (init+1);; Call (k + 1))%MC)
+        else if (RecVar_dec X (k + Gamma f + 1)) then
+           (pids,(Send (init+1) zero (init+2);; IfEq (init+2) init (Send (init+1) this q;; Call (k + Gamma f + 2))
+                 (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (k + 1)))%MC)
+        else (Procedures Pf X))
+      (Call k)).
 Defined.
 
 Definition Par_Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Choreography :=
