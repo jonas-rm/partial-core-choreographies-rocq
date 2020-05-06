@@ -405,6 +405,36 @@ Qed.
 Definition eq_state_ext (s s': State) : Prop :=
   forall p, LSt.eq_state (s p) (s' p).
 
+Lemma eq_state_ext_refl : forall s, eq_state_ext s s.
+Proof. red; intros. apply LSt.eq_state_refl. Qed.
+
+Lemma eq_state_ext_sym : forall s s', eq_state_ext s s' -> eq_state_ext s' s.
+Proof. red; intros. apply LSt.eq_state_sym. auto. Qed.
+
+Lemma eq_state_ext_trans : forall s s' s'',
+  eq_state_ext s s' -> eq_state_ext s' s'' -> eq_state_ext s s''.
+Proof. red; intros. transitivity (s' p); auto. Qed.
+
+Lemma eq_state_ext_congr : forall s s' p x v,
+  eq_state_ext s s' -> eq_state_ext (update s p x v) (update s' p x v).
+Proof.
+repeat intro.
+unfold update.
+elim Pid_dec; auto.
+2: apply H.
+unfold LSt.update.
+elim Var_dec; auto.
+apply H.
+Qed.
+
+(*
+Add Parametric Relation : State eq_state_ext
+  reflexivity proved by eq_state_ext_refl
+  symmetry proved by eq_state_ext_sym
+  transitivity proved by eq_state_ext_trans
+  as eq_state_ext_rel.
+*)
+
 Lemma update_update_ext : forall s p x v1 v2,
   eq_state_ext (update (update s p x v2) p x v1) (update s p x v1).
 Proof.
@@ -451,6 +481,7 @@ End GState.
 Module Type Eval (Expression Vars Input Output : DecType).
 
 Parameter eval : Expression.t -> (Vars.t -> Input.t) -> Output.t.
+Parameter eval_wd : forall f f', (forall x, f x = f' x) -> 
+  forall e, eval e f = eval e f'.
 
 End Eval.
-

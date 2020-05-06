@@ -102,7 +102,7 @@ Definition eval {m} (f:PRFunction m) (steps:nat) (ns:t nat m) : option nat := ev
 
 End Definitions.
 
-(** ª Sanity checks
+(** * Sanity checks
     Our first goal is to prove that evaluation works as expected.
     This requires some preliminary properties about the auxiliary functions. *)
 Section Auxiliary_Lemmas.

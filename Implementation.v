@@ -3,7 +3,9 @@ Require Export MC.
 
 Local Open Scope nat_scope.
 
-(** * The concrete language we have in mind for Turing completeness. *)
+(** * Choreography language
+  We start by defining the types for the concrete language
+  we use for proving Turing completeness. *)
 Inductive Expr : Type :=
  | this : Expr
  | zero : Expr
@@ -48,12 +50,20 @@ match e with
  | succ_this => S (f xx)
 end.
 
+Lemma eval_wd : forall f f', (forall x, f x = f' x) ->
+  forall e, eval e f = eval e f'.
+Proof. intros. case e; simpl; auto. Qed.
+
 End MC_Eval.
 
 Module MC_BEval <: (Eval Bool_Expressions Bool Nat Bool).
 
 Definition eval (b:BExpr) (f:bool -> nat) : bool :=
   (f xx =? f yy).
+
+Lemma eval_wd : forall f f', (forall x, f x = f' x) ->
+  forall b, eval b f = eval b f'.
+Proof. intros. case b; simpl. unfold eval; auto. Qed.
 
 End MC_BEval.
 
@@ -98,17 +108,18 @@ fold C'' in H.
 simpl. set (s'' := CSt.update s' q xx 0). intros.
 exists s'', (eval_on_state e s1 p); split.
 + eapply MCT_Step.
-  1: constructor. apply H.
+  1: constructor. apply H. apply eq_state_ext_refl.
   eapply MCT_Step.
-  1: constructor. apply H0.
+  1: constructor. apply H0. apply eq_state_ext_refl.
   constructor.
 + unfold s'', s'.
   apply CSt.update_update_ext.
 Qed.
 
+(*
 Section Implementation.
 
-(** The type of partial functions and the notion of a choreography implementing one.
+(* The type of partial functions and the notion of a choreography implementing one.
     We can only represent computable functions, but this is not a problem. *)
 
 Definition PFunction (n:nat) := t nat n -> option nat.
@@ -145,21 +156,7 @@ Definition make_pf_2 (f:nat -> nat -> nat) : PFunction 2
 Definition make_pf_3 (f:nat -> nat -> nat -> nat) : PFunction 3
   := fun xs => Some (f (hd xs) (hd (tl xs)) (hd (tl (tl xs)))).
 
-(** Useful macros for writing choreographies. *)
-Definition Pack0 (ps:list Pid) (C:Choreography) :=
-  Build_Program (fun (X:RecVar) => (ps,End)) C.
-
-Definition Pack1 X CX : RecVar -> Choreography :=
-  (fun (R:RecVar) => if RecVar_dec R X then CX else End).
-
-(*
-Definition Pack2 (ps:list Pid) X CX Y CY (C:Choreography) :=
-  Build_Program (fun (R:RecVar) =>
-    if RecVar_dec R X then (ps,CX)
-    else if RecVar_dec R Y then (ps,CY) else (ps,End)) C.
-*)
-
-(** We recover the examples from the paper. *)
+(* We recover the examples from the paper. *)
 Definition C_Inc (p t:Pid) : Choreography :=
   Send p this t;; Send t succ_this p;; End.
 
@@ -200,11 +197,6 @@ repeat rewrite nth_hd'; auto.
 Qed.
 
 End Implementation.
-
-(** Changes to do before continuing:
- - implementation needs an extra paramenter (first undefined procedure)
- - all "functions" end with a call to a fixed procedure
- - fatsemi replaces the definition of the call ending the choreography
 *)
 
 (** * Extensions of MC
@@ -252,6 +244,13 @@ Fixpoint Gamma {m} (f:PRFunction m) : nat :=
 Eval compute in (Pi PR_sub).
 Eval compute in (Gamma PR_sub).
 *)
+
+(** Useful macros for writing choreographies. *)
+Definition Pack0 (ps:list Pid) (C:Choreography) :=
+  Build_Program (fun (X:RecVar) => (ps,End)) C.
+
+Definition Pack1 X CX : RecVar -> Choreography :=
+  (fun (R:RecVar) => if RecVar_dec R X then CX else End).
 
 End MC_plus.
 
@@ -534,3 +533,37 @@ Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Succ
 *)
 
 End Definitions.
+
+Section Soundness.
+
+(* Without classical logic we can't make PRFunctions into PFunctions. *)
+
+(* Missing: confluence, determinism. *)
+
+Definition implements (P:Program) {n} (f:PRFunction n) (ps:t Pid n) (q:Pid) :=
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
+  (forall y, converges f xs y <-> exists s' ts P', (P,s) --[ts]-->* (P',s') /\ s' q xx = y /\ Main P' = End) /\
+  (diverges f xs <-> forall s' ts P', (P,s) --[ts]-->* (P',s') -> Main P' <> End).
+
+(** For convenience - unfinished.
+Lemma implements_None : forall P {n} f ps q, implements P f ps q -> 
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
+  diverges f xs -> forall s' ts P', (P,s) --[ts]-->* (P',s') -> Main P' <> End.
+Proof.
+unfold implements; intros.
+elim (H _ _ H0); eauto.
+Qed.
+
+Lemma implements_Some : forall P {n} f ps q, implements P f ps q -> 
+  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
+  forall y, converges f xs y -> exists s' ts P', (P,s) --[ts]-->* (P',s') /\ s' q xx = y /\ Main P' = End.
+Proof.
+unfold implements; intros.
+elim (H _ _ H0); auto.
+Qed.
+
+Theorem encoding_sound : forall n (f:PRFunction n),
+  implements (Implementation' f) f (vec_1_to_n n) 0.
+*)
+
+End Soundness.

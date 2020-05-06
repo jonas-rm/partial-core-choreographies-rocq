@@ -624,21 +624,25 @@ match eta with
 | (p --> q [_])%MC     => disjoint_p_tl p t /\ disjoint_p_tl q t
 end.
 
-Definition set_remove_pid := set_remove P.eq_dec.
+Definition set_remove_pid := set_remove' P.eq_dec.
+Definition set_size_pid := set_size P.eq_dec.
 
 (** One-step and multi-step reduction. Multi-step reduction is simply a reflexive and transitive closure. *)
 
 Inductive MCC_To (Procs : RecVar -> (list Pid)*Choreography) :
   Choreography -> State -> TransitionLabel -> Choreography -> State -> Prop :=
- | C_Com p e q x C s : let v := (eval_on_state e s p) in
-        MCC_To Procs (p # e --> q $ x;; C) s
-               (L_Com p v q)
-               C (update s q x v)
- | C_Sel p q l C s : MCC_To Procs (p --> q [l];; C) s (L_Sel p q l) C s
- | C_Then p b C1 C2 s : (beval_on_state b s p = true) ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C1 s
- | C_Else p b C1 C2 s : (beval_on_state b s p = false) ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C2 s
+ | C_Com p e q x C s s' : let v := (eval_on_state e s p) in
+        eq_state_ext s' (update s q x v) ->
+        MCC_To Procs (p # e --> q $ x;; C) s (L_Com p v q) C s'
+ | C_Sel p q l C s s':
+        eq_state_ext s s' ->
+        MCC_To Procs (p --> q [l];; C) s (L_Sel p q l) C s'
+ | C_Then p b C1 C2 s s':
+        eq_state_ext s s' -> (beval_on_state b s p = true) ->
+        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C1 s'
+ | C_Else p b C1 C2 s s':
+        eq_state_ext s s' -> (beval_on_state b s p = false) ->
+        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C2 s'
  | C_Delay_Eta eta C C' s s' t: disjoint_eta_tl eta t -> 
         MCC_To Procs C s t C' s' ->
         MCC_To Procs (eta;; C) s t (eta;; C') s'
@@ -646,22 +650,75 @@ Inductive MCC_To (Procs : RecVar -> (list Pid)*Choreography) :
         MCC_To Procs C1 s t C1' s' ->
         MCC_To Procs C2 s t C2' s' ->
         MCC_To Procs (If p ? b Then C1 Else C2) s t (If p ? b Then C1' Else C2') s'
- | C_Call_Local p X s : (fst (Procs X) = (p::nil)) ->
-        MCC_To Procs (Call X) s (L_Tau p) (snd (Procs X)) s
- | C_Call_Start p X s: (length (fst (Procs X)) > 1) -> In p (fst (Procs X)) ->
+ | C_Call_Local p X s s': eq_state_ext s s' ->
+        set_size_pid (fst (Procs X)) = 1 -> In p (fst (Procs X)) ->
+        MCC_To Procs (Call X) s (L_Tau p) (snd (Procs X)) s'
+ | C_Call_Start p X s s':
+        eq_state_ext s s' ->
+        set_size_pid (fst (Procs X)) > 1 -> In p (fst (Procs X)) ->
         MCC_To Procs
                (Call X) s
                (L_Tau p)
-               (RT_Call X (set_remove_pid p (fst (Procs X))) (snd (Procs X))) s
- | C_Call_Enter p ps X C s : length ps > 1 -> In p ps ->
+               (RT_Call X (set_remove_pid p (fst (Procs X))) (snd (Procs X))) s'
+ | C_Call_Enter p ps X C s s':
+        eq_state_ext s s' -> set_size_pid ps > 1 -> In p ps ->
         MCC_To Procs
                (RT_Call X ps C) s
                (L_Tau p)
-               (RT_Call X (set_remove_pid p ps) C) s
- | C_Call_Finish p X C s: 
+               (RT_Call X (set_remove_pid p ps) C) s'
+ | C_Call_Finish p ps X C s s':
+        eq_state_ext s s' -> set_size_pid ps = 1 -> In p ps ->
         MCC_To Procs
-               (RT_Call X (p::nil) C) s (L_Tau p) C s
+               (RT_Call X ps C) s (L_Tau p) C s'
 .
+
+(* Grrrr *)
+
+Lemma C_Com' : forall Procs p e q x C s, let v := (eval_on_state e s p) in
+        MCC_To Procs (p # e --> q $ x;; C) s (L_Com p v q) C (update s q x v).
+Proof. intros. apply C_Com. apply eq_state_ext_refl. Qed.
+
+Lemma C_Sel' : forall Procs p q l C s,
+  MCC_To Procs (p --> q [l];; C) s (L_Sel p q l) C s.
+Proof. intros. apply C_Sel. apply eq_state_ext_refl. Qed.
+
+Lemma C_Then' : forall Procs p b C1 C2 s,
+        beval_on_state b s p = true ->
+        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C1 s.
+Proof. intros. apply C_Then. apply eq_state_ext_refl. auto. Qed.
+
+Lemma C_Else' : forall Procs p b C1 C2 s,
+        beval_on_state b s p = false ->
+        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C2 s.
+Proof. intros. apply C_Else. apply eq_state_ext_refl. auto. Qed.
+
+Lemma C_Call_Local' : forall Procs p X s,
+        set_size_pid (fst (Procs X)) = 1 -> In p (fst (Procs X)) ->
+        MCC_To Procs (Call X) s (L_Tau p) (snd (Procs X)) s.
+Proof. intros. apply C_Call_Local; auto. apply eq_state_ext_refl. Qed.
+
+Lemma C_Call_Start' : forall Procs p X s,
+        set_size_pid (fst (Procs X)) > 1 -> In p (fst (Procs X)) ->
+        MCC_To Procs
+               (Call X) s
+               (L_Tau p)
+               (RT_Call X (set_remove_pid p (fst (Procs X))) (snd (Procs X))) s.
+Proof. intros. apply C_Call_Start; auto. apply eq_state_ext_refl. Qed.
+
+Lemma C_Call_Enter' : forall Procs p ps X C s,
+        set_size_pid ps > 1 -> In p ps ->
+        MCC_To Procs
+               (RT_Call X ps C) s
+               (L_Tau p)
+               (RT_Call X (set_remove_pid p ps) C) s.
+Proof. intros. apply C_Call_Enter; auto. apply eq_state_ext_refl. Qed.
+
+Lemma C_Call_Finish' : forall Procs p ps X C s,
+        set_size_pid ps = 1 -> In p ps ->
+        MCC_To Procs (RT_Call X ps C) s (L_Tau p) C s.
+Proof. intros. apply C_Call_Finish; auto. apply eq_state_ext_refl. Qed.
+
+
 
 Definition Configuration : Type := Program * State.
 
@@ -696,11 +753,11 @@ Section Sanity_Checks.
 
 Example Com_reduction : forall P p e q x C s,
   (Build_Program P (p # e --> q $ x;; C), s) --[ L_Com p (eval_on_state e s p) q ]--> (Build_Program P C, update s q x (eval_on_state e s p)).
-Proof. constructor. constructor. Qed.
+Proof. constructor. constructor. apply eq_state_ext_refl. Qed.
 
 Example Sel_reduction : forall P p q l C s, 
   (Build_Program P (p --> q [l];; C), s) --[ L_Sel p q l ]--> (Build_Program P C, s).
-Proof. constructor. constructor. Qed.
+Proof. constructor. constructor. apply eq_state_ext_refl. Qed.
 
 End Sanity_Checks.
 
@@ -713,44 +770,61 @@ induction C; intros.
 + simpl in H. elim H; auto.
 + rename r into X; set (ps := fst (Ps X)).
   simpl in H.
-  case_eq ps; [idtac | intros; case_eq l].
+  case_eq (set_size_pid ps); [idtac | intros; case_eq n].
   - intro. exfalso.
     unfold ps in H1.
     generalize (MCP_WF_Vars _ H0 X); intros.
     simpl in H2.
     unfold Vars in H2; simpl in H2.
-    rewrite H1 in H2.
+    rewrite (set_size_0 _ _ H1) in H2.
     apply H2; auto.
     red. simpl. auto.
   - intros.
-    rewrite H2 in H1; clear H2 l.
+    rewrite H2 in H1; clear H2 n.
+    case_eq ps; intros.
+    1: { rewrite H2 in H1; inversion H1. }
+    unfold ps in H1, H2; clear ps.
+    assert (In p (fst (Ps X))). rewrite H2; left; auto.
     do 2 eexists.
-    constructor; apply C_Call_Local.
-    unfold ps in H1; rewrite H1.
-    reflexivity.
+    constructor; apply (C_Call_Local' Ps p X); auto.
   - intros.
+    rewrite H2 in H1; clear n H2.
+    case_eq ps; intros.
+    1: { rewrite H2 in H1; inversion H1. }
+    unfold ps in H1, H2; clear ps.
+    assert (set_size_pid (fst (Ps X)) > 1).
+    1: { rewrite H1; auto with arith. }
+    assert (In p (fst (Ps X))).
+    1: { rewrite H2; left; auto. }
     do 2 eexists.
-    constructor; apply C_Call_Start;
-    fold ps; rewrite H1, H2.
-    * simpl; auto with arith.
-    * left; auto.
-+ case_eq l.
-  - clear H IHC.
-    intro; exfalso.
+    constructor; apply (C_Call_Start' Ps p); auto.
++ case_eq (set_size_pid l); intros; [idtac | case_eq n].
+  - clear H IHC; exfalso.
     generalize (MCP_WF_Main _ H0).
     simpl; intros.
-    inversion_clear H1.
+    inversion_clear H.
     inversion_clear H3.
-    simpl in H1.
-    rewrite H in H1; auto.
+    elim H; eapply set_size_0; apply H1.
   - intros.
-    case l0; do 2 eexists; constructor.
-    * apply C_Call_Finish.
-    * constructor; simpl; auto with arith.
-+ case_eq e; do 2 eexists; do 2 constructor.
+    rewrite H2 in H1; clear n H2.
+    case_eq l; intro.
+    1: { rewrite H2 in H1; inversion H1. }
+    do 2 eexists; constructor.
+    apply C_Call_Finish'.
+    1: { rewrite <- H2; auto. }
+    left; eauto.
+  - intros.
+    rewrite H2 in H1; clear n H2.
+    case_eq l; intro.
+    1: { rewrite H2 in H1; inversion H1. }
+    do 2 eexists; do 2 constructor.
+    1: { apply eq_state_ext_refl. }
+    1: { rewrite <- H2; rewrite H1; auto with arith. }
+    left; eauto.
++ case_eq e; do 2 eexists; do 2 constructor; apply eq_state_ext_refl.
 + case_eq (beval_on_state b s p).
-  - do 2 eexists; constructor; apply C_Then; auto.
-  - do 2 eexists; constructor; apply C_Else; auto.
+  - do 2 eexists; constructor; apply C_Then'; auto.
+  - do 2 eexists; constructor; apply C_Else'; auto.
 Qed.
 
 Lemma MCC_To_within_Xs : forall P s l P' s' Xs,
@@ -811,12 +885,15 @@ induction H4.
   2: apply (Program_WF_Vars_In _ _ H); red; simpl; auto.
   split; simpl; auto.
   split; auto.
-  revert H0; case (fst (Defs X)); intros.
-  1: exfalso; inversion H0.
-  revert H0; case l; intros.
-  1: exfalso; inversion H0; inversion H5.
-  simpl.
-  elim P.eq_dec; try discriminate.
+  revert H1; case (fst (Defs X)); intros.
+  1: exfalso; inversion H1.
+  intro.
+  unfold set_size_pid in H1.
+  rewrite (set_size_remove' P.eq_dec) with (p0::l) p in H1; auto.
+  - unfold set_remove_pid in H5; rewrite H5 in H1.
+    elim (lt_irrefl _ H1).
+  - revert H5; simpl. elim P.eq_dec; auto.
+    intros. inversion H5.
 + elim (Program_WF_Proc _ _ H X); intros.
   2: {
     apply (Program_WF_Vars_In _ _ H); red; simpl.
@@ -825,15 +902,13 @@ induction H4.
   inversion_clear HC.
   simpl in H4, H5.
   split; simpl; auto.
-  inversion_clear H5; split; auto.
-  revert H0; case ps; intros.
-  1: exfalso; inversion H0.
-  revert H0; case l; intros.
-  1: exfalso; inversion H0; inversion H8.
-  simpl.
-  elim P.eq_dec; try discriminate.
+  inversion_clear H6; split; auto.
+  unfold set_size_pid in H1.
+  rewrite (set_size_remove' P.eq_dec) with ps p in H1; auto.
+  unfold set_remove_pid; intro. rewrite H6 in H1.
+  elim (lt_irrefl _ H1).
 + elim HC; intros.
-  inversion_clear H1; red; auto.
+  inversion_clear H4; red; auto.
 Qed.
 
 Lemma MCC_To_MCP_WF : forall P s l P' s',
@@ -848,6 +923,29 @@ rewrite H5.
 apply (MCC_To_Program_WF _ _ _ _ _ _ H H0).
 rewrite <- H1 in H8.
 apply well_ann_Main_change with C; auto.
+Qed.
+
+Example mega_fail : forall Defs X p q CX b b' C1 C2 s,
+  (Defs X = (p::q::nil,CX)) -> beval_on_state b' s q = true -> p<>q ->
+  MCC_To Defs
+    (If p ? b Then (Call X) Else (If q ? b' Then C1 Else C2))
+    s (L_Tau q)
+    (If p ? b Then (RT_Call X (p::nil) CX) Else C1) s.
+Proof.
+intros.
+apply C_Delay_Cond.
++ auto.
++ replace (p::nil) with (set_remove_pid q (fst (Defs X))).
+  replace CX with (snd (Defs X)).
+  - apply C_Call_Start'; rewrite H; simpl; auto.
+    elim P.eq_dec; auto. intro; elim H1; auto.
+  - rewrite H; auto.
+  - rewrite H; simpl.
+    do 2 elim P.eq_dec; simpl; intros; auto.
+    * elim H1; auto.
+    * elim H1; auto.
+    * elim b0; auto.
++ apply C_Then'; auto.
 Qed.
 
 End MCBase.

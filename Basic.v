@@ -4,10 +4,6 @@ Require Export ListSet.
 Require Export Sorting.Permutation.
 Require Export Arith.
 
-(* Kill me.
-Require Import Coq.Program.Equality.
-*)
-
 Ltac destroy H := repeat (elim H; clear H; intro; intro H).
 Ltac destroy_as H H' := rename H into H'; set (H:=True); destroy H'; clear H; rename H' into H.
 
@@ -344,6 +340,87 @@ elim (set_incl_dec X Y); [elim (set_incl_dec Y X) | idtac]; intros.
   rewrite set_equals_char in H; inversion_clear H; auto.
 + right; intro; apply b.
   rewrite set_equals_char in H; inversion_clear H; auto.
+Qed.
+
+Fixpoint set_remove' x (X:set T) :=
+  match X with
+  | nil => nil
+  | y::Y => if T_dec x y then (set_remove' x Y) else (y::set_remove' x Y)
+  end.
+
+Lemma set_remove'_not_In : forall x (X:set T), ~In x X -> set_remove' x X = X.
+Proof.
+induction X; auto.
+simpl; intros.
+elim T_dec; simpl; intros.
++ elim H; auto.
++ rewrite IHX; auto.
+Qed.
+
+Lemma set_remove'_1 (a x : T) (X : set T) : In a (set_remove' x X) -> In a X.
+Proof.
+induction X; simpl; auto.
+elim T_dec; intros; auto.
+inversion_clear H; auto.
+Qed.
+
+Lemma set_remove'_In : forall a x (X:set T), a<>x -> In a X -> In a (set_remove' x X).
+Proof.
+induction X; auto.
+simpl; intros.
+inversion_clear H0; intros.
++ rewrite H1; clear a0 H1.
+  elim T_dec; intros; simpl; auto.
+  elim H; auto.
++ elim T_dec; simpl; auto.
+Qed.
+
+Fixpoint set_size (X:set T) :=
+  match X with
+  | nil => 0
+  | x::Y => if In_dec T_dec x Y then set_size Y else S (set_size Y)
+  end.
+
+Lemma set_size_0 : forall X, set_size X = 0 -> X = nil.
+Proof.
+induction X; auto.
+simpl.
+elim in_dec; simpl; intros.
++ rewrite IHX in a0; auto; inversion a0.
++ inversion H.
+Qed.
+
+Lemma set_size_remove' : forall X x, In x X ->
+  set_size X = S (set_size (set_remove' x X)).
+Proof.
+induction X; intros; auto with arith.
+inversion_clear H.
++ rewrite H0; clear a H0; simpl.
+  elim T_dec; intro Hx. 2: elim Hx; auto.
+  elim in_dec; intros; auto.
+  rewrite set_remove'_not_In; auto.
++ simpl.
+  elim T_dec; elim in_dec; intros; auto.
+  * elim b; rewrite <- a0; auto.
+  * rewrite (IHX a); simpl; auto; elim in_dec; auto; intros.
+    2: { elim b0. apply set_remove'_In; auto. }
+    rewrite <- IHX; auto.
+  * simpl.
+    elim in_dec; intros; auto.
+    elim b. apply set_remove'_1 with x; auto.
+Qed.
+
+Lemma set_size_1 : forall X, set_size X = 1 ->
+  forall x y, In x X -> In y X -> x = y.
+Proof.
+intros.
+elim (T_dec y x); auto; intro.
+exfalso.
+rewrite (set_size_remove' _ _ H0) in H.
+inversion H.
+apply set_size_0 in H3.
+apply (set_remove'_In X b) in H1.
+rewrite H3 in H1; inversion H1.
 Qed.
 
 End Lists.
