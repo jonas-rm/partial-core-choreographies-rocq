@@ -605,23 +605,52 @@ Definition beval_on_state (b:BExpr) (s:State) (p:Pid) : bool := beval b (s p).
 
 (** The semantics uses a labeled transition system. We first define the type of labels. *)
 
+Inductive RichLabel : Type :=
+| R_Com (p:Pid) (v:Value) (q:Pid) (x:Var) : RichLabel
+| R_Sel (p:Pid) (q:Pid) (l:Label) : RichLabel
+| R_Cond (p:Pid) : RichLabel
+| R_Call (X:RecVar) (p:Pid) : RichLabel
+.
+
 Inductive TransitionLabel : Type :=
 | L_Com (p:Pid) (v:Value) (q:Pid) : TransitionLabel
 | L_Sel (p:Pid) (q:Pid) (l:Label) : TransitionLabel
 | L_Tau (p:Pid) : TransitionLabel
 .
 
-Definition disjoint_p_tl (p:Pid) (t:TransitionLabel) : Prop :=
-match t with
-| L_Com r _ s => p <> r /\ p <> s
-| L_Sel r s _ => p <> r /\ p <> s
-| L_Tau r     => p <> r
+Definition forget (t:RichLabel) : TransitionLabel :=
+  match t with
+  | R_Com p v q _ => L_Com p v q
+  | R_Sel p q l   => L_Sel p q l
+  | R_Cond p      => L_Tau p
+  | R_Call _ p    => L_Tau p
 end.
 
-Definition disjoint_eta_tl (eta:Eta) (t:TransitionLabel) : Prop :=
+(** Useful for rewriting in proofs. *)
+Lemma forget_Com : forall x p v q, forget (R_Com p v q x) = L_Com p v q.
+Proof. auto. Qed.
+
+Lemma forget_Sel : forall p q l, forget (R_Sel p q l) = L_Sel p q l.
+Proof. auto. Qed.
+
+Lemma forget_Cond : forall p, forget (R_Cond p) = L_Tau p.
+Proof. auto. Qed.
+
+Lemma forget_Call : forall X p, forget (R_Call X p) = L_Tau p.
+Proof. auto. Qed.
+
+Definition disjoint_p_rl (p:Pid) (t:RichLabel) : Prop :=
+match t with
+| R_Com r _ s _ => p <> r /\ p <> s
+| R_Sel r s _   => p <> r /\ p <> s
+| R_Cond r      => p <> r
+| R_Call _ r    => p <> r
+end.
+
+Definition disjoint_eta_rl (eta:Eta) (t:RichLabel) : Prop :=
 match eta with
-| (p # _ --> q $ _)%MC => disjoint_p_tl p t /\ disjoint_p_tl q t
-| (p --> q [_])%MC     => disjoint_p_tl p t /\ disjoint_p_tl q t
+| (p # _ --> q $ _)%MC => disjoint_p_rl p t /\ disjoint_p_rl q t
+| (p --> q [_])%MC     => disjoint_p_rl p t /\ disjoint_p_rl q t
 end.
 
 Definition set_remove_pid := set_remove' P.eq_dec.
@@ -630,101 +659,99 @@ Definition set_size_pid := set_size P.eq_dec.
 (** One-step and multi-step reduction. Multi-step reduction is simply a reflexive and transitive closure. *)
 
 Inductive MCC_To (Procs : RecVar -> (list Pid)*Choreography) :
-  Choreography -> State -> TransitionLabel -> Choreography -> State -> Prop :=
+  Choreography -> State -> RichLabel -> Choreography -> State -> Prop :=
  | C_Com p e q x C s s' : let v := (eval_on_state e s p) in
         eq_state_ext s' (update s q x v) ->
-        MCC_To Procs (p # e --> q $ x;; C) s (L_Com p v q) C s'
+        MCC_To Procs (p # e --> q $ x;; C) s (R_Com p v q x) C s'
  | C_Sel p q l C s s':
         eq_state_ext s s' ->
-        MCC_To Procs (p --> q [l];; C) s (L_Sel p q l) C s'
+        MCC_To Procs (p --> q [l];; C) s (R_Sel p q l) C s'
  | C_Then p b C1 C2 s s':
         eq_state_ext s s' -> (beval_on_state b s p = true) ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C1 s'
+        MCC_To Procs (If p ? b Then C1 Else C2) s (R_Cond p) C1 s'
  | C_Else p b C1 C2 s s':
         eq_state_ext s s' -> (beval_on_state b s p = false) ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C2 s'
- | C_Delay_Eta eta C C' s s' t: disjoint_eta_tl eta t -> 
+        MCC_To Procs (If p ? b Then C1 Else C2) s (R_Cond p) C2 s'
+ | C_Delay_Eta eta C C' s s' t: disjoint_eta_rl eta t -> 
         MCC_To Procs C s t C' s' ->
         MCC_To Procs (eta;; C) s t (eta;; C') s'
- | C_Delay_Cond p b C1 C2 C1' C2' s s' t: disjoint_p_tl p t -> 
+ | C_Delay_Cond p b C1 C2 C1' C2' s s' t: disjoint_p_rl p t -> 
         MCC_To Procs C1 s t C1' s' ->
         MCC_To Procs C2 s t C2' s' ->
         MCC_To Procs (If p ? b Then C1 Else C2) s t (If p ? b Then C1' Else C2') s'
  | C_Call_Local p X s s': eq_state_ext s s' ->
         set_size_pid (fst (Procs X)) = 1 -> In p (fst (Procs X)) ->
-        MCC_To Procs (Call X) s (L_Tau p) (snd (Procs X)) s'
+        MCC_To Procs (Call X) s (R_Call X p) (snd (Procs X)) s'
  | C_Call_Start p X s s':
         eq_state_ext s s' ->
         set_size_pid (fst (Procs X)) > 1 -> In p (fst (Procs X)) ->
         MCC_To Procs
                (Call X) s
-               (L_Tau p)
+               (R_Call X p)
                (RT_Call X (set_remove_pid p (fst (Procs X))) (snd (Procs X))) s'
  | C_Call_Enter p ps X C s s':
         eq_state_ext s s' -> set_size_pid ps > 1 -> In p ps ->
         MCC_To Procs
                (RT_Call X ps C) s
-               (L_Tau p)
+               (R_Call X p)
                (RT_Call X (set_remove_pid p ps) C) s'
  | C_Call_Finish p ps X C s s':
         eq_state_ext s s' -> set_size_pid ps = 1 -> In p ps ->
         MCC_To Procs
-               (RT_Call X ps C) s (L_Tau p) C s'
+               (RT_Call X ps C) s (R_Call X p) C s'
 .
 
 (* Grrrr *)
 
 Lemma C_Com' : forall Procs p e q x C s, let v := (eval_on_state e s p) in
-        MCC_To Procs (p # e --> q $ x;; C) s (L_Com p v q) C (update s q x v).
-Proof. intros. apply C_Com. apply eq_state_ext_refl. Qed.
+        MCC_To Procs (p # e --> q $ x;; C) s (R_Com p v q x) C (update s q x v).
+Proof. intros. apply C_Com. ESEr. Qed.
 
 Lemma C_Sel' : forall Procs p q l C s,
-  MCC_To Procs (p --> q [l];; C) s (L_Sel p q l) C s.
-Proof. intros. apply C_Sel. apply eq_state_ext_refl. Qed.
+  MCC_To Procs (p --> q [l];; C) s (R_Sel p q l) C s.
+Proof. intros. apply C_Sel. ESEr. Qed.
 
 Lemma C_Then' : forall Procs p b C1 C2 s,
         beval_on_state b s p = true ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C1 s.
-Proof. intros. apply C_Then. apply eq_state_ext_refl. auto. Qed.
+        MCC_To Procs (If p ? b Then C1 Else C2) s (R_Cond p) C1 s.
+Proof. intros. apply C_Then. ESEr. auto. Qed.
 
 Lemma C_Else' : forall Procs p b C1 C2 s,
         beval_on_state b s p = false ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s (L_Tau p) C2 s.
-Proof. intros. apply C_Else. apply eq_state_ext_refl. auto. Qed.
+        MCC_To Procs (If p ? b Then C1 Else C2) s (R_Cond p) C2 s.
+Proof. intros. apply C_Else. ESEr. auto. Qed.
 
 Lemma C_Call_Local' : forall Procs p X s,
         set_size_pid (fst (Procs X)) = 1 -> In p (fst (Procs X)) ->
-        MCC_To Procs (Call X) s (L_Tau p) (snd (Procs X)) s.
-Proof. intros. apply C_Call_Local; auto. apply eq_state_ext_refl. Qed.
+        MCC_To Procs (Call X) s (R_Call X p) (snd (Procs X)) s.
+Proof. intros. apply C_Call_Local; auto. ESEr. Qed.
 
 Lemma C_Call_Start' : forall Procs p X s,
         set_size_pid (fst (Procs X)) > 1 -> In p (fst (Procs X)) ->
         MCC_To Procs
                (Call X) s
-               (L_Tau p)
+               (R_Call X p)
                (RT_Call X (set_remove_pid p (fst (Procs X))) (snd (Procs X))) s.
-Proof. intros. apply C_Call_Start; auto. apply eq_state_ext_refl. Qed.
+Proof. intros. apply C_Call_Start; auto. ESEr. Qed.
 
 Lemma C_Call_Enter' : forall Procs p ps X C s,
         set_size_pid ps > 1 -> In p ps ->
         MCC_To Procs
                (RT_Call X ps C) s
-               (L_Tau p)
+               (R_Call X p)
                (RT_Call X (set_remove_pid p ps) C) s.
-Proof. intros. apply C_Call_Enter; auto. apply eq_state_ext_refl. Qed.
+Proof. intros. apply C_Call_Enter; auto. ESEr. Qed.
 
 Lemma C_Call_Finish' : forall Procs p ps X C s,
         set_size_pid ps = 1 -> In p ps ->
-        MCC_To Procs (RT_Call X ps C) s (L_Tau p) C s.
-Proof. intros. apply C_Call_Finish; auto. apply eq_state_ext_refl. Qed.
-
-
+        MCC_To Procs (RT_Call X ps C) s (R_Call X p) C s.
+Proof. intros. apply C_Call_Finish; auto. ESEr. Qed.
 
 Definition Configuration : Type := Program * State.
 
 Inductive MCP_To : Configuration -> TransitionLabel -> Configuration -> Prop :=
  | MCP_To_intro Procs C s t C' s' : MCC_To Procs C s t C' s' ->
-     MCP_To (Build_Program Procs C,s) t (Build_Program Procs C',s').
+     MCP_To (Build_Program Procs C,s) (forget t) (Build_Program Procs C',s').
 
 Inductive MCP_ToStar : Configuration -> list TransitionLabel -> Configuration -> Prop :=
  | MCT_Refl c : MCP_ToStar c nil c
@@ -753,11 +780,11 @@ Section Sanity_Checks.
 
 Example Com_reduction : forall P p e q x C s,
   (Build_Program P (p # e --> q $ x;; C), s) --[ L_Com p (eval_on_state e s p) q ]--> (Build_Program P C, update s q x (eval_on_state e s p)).
-Proof. constructor. constructor. apply eq_state_ext_refl. Qed.
+Proof. intros. rewrite <- (forget_Com x). constructor. apply C_Com'. Qed.
 
 Example Sel_reduction : forall P p q l C s, 
   (Build_Program P (p --> q [l];; C), s) --[ L_Sel p q l ]--> (Build_Program P C, s).
-Proof. constructor. constructor. apply eq_state_ext_refl. Qed.
+Proof. intros. rewrite <- forget_Sel. constructor. apply C_Sel'. Qed.
 
 End Sanity_Checks.
 
@@ -818,10 +845,10 @@ induction C; intros.
     case_eq l; intro.
     1: { rewrite H2 in H1; inversion H1. }
     do 2 eexists; do 2 constructor.
-    1: { apply eq_state_ext_refl. }
+    1: { ESEr. }
     1: { rewrite <- H2; rewrite H1; auto with arith. }
     left; eauto.
-+ case_eq e; do 2 eexists; do 2 constructor; apply eq_state_ext_refl.
++ case_eq e; do 2 eexists; do 2 constructor; ESEr.
 + case_eq (beval_on_state b s p).
   - do 2 eexists; constructor; apply C_Then'; auto.
   - do 2 eexists; constructor; apply C_Else'; auto.
@@ -854,13 +881,11 @@ intros.
 generalize (MCC_To_within_Xs _ _ _ _ _ Xs H H0); intro HXs.
 inversion H0; auto.
 rewrite <- H1 in H; rewrite <- H5 in HXs.
-clear s'0 H6 s0 H3 H5 H0 P' H1 P H2 t.
+clear s'0 H6 s0 H3 H5 H0 P' H1 P H2 l.
 rename Procs0 into Defs.
 apply Program_WF_Main_change with C; auto.
 clear HXs.
 generalize (Program_WF_Main _ _ H); simpl; intro HC.
-(* generalize (Program_WF_within_Xs _ _ H); simpl; intro HXs.
-generalize (Program_WF_Vars_In _ _ H); simpl; intro HX. *)
 induction H4.
 + eapply Choreography_WF_eta; eauto.
 + eapply Choreography_WF_eta; eauto.
@@ -925,6 +950,7 @@ rewrite <- H1 in H8.
 apply well_ann_Main_change with C; auto.
 Qed.
 
+(*
 Example mega_fail : forall Defs X p q CX b b' C1 C2 s,
   (Defs X = (p::q::nil,CX)) -> beval_on_state b' s q = true -> p<>q ->
   MCC_To Defs
@@ -947,5 +973,6 @@ apply C_Delay_Cond.
     * elim b0; auto.
 + apply C_Then'; auto.
 Qed.
+*)
 
 End MCBase.

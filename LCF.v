@@ -6,12 +6,6 @@ Module Temp (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
 Module Import MCBase := MCBase P X V E B R Ev BEv.
 
-Ltac ESEr := apply eq_state_ext_refl.
-Ltac ESEs := apply eq_state_ext_sym; auto.
-Ltac ESEt x := apply eq_state_ext_trans with x; auto.
-Ltac eESEt := eapply eq_state_ext_trans; eauto.
-Ltac ESEc := apply eq_state_ext_congr.
-
 Lemma set_remove'_remove' : forall A A_dec (S:set A) x y,
   set_remove' A_dec x (set_remove' A_dec y S) = set_remove' A_dec y (set_remove' A_dec x S).
 Proof.
@@ -137,7 +131,7 @@ induction H1.
 Qed.
 
 Lemma MCC_To_disjoint_eval : forall Defs C s tl s' p e C',
-  disjoint_p_tl p tl -> MCC_To Defs C s tl C' s' ->
+  disjoint_p_rl p tl -> MCC_To Defs C s tl C' s' ->
   eval_on_state e s p = eval_on_state e s' p.
 Proof.
 intros.
@@ -149,7 +143,7 @@ apply eval_eq; ESEs.
 Qed.
 
 Lemma MCC_To_disjoint_beval : forall Defs C s tl s' p b C',
-  disjoint_p_tl p tl -> MCC_To Defs C s tl C' s' ->
+  disjoint_p_rl p tl -> MCC_To Defs C s tl C' s' ->
   beval_on_state b s p = beval_on_state b s' p.
 Proof.
 intros.
@@ -161,7 +155,7 @@ apply beval_eq; ESEs.
 Qed.
 
 Lemma MCC_To_disjoint_update : forall Defs C s tl s' p x v C',
-  disjoint_p_tl p tl -> MCC_To Defs C s tl C' s' ->
+  disjoint_p_rl p tl -> MCC_To Defs C s tl C' s' ->
   MCC_To Defs C (update s p x v) tl C' (update s' p x v).
 Proof.
 intros.
@@ -250,6 +244,22 @@ eapply MCC_To_deterministic'; eauto.
 eapply MCC_To_deterministic''; eauto.
 Qed.
 
+Lemma MCC_To_rl_implies_state : forall Defs C1 s tl C1' s1 C2 C2' s2,
+  MCC_To Defs C1 s tl C1' s1 -> MCC_To Defs C2 s tl C2' s2 ->
+  eq_state_ext s1 s2.
+Proof.
+induction C1; induction C2; intros; inversion H; inversion H0;
+  try (ESEt s; ESEs; fail); eauto;
+  try (rewrite <- H4 in H13; inversion H13; fail);
+  try (rewrite <- H6 in H14; inversion H14; fail).
++ rewrite <- H6 in H12; inversion H12.
++ rewrite <- H6 in H12; inversion H12.
++ ESEt (update s q x v). ESEs. ESEt (update s q0 x0 v0).
+  rewrite <- H4 in H11; inversion H11. ESEr.
++ rewrite <- H4 in H11; inversion H11.
++ rewrite <- H4 in H11; inversion H11.
+Qed.
+
 Lemma diamond_Chor : forall Defs C s tl1 tl2 C1 C2 s1 s2,
   MCC_To Defs C s tl1 C1 s1 -> MCC_To Defs C s tl2 C2 s2 ->
   tl1 <> tl2 -> exists C' s', MCC_To Defs C1 s1 tl2 C' s' /\ MCC_To Defs C2 s2 tl1 C' s'.
@@ -313,7 +323,7 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
       [eapply set_remove'_2_weird; eauto | apply set_remove'_In; auto]).
 + (* Eta *)
   inversion HC'; inversion HC''; try (rewrite <- H in H6; inversion H6).
-  - elim Htl. unfold v, v0 in H9, H2. rewrite <- H9, <- H2, H14, H15, H16; auto.
+  - elim Htl. unfold v, v0 in H9, H2. rewrite <- H9, <- H2, H14, H15, H16, H17; auto.
   - clear HC' HC'' Htl s'1 H12 C'' H11 t H10 s1 H9 C1 H7 eta H6 H14.
     rewrite <- H3.
     clear s'0 H4 C' H3 C0 H1 s0 H0 tl' H2.
@@ -347,7 +357,8 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
   - elim (IHC _ _ _ _ _ _ _ H6 H14); intros; auto.
     inversion_clear H15. inversion_clear H16.
     do 2 eexists; split; apply C_Delay_Eta; eauto.
-+ inversion HC'; inversion HC''; try (rewrite H8 in H18; inversion H18).
++ (* Cond *)
+  inversion HC'; inversion HC''; try (rewrite H8 in H18; inversion H18).
   - elim Htl. rewrite <- H14, <- H4; auto.
   - rewrite <- H5.
     exists C1', s''; split; auto.
@@ -378,13 +389,24 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     rename C2' into C2a, C2'0 into C2b, x into C2'.
     elim H; clear H; intros s1 Hs1; inversion_clear Hs1.
     elim H0; clear H0; intros s2 Hs2; inversion_clear Hs2.
-(* mega-fuck    exists (If p ? b Then C1' Else C2'), s *)
-
+    pose (MCC_To_rl_implies_state _ _ _ _ _ _ _ _ _ H H0) as Hrl.
+    clearbody Hrl.
+    exists (If p ? b Then C1' Else C2'), s1; split; apply C_Delay_Cond; auto.
+    * apply MCC_To_eq with s' s2; auto. ESEr. ESEs.
+    * apply MCC_To_eq with s'' s2; auto. ESEr. ESEs.
+Qed.
 
 Lemma diamond : forall c tl1 tl2 c1 c2,
   c --[ tl1 ]--> c1 -> c --[ tl2 ]--> c2 ->
-  (c1 = c2) \/ exists c', c1 --[ tl2 ]--> c' /\ c2 --[ tl1 ]--> c'.
+  tl1 <> tl2 -> exists c', c1 --[ tl2 ]--> c' /\ c2 --[ tl1 ]--> c'.
 Proof.
 induction c.
 induction a.
 rename Procedures0 into Defs, Main0 into C, b into s.
+intros.
+inversion H; inversion H0.
+elim (diamond_Chor _ _ _ _ _ _ _ _ _ H7 H13); intros.
+2: { intro; apply H1. rewrite <- H9, <- H3, H14. auto. }
+inversion_clear H14. inversion_clear H15.
+exists (Build_Program Defs x,x0); split; constructor; auto.
+Qed.

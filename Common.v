@@ -472,6 +472,12 @@ elim Pid_dec.
 + reflexivity.
 Qed.
 
+Ltac ESEr := apply eq_state_ext_refl.
+Ltac ESEs := apply eq_state_ext_sym; auto.
+Ltac ESEt x := apply eq_state_ext_trans with x; auto.
+Ltac eESEt := eapply eq_state_ext_trans; eauto.
+Ltac ESEc := apply eq_state_ext_congr.
+
 End GState.
 
 (** * Evaluation

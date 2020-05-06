@@ -1,4 +1,5 @@
 Require Import Kleene.
+Require Import Common.
 Require Export MC.
 
 Local Open Scope nat_scope.
@@ -86,10 +87,11 @@ Example sanity_check : forall P s,
   (Build_Program P (3#this --> 2$yy;; If 2 ? compare Then (4#succ_this --> 3$xx;; End) Else (3#zero --> 2$xx;; End)), s).
 Proof.
 intros.
+rewrite <- forget_Sel.
 constructor.
 apply C_Delay_Eta.
 1: simpl. auto with arith.
-apply C_Sel.
+apply C_Sel'.
 Qed.
 
 Example MCToStar_sanity_check : forall p e q s1 C P, exists s2 v,
@@ -108,9 +110,9 @@ fold C'' in H.
 simpl. set (s'' := CSt.update s' q xx 0). intros.
 exists s'', (eval_on_state e s1 p); split.
 + eapply MCT_Step.
-  1: constructor. apply H. apply eq_state_ext_refl.
+  1: rewrite <- (forget_Com xx). constructor. apply H. ESEr.
   eapply MCT_Step.
-  1: constructor. apply H0. apply eq_state_ext_refl.
+  1: rewrite <- (forget_Com xx). constructor. apply H0. ESEr.
   constructor.
 + unfold s'', s'.
   apply CSt.update_update_ext.
