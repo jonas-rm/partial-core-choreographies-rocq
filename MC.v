@@ -612,11 +612,27 @@ Inductive RichLabel : Type :=
 | R_Call (X:RecVar) (p:Pid) : RichLabel
 .
 
+Lemma RichLabel_eq_dec : forall (x y:RichLabel), {x=y}+{x<>y}.
+Proof.
+decide equality; try (apply P.eq_dec).
++ apply X.eq_dec.
++ apply V.eq_dec.
++ decide equality.
++ apply R.eq_dec.
+Qed.
+
 Inductive TransitionLabel : Type :=
 | L_Com (p:Pid) (v:Value) (q:Pid) : TransitionLabel
 | L_Sel (p:Pid) (q:Pid) (l:Label) : TransitionLabel
 | L_Tau (p:Pid) : TransitionLabel
 .
+
+Lemma TransitionLabel_eq_dec : forall (x y:TransitionLabel), {x=y}+{x<>y}.
+Proof.
+decide equality; try (apply P.eq_dec).
++ apply V.eq_dec.
++ decide equality.
+Qed.
 
 Definition forget (t:RichLabel) : TransitionLabel :=
   match t with

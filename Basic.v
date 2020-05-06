@@ -357,22 +357,43 @@ elim T_dec; simpl; intros.
 + rewrite IHX; auto.
 Qed.
 
-Lemma set_remove'_1 (a x : T) (X : set T) : In a (set_remove' x X) -> In a X.
+Lemma set_remove'_1: forall x y (X : set T), In x (set_remove' y X) -> In x X.
 Proof.
 induction X; simpl; auto.
 elim T_dec; intros; auto.
 inversion_clear H; auto.
 Qed.
 
-Lemma set_remove'_In : forall a x (X:set T), a<>x -> In a X -> In a (set_remove' x X).
+Lemma set_remove'_2: forall x y (X:set T), In x (set_remove' y X) -> x <> y.
+Proof.
+induction X; auto.
+simpl. elim T_dec; auto.
+simpl; intros.
+inversion_clear H; auto.
+rewrite <- H0; auto.
+Qed.
+
+Lemma set_remove'_3: forall x y (X:set T), x<>y -> In x X -> In x (set_remove' y X).
 Proof.
 induction X; auto.
 simpl; intros.
 inversion_clear H0; intros.
-+ rewrite H1; clear a0 H1.
++ rewrite H1; clear a H1.
   elim T_dec; intros; simpl; auto.
   elim H; auto.
 + elim T_dec; simpl; auto.
+Qed.
+
+Lemma set_remove'_cross : forall x y (X:set T),
+  In x X -> In y X -> set_remove' x X = set_remove' y X -> x = y.
+Proof.
+intros.
+elim (T_dec x y); auto.
+intro.
+exfalso.
+generalize (set_remove'_3 _ b H); intro.
+rewrite <- H1 in H2.
+generalize (set_remove'_2 _ H2); auto.
 Qed.
 
 Fixpoint set_size (X:set T) :=
@@ -403,7 +424,7 @@ inversion_clear H.
   elim T_dec; elim in_dec; intros; auto.
   * elim b; rewrite <- a0; auto.
   * rewrite (IHX a); simpl; auto; elim in_dec; auto; intros.
-    2: { elim b0. apply set_remove'_In; auto. }
+    2: { elim b0. apply set_remove'_3; auto. }
     rewrite <- IHX; auto.
   * simpl.
     elim in_dec; intros; auto.
@@ -419,7 +440,7 @@ exfalso.
 rewrite (set_size_remove' _ _ H0) in H.
 inversion H.
 apply set_size_0 in H3.
-apply (set_remove'_In X b) in H1.
+apply (set_remove'_3 X b) in H1.
 rewrite H3 in H1; inversion H1.
 Qed.
 

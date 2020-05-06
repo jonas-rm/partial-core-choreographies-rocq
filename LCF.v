@@ -35,7 +35,7 @@ exfalso.
 rewrite (set_size_remove' T_dec X x) in H2; auto.
 rewrite (set_size_remove' T_dec (set_remove' T_dec x X) y) in H2.
 inversion H2. inversion H4. inversion H6.
-apply set_remove'_In; auto.
+apply set_remove'_3; auto.
 Qed.
 
 (*
@@ -173,7 +173,7 @@ induction H0; try (constructor; auto; try ESEc; auto; fail).
   rewrite <- beval_neq; auto.
 Qed.
 
-Lemma MCC_To_deterministic' : forall Defs C s tl C1 s1 C2 s2,
+Lemma MCC_To_deterministic_1 : forall Defs C C1 C2 tl s s1 s2,
   MCC_To Defs C s tl C1 s1 -> MCC_To Defs C s tl C2 s2 -> C1 = C2.
 Proof.
 (* Might be simpler: induction tl *)
@@ -206,7 +206,7 @@ induction C; intros; inversion H; inversion H0;
 - rewrite (IHC1 _ _ _ _ _ _ H10 H21); rewrite (IHC2 _ _ _ _ _ _ H11 H22); auto.
 Qed.
 
-Lemma MCC_To_deterministic'' : forall Defs C s tl C1 s1 C2 s2,
+Lemma MCC_To_deterministic_2 : forall Defs C C1 C2 tl s s1 s2,
   MCC_To Defs C s tl C1 s1 -> MCC_To Defs C s tl C2 s2 ->
   eq_state_ext s1 s2.
 Proof.
@@ -234,14 +234,135 @@ induction C; intros; inversion H; inversion H0;
 - eauto.
 Qed.
 
-Lemma MCC_To_deterministic : forall Defs C s tl1 C1 s1 tl2 C2 s2,
+Lemma MCC_To_deterministic : forall Defs C C1 C2 tl1 tl2 s s1 s2,
   MCC_To Defs C s tl1 C1 s1 -> MCC_To Defs C s tl2 C2 s2 ->
   tl1 = tl2 -> C1 = C2 /\ eq_state_ext s1 s2.
 Proof.
 intros.
 rewrite H1 in H; split.
-eapply MCC_To_deterministic'; eauto.
-eapply MCC_To_deterministic''; eauto.
+eapply MCC_To_deterministic_1; eauto.
+eapply MCC_To_deterministic_2; eauto.
+Qed.
+
+Lemma MCC_To_eta_reduction : forall Defs eta C s1 s2 tl,
+  MCC_To Defs (eta;;C) s1 tl C s2 ->
+  (forall p e q x, eta = (p # e --> q $ x)%MC -> tl = R_Com p (eval_on_state e s1 p) q x)
+  /\
+  (forall p q l, eta = (p --> q[l])%MC -> tl = R_Sel p q l).
+Proof.
+induction C; intros; inversion H; split; intros;
+  try (unfold v); try (inversion H6; auto; fail).
++ clear s' H5 C' H6 t H4 s H3 eta0 H0 C0 H1.
+  rewrite H2, H9 in IHC; rewrite H9 in H7, H8.
+  clear e H9 H2 H.
+  elim (IHC _ _ _ H8); auto.
++ clear s' H5 C' H6 t H4 s H3 eta0 H0 C0 H1.
+  rewrite H2, H9 in IHC; rewrite H9 in H7, H8.
+  clear e H9 H2 H.
+  elim (IHC _ _ _ H8); auto.
+Qed.
+
+Lemma MCC_To_Then_reduction : forall Defs p b C1 C2 s1 s2 tl,
+  MCC_To Defs (If p ? b Then C1 Else C2) s1 tl C1 s2 ->
+  tl = R_Cond p.
+Proof.
+induction C1; intros; inversion H; auto.
+rewrite <- H7, <- H8 in H12; rewrite <- H7.
+apply (IHC1_1 _ _ _ _ H12).
+Qed.
+
+Lemma MCC_To_Else_reduction : forall Defs p b C1 C2 s1 s2 tl,
+  MCC_To Defs (If p ? b Then C1 Else C2) s1 tl C2 s2 ->
+  tl = R_Cond p.
+Proof.
+intros Defs p b C1 C2; revert C1.
+induction C2; intros; inversion H; auto.
+rewrite <- H7, <- H8 in H13; rewrite <- H7.
+apply (IHC2_2 _ _ _ _ H13).
+Qed.
+
+Lemma MCC_To_deterministic_3 : forall Defs C C' tl1 tl2 s s1 s2,
+  MCC_To Defs C s tl1 C' s1 -> MCC_To Defs C s tl2 C' s2 ->
+  tl1 = tl2.
+Proof.
+induction C; intros; inversion H; inversion H0; auto.
++ rewrite (set_size_1 _ _ H11 _ _ H12 H4); auto.
++ rewrite H3 in H11; elim (lt_irrefl _ H11).
++ rewrite H11 in H3; elim (lt_irrefl _ H3).
++ rewrite <- H7 in H15; inversion H15.
+  rewrite (set_remove'_cross _ _ _ _ H12 H4 H18); auto.
++ rewrite <- H7 in H17; inversion H17.
+  rewrite (set_remove'_cross _ _ _ _ H20 H10 H22); auto.
++ rewrite <- H19 in H9; elim (lt_irrefl _ H9).
++ rewrite <- H9 in H19; elim (lt_irrefl _ H19).
++ rewrite (set_size_1 _ _ H19 _ _ H10 H20); auto.
++ unfold v, v0; rewrite <- H1 in H8; inversion H8; auto.
++ rewrite <- H1 in H8; inversion H8; auto.
++ rewrite H5, <- H13 in H15.
+  clear H H0 C0 H3 s0 H2 H5 s' H6 C1 H9 eta H8 s3 H11 t H12 s'0 H14 C' H13.
+  elim (MCC_To_eta_reduction _ _ _ _ _ _ H15); intros.
+  symmetry; apply H; auto.
++ rewrite <- H1 in H8; inversion H8; auto.
++ rewrite <- H1 in H8; inversion H8; auto.
++ rewrite H5, <- H13 in H15.
+  clear H H0 C0 H3 s0 H2 H5 s' H6 C1 H9 eta H8 s3 H11 t H12 s'0 H14 C' H13.
+  elim (MCC_To_eta_reduction _ _ _ _ _ _ H15); intros.
+  symmetry; apply H0; auto.
++ rewrite H13, <- H6 in H8.
+  elim (MCC_To_eta_reduction _ _ _ _ _ _ H8); intros.
+  apply H16; auto.
++ rewrite H13, <- H6 in H8.
+  elim (MCC_To_eta_reduction _ _ _ _ _ _ H8); intros.
+  apply H17; auto.
++ revert H8 H16. rewrite <- H6 in H14; inversion H14.
+  eauto.
++ rewrite H7, <- H17 in H20.
+  rewrite (MCC_To_Then_reduction _ _ _ _ _ _ _ _ H20); auto.
++ rewrite H7, <- H17 in H21.
+  rewrite (MCC_To_Else_reduction _ _ _ _ _ _ _ _ H21); auto.
++ rewrite H18, <- H7 in H10.
+  apply (MCC_To_Then_reduction _ _ _ _ _ _ _ _ H10); auto.
++ rewrite H18, <- H7 in H11.
+  apply (MCC_To_Else_reduction _ _ _ _ _ _ _ _ H11); auto.
++ revert H21 H22. rewrite <- H7 in H18; inversion H18.
+  eauto.
+Qed.
+
+Lemma MCC_To_deterministic_4 : forall Defs C C' tl1 tl2 s s1 s2,
+  MCC_To Defs C s tl1 C' s1 -> MCC_To Defs C s tl2 C' s2 ->
+  eq_state_ext s1 s2.
+Proof.
+intros.
+rewrite (MCC_To_deterministic_3 _ _ _ _ _ _ _ _ H0 H) in H0.
+clear tl2.
+revert C C' tl1 s s1 s2 H H0.
+induction C; intros; inversion H; inversion H0;
+  try (ESEt s; ESEs; fail).
+- ESEt (update s q x v).
+  revert H14; unfold v, v0.
+  rewrite <- H1 in H8; inversion H8.
+  ESEs.
+- rewrite <- H1 in H8; inversion H8.
+- rewrite <- H5 in H13; rewrite <- H1 in H10, H13.
+  clear H H0 s'0 H14 C' t H12 s3 H11 C1 H9 eta H8 s' H6 H5 s0 H2 C0 H3 IHC e H1.
+  rename e0 into eta.
+  rewrite <- H13 in H15.
+  exfalso; inversion H15.
+  + rewrite <- H6 in H10; inversion_clear H10. inversion_clear H12; auto.
+  + rewrite <- H4 in H1; inversion_clear H1. inversion_clear H11; auto.
+- rewrite <- H4 in H11; inversion H11.
+- rewrite <- H1, <- H4 in H10.
+  inversion_clear H10. inversion H16. elim H10; auto.
+- rewrite <- H9, <- H12 in H3.
+  inversion_clear H3. inversion H16. elim H3; auto.
+- rewrite <- H9, <- H12 in H3.
+  inversion_clear H3. inversion H16. elim H3; auto.
+- revert H8 H16. rewrite <- H6 in H14; inversion H14; eauto.
+- rewrite <- H6 in H19; elim H19; auto.
+- rewrite <- H6 in H19; elim H19; auto.
+- rewrite <- H17 in H9; elim H9; auto.
+- rewrite <- H17 in H9; elim H9; auto.
+- revert H10 H21. rewrite <- H7 in H18; inversion H18; eauto.
 Qed.
 
 Lemma MCC_To_rl_implies_state : forall Defs C1 s tl C1' s1 C2 C2' s2,
@@ -285,16 +406,16 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
       ++ revert HX.
          unfold set_size_pid, set_remove_pid.
          intro; rewrite (set_size_remove' P.eq_dec) with (fst (Defs X)) p in HX; auto.
-      ++ apply set_remove'_In; auto.
+      ++ apply set_remove'_3; auto.
       ++ revert HX.
          unfold set_size_pid, set_remove_pid.
          intro; rewrite (set_size_remove' P.eq_dec) with (fst (Defs X)) p0 in HX; auto.
-      ++ apply set_remove'_In; auto.
+      ++ apply set_remove'_3; auto.
     * exists (RT_Call X (set_remove_pid p (set_remove_pid p0 (fst (Defs X)))) (snd (Defs X))), s.
       unfold set_remove_pid.
       rewrite set_remove'_remove' at 1.
       split; (apply C_Call_Enter; try ESEs;
-        [eapply set_remove'_2_weird; eauto | apply set_remove'_In; auto]).
+        [eapply set_remove'_2_weird; eauto | apply set_remove'_3; auto]).
 + (* RT_Call *)
   inversion HC'; inversion HC''; auto.
   2: { exfalso. rewrite H17 in H7. apply (lt_irrefl _ H7). }
@@ -311,16 +432,16 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     - revert HX.
       unfold set_size_pid, set_remove_pid.
       intro; rewrite (set_size_remove' P.eq_dec) with ps p in HX; auto.
-    - apply set_remove'_In; auto.
+    - apply set_remove'_3; auto.
     - revert HX.
       unfold set_size_pid, set_remove_pid.
       intro; rewrite (set_size_remove' P.eq_dec) with ps p0 in HX; auto.
-    - apply set_remove'_In; auto.
+    - apply set_remove'_3; auto.
   * exists (RT_Call X (set_remove_pid p (set_remove_pid p0 ps)) C), s.
     unfold set_remove_pid.
     rewrite set_remove'_remove' at 1.
     split; (apply C_Call_Enter; try ESEs;
-      [eapply set_remove'_2_weird; eauto | apply set_remove'_In; auto]).
+      [eapply set_remove'_2_weird; eauto | apply set_remove'_3; auto]).
 + (* Eta *)
   inversion HC'; inversion HC''; try (rewrite <- H in H6; inversion H6).
   - elim Htl. unfold v, v0 in H9, H2. rewrite <- H9, <- H2, H14, H15, H16, H17; auto.
@@ -396,12 +517,11 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     * apply MCC_To_eq with s'' s2; auto. ESEr. ESEs.
 Qed.
 
-Lemma diamond : forall c tl1 tl2 c1 c2,
+Lemma diamond_1 : forall c tl1 tl2 c1 c2,
   c --[ tl1 ]--> c1 -> c --[ tl2 ]--> c2 ->
   tl1 <> tl2 -> exists c', c1 --[ tl2 ]--> c' /\ c2 --[ tl1 ]--> c'.
 Proof.
-induction c.
-induction a.
+induction c. induction a.
 rename Procedures0 into Defs, Main0 into C, b into s.
 intros.
 inversion H; inversion H0.
@@ -410,3 +530,39 @@ elim (diamond_Chor _ _ _ _ _ _ _ _ _ H7 H13); intros.
 inversion_clear H14. inversion_clear H15.
 exists (Build_Program Defs x,x0); split; constructor; auto.
 Qed.
+
+Lemma diamond_2 : forall c tl1 tl2 c1 c2,
+  c --[ tl1 ]--> c1 -> c --[ tl2 ]--> c2 ->
+  {fst c1 = fst c2 /\ eq_state_ext (snd c1) (snd c2)}
+  + {exists c', c1 --[ tl2 ]--> c' /\ c2 --[ tl1 ]--> c'}.
+Proof.
+induction c, c1, c2. induction a, p, p0.
+rename Procedures1 into Defs', Main1 into C', s into s'.
+rename Procedures2 into Defs'', Main2 into C'', s0 into s''.
+rename Procedures0 into Defs, Main0 into C, b into s.
+intros.
+elim (chor_eq_dec C' C''); intro HC'C''; [left | right].
++ inversion H; inversion H0.
+  clear H H0 s'1 H16 C'1 H15 tl2 H10 s1 H12 C1 H11 Procs1 H9 s'0 H8.
+  clear C'0 H7 tl1 H2 s0 H4 C0 H3 Procs0 H1.
+  revert H5 H13; rewrite <- H6, <- H14, <- HC'C''; clear H6 H14 HC'C'' Defs' Defs'' C''.
+  intros HC HC'.
+  split; auto.
+  eapply MCC_To_deterministic_4; eauto.
++ inversion H; inversion H0.
+  elim (RichLabel_eq_dec t t0); intro.
+  1: {
+    elim HC'C''.
+    rewrite <- a, <- H14 in H13. rewrite <- H6 in H5.
+    eapply MCC_To_deterministic_1; eauto.
+  }
+  rewrite <- H6 in H5; rewrite <- H14 in H13.
+  elim (diamond_Chor _ _ _ _ _ _ _ _ _ H5 H13); intros; auto.
+  inversion_clear H17. inversion_clear H18.
+  rewrite <- H6, <- H14.
+  exists (Build_Program Defs x,x0); split; constructor; auto.
+Qed.
+
+Lemma convergence : forall c tls1 tls2 c1 c2,
+  c --[ tls1 ]-->* c1 -> c --[ tls2 ]-->* c2 ->
+  tls1 <> tls2 -> exists c', c1 --[ tl2 ]--> c' /\ c2 --[ tl1 ]--> c'.
