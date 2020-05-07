@@ -4,46 +4,6 @@ Require Export ListSet.
 Require Export Sorting.Permutation.
 Require Export Arith.
 
-Ltac destroy H := repeat (elim H; clear H; intro; intro H).
-Ltac destroy_as H H' := rename H into H'; set (H:=True); destroy H'; clear H; rename H' into H.
-
-(** * Logical stuff. *)
-Section Logical.
-
-(** De Morgan law *)
-Lemma deMorganNotOr : forall P Q : Prop,
-  ~(P \/ Q) -> ~P /\ ~Q.
-Proof.
-  unfold not.
-  intros P Q PorQ_imp_false.
-  split.
-  - intros P_holds. apply PorQ_imp_false. left. assumption.
-  - intros Q_holds. apply PorQ_imp_false. right. assumption.
-Qed.
-
-Lemma or_over_impl : forall (a b c:Prop), ((a \/ b) -> c) -> ((a -> c) /\ (b -> c)).
-Proof.
-intros a b c.
-intros H.
-split.
-tauto.
-tauto.
-Qed.
-
-Definition or_add_left : forall A B C, B \/ C -> (A \/ B) \/ C.
-Proof.
-intros.
-inversion H; auto.
-Defined.
-
-Definition is_defined (A:Type) (o:option A) : bool :=
-match o with
- | Some a => true
- | None => false
-end.
-
-End Logical.
-
 (** * Natural numbers *)
 Section Natural_Numbers.
 
@@ -191,25 +151,12 @@ Lemma NoDup_app :
 Proof.
 intros.
 induction P.
-split.
-apply NoDup_nil.
-trivial.
-split.
-simpl in H.
-apply NoDup_cons_iff in H.
-inversion_clear H.
-apply NoDup_cons.
-(* ~ In a (P ++ Q) -> ~ In a P *)
-set (myH := (in_or_app P Q a)).
-apply or_over_impl in myH; inversion_clear myH.
-intro.
-apply H0.
-apply in_or_app.
-auto.
-elim IHP; auto.
-simpl in H.
-inversion H.
-elim IHP; auto.
++ split; auto. apply NoDup_nil.
++ inversion H.
+  elim IHP; auto; intros.
+  split; auto.
+  apply NoDup_cons; auto.
+  intro; apply H2; apply in_or_app; auto.
 Qed.
 
 Lemma NoDup_app_not_in : forall l l':list T, NoDup (l ++ l') ->
@@ -396,6 +343,23 @@ rewrite <- H1 in H2.
 generalize (set_remove'_2 _ H2); auto.
 Qed.
 
+Lemma set_remove'_remove' : forall x y (X:set T),
+  set_remove' x (set_remove' y X) = set_remove' y (set_remove' x X).
+Proof.
+induction X; simpl; auto.
+intros; do 2 elim T_dec; simpl; intros.
++ rewrite a0, a1; auto.
++ elim T_dec; simpl; auto.
+  intro; elim b0; auto.
++ elim T_dec; simpl; auto.
+  intro; elim b0; auto.
++ elim T_dec; simpl; auto.
+  1: intro; elim b; auto.
+  elim T_dec; simpl; auto.
+  1: intro; elim b0; auto.
+  intros; rewrite IHX; auto.
+Qed.
+
 Fixpoint set_size (X:set T) :=
   match X with
   | nil => 0
@@ -442,6 +406,21 @@ inversion H.
 apply set_size_0 in H3.
 apply (set_remove'_3 X b) in H1.
 rewrite H3 in H1; inversion H1.
+Qed.
+
+Lemma set_size_neq_2 : forall x y (X:set T), x<>y ->
+  In x X -> In y X -> set_size X <> 2 -> set_size (set_remove' x X) > 1.
+Proof.
+intros.
+apply lt_S_n.
+rewrite <- set_size_remove'; auto.
+elim (nat_total_order _ _ H2); auto.
+clear H2; intro.
+exfalso.
+rewrite (set_size_remove' X x) in H2; auto.
+rewrite (set_size_remove' (set_remove' x X) y) in H2.
+inversion H2. inversion H4. inversion H6.
+apply set_remove'_3; auto.
 Qed.
 
 End Lists.
