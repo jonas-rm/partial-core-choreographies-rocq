@@ -28,6 +28,9 @@ Definition beval := BEv.eval.
 
 Definition Store := CSt.State.
 
+Definition set_remove_pid := set_remove' P.eq_dec.
+Definition set_size_pid := set_size P.eq_dec.
+
 (** ** Syntax of MC choreographies. *)
 
 Section Syntax.
@@ -60,8 +63,10 @@ Inductive Choreography : Type :=
 (** A program is a pair containing all procedure definitions and the main
     choreography. *)
 
+Definition DefSet := RecVar -> (list Pid)*Choreography.
+
 Record Program : Type :=
-  { Procedures : RecVar -> (list Pid)*Choreography;
+  { Procedures : DefSet;
     Main       : Choreography }.
 
 Definition Vars := fun P X => fst (Procedures P X).
@@ -350,6 +355,27 @@ intros.
 inversion_clear H; inversion_clear H0; inversion_clear H1; split; auto.
 Qed.
 
+Lemma Choreography_WF_Call_1 : forall X ps C,
+  Choreography_WF (RT_Call X ps C) -> Choreography_WF C.
+Proof.
+intros.
+inversion_clear H. inversion_clear H1. split; auto.
+Qed.
+
+Lemma Choreography_WF_Call_2 : forall X p ps C,
+  Choreography_WF (RT_Call X ps C) -> set_size_pid ps > 1 ->
+  Choreography_WF (RT_Call X (set_remove_pid p ps) C).
+Proof.
+intros.
+inversion_clear H. inversion_clear H2. repeat split; auto.
+unfold set_size_pid in H0. unfold set_remove_pid.
+elim (In_dec P.eq_dec p ps); intro.
++ rewrite (set_size_remove' P.eq_dec ps p) in H0; auto.
+  apply lt_S_n in H0.
+  intro; rewrite H2 in H0; inversion H0.
++ rewrite set_remove'_not_In; auto.
+Qed.
+
 (** A program is well-formed if there is a finite set of procedures Xs such that:
     - main and all procedures in Xs are well-formed
     - main and all procedures in Xs only call procedures in Xs
@@ -569,6 +595,17 @@ apply Choreography_WF_Else with p b C1; repeat split; auto.
 apply (Program_WF_Main_within_Xs _ _ H).
 Qed.
 
+Lemma Program_WF_Call : forall Xs Defs X ps C,
+  Program_WF Xs (Build_Program Defs (RT_Call X ps C)) -> Program_WF Xs (Build_Program Defs C).
+Proof.
+intros.
+elim (Program_WF_Main _ _ H); simpl; intros.
+inversion_clear H1.
+eapply Program_WF_Main_change; eauto.
+split; auto.
+apply (Program_WF_Main_within_Xs _ _ H).
+Qed.
+
 (** This one is not decidable. *)
 
 Definition MCP_WF (P:Program) := exists Xs, Program_WF Xs P /\ well_ann P.
@@ -590,6 +627,38 @@ rename x into Xs; inversion_clear H1.
 clear H2.
 apply Program_WF_Vars with Xs; auto.
 apply Program_WF_Vars_In with P; auto.
+Qed.
+
+Lemma MCP_WF_eta : forall Defs C eta,
+  MCP_WF (Build_Program Defs (eta;;C)) -> MCP_WF (Build_Program Defs C).
+Proof.
+intros.
+inversion_clear H; inversion_clear H0.
+exists x; split; auto. eapply Program_WF_eta; eauto.
+Qed.
+
+Lemma MCP_WF_Then : forall Defs p b C1 C2,
+  MCP_WF (Build_Program Defs (If p ? b Then C1 Else C2)) -> MCP_WF (Build_Program Defs C1).
+Proof.
+intros.
+inversion_clear H; inversion_clear H0.
+exists x; split; auto. eapply Program_WF_Then; eauto.
+Qed.
+
+Lemma MCP_WF_Else : forall Defs p b C1 C2,
+  MCP_WF (Build_Program Defs (If p ? b Then C1 Else C2)) -> MCP_WF (Build_Program Defs C2).
+Proof.
+intros.
+inversion_clear H; inversion_clear H0.
+exists x; split; auto. eapply Program_WF_Else; eauto.
+Qed.
+
+Lemma MCP_WF_Call : forall Defs X ps C,
+  MCP_WF (Build_Program Defs (RT_Call X ps C)) -> MCP_WF (Build_Program Defs C).
+Proof.
+intros.
+inversion_clear H; inversion_clear H0.
+exists x; split; auto. eapply Program_WF_Call; eauto.
 Qed.
 
 End Syntactic_Properties.
@@ -702,111 +771,124 @@ match t with
 | R_Call _ r    => p <> r
 end.
 
+Fixpoint disjoint_ps_rl (ps:list Pid) (t:RichLabel) : Prop :=
+match ps with
+| nil    => True
+| p::ps' => disjoint_p_rl p t /\ disjoint_ps_rl ps' t
+end.
+
+Lemma disjoint_ps_rl_In p ps t :
+  In p ps -> disjoint_ps_rl ps t -> disjoint_p_rl p t.
+Proof.
+induction ps; intros; inversion H; inversion_clear H0; auto.
+rewrite <- H1; auto.
+Qed.
+
 Definition disjoint_eta_rl (eta:Eta) (t:RichLabel) : Prop :=
 match eta with
 | (p # _ --> q $ _)%MC => disjoint_p_rl p t /\ disjoint_p_rl q t
 | (p --> q [_])%MC     => disjoint_p_rl p t /\ disjoint_p_rl q t
 end.
 
-Definition set_remove_pid := set_remove' P.eq_dec.
-Definition set_size_pid := set_size P.eq_dec.
-
 (** One-step and multi-step reduction. Multi-step reduction is simply a reflexive and transitive closure. *)
 
-Inductive MCC_To (Procs : RecVar -> (list Pid)*Choreography) :
+Inductive MCC_To (Defs : DefSet) :
   Choreography -> State -> RichLabel -> Choreography -> State -> Prop :=
  | C_Com p e q x C s s' : let v := (eval_on_state e s p) in
         eq_state_ext s' (update s q x v) ->
-        MCC_To Procs (p # e --> q $ x;; C) s (R_Com p v q x) C s'
+        MCC_To Defs (p # e --> q $ x;; C) s (R_Com p v q x) C s'
  | C_Sel p q l C s s':
         eq_state_ext s s' ->
-        MCC_To Procs (p --> q [l];; C) s (R_Sel p q l) C s'
+        MCC_To Defs (p --> q [l];; C) s (R_Sel p q l) C s'
  | C_Then p b C1 C2 s s':
         eq_state_ext s s' -> (beval_on_state b s p = true) ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s (R_Cond p) C1 s'
+        MCC_To Defs (If p ? b Then C1 Else C2) s (R_Cond p) C1 s'
  | C_Else p b C1 C2 s s':
         eq_state_ext s s' -> (beval_on_state b s p = false) ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s (R_Cond p) C2 s'
+        MCC_To Defs (If p ? b Then C1 Else C2) s (R_Cond p) C2 s'
  | C_Delay_Eta eta C C' s s' t: disjoint_eta_rl eta t -> 
-        MCC_To Procs C s t C' s' ->
-        MCC_To Procs (eta;; C) s t (eta;; C') s'
+        MCC_To Defs C s t C' s' ->
+        MCC_To Defs (eta;; C) s t (eta;; C') s'
  | C_Delay_Cond p b C1 C2 C1' C2' s s' t: disjoint_p_rl p t -> 
-        MCC_To Procs C1 s t C1' s' ->
-        MCC_To Procs C2 s t C2' s' ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s t (If p ? b Then C1' Else C2') s'
+        MCC_To Defs C1 s t C1' s' ->
+        MCC_To Defs C2 s t C2' s' ->
+        MCC_To Defs (If p ? b Then C1 Else C2) s t (If p ? b Then C1' Else C2') s'
+ | C_Delay_Call ps X C C' s s' t:
+        disjoint_ps_rl ps t -> MCC_To Defs C s t C' s' ->
+        MCC_To Defs (RT_Call X ps C) s t (RT_Call X ps C') s'
  | C_Call_Local p X s s': eq_state_ext s s' ->
-        set_size_pid (fst (Procs X)) = 1 -> In p (fst (Procs X)) ->
-        MCC_To Procs (Call X) s (R_Call X p) (snd (Procs X)) s'
+        set_size_pid (fst (Defs X)) = 1 -> In p (fst (Defs X)) ->
+        MCC_To Defs (Call X) s (R_Call X p) (snd (Defs X)) s'
  | C_Call_Start p X s s':
         eq_state_ext s s' ->
-        set_size_pid (fst (Procs X)) > 1 -> In p (fst (Procs X)) ->
-        MCC_To Procs
+        set_size_pid (fst (Defs X)) > 1 -> In p (fst (Defs X)) ->
+        MCC_To Defs
                (Call X) s
                (R_Call X p)
-               (RT_Call X (set_remove_pid p (fst (Procs X))) (snd (Procs X))) s'
+               (RT_Call X (set_remove_pid p (fst (Defs X))) (snd (Defs X))) s'
  | C_Call_Enter p ps X C s s':
         eq_state_ext s s' -> set_size_pid ps > 1 -> In p ps ->
-        MCC_To Procs
+        MCC_To Defs
                (RT_Call X ps C) s
                (R_Call X p)
                (RT_Call X (set_remove_pid p ps) C) s'
  | C_Call_Finish p ps X C s s':
         eq_state_ext s s' -> set_size_pid ps = 1 -> In p ps ->
-        MCC_To Procs
+        MCC_To Defs
                (RT_Call X ps C) s (R_Call X p) C s'
 .
 
 (* Grrrr *)
 
-Lemma C_Com' : forall Procs p e q x C s, let v := (eval_on_state e s p) in
-        MCC_To Procs (p # e --> q $ x;; C) s (R_Com p v q x) C (update s q x v).
+Lemma C_Com' : forall Defs p e q x C s, let v := (eval_on_state e s p) in
+        MCC_To Defs (p # e --> q $ x;; C) s (R_Com p v q x) C (update s q x v).
 Proof. intros. apply C_Com. ESEr. Qed.
 
-Lemma C_Sel' : forall Procs p q l C s,
-  MCC_To Procs (p --> q [l];; C) s (R_Sel p q l) C s.
+Lemma C_Sel' : forall Defs p q l C s,
+  MCC_To Defs (p --> q [l];; C) s (R_Sel p q l) C s.
 Proof. intros. apply C_Sel. ESEr. Qed.
 
-Lemma C_Then' : forall Procs p b C1 C2 s,
+Lemma C_Then' : forall Defs p b C1 C2 s,
         beval_on_state b s p = true ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s (R_Cond p) C1 s.
+        MCC_To Defs (If p ? b Then C1 Else C2) s (R_Cond p) C1 s.
 Proof. intros. apply C_Then. ESEr. auto. Qed.
 
-Lemma C_Else' : forall Procs p b C1 C2 s,
+Lemma C_Else' : forall Defs p b C1 C2 s,
         beval_on_state b s p = false ->
-        MCC_To Procs (If p ? b Then C1 Else C2) s (R_Cond p) C2 s.
+        MCC_To Defs (If p ? b Then C1 Else C2) s (R_Cond p) C2 s.
 Proof. intros. apply C_Else. ESEr. auto. Qed.
 
-Lemma C_Call_Local' : forall Procs p X s,
-        set_size_pid (fst (Procs X)) = 1 -> In p (fst (Procs X)) ->
-        MCC_To Procs (Call X) s (R_Call X p) (snd (Procs X)) s.
+Lemma C_Call_Local' : forall Defs p X s,
+        set_size_pid (fst (Defs X)) = 1 -> In p (fst (Defs X)) ->
+        MCC_To Defs (Call X) s (R_Call X p) (snd (Defs X)) s.
 Proof. intros. apply C_Call_Local; auto. ESEr. Qed.
 
-Lemma C_Call_Start' : forall Procs p X s,
-        set_size_pid (fst (Procs X)) > 1 -> In p (fst (Procs X)) ->
-        MCC_To Procs
+Lemma C_Call_Start' : forall Defs p X s,
+        set_size_pid (fst (Defs X)) > 1 -> In p (fst (Defs X)) ->
+        MCC_To Defs
                (Call X) s
                (R_Call X p)
-               (RT_Call X (set_remove_pid p (fst (Procs X))) (snd (Procs X))) s.
+               (RT_Call X (set_remove_pid p (fst (Defs X))) (snd (Defs X))) s.
 Proof. intros. apply C_Call_Start; auto. ESEr. Qed.
 
-Lemma C_Call_Enter' : forall Procs p ps X C s,
+Lemma C_Call_Enter' : forall Defs p ps X C s,
         set_size_pid ps > 1 -> In p ps ->
-        MCC_To Procs
+        MCC_To Defs
                (RT_Call X ps C) s
                (R_Call X p)
                (RT_Call X (set_remove_pid p ps) C) s.
 Proof. intros. apply C_Call_Enter; auto. ESEr. Qed.
 
-Lemma C_Call_Finish' : forall Procs p ps X C s,
+Lemma C_Call_Finish' : forall Defs p ps X C s,
         set_size_pid ps = 1 -> In p ps ->
-        MCC_To Procs (RT_Call X ps C) s (R_Call X p) C s.
+        MCC_To Defs (RT_Call X ps C) s (R_Call X p) C s.
 Proof. intros. apply C_Call_Finish; auto. ESEr. Qed.
 
 Definition Configuration : Type := Program * State.
 
 Inductive MCP_To : Configuration -> TransitionLabel -> Configuration -> Prop :=
- | MCP_To_intro Procs C s t C' s' : MCC_To Procs C s t C' s' ->
-     MCP_To (Build_Program Procs C,s) (forget t) (Build_Program Procs C',s').
+ | MCP_To_intro Defs C s t C' s' : MCC_To Defs C s t C' s' ->
+     MCP_To (Build_Program Defs C,s) (forget t) (Build_Program Defs C',s').
 
 Inductive MCP_ToStar : Configuration -> list TransitionLabel -> Configuration -> Prop :=
  | MCT_Refl c : MCP_ToStar c nil c
@@ -868,6 +950,7 @@ induction H1.
   rewrite <- (beval_eq b s); auto.
 + apply C_Delay_Eta; auto.
 + apply C_Delay_Cond; auto.
++ apply C_Delay_Call; auto.
 + apply C_Call_Local; auto. ESEt s. ESEs. ESEt s'.
 + apply C_Call_Start; auto. ESEt s. ESEs. ESEt s'.
 + apply C_Call_Enter; auto. ESEt s. ESEs. ESEt s'.
@@ -905,7 +988,9 @@ Qed.
 
 (** The set of procedure definitions never changes. *)
 
-Lemma MCP_To_Procs_stable : forall Defs Defs' C C' tl s s',
+Hypothesis Defs : DefSet.
+
+Lemma MCP_To_Defs_stable : forall Defs' C C' tl s s',
   (Build_Program Defs C,s) --[tl]--> (Build_Program Defs' C',s') -> Defs = Defs'.
 Proof.
 intros.
@@ -913,21 +998,21 @@ inversion H.
 inversion H; auto.
 Qed.
 
-Lemma MCP_ToStar_Procs_stable : forall Defs Defs' C C' tl s s',
+Lemma MCP_ToStar_Defs_stable : forall Defs' C C' tl s s',
   (Build_Program Defs C,s) --[tl]-->* (Build_Program Defs' C',s') -> Defs = Defs'.
 Proof.
-intros Defs Defs' C C' tl; revert C C'.
+intros Defs' C C' tl; revert C C'.
 induction tl; intros; inversion H; clear H; auto.
 clear c1 c3 H2 H4 t l H0 H1.
 induction c2. induction a0.
-apply MCP_To_Procs_stable in H3.
+apply MCP_To_Defs_stable in H3.
 rewrite <- H3 in H5.
 eauto.
 Qed.
 
 (** Reductions and state. *)
 
-Lemma MCC_To_disjoint_eval : forall Defs C s tl s' p e C',
+Lemma MCC_To_disjoint_eval : forall C s tl s' p e C',
   disjoint_p_rl p tl -> MCC_To Defs C s tl C' s' ->
   eval_on_state e s p = eval_on_state e s' p.
 Proof.
@@ -939,7 +1024,7 @@ apply eval_neq; auto.
 apply eval_eq; ESEs.
 Qed.
 
-Lemma MCC_To_disjoint_beval : forall Defs C s tl s' p b C',
+Lemma MCC_To_disjoint_beval : forall C s tl s' p b C',
   disjoint_p_rl p tl -> MCC_To Defs C s tl C' s' ->
   beval_on_state b s p = beval_on_state b s' p.
 Proof.
@@ -951,7 +1036,7 @@ apply beval_neq; auto.
 apply beval_eq; ESEs.
 Qed.
 
-Lemma MCC_To_disjoint_update : forall Defs C s tl s' p x v C',
+Lemma MCC_To_disjoint_update : forall C s tl s' p x v C',
   disjoint_p_rl p tl -> MCC_To Defs C s tl C' s' ->
   MCC_To Defs C (update s p x v) tl C' (update s' p x v).
 Proof.
@@ -971,7 +1056,7 @@ induction H0; try (constructor; auto; try ESEc; auto; fail).
 Qed.
 
 (** Determinism of reductions given the label. *)
-Lemma MCC_To_deterministic_1 : forall Defs C C1 C2 tl s s1 s2,
+Lemma MCC_To_deterministic_1 : forall C C1 C2 tl s s1 s2,
   MCC_To Defs C s tl C1 s1 -> MCC_To Defs C s tl C2 s2 -> C1 = C2.
 Proof.
 (* Might be simpler: induction tl *)
@@ -981,8 +1066,17 @@ induction C; intros; inversion H; inversion H0;
 - rewrite H3 in H11; elim (lt_irrefl _ H11).
 - rewrite H11 in H3; elim (lt_irrefl _ H3).
 - rewrite <- H6 in H14; inversion H14; auto.
+- rewrite (IHC _ _ _ _ _ _ H9 H18); auto.
+- rewrite <- H15 in H8. apply (disjoint_ps_rl_In _ _ _ H19) in H8.
+  elim H8; auto.
+- rewrite <- H15 in H8. apply (disjoint_ps_rl_In _ _ _ H19) in H8.
+  elim H8; auto.
+- rewrite <- H6 in H18. apply (disjoint_ps_rl_In _ _ _ H10) in H18.
+  elim H18; auto.
 - rewrite <- H6 in H16; inversion H16; auto.
 - rewrite H19 in H9; elim (lt_irrefl _ H9).
+- rewrite <- H6 in H18. apply (disjoint_ps_rl_In _ _ _ H10) in H18.
+  elim H18; auto.
 - rewrite H9 in H19; elim (lt_irrefl _ H19).
 - exfalso. rewrite <- H1, <- H4 in H10.
   inversion_clear H10. inversion_clear H16. auto.
@@ -1004,12 +1098,20 @@ induction C; intros; inversion H; inversion H0;
 - rewrite (IHC1 _ _ _ _ _ _ H10 H21); rewrite (IHC2 _ _ _ _ _ _ H11 H22); auto.
 Qed.
 
-Lemma MCC_To_deterministic_2 : forall Defs C C1 C2 tl s s1 s2,
+Lemma MCC_To_deterministic_2 : forall C C1 C2 tl s s1 s2,
   MCC_To Defs C s tl C1 s1 -> MCC_To Defs C s tl C2 s2 ->
   eq_state_ext s1 s2.
 Proof.
 induction C; intros; inversion H; inversion H0;
-  try (ESEt s; ESEs; fail); auto.
+  try (ESEt s; ESEs; fail); eauto.
+- rewrite <- H15 in H8. apply (disjoint_ps_rl_In _ _ _ H19) in H8.
+  elim H8; auto.
+- rewrite <- H15 in H8. apply (disjoint_ps_rl_In _ _ _ H19) in H8.
+  elim H8; auto.
+- rewrite <- H6 in H18. apply (disjoint_ps_rl_In _ _ _ H10) in H18.
+  elim H18; auto.
+- rewrite <- H6 in H18. apply (disjoint_ps_rl_In _ _ _ H10) in H18.
+  elim H18; auto.
 - ESEt (update s q x v).
   revert H14; unfold v, v0.
   rewrite <- H1 in H8; inversion H8.
@@ -1024,15 +1126,13 @@ induction C; intros; inversion H; inversion H0;
   inversion_clear H3. inversion H16. elim H3; auto.
 - rewrite <- H9, <- H12 in H3.
   inversion_clear H3. inversion H16. elim H3; auto.
-- eauto.
 - rewrite <- H6 in H19; elim H19; auto.
 - rewrite <- H6 in H19; elim H19; auto.
 - rewrite <- H17 in H9; elim H9; auto.
 - rewrite <- H17 in H9; elim H9; auto.
-- eauto.
 Qed.
 
-Lemma MCC_To_deterministic : forall Defs C C1 C2 tl1 tl2 s s1 s2,
+Lemma MCC_To_deterministic : forall C C1 C2 tl1 tl2 s s1 s2,
   MCC_To Defs C s tl1 C1 s1 -> MCC_To Defs C s tl2 C2 s2 ->
   tl1 = tl2 -> C1 = C2 /\ eq_state_ext s1 s2.
 Proof.
@@ -1045,7 +1145,7 @@ Qed.
 (** Conversely: the result choreography determines the transition label
   and resulting state. *)
 
-Lemma MCC_To_eta_reduction : forall Defs eta C s1 s2 tl,
+Lemma MCC_To_eta_reduction : forall eta C s1 s2 tl,
   MCC_To Defs (eta;;C) s1 tl C s2 ->
   (forall p e q x, eta = (p # e --> q $ x)%MC -> tl = R_Com p (eval_on_state e s1 p) q x)
   /\
@@ -1063,7 +1163,7 @@ induction C; intros; inversion H; split; intros;
   elim (IHC _ _ _ H8); auto.
 Qed.
 
-Lemma MCC_To_Then_reduction : forall Defs p b C1 C2 s1 s2 tl,
+Lemma MCC_To_Then_reduction : forall p b C1 C2 s1 s2 tl,
   MCC_To Defs (If p ? b Then C1 Else C2) s1 tl C1 s2 ->
   tl = R_Cond p.
 Proof.
@@ -1072,17 +1172,101 @@ rewrite <- H7, <- H8 in H12; rewrite <- H7.
 apply (IHC1_1 _ _ _ _ H12).
 Qed.
 
-Lemma MCC_To_Else_reduction : forall Defs p b C1 C2 s1 s2 tl,
+Lemma MCC_To_Else_reduction : forall p b C1 C2 s1 s2 tl,
   MCC_To Defs (If p ? b Then C1 Else C2) s1 tl C2 s2 ->
   tl = R_Cond p.
 Proof.
-intros Defs p b C1 C2; revert C1.
+intros p b C1 C2; revert C1.
 induction C2; intros; inversion H; auto.
 rewrite <- H7, <- H8 in H13; rewrite <- H7.
 apply (IHC2_2 _ _ _ _ H13).
 Qed.
 
-Lemma MCC_To_deterministic_3 : forall Defs C C' tl1 tl2 s s1 s2,
+Lemma MCC_To_Call_reduction_1 : forall p X s1 s2 tl,
+  initial (snd (Defs X)) -> In p (fst (Defs X))
+  -> MCC_To Defs (Call X) s1 tl (snd (Defs X)) s2
+  -> tl = R_Call X p.
+Proof.
+intros.
+set (C:=snd (Defs X)). assert (C = snd (Defs X)); auto.
+clearbody C. revert p X s1 s2 tl H H0 H1 H2.
+induction C; intros; inversion H1;
+  try (rewrite (set_size_1 _ _ H5 _ _ H0 H6); auto; fail);
+  try (rewrite <- H4 in H; simpl in H; inversion H).
+Qed.
+
+Lemma MCC_To_Call_reduction_2 : forall p X s1 s2 tl,
+  initial (snd (Defs X)) -> In p (fst (Defs X))
+  -> MCC_To Defs (Call X) s1 tl (RT_Call X (set_remove_pid p (fst (Defs X))) (snd (Defs X))) s2
+  -> tl = R_Call X p.
+Proof.
+intros.
+set (C:=snd (Defs X)). assert (C = snd (Defs X)); auto.
+clearbody C. revert p X s1 s2 tl H H0 H1 H2.
+induction C; intros; inversion H1;
+  try (rewrite H4 in H; simpl in H; inversion H);
+  try rewrite (set_remove'_cross _ _ _ _ H9 H4); auto.
+Qed.
+
+Lemma MCC_To_Call_reduction_3 : forall C p ps X s1 s2 tl,
+  In p ps ->
+  MCC_To Defs (RT_Call X ps C) s1 tl (RT_Call X (set_remove_pid p ps) C) s2 ->
+  tl = R_Call X p.
+Proof.
+induction C; intros; inversion H0;
+  try (rewrite (set_remove'_cross _ _ _ _ H10 H4); auto; fail);
+  try (rewrite H7 in H; apply set_remove'_2 in H; elim H; auto; fail).
+rewrite (set_size_1 _ _ H11 _ _ H H12); auto.
+Qed.
+
+Fixpoint C_size (C:Choreography) :=
+match C with
+| RT_Call _ _ C' => S (C_size C')
+| (Eta;; C')%MC  => S (C_size C')
+| Cond _ _ C1 C2 => S (C_size C1 + C_size C2)
+| _              => 0
+end.
+
+Fixpoint subterm (C1 C2:Choreography) : Prop :=
+match C2 with
+| (Eta;;C')%MC     => C1 = C' \/ subterm C1 C'
+| Cond _ _ C1' C2' => C1 = C1' \/ C1 = C2' \/ subterm C1 C1' \/ subterm C1 C2'
+| RT_Call _ _ C'   => C1 = C' \/ subterm C1 C'
+| _                => False
+end.
+
+Lemma subterm_size : forall C C', subterm C C' -> C_size C < C_size C'.
+Proof.
+intros C C'; revert C; induction C'; simpl; intros; inversion H; try rewrite H0; auto with arith.
+inversion_clear H0. rewrite H1; auto with arith.
+inversion_clear H1.
++ transitivity (C_size C'1); auto with arith.
++ transitivity (C_size C'2); auto with arith.
+Qed.
+
+Lemma subterm_not_equal : forall C C', subterm C C' -> C <> C'.
+Proof.
+intros; intro.
+generalize (subterm_size _ _ H); intro.
+rewrite H0 in H1.
+apply (lt_irrefl _ H1).
+Qed.
+
+Lemma MCC_To_Call_reduction_4 : forall C p ps X s1 s2 tl,
+  In p ps -> MCC_To Defs (RT_Call X ps C) s1 tl C s2
+  -> tl = R_Call X p.
+Proof.
+induction C; intros; inversion H0; auto;
+  try (rewrite (set_size_1 _ _ H7 _ _ H H9); auto; fail);
+  try (rewrite (set_size_1 _ _ H3 _ _ H H4); auto; fail).
++ clear H0 s' H6 C' H9 t H5 s H3 C0 H4 ps0 H2 X0 H1.
+  rewrite <- H7; rewrite <- H7 in H11; clear r H7.
+  rewrite <- H8 in H10, H11; clear l H8.
+  eauto.
++ elim (subterm_not_equal C (RT_Call r (set_remove_pid p0 ps) C)); simpl; auto.
+Qed.
+
+Lemma MCC_To_deterministic_3 : forall C C' tl1 tl2 s s1 s2,
   MCC_To Defs C s tl1 C' s1 -> MCC_To Defs C s tl2 C' s2 ->
   tl1 = tl2.
 Proof.
@@ -1091,84 +1275,66 @@ induction C; intros; inversion H; inversion H0; auto.
 + rewrite H3 in H11; elim (lt_irrefl _ H11).
 + rewrite H11 in H3; elim (lt_irrefl _ H3).
 + rewrite <- H7 in H15; inversion H15.
-  rewrite (set_remove'_cross _ _ _ _ H12 H4 H18); auto.
+  rewrite (set_remove'_cross _ _ _ _ H12 H18); auto.
++ rewrite <- H6 in H15; inversion H15.
+  rewrite <- H20 in H9; eauto.
++ rewrite <- H6 in H16; inversion H16.
+  rewrite <- H21 in H19. apply set_remove'_2 in H19. elim H19; auto.
++ rewrite H16, <- H6 in H9.
+  apply (MCC_To_Call_reduction_4 _ _ _ _ _ _ _ H19 H9).
++ rewrite <- H7 in H0.
+  symmetry; apply (MCC_To_Call_reduction_3 _ _ _ _ _ _ _ H10 H0).
 + rewrite <- H7 in H17; inversion H17.
-  rewrite (set_remove'_cross _ _ _ _ H20 H10 H22); auto.
+  rewrite (set_remove'_cross _ _ _ _ H20 H22); auto.
 + rewrite <- H19 in H9; elim (lt_irrefl _ H9).
++ rewrite H7, <- H16 in H19.
+  symmetry; apply (MCC_To_Call_reduction_4 _ _ _ _ _ _ _ H10 H19).
 + rewrite <- H9 in H19; elim (lt_irrefl _ H19).
 + rewrite (set_size_1 _ _ H19 _ _ H10 H20); auto.
 + unfold v, v0; rewrite <- H1 in H8; inversion H8; auto.
 + rewrite <- H1 in H8; inversion H8; auto.
 + rewrite H5, <- H13 in H15.
   clear H H0 C0 H3 s0 H2 H5 s' H6 C1 H9 eta H8 s3 H11 t H12 s'0 H14 C' H13.
-  elim (MCC_To_eta_reduction _ _ _ _ _ _ H15); intros.
+  elim (MCC_To_eta_reduction _ _ _ _ _ H15); intros.
   symmetry; apply H; auto.
 + rewrite <- H1 in H8; inversion H8; auto.
 + rewrite <- H1 in H8; inversion H8; auto.
 + rewrite H5, <- H13 in H15.
   clear H H0 C0 H3 s0 H2 H5 s' H6 C1 H9 eta H8 s3 H11 t H12 s'0 H14 C' H13.
-  elim (MCC_To_eta_reduction _ _ _ _ _ _ H15); intros.
+  elim (MCC_To_eta_reduction _ _ _ _ _ H15); intros.
   symmetry; apply H0; auto.
 + rewrite H13, <- H6 in H8.
-  elim (MCC_To_eta_reduction _ _ _ _ _ _ H8); intros.
+  elim (MCC_To_eta_reduction _ _ _ _ _ H8); intros.
   apply H16; auto.
 + rewrite H13, <- H6 in H8.
-  elim (MCC_To_eta_reduction _ _ _ _ _ _ H8); intros.
+  elim (MCC_To_eta_reduction _ _ _ _ _ H8); intros.
   apply H17; auto.
 + revert H8 H16. rewrite <- H6 in H14; inversion H14.
   eauto.
 + rewrite H7, <- H17 in H20.
-  rewrite (MCC_To_Then_reduction _ _ _ _ _ _ _ _ H20); auto.
+  rewrite (MCC_To_Then_reduction _ _ _ _ _ _ _ H20); auto.
 + rewrite H7, <- H17 in H21.
-  rewrite (MCC_To_Else_reduction _ _ _ _ _ _ _ _ H21); auto.
+  rewrite (MCC_To_Else_reduction _ _ _ _ _ _ _ H21); auto.
 + rewrite H18, <- H7 in H10.
-  apply (MCC_To_Then_reduction _ _ _ _ _ _ _ _ H10); auto.
+  apply (MCC_To_Then_reduction _ _ _ _ _ _ _ H10); auto.
 + rewrite H18, <- H7 in H11.
-  apply (MCC_To_Else_reduction _ _ _ _ _ _ _ _ H11); auto.
+  apply (MCC_To_Else_reduction _ _ _ _ _ _ _ H11); auto.
 + revert H21 H22. rewrite <- H7 in H18; inversion H18.
   eauto.
 Qed.
 
-Lemma MCC_To_deterministic_4 : forall Defs C C' tl1 tl2 s s1 s2,
+Lemma MCC_To_deterministic_4 : forall C C' tl1 tl2 s s1 s2,
   MCC_To Defs C s tl1 C' s1 -> MCC_To Defs C s tl2 C' s2 ->
   eq_state_ext s1 s2.
 Proof.
 intros.
-rewrite (MCC_To_deterministic_3 _ _ _ _ _ _ _ _ H0 H) in H0.
-clear tl2.
-revert C C' tl1 s s1 s2 H H0.
-induction C; intros; inversion H; inversion H0;
-  try (ESEt s; ESEs; fail).
-- ESEt (update s q x v).
-  revert H14; unfold v, v0.
-  rewrite <- H1 in H8; inversion H8.
-  ESEs.
-- rewrite <- H1 in H8; inversion H8.
-- rewrite <- H5 in H13; rewrite <- H1 in H10, H13.
-  clear H H0 s'0 H14 C' t H12 s3 H11 C1 H9 eta H8 s' H6 H5 s0 H2 C0 H3 IHC e H1.
-  rename e0 into eta.
-  rewrite <- H13 in H15.
-  exfalso; inversion H15.
-  + rewrite <- H6 in H10; inversion_clear H10. inversion_clear H12; auto.
-  + rewrite <- H4 in H1; inversion_clear H1. inversion_clear H11; auto.
-- rewrite <- H4 in H11; inversion H11.
-- rewrite <- H1, <- H4 in H10.
-  inversion_clear H10. inversion H16. elim H10; auto.
-- rewrite <- H9, <- H12 in H3.
-  inversion_clear H3. inversion H16. elim H3; auto.
-- rewrite <- H9, <- H12 in H3.
-  inversion_clear H3. inversion H16. elim H3; auto.
-- revert H8 H16. rewrite <- H6 in H14; inversion H14; eauto.
-- rewrite <- H6 in H19; elim H19; auto.
-- rewrite <- H6 in H19; elim H19; auto.
-- rewrite <- H17 in H9; elim H9; auto.
-- rewrite <- H17 in H9; elim H9; auto.
-- revert H10 H21. rewrite <- H7 in H18; inversion H18; eauto.
+rewrite (MCC_To_deterministic_3 _ _ _ _ _ _ _ H0 H) in H0.
+eapply MCC_To_deterministic_2; eauto.
 Qed.
 
 (** The label alone determines the resulting state. *)
 
-Lemma MCC_To_rl_implies_state : forall Defs C1 s tl C1' s1 C2 C2' s2,
+Lemma MCC_To_rl_implies_state : forall C1 s tl C1' s1 C2 C2' s2,
   MCC_To Defs C1 s tl C1' s1 -> MCC_To Defs C2 s tl C2' s2 ->
   eq_state_ext s1 s2.
 Proof.
@@ -1244,8 +1410,7 @@ induction C; intros.
     rewrite H2 in H1; clear n H2.
     case_eq l; intro.
     1: { rewrite H2 in H1; inversion H1. }
-    do 2 eexists; do 2 constructor.
-    1: { ESEr. }
+    do 2 eexists; constructor. apply C_Call_Enter'.
     1: { rewrite <- H2; rewrite H1; auto with arith. }
     left; eauto.
 + case_eq e; do 2 eexists; do 2 constructor; ESEr.
@@ -1260,7 +1425,6 @@ Proof.
 intros.
 revert H.
 inversion_clear H0.
-rename Procs0 into Defs.
 simpl; intros.
 generalize (Program_WF_within_Xs _ _ H0); intros.
 unfold Procs in H1; simpl in H1.
@@ -1270,6 +1434,7 @@ induction H; auto.
 + inversion_clear H2; auto.
 + inversion_clear H2; auto.
 + inversion_clear H2; split; auto.
++ inversion_clear H2. simpl; auto.
 + simpl; auto.
 + inversion_clear H2; auto.
 Qed.
@@ -1282,7 +1447,6 @@ generalize (MCC_To_within_Xs _ _ _ _ _ Xs H H0); intro HXs.
 inversion H0; auto.
 rewrite <- H1 in H; rewrite <- H5 in HXs.
 clear s'0 H6 s0 H3 H5 H0 P' H1 P H2 l.
-rename Procs0 into Defs.
 apply Program_WF_Main_change with C; auto.
 clear HXs.
 generalize (Program_WF_Main _ _ H); simpl; intro HC.
@@ -1303,6 +1467,14 @@ induction H4.
   generalize (Program_WF_Else _ _ _ _ _ _ H); intro.
   elim IHMCC_To1; auto; elim IHMCC_To2; auto; intros.
   split; split; auto.
++ assert (Choreography_WF C).
+  1: { inversion_clear HC. simpl in H1; inversion_clear H2; split; auto. }
+  assert (within_Xs Xs C).
+  1: { elim (Program_WF_Main_within_Xs _ _ H); auto. }
+  generalize (Program_WF_Main_change _ _ _ _ H1 H2 H); intro.
+  assert (Choreography_WF C'); auto; clear IHMCC_To.
+  inversion_clear H5. repeat split; simpl; auto.
+  inversion_clear HC. inversion_clear H8; auto.
 + change (Choreography_WF (Procs (Build_Program Defs (Call X)) X)).
   apply Program_WF_Proc with Xs; auto.
   apply (Program_WF_Vars_In _ _ H). red; simpl; auto.

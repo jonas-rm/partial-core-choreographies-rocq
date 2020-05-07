@@ -332,15 +332,14 @@ inversion_clear H0; intros.
 Qed.
 
 Lemma set_remove'_cross : forall x y (X:set T),
-  In x X -> In y X -> set_remove' x X = set_remove' y X -> x = y.
+  In x X -> set_remove' x X = set_remove' y X -> x = y.
 Proof.
 intros.
 elim (T_dec x y); auto.
 intro.
-exfalso.
 generalize (set_remove'_3 _ b H); intro.
-rewrite <- H1 in H2.
-generalize (set_remove'_2 _ H2); auto.
+rewrite <- H0 in H1.
+elim (set_remove'_2 _ H1); auto.
 Qed.
 
 Lemma set_remove'_remove' : forall x y (X:set T),
