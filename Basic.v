@@ -4,6 +4,8 @@ Require Export ListSet.
 Require Export Sorting.Permutation.
 Require Export Arith.
 
+Ltac destroy H := repeat (elim H; intro; clear H; intro H).
+
 (** * Natural numbers *)
 Section Natural_Numbers.
 
@@ -242,6 +244,20 @@ Qed.
 (** On sets. *)
 
 Set Implicit Arguments.
+
+Lemma set_union_elim : forall T T_dec (x:T) (X Y:set T),
+  In x (set_union T_dec X Y) -> {In x X} + {In x Y}.
+Proof.
+induction Y.
++ left; simpl; auto.
++ elim (T_dec x a).
+  - right. rewrite a0; simpl; auto.
+  - intros; elim IHY; auto.
+    right; simpl; auto.
+    simpl in H.
+    elim (set_add_elim _ _ _ _ H); auto.
+    intros; elim b; auto.
+Qed.
 
 Hypothesis T_dec : forall x y:T, {x=y}+{x<>y}.
 
