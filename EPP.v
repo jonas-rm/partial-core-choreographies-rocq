@@ -1,6 +1,8 @@
 Require Import MC.
 Require Import SP.
 
+Local Open Scope nat_scope.
+
 Module EPPBase (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
 Module Import MCBase := MCBase P X V E B R Ev BEv.
@@ -12,10 +14,6 @@ Module Export CSt := GState P V X.
 *)
 
 Section EPP.
-
-Print Pid_dec.
-
-Print Expr_dec.
 
 Fixpoint merge (B1:Behaviour) (B2:Behaviour) : option Behaviour :=
 match B1, B2 with
@@ -45,34 +43,31 @@ match B1, B2 with
  | Branching p f, Branching p' f' =>
     if (Pid_dec p p') then
       match
-        match (f left, f' left) with
-        | (inl B, inl B') => match (merge B B') with Some B'' => Some (inl B'') | None => None end
-        | (inl B, inr _) => Some (inl B)
-        | (inr _, inl B') => Some (inl B')
-        | (inr _, inr _) => Some (inr tt)
+        (* inl Some B = merging of a branching failed
+           inl None = there were no branches to merge for that label in the first place, so all OK
+           inr tt = merging error
+        *)
+        match f left, f' left with
+        | Some B, Some B' => match (merge B B') with Some B'' => inl (Some B'') | None => inr tt end
+        | Some B, None => inl (Some B)
+        | None, Some B' => inl (Some B')
+        | None, None => inl None
         end,
-        match (f right, f' right) with
-        | (inl B, inl B') => match (merge B B') with Some B'' => Some (inl B'') | None => None end
-        | (inl B, inr _) => Some (inl B)
-        | (inr _, inl B') => Some (inl B')
-        | (inr _, inr _) => Some (inr tt)
+        match f right, f' right with
+        | Some B, Some B' => match (merge B B') with Some B'' => inl (Some B'') | None => inr tt end
+        | Some B, None => inl (Some B)
+        | None, Some B' => inl (Some B')
+        | None, None => inl None
         end
       with
-        | Some bl, Some br => Some (Branching p (fun l => match l with left => bl | right => br end))
+        | inl bl, inl br => Some (Branching p (fun l => match l with left => bl | right => br end))
         | _, _ => None
       end
-      (*
-      match merge_branch (f left, f' left), merge_branch (f right, f' right) with
-        | Some bl, Some br => Some (Branching p (fun l => match l with left => bl | right => br end))
-        | _, _ => None
-      end
-      *)
-      (* match merge_branches f f' with Some f'' => Some (Branching p f'') | None => None end *)
     else None
- | Cond p B1 B2, Cond p' B1' B2' =>
-    if (Pid_dec p p') then
+ | Cond e B1 B2, Cond e' B1' B2' =>
+    if (BExpr_dec e e') then
       match (merge B1 B1') with
-       | Some B1m => match (merge B2 B2') with | Some B2m => Some( Cond p B1m B2m ) | _ => None end
+       | Some B1m => match (merge B2 B2') with | Some B2m => Some( Cond e B1m B2m ) | _ => None end
        | _ => None
       end
     else None
@@ -80,10 +75,44 @@ match B1, B2 with
  | _, _ => None
 end.
 
+Definition bproj_buildB (constructor:Behaviour -> Behaviour) (cont:option Behaviour) : option Behaviour :=
+match cont with
+| Some B => Some(constructor B)
+| _ => None
+end.
 
-Fixpoint pproj (C:MCBase.Choreography) (r:Pid) : option Behaviour :=
+Definition bproj_buildbiB (biconstructor:Behaviour -> Behaviour -> Behaviour) (cont1:option Behaviour) (cont2:option Behaviour): option Behaviour :=
+match cont1 with
+| Some B1 => bproj_buildB (biconstructor B1) (cont2)
+| _ => None
+end.
+
+Print Choreography.
+
+(* Cannot put the right End... MCBase? MC.End? Nothing works correctly then... *)
+Fixpoint bproj (C:Choreography) (r:Pid) : option Behaviour :=
 match C with
-| MCBase.End => (Some End)
+| End => (Some End)
+| (eta;;C')%MC => match eta with
+            | (p # e --> q $ x)%MC => if (Pid_dec p r)
+                                        then bproj_buildB (Send q e) (bproj C' r)
+                                        else if (BExpr_dec q r)
+                                               then (bproj_buildB (Recv p) (bproj C' r))
+                                               else (bproj C' r)
+            | (p --> q [ l ])%MC => if (Pid_dec p r)
+                               then bproj_buildB (Sel q l) (bproj C' r)
+                               else if (BExpr_dec q r)
+                                      then match (bproj C' r) with
+                                           | Some BC => Some (Branching p
+                                                               (fun l' => match l, l' with
+                                                                          | left,left => inl BC
+                                                                          | right,right => inl BC
+                                                                          | _,_ => inr tt end))
+                                           | None => None
+                                           end
+                                      else (bproj C' r)
+            end
+
 | _ => (Some End)
 end.
 
