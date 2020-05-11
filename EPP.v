@@ -86,13 +86,15 @@ match cont1 with
 | Some B1 => bproj_buildB (biconstructor B1) (cont2)
 | _ => None
 end.
-
+Search End.
 Print Choreography.
+
+Search Choreography.
 
 (* Cannot put the right End... MCBase? MC.End? Nothing works correctly then... *)
 Fixpoint bproj (C:Choreography) (r:Pid) : option Behaviour :=
 match C with
-| End => (Some End)
+| (MCBase.End)%MC => (Some End)
 | (eta;;C')%MC => match eta with
             | (p # e --> q $ x)%MC => if (Pid_dec p r)
                                         then bproj_buildB (Send q e) (bproj C' r)
@@ -112,7 +114,6 @@ match C with
                                            end
                                       else (bproj C' r)
             end
-
 | _ => (Some End)
 end.
 
