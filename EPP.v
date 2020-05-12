@@ -12,6 +12,10 @@ Module Export PSt := LState V X.
 Module Export CSt := GState P V X.
 *)
 
+Section MaybeMove.
+Definition Pid_In_dec := in_dec P.eq_dec.
+End MaybeMove.
+
 Section EPP.
 
 Fixpoint merge (B1:Behaviour) (B2:Behaviour) : option Behaviour :=
@@ -70,6 +74,7 @@ match B1, B2 with
        | _ => None
       end
     else None
+ | Call X, Call Y => if (RecVar_dec X Y) then Some (Call X) else None
  | End, End => Some End
  | _, _ => None
 end.
@@ -86,18 +91,18 @@ match cont1 with
 | _ => None
 end.
 
-(* Cannot put the right End... MCBase? MC.End? Nothing works correctly then... *)
-Fixpoint bproj (C:Choreography) (r:Pid) : option Behaviour :=
+(* DefSet is overkill, we might wanna just get RecVar -> list Pid *)
+Fixpoint bproj (Defs:DefSet) (C:Choreography) (r:Pid) : option Behaviour :=
 match C with
-| MCBase.End => (Some End)
+| MCBase.End => Some End
 | (eta;;C')%MC => match eta with
             | (p # e --> q $ x)%MC => if (Pid_dec p r)
-                                      then bproj_buildB (Send q e) (bproj C' r)
-                                      else (bproj_buildB (Recv p x) (bproj C' r))
+                                      then bproj_buildB (Send q e) (bproj Defs C' r)
+                                      else (bproj_buildB (Recv p x) (bproj Defs C' r))
             | (p --> q [ l ])%MC => if (Pid_dec p r)
-                                    then bproj_buildB (Sel q l) (bproj C' r)
+                                    then bproj_buildB (Sel q l) (bproj Defs C' r)
                                     else if (Pid_dec q r)
-                                         then match (bproj C' r) with
+                                         then match (bproj Defs C' r) with
                                            | Some BC => Some (Branching p
                                                                (fun l' => match l, l' with
                                                                           | left,left => Some BC
@@ -105,16 +110,34 @@ match C with
                                                                           | _,_ => None end))
                                            | None => None
                                            end
-                                         else (bproj C' r)
+                                         else (bproj Defs C' r)
             end
 | MCBase.Cond p b C1 C2 => if (Pid_dec p r)
-                              then bproj_buildbiB (Cond b) (bproj C1 r) (bproj C2 r)
-                              else match (bproj C1 r), (bproj C2 r) with
+                              then bproj_buildbiB (Cond b) (bproj Defs C1 r) (bproj Defs C2 r)
+                              else match (bproj Defs C1 r), (bproj Defs C2 r) with
                                     | Some B1, Some B2 => (merge B1 B2)
                                     | _, _ => None
                                    end
-| _ => (Some End)
+| MCBase.Call X => if Pid_In_dec r (fst (Defs X)) then Some (Call X) else Some End
+| MCBase.RT_Call X ps C' => if Pid_In_dec r ps then Some (Call X) else bproj Defs C' r
 end.
+
+Fixpoint epp_list (Defs:DefSet) (C:Choreography) (ps:list Pid) : option Network :=
+match ps with
+| nil => Some nnil%SP
+| p::qs => match epp_list Defs C qs with
+            | Some N => match bproj Defs C p with
+                         | Some B => Some (p[B] | N)%SP
+                         | None => None
+                        end
+            | None => None
+           end
+end.
+
+(* Replace ?? with the pn of the choreo based on Defs :) 
+Definition epp (Defs:DefSet) (C:Choreography) : option Network := epp_list Defs C (??).
+*)
+
 
 End EPP.
 

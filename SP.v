@@ -145,7 +145,7 @@ Bind Scope SP_scope with Behaviour.
 Bind Scope SP_scope with Network.
 
 Notation "N | N'" := (Par N N') (at level 202, right associativity) : SP_scope.
-Notation "p [ v , B ]" := (Process p v B) (at level 201, v at level 9, no associativity) : SP_scope.
+Notation "p [ B ]" := (Process p B) (at level 201, no associativity) : SP_scope.
 Notation "p ! e ; B" := (Send p e B) (at level 60, e at level 9, right associativity) : SP_scope.
 Notation "p ? xx ; B" := (Recv p xx B) (at level 60, right associativity) : SP_scope.
 Notation "p (+) l ; B" := (Sel p l B) (at level 49, l at level 9, right associativity) : SP_scope.
