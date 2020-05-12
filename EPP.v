@@ -92,23 +92,27 @@ match C with
 | MCBase.End => (Some End)
 | (eta;;C')%MC => match eta with
             | (p # e --> q $ x)%MC => if (Pid_dec p r)
-                                        then bproj_buildB (Send q e) (bproj C' r)
-                                        else if (BExpr_dec q r)
-                                               then (bproj_buildB (Recv p) (bproj C' r))
-                                               else (bproj C' r)
+                                      then bproj_buildB (Send q e) (bproj C' r)
+                                      else (bproj_buildB (Recv p x) (bproj C' r))
             | (p --> q [ l ])%MC => if (Pid_dec p r)
-                               then bproj_buildB (Sel q l) (bproj C' r)
-                               else if (BExpr_dec q r)
-                                      then match (bproj C' r) with
+                                    then bproj_buildB (Sel q l) (bproj C' r)
+                                    else if (Pid_dec q r)
+                                         then match (bproj C' r) with
                                            | Some BC => Some (Branching p
                                                                (fun l' => match l, l' with
-                                                                          | left,left => inl BC
-                                                                          | right,right => inl BC
-                                                                          | _,_ => inr tt end))
+                                                                          | left,left => Some BC
+                                                                          | right,right => Some BC
+                                                                          | _,_ => None end))
                                            | None => None
                                            end
-                                      else (bproj C' r)
+                                         else (bproj C' r)
             end
+| MCBase.Cond p b C1 C2 => if (Pid_dec p r)
+                              then bproj_buildbiB (Cond b) (bproj C1 r) (bproj C2 r)
+                              else match (bproj C1 r), (bproj C2 r) with
+                                    | Some B1, Some B2 => (merge B1 B2)
+                                    | _, _ => None
+                                   end
 | _ => (Some End)
 end.
 
