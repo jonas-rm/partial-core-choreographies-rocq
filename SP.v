@@ -4,7 +4,7 @@ Local Open Scope nat_scope.
 
 Module SPBase (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
-Module Import MCBase := MCBase P X V E B R Ev BEv.
+Module Export MCBase := MCBase P X V E B R Ev BEv.
 
 Module Export PSt := LState V X.
 Module Export CSt := GState P V X.

@@ -5,7 +5,6 @@ Local Open Scope nat_scope.
 
 Module EPPBase (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
-Module Import MCBase := MCBase P X V E B R Ev BEv.
 Module Import SPBase := SPBase P X V E B R Ev BEv.
 
 (*
@@ -86,15 +85,11 @@ match cont1 with
 | Some B1 => bproj_buildB (biconstructor B1) (cont2)
 | _ => None
 end.
-Search End.
-Print Choreography.
-
-Search Choreography.
 
 (* Cannot put the right End... MCBase? MC.End? Nothing works correctly then... *)
 Fixpoint bproj (C:Choreography) (r:Pid) : option Behaviour :=
 match C with
-| (MCBase.End)%MC => (Some End)
+| MCBase.End => (Some End)
 | (eta;;C')%MC => match eta with
             | (p # e --> q $ x)%MC => if (Pid_dec p r)
                                         then bproj_buildB (Send q e) (bproj C' r)
