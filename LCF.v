@@ -3,11 +3,14 @@ Require Export Common.
 Require Export MC.
 Require Import Sumbool.
 
+Module Temp (P X V E B R: DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
+
 Notation "A '&&&' B" := (sumbool_and _ _ _ _ A B).
 
-Module Temp (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
-
 Module Import MCBase := MCBase P X V E B R Ev BEv.
+
+
+
 
 Fixpoint compatible (Defs:DefSet) (s:State) (tl:RichLabel) (C:Choreography) : Prop :=
   (match C, tl with
@@ -297,5 +300,6 @@ eapply MCC_To_deterministic_1; eauto.
 apply reduce_sound; auto.
 eapply reduce_compatible; eauto.
 Qed.
+*)
 
 End Temp.

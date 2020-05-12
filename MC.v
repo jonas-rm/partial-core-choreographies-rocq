@@ -391,161 +391,88 @@ induction C; simpl; auto.
   right; intro; destroy H1; auto.
 Qed.
 
-(** We need a recursive definition on the list of used process variables. *)
-
-Fixpoint Program_WF_rec (Xs Ys:list RecVar) (P:Program) : Prop :=
-match Xs with
-| nil     => Choreography_WF (Main P) /\ within_Xs Ys (Main P)
-| (X::Zs) => Choreography_WF (Procs P X) /\ initial (Procs P X) /\
-               (Vars P X) <> nil /\ within_Xs Ys (Procs P X) /\ Program_WF_rec Zs Ys P
-end.
-
-Lemma Program_WF_rec_dec : forall Xs Ys P,
-  {Program_WF_rec Xs Ys P} + {~Program_WF_rec Xs Ys P}.
-Proof.
-induction Xs; simpl; intros.
-+ elim (Choreography_WF_dec (Main P)); intros.
-  2: right; intro; destroy H; auto.
-  elim (within_Xs_dec Ys (Main P)); intros.
-  2: right; intro; destroy H; auto.
-  auto.
-+ elim (IHXs Ys P); intros.
-  2: right; intro; destroy H; auto.
-  clear IHXs.
-  elim (Choreography_WF_dec (Procs P a)); intros.
-  2: right; intro; destroy H; auto.
-  elim (initial_dec (Procs P a)); intros.
-  2: right; intro; destroy H; auto.
-  elim (within_Xs_dec Ys (Procs P a)); intros.
-  2: right; intro; destroy H; auto.
-  case_eq (Vars P a); intros.
-  right; intro; destroy H0; auto.
-  left; repeat (split; auto).
-  discriminate.
-Qed.
+(** We need to consider the list of used process variables. *)
 
 Definition Program_WF (Xs:list RecVar) (P:Program) : Prop :=
-  Program_WF_rec Xs Xs P.
+  Choreography_WF (Main P) /\ within_Xs Xs (Main P) /\
+  forall X, In X Xs -> Choreography_WF (Procs P X) /\ initial (Procs P X) /\
+            (Vars P X) <> nil /\ within_Xs Xs (Procs P X).
 
 Lemma Program_WF_dec : forall Xs P, {Program_WF Xs P} + {~Program_WF Xs P}.
 Proof.
 intros.
-exact (Program_WF_rec_dec Xs Xs P).
+elim (Choreography_WF_dec (Main P)); intros.
+2: right; intro; destroy H; auto.
+elim (within_Xs_dec Xs (Main P)); intros.
+2: right; intro; destroy H; auto.
+assert (forall (Ys:list RecVar), {forall X, In X Ys -> Choreography_WF (Procs P X) /\ initial (Procs P X) /\
+            (Vars P X) <> nil /\ within_Xs Xs (Procs P X)} +
+        {~forall X, In X Ys -> Choreography_WF (Procs P X) /\ initial (Procs P X) /\
+            (Vars P X) <> nil /\ within_Xs Xs (Procs P X)}); intros.
+2: { elim (X Xs); clear X; intros.
+  left; repeat (split; auto).
+  right; intro. destroy H; auto.
+}
+clear a a0.
+induction Ys; simpl; intros.
++ left. intros; inversion H.
++ elim IHYs; intros.
+  2: right; intro; destroy H; auto.
+  clear IHYs.
+  elim (Choreography_WF_dec (Procs P a)); intros.
+  2: right; intro; elim (H a); auto.
+  elim (initial_dec (Procs P a)); intros.
+  2: right; intro; elim (H a); intros; destroy H1; auto.
+  elim (within_Xs_dec Xs (Procs P a)); intros.
+  2: right; intro; elim (H a); intros; destroy H1; auto.
+  case_eq (Vars P a); intros.
+  right; intro; elim (H0 a); intros; destroy H2; auto.
+  left; intros.
+  inversion_clear H0; auto.
+  rewrite <- H1; repeat (split; auto).
+  rewrite H; discriminate.
 Qed.
 
 Lemma Program_WF_Proc : forall P Xs, Program_WF Xs P ->
   forall X, In X Xs -> Choreography_WF (Procs P X).
-Proof.
-induction P.
-rename Procedures0 into Ps, Main0 into C.
-simpl; intros.
-red in H.
-assert (forall y, Program_WF_rec y Xs (Build_Program Ps C) -> In X y -> Choreography_WF (Procs (Build_Program Ps C) X)).
-2: apply H1 with Xs; auto.
-clear H; induction y; simpl; intros.
-+ inversion H1.
-+ inversion_clear H1; destroy H; auto.
-  rewrite <- H2; auto.
-Qed.
+Proof. intros. destroy H. elim (H X); auto. Qed.
 
 Lemma Program_WF_Main : forall P Xs, Program_WF Xs P -> Choreography_WF (Main P).
-Proof.
-induction P.
-rename Procedures0 into Ps, Main0 into C.
-simpl; intros.
-red in H.
-assert (forall y, Program_WF_rec y Xs (Build_Program Ps C) -> Choreography_WF C).
-2: apply H0 with Xs; auto.
-clear H; induction y; simpl; intros.
-+ inversion H; auto.
-+ destroy H; auto.
-Qed.
+Proof. intros. destroy H; auto. Qed.
 
 Lemma Program_WF_initial_Proc : forall P Xs, Program_WF Xs P ->
   forall X, In X Xs -> initial (Procs P X).
-Proof.
-induction P.
-rename Procedures0 into Ps, Main0 into C.
-simpl; intros.
-red in H.
-assert (forall y, Program_WF_rec y Xs (Build_Program Ps C) -> In X y -> initial (Procs (Build_Program Ps C) X)).
-2: apply H1 with Xs; auto.
-clear H; induction y; simpl; intros.
-+ inversion H1.
-+ inversion_clear H1; destroy H; auto.
-  rewrite <- H2; auto.
-Qed.
+Proof. intros. destroy H. elim (H X); auto. intros. destroy H4; auto. Qed.
 
 Lemma Program_WF_Main_within_Xs : forall P Xs, Program_WF Xs P ->
   within_Xs Xs (Main P).
-Proof.
-induction P.
-rename Procedures0 into Ps, Main0 into C.
-simpl; intros.
-red in H.
-assert (forall y, Program_WF_rec y Xs (Build_Program Ps C) -> within_Xs Xs C).
-2: apply H0 with Xs; auto.
-clear H; induction y; simpl; intros.
-+ inversion H; auto.
-+ destroy H; auto.
-Qed.
+Proof. intros. destroy H; auto. Qed.
 
 Lemma Program_WF_Vars_In : forall P Xs, Program_WF Xs P ->
   forall X, X_Free X (Main P) -> In X Xs.
 Proof.
 intros.
+destroy H. clear H.
 induction P.
 rename Procedures0 into Defs, Main0 into C.
-assert (forall Ys, Program_WF_rec Xs Ys (Build_Program Defs C) -> In X Ys).
-2: eauto.
-clear H; induction Xs; simpl; intros.
-+ inversion_clear H.
-  clear H1.
-  induction C; simpl in H0, H2; auto.
-  - inversion H0.
-  - inversion H0.
-    * rewrite <- H; auto.
-    * inversion H.
-  - red in H0. simpl in H0.
-    inversion_clear H2.
-    elim (set_union_elim _ _ _ _ H0); intros; auto.
-    inversion a.
-    2: inversion H2.
-    rewrite <- H2; auto.
-  - inversion H2.
-    elim (X_Free_Cond _ _ _ _ _ H0); intros; auto.
-+ destroy H; auto.
+simpl in H0, H2. clear H1.
+induction C; auto.
++ inversion H0.
++ inversion H0. rewrite H in H2; simpl in H2; auto. inversion H.
++ inversion_clear H2. red in H0. simpl in H0.
+  elim (set_union_elim _ _ _ _ H0); intros; auto.
+  inversion_clear a. rewrite H2 in H; auto. inversion H2.
++ inversion_clear H2.
+  elim (set_union_elim _ _ _ _ H0); auto.
 Qed.
 
 Lemma Program_WF_Vars : forall P Xs, Program_WF Xs P ->
   forall X, In X Xs -> Vars P X <> nil.
-Proof.
-intros.
-assert (forall Ys, Program_WF_rec Xs Ys P -> Vars P X <> nil).
-2: eauto.
-clear H.
-induction Xs.
-+ inversion H0.
-+ intros.
-  inversion_clear H0.
-  - rewrite H1 in H; clear a H1.
-    destroy H; auto.
-  - destroy H; apply IHXs with Ys; auto.
-Qed.
+Proof. intros. destroy H. elim (H X); auto. intros. destroy H4; auto. Qed.
 
 Lemma Program_WF_within_Xs : forall P Xs, Program_WF Xs P ->
   forall X, In X Xs -> within_Xs Xs (Procs P X).
-Proof.
-assert (forall P Xs Ys, Program_WF_rec Xs Ys P ->
-  forall X, In X Xs -> within_Xs Ys (Procs P X)).
-2: eauto.
-induction Xs; intros.
-+ inversion H0.
-+ inversion_clear H0.
-  - rewrite H1 in H; clear a H1.
-    destroy H; auto.
-  - destroy H; apply IHXs; auto.
-Qed.
+Proof. intros. destroy H. elim (H X); auto. intros. destroy H4; auto. Qed.
 
 (** Inversion results. *)
 Lemma Program_WF_Main_change : forall Xs Defs C C',
@@ -553,12 +480,7 @@ Lemma Program_WF_Main_change : forall Xs Defs C C',
   Program_WF Xs (Build_Program Defs C) -> Program_WF Xs (Build_Program Defs C').
 Proof.
 intros.
-revert H1.
-unfold Program_WF.
-assert (forall Ys, Program_WF_rec Ys Xs (Build_Program Defs C) -> Program_WF_rec Ys Xs (Build_Program Defs C')); eauto.
-induction Ys; simpl; auto.
-intros.
-destroy H1; split; auto.
+destroy H1; repeat (split; auto).
 Qed.
 
 Lemma Program_WF_eta : forall Xs Defs C eta,
@@ -1668,8 +1590,8 @@ induction H4.
 + eapply Choreography_WF_Else; eauto.
 + inversion_clear HC.
   inversion_clear H1; simpl in H2.
-  elim IHMCC_To; repeat split; auto.
-  eapply Program_WF_eta; eauto.
+  destroy H.
+  elim IHMCC_To; repeat (split; auto).
 + inversion_clear HC.
   inversion_clear H1; inversion_clear H2.
   assert (Choreography_WF C1). split; auto.
@@ -1732,6 +1654,79 @@ apply (MCC_To_Program_WF _ _ _ _ _ _ H H0).
 rewrite <- H1 in H8.
 apply well_ann_Main_change with C; auto.
 Qed.
+
+Section BigStepSemantics.
+
+Lemma RT_Call_reduce : forall Defs X ps C s, (ps <> List.nil) ->
+  exists tl, (Build_Program Defs (RT_Call X ps C),s) --[tl]-->* (Build_Program Defs C,s).
+Proof.
+intros.
+set (n := set_size_pid ps).
+assert (n = set_size_pid ps); auto.
+clearbody n; revert ps H H0.
+induction n; intros.
++ symmetry in H0; apply set_size_0 in H0. exfalso; auto.
++ case_eq n; intros.
+  - rewrite H1 in H0; clear IHn H1 n.
+    case_eq ps; intros. rewrite H1 in H; elim H; auto.
+    exists (L_Tau p::List.nil)%list.
+    econstructor. 2: constructor.
+    replace (L_Tau p) with (forget (R_Call X p)); auto.
+    constructor. apply C_Call_Finish'; [rewrite <- H1 | simpl]; auto.
+  - case_eq ps; intros. rewrite H2 in H; elim H; auto.
+    rewrite H1 in H0, IHn; clear n H1; rename n0 into n.
+    assert (S n = set_size_pid (set_remove_pid p ps)).
+    1: {
+      unfold set_size_pid in H0.
+      rewrite (set_size_remove' P.eq_dec ps p) in H0; auto.
+      rewrite H2; simpl; auto.
+    }
+    elim (IHn (set_remove_pid p ps)); intros; auto.
+    2: { intro. rewrite H3 in H1. simpl in H1; inversion H1. }
+    rename x into tls.
+    exists (L_Tau p :: tls)%list.
+    eapply MCT_Step with (Build_Program Defs (RT_Call X (set_remove_pid p ps) C),s); auto.
+    replace (L_Tau p) with (forget (R_Call X p)); auto.
+    constructor. rewrite H2; apply C_Call_Enter'.
+    rewrite <- H2, <- H0; auto with arith.
+    simpl; auto.
+Qed.
+
+Lemma Call_reduce : forall (Defs:DefSet) X s, (fst (Defs X) <> List.nil) ->
+  exists tl, (Build_Program Defs (Call X),s) --[tl]-->* (Build_Program Defs (snd (Defs X)),s).
+Proof.
+intros.
+case_eq (set_size_pid (fst (Defs X))); intros; [idtac | case_eq n]; intros.
++ exfalso; apply set_size_0 in H0; auto.
++ rewrite H1 in H0; clear n H1.
+  case_eq (fst (Defs X)); intros. exfalso; auto.
+  exists (L_Tau p::List.nil)%list.
+  econstructor. 2: constructor.
+  replace (L_Tau p) with (forget (R_Call X p)); auto.
+  change (fst (A:=set P.t) (Defs X) = p::l)%list in H1.
+  constructor. apply C_Call_Local'; auto. rewrite H1; simpl; auto.
++ rewrite H1 in H0; clear n H1. rename n0 into n.
+  case_eq (fst (Defs X)); intros. exfalso; auto.
+  assert (set_remove_pid p (fst (Defs X)) <> List.nil).
+  1: {
+    intro. unfold set_size_pid, set_remove_pid in H0, H2.
+    rewrite (set_size_remove' P.eq_dec (fst (Defs X)) p) in H0.
+    2: rewrite H1; simpl; auto.
+    rewrite H2 in H0. inversion H0.
+  }
+  elim (RT_Call_reduce Defs X (set_remove_pid p (fst (Defs X))) (snd (Defs X)) s); auto.
+  intros.
+  exists (L_Tau p :: x)%list.
+  eapply MCT_Step; eauto.
+  replace (L_Tau p) with (forget (R_Call X p)); auto.
+  constructor. apply C_Call_Start'.
+  - change (set_size_pid (fst (A:=set P.t) (Defs X)) = S (S n)) in H0.
+    rewrite H0; auto with arith.
+  - change (fst (A:=set P.t) (Defs X) = p::l)%list in H1.
+    rewrite H1; simpl; auto.
+Qed.
+
+End BigStepSemantics.
 
 Section Confluence.
 

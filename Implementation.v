@@ -540,20 +540,19 @@ Section Soundness.
 
 (* Without classical logic we can't make PRFunctions into PFunctions. *)
 
-(* Missing: confluence, determinism. *)
-
 Definition implements (P:Program) {n} (f:PRFunction n) (ps:t Pid n) (q:Pid) :=
   forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
   (forall y, converges f xs y <-> exists s' ts P', (P,s) --[ts]-->* (P',s') /\ s' q xx = y /\ Main P' = End) /\
   (diverges f xs <-> forall s' ts P', (P,s) --[ts]-->* (P',s') -> Main P' <> End).
 
-(** For convenience - unfinished.
+(** For convenience. *)
 Lemma implements_None : forall P {n} f ps q, implements P f ps q -> 
   forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
   diverges f xs -> forall s' ts P', (P,s) --[ts]-->* (P',s') -> Main P' <> End.
 Proof.
 unfold implements; intros.
-elim (H _ _ H0); eauto.
+elim (H _ _ H0); intros.
+elim H4; eauto.
 Qed.
 
 Lemma implements_Some : forall P {n} f ps q, implements P f ps q -> 
@@ -561,9 +560,40 @@ Lemma implements_Some : forall P {n} f ps q, implements P f ps q ->
   forall y, converges f xs y -> exists s' ts P', (P,s) --[ts]-->* (P',s') /\ s' q xx = y /\ Main P' = End.
 Proof.
 unfold implements; intros.
-elim (H _ _ H0); auto.
+elim (H _ _ H0); intros.
+elim (H2 y); eauto.
 Qed.
 
+(*
+Lemma implements_WF : forall {n} (f:PRFunction n) ps q,
+  MCP_WF (Implementation f ps q).
+Proof.
+*)
+
+(*
+Lemma implements_Zero : forall ps q, 
+  implements (Implementation Zero ps q) Zero ps q.
+Proof.
+intros.
+repeat (split; intros).
++ set (P := Implementation Zero ps q).
+  assert (P = Implementation Zero ps q); auto.
+  induction P.
+  rename Procedures0 into Defs, Main0 into C.
+  inversion H1; clear H1.
+  elim (Call_reduce Defs 0 s); intros.
+  rename x into tl1.
+  2: {
+
+unfold Implementation; simpl.
+  unfold Pack1; simpl.
+  exists (update s q xx 0), (L_Tau (hd ps)::L_Tau L_Com (hd ps) 0 q xx::L_Tau (hd ps)).
+
+
+Qed.
+*)
+
+(*
 Theorem encoding_sound : forall n (f:PRFunction n),
   implements (Implementation' f) f (vec_1_to_n n) 0.
 *)

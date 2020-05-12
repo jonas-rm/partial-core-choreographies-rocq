@@ -423,6 +423,15 @@ apply (set_remove'_3 X b) in H1.
 rewrite H3 in H1; inversion H1.
 Qed.
 
+Lemma set_size_remove'_lt : forall x (X:set T),
+  set_size X <= S (set_size (set_remove' x X)).
+Proof.
+intros.
+elim (In_dec T_dec x X); intro.
++ rewrite <- set_size_remove'; auto.
++ rewrite set_remove'_not_In; auto.
+Qed.
+
 Lemma set_size_neq_2 : forall x y (X:set T), x<>y ->
   In x X -> In y X -> set_size X <> 2 -> set_size (set_remove' x X) > 1.
 Proof.
