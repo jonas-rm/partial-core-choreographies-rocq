@@ -134,12 +134,16 @@ match ps with
            end
 end.
 
-(* Replace ?? with the pn of the choreo based on Defs :) 
-Definition epp (Defs:DefSet) (C:Choreography) : option Network := epp_list Defs C (??).
-*)
+(* Mmh we gotta discuss how to import SPBase with RecVars = RecVars * Pid *)
 
+(* Definition epp (Defs:DefSet) (C:Choreography) (ps:list Pid) *)
+
+(* Definition epp (Defs:DefSet) (C:Choreography) : option Network := epp_list Defs C (??). *)
 
 End EPP.
 
 Section EPP_Properties.
+
+(* Theorem EPP_Theorem : forall Defs C s, *)
+
 End EPP_Properties.
