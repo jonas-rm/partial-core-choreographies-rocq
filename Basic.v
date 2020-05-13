@@ -73,7 +73,7 @@ Section Lists.
 
 Variable T:Type.
 
-(** ** A result about permutations. *)
+(** ** A result about permutations *)
 
 Lemma Permutation_NoDup : forall P Q: list T, Permutation P Q -> NoDup P -> NoDup Q.
 Proof.
@@ -193,7 +193,7 @@ apply not_in_app.
 apply not_in_app'.
 Qed.
 
-(** Disjoint lists. *)
+(** ** Disjoint lists *)
 
 Definition disjoint {A:Type} (l l':list A) :=
   forall a, ~(In a l /\ In a l').
@@ -241,7 +241,7 @@ apply disjoint_char.
 apply disjoint_not_in_snd; auto.
 Qed.
 
-(** On sets. *)
+(** ** On sets *)
 
 Set Implicit Arguments.
 
@@ -258,6 +258,8 @@ induction Y.
     elim (set_add_elim _ _ _ _ H); auto.
     intros; elim b; auto.
 Qed.
+
+(** Equality and inclusion *)
 
 Hypothesis T_dec : forall x y:T, {x=y}+{x<>y}.
 
@@ -304,6 +306,8 @@ elim (set_incl_dec X Y); [elim (set_incl_dec Y X) | idtac]; intros.
 + right; intro; apply b.
   rewrite set_equals_char in H; inversion_clear H; auto.
 Qed.
+
+(** More robust remove *)
 
 Fixpoint set_remove' x (X:set T) :=
   match X with
@@ -374,6 +378,8 @@ intros; do 2 elim T_dec; simpl; intros.
   1: intro; elim b0; auto.
   intros; rewrite IHX; auto.
 Qed.
+
+(** Size *)
 
 Fixpoint set_size (X:set T) :=
   match X with
@@ -533,6 +539,15 @@ induction n; simpl.
 + intros; inversion Hi.
 + intros; rewrite (eta v).
   simpl; auto.
+Qed.
+
+Lemma In_nth : forall {A} {n} (v:t A n) H x, v[@H] = x -> In x v.
+Proof.
+induction H; simpl.
++ revert n v. refine (@caseS _  _ _); simpl; intros.
+  rewrite H; constructor.
++ revert n v H IHt. refine (@caseS _  _ _); simpl; intros.
+  constructor. auto.
 Qed.
 
 Fixpoint eta_elim_aux {A n} (v:t A (S n)) H :=

@@ -3,12 +3,170 @@ Require Export Common.
 Require Export MC.
 Require Import Sumbool.
 
-Module Temp (P X V E B R: DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
+Require Export Kleene.
+Require Export Implementation.
+
+Module Export MC_Nat := Implementation.MC_Nat.
 
 Notation "A '&&&' B" := (sumbool_and _ _ _ _ A B).
 
-Module Import MCBase := MCBase P X V E B R Ev BEv.
+Lemma Implementation_Main_WF : forall {n} (f:PRFunction n) ps q,
+  Choreography_WF (Main (Implementation f ps q)).
+Proof. intros. simpl. split; simpl; auto. Qed.
 
+Lemma Implementation_Main_within_Xs : forall {n} (f:PRFunction n) ps q Xs,
+  List.In 0 Xs -> within_Xs Xs (Main (Implementation f ps q)).
+Proof. auto. Qed.
+
+Lemma all_pids_not_nil : forall n, all_pids n <> List.nil.
+Proof. intros; case n; discriminate. Qed.
+
+Lemma Implementation_Procs_Vars_not_nil : forall {n} (f:PRFunction n) ps q X,
+  Vars (Implementation f ps q) X <> List.nil.
+Proof.
+intros. unfold Vars; simpl.
+apply all_pids_not_nil.
+Qed.
+
+Lemma Zero_Procs_WF : forall d Hd ps q n X Y,
+  ~In q ps -> Choreography_WF (Implementation_aux Zero d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; repeat split; simpl; auto.
+intro; apply H. eapply In_nth; eauto.
+Qed.
+
+Lemma Zero_Procs_initial : forall d Hd ps q n X Y,
+  initial (Implementation_aux Zero d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; simpl; auto.
+Qed.
+
+Lemma Zero_Procs_within_Xs : forall d Hd ps q n X Y Xs,
+  List.In X Xs -> List.In (S X) Xs ->
+  within_Xs Xs (Implementation_aux Zero d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; simpl; auto.
+Qed.
+
+Lemma Succ_Procs_WF : forall d Hd ps q n X Y,
+  ~In q ps -> Choreography_WF (Implementation_aux Successor d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; repeat split; simpl; auto.
+intro; apply H. eapply In_nth; eauto.
+Qed.
+
+Lemma Succ_Procs_initial : forall d Hd ps q n X Y,
+  initial (Implementation_aux Successor d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; simpl; auto.
+Qed.
+
+Lemma Succ_Procs_within_Xs : forall d Hd ps q n X Y Xs,
+  List.In X Xs -> List.In (S X) Xs ->
+  within_Xs Xs (Implementation_aux Successor d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; simpl; auto.
+Qed.
+
+Lemma Proj_Procs_WF : forall k m (Hp:k<m) d Hd ps q n X Y,
+  ~In q ps -> Choreography_WF (Implementation_aux (Projection Hp) d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; repeat split; simpl; auto.
+intro; apply H. eapply In_nth; eauto.
+Qed.
+
+Lemma Proj_Procs_initial : forall k m (Hp:k<m) d Hd ps q n X Y,
+  initial (Implementation_aux (Projection Hp) d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; simpl; auto.
+Qed.
+
+Lemma Proj_Procs_within_Xs : forall k m (Hp:k<m) d Hd ps q n X Y Xs,
+  List.In X Xs -> List.In (S X) Xs ->
+  within_Xs Xs (Implementation_aux (Projection Hp) d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; simpl; auto.
+Qed.
+
+(* time to think *)
+
+Lemma Comp_Procs_WF : forall k m (Hp:k<m) d Hd ps q n X Y,
+  ~In q ps -> Choreography_WF (Implementation_aux (Projection Hp) d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; repeat split; simpl; auto.
+intro; apply H. eapply In_nth; eauto.
+Qed.
+
+Lemma Comp_Procs_initial : forall k m (Hp:k<m) d Hd ps q n X Y,
+  initial (Implementation_aux (Projection Hp) d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; simpl; auto.
+Qed.
+
+Lemma Comp_Procs_within_Xs : forall k m (Hp:k<m) d Hd ps q n X Y Xs,
+  List.In X Xs -> List.In (S X) Xs ->
+  within_Xs Xs (Implementation_aux (Projection Hp) d Hd ps q n X Y).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+elim RecVar_dec; simpl; auto.
+Qed.
+
+Lemma implements_WF : forall {n} (f:PRFunction n) ps q,
+  ~In q ps -> MCP_WF (Implementation f ps q).
+Proof.
+assert (forall d n (f:PRFunction n) ps q, depth f < d -> ~In q ps -> MCP_WF (Implementation f ps q)); eauto.
+induction d; intros. inversion H.
+destruct f; simpl.
++ (* Zero *)
+  exists (0::1::List.nil)%list; split.
+  - split. apply Implementation_Main_WF.
+    split. apply Implementation_Main_within_Xs; simpl; auto.
+    split. apply Zero_Procs_WF; auto.
+    split. apply Zero_Procs_initial.
+    split. apply Implementation_Procs_Vars_not_nil.
+    apply Zero_Procs_within_Xs; simpl; auto.
+  - admit. (* for later *)
++ (* Successor *)
+  exists (0::1::List.nil)%list; split.
+  - split. apply Implementation_Main_WF.
+    split. apply Implementation_Main_within_Xs; simpl; auto.
+    split. apply Succ_Procs_WF; auto.
+    split. apply Succ_Procs_initial.
+    split. apply Implementation_Procs_Vars_not_nil.
+    apply Succ_Procs_within_Xs; simpl; auto.
+  - admit. (* for later *)
++ (* Projection *)
+  exists (0::1::List.nil)%list; split.
+  - split. apply Implementation_Main_WF.
+    split. apply Implementation_Main_within_Xs; simpl; auto.
+    split. apply Proj_Procs_WF; auto.
+    split. apply Proj_Procs_initial.
+    split. apply Implementation_Procs_Vars_not_nil.
+    apply Proj_Procs_within_Xs; simpl; auto.
+  - admit. (* for later *)
 
 
 

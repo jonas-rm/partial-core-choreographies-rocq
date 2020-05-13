@@ -68,7 +68,7 @@ Proof. intros. case b; simpl. unfold eval; auto. Qed.
 
 End MC_BEval.
 
-Module Import MC_Nat :=
+Module Export MC_Nat :=
   MCBase Nat Bool Nat MC_Expressions Bool_Expressions Nat MC_Eval MC_BEval.
 
 (** Restricted conditional. *)
