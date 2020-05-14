@@ -18,46 +18,44 @@ End MaybeMove.
 
 Section EPP.
 
-Fixpoint merge (B1:Behaviour) (B2:Behaviour) : option Behaviour :=
+Fixpoint merge_beh (B1:Behaviour) (B2:Behaviour) : option Behaviour :=
 match B1, B2 with
  | Send p e B, Send p' e' B' =>
-    if (Pid_dec p p') && (Expr_dec e e') then
-      match (merge B B') with
+    if Pid_dec p p' && Expr_dec e e' then
+      match merge_beh B B' with
        | Some Bm => Some( Send p e Bm )
        | _ => None
       end
     else None
  | Recv p x B, Recv p' x' B' =>
-    if (Pid_dec p p') then
-      if (Var_dec x x') then
-        match (merge B B') with
-         | Some Bm => Some( Recv p x Bm )
-         | _ => None
-        end
-      else None
+    if Pid_dec p p' && Var_dec x x' then
+      match merge_beh B B' with
+       | Some Bm => Some( Recv p x Bm )
+       | _ => None
+      end
     else None
  | Sel p l B, Sel p' l' B' =>
-    if (Pid_dec p p') && (eqb_label l l') then
-      match (merge B B') with
+    if Pid_dec p p' && eqb_label l l' then
+      match (merge_beh B B') with
        | Some Bm => Some( Sel p l Bm )
        | _ => None
       end
     else None
  | Branching p f, Branching p' f' =>
-    if (Pid_dec p p') then
+    if Pid_dec p p' then
       match
         (* inl Some B = merging of a branching failed
            inl None = there were no branches to merge for that label in the first place, so all OK
            inr tt = merging error
         *)
         match f left, f' left with
-        | Some B, Some B' => match (merge B B') with Some B'' => inl (Some B'') | None => inr tt end
+        | Some B, Some B' => match merge_beh B B' with Some B'' => inl (Some B'') | None => inr tt end
         | Some B, None => inl (Some B)
         | None, Some B' => inl (Some B')
         | None, None => inl None
         end,
         match f right, f' right with
-        | Some B, Some B' => match (merge B B') with Some B'' => inl (Some B'') | None => inr tt end
+        | Some B, Some B' => match (merge_beh B B') with Some B'' => inl (Some B'') | None => inr tt end
         | Some B, None => inl (Some B)
         | None, Some B' => inl (Some B')
         | None, None => inl None
@@ -68,13 +66,13 @@ match B1, B2 with
       end
     else None
  | Cond e B1 B2, Cond e' B1' B2' =>
-    if (BExpr_dec e e') then
-      match (merge B1 B1') with
-       | Some B1m => match (merge B2 B2') with | Some B2m => Some( Cond e B1m B2m ) | _ => None end
+    if BExpr_dec e e' then
+      match (merge_beh B1 B1') with
+       | Some B1m => match (merge_beh B2 B2') with | Some B2m => Some( Cond e B1m B2m ) | _ => None end
        | _ => None
       end
     else None
- | Call X, Call Y => if (RecVar_dec X Y) then Some (Call X) else None
+ | Call X, Call Y => if RecVar_dec X Y then Some (Call X) else None
  | End, End => Some End
  | _, _ => None
 end.
@@ -115,7 +113,7 @@ match C with
 | MCBase.Cond p b C1 C2 => if (Pid_dec p r)
                               then bproj_buildbiB (Cond b) (bproj Defs C1 r) (bproj Defs C2 r)
                               else match (bproj Defs C1 r), (bproj Defs C2 r) with
-                                    | Some B1, Some B2 => (merge B1 B2)
+                                    | Some B1, Some B2 => (merge_beh B1 B2)
                                     | _, _ => None
                                    end
 | MCBase.Call X => if Pid_In_dec r (fst (Defs X)) then Some (Call X) else Some End
@@ -142,7 +140,75 @@ end.
 
 End EPP.
 
+Print within_ps.
+
 Section EPP_Properties.
+
+Fixpoint more_branches_beh_direct (B1 B2:Behaviour) : Prop :=
+match B1, B2 with
+ | Send p e B, Send p' e' B' =>
+    if (Pid_dec p p') && (Expr_dec e e') then more_branches_beh_direct B B' else False
+ | Recv p x B, Recv p' x' B' =>
+    if (Pid_dec p p') && (Var_dec x x') then more_branches_beh_direct B B' else False
+ | Sel p l B, Sel p' l' B' =>
+    if (Pid_dec p p') && (eqb_label l l') then more_branches_beh_direct B B' else False
+ | Branching p f, Branching p' f' =>
+    if (Pid_dec p p') then
+      match f left, f' left with
+       | Some B, Some B' => more_branches_beh_direct B B'
+       | Some B, None => True
+       | None, Some B' => False
+       | None, None => True
+      end
+      /\
+      match f left, f' left with
+       | Some B, Some B' => more_branches_beh_direct B B'
+       | Some B, None => True
+       | None, Some B' => False
+       | None, None => True
+      end
+    else False
+ | Cond e B1 B2, Cond e' B1' B2' =>
+    if (BExpr_dec e e') then more_branches_beh_direct B1 B1' /\ more_branches_beh_direct B2 B2' else False
+ | Call X, Call Y => if (RecVar_dec X Y) then True else False
+ | End, End => True
+ | _, _ => False
+end.
+
+Definition more_branches_beh (B1 B2:Behaviour) := (merge_beh B1 B2) = Some B1.
+
+Lemma more_branches_beh_char_1 : forall (B1 B2:Behaviour), more_branches_beh B1 B2 -> more_branches_beh_direct B1 B2.
+intros.
+(*
+induction B1; induction B2; inversion H; auto.
++ simpl; trivial.
++ 
++ induction B2; inversion H; auto.
+  simpl; auto.
++ induction B2.
++ 
+induction B1, B2.
++ red in H.
+  simpl in H.
+  destruct B2; inversion H; simpl; auto.
++ destruct B2; simpl; inversion H.
+  case_eq (Pid_dec p p0); intros; rewrite H0 in H1.
+  case_eq (Expr_dec e e0); intros; rewrite H2 in H1.
+  - simpl.
+    simpl in H1.
+    destruct (merge_beh B1 B2).
+*)
+Admitted.
+
+Lemma more_branches_beh_char_2 : forall (B1 B2:Behaviour), more_branches_beh_direct B1 B2 -> more_branches_beh B1 B2.
+Admitted.
+
+Lemma more_branches_beh_char : forall (B1 B2:Behaviour), more_branches_beh B1 B2 <-> more_branches_beh_direct B1 B2.
+Proof.
+intros; split.
++ apply more_branches_beh_char_1.
++ apply more_branches_beh_char_2.
+Qed.
 
 (* Theorem EPP_Theorem : forall Defs C s, *)
 
