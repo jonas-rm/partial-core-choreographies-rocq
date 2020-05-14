@@ -51,7 +51,7 @@ induction k; intro.
     rewrite plus_Snm_nSm. transitivity q; auto with arith.
 Qed.
 
-Lemma Implementation_aux_Procs_WF : forall m (f:PRFunction m) d Hd ps q n X Y,
+Lemma Implementation_aux_WF : forall m (f:PRFunction m) d Hd ps q n X Y,
   ~In q ps -> (forall p, In p ps -> p < n) -> q < n ->
   Choreography_WF (Implementation_aux f d Hd ps q n X Y).
 Proof.
@@ -130,7 +130,7 @@ induction k; intro.
   elim Nat.ltb; auto.
 Qed.
 
-Lemma Implementation_aux_Procs_initial : forall m (f:PRFunction m) d Hd ps q n X Y,
+Lemma Implementation_aux_initial : forall m (f:PRFunction m) d Hd ps q n X Y,
   initial (Implementation_aux f d Hd ps q n X Y).
 Proof.
 intros m f d; revert m f.
@@ -151,6 +151,120 @@ intros. unfold Vars; simpl.
 apply all_pids_not_nil.
 Qed.
 
+Fixpoint RecVarList n : list RecVar :=
+match n with
+| 0 => (0::List.nil)%list
+| S m => (n::RecVarList m)
+end.
+
+Lemma RecVarList_In : forall m n, m <= n -> List.In m (RecVarList n).
+Proof.
+induction n; simpl; auto with arith.
+intros.
+inversion H; auto.
+Qed.
+
+Lemma In_RecVarList : forall m n, List.In m (RecVarList n) -> m <= n.
+Proof.
+induction n; simpl; intros.
++ inversion_clear H; inversion H0; auto.
++ inversion H; auto. rewrite H0; auto.
+Qed.
+
+Lemma RecVarList_incl : forall m n, m <= n ->
+  (forall X, List.In X (RecVarList m) -> List.In X (RecVarList n)).
+Proof.
+intros.
+apply RecVarList_In.
+transitivity m; auto.
+apply In_RecVarList; auto.
+Qed.
+
+Lemma within_Xs_incl : forall C Xs Ys, (forall X, List.In X Xs -> List.In X Ys) ->
+  within_Xs Xs C -> within_Xs Ys C.
+Proof.
+induction C; simpl; auto.
++ intros. inversion_clear H0. split; eauto.
++ intros. inversion_clear H0. split; eauto.
+Qed.
+
+Lemma seq_compose_within_Xs : forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
+  (forall k f ps' m' n' H X Y, within_Xs (RecVarList (X+Gamma f)) (Implement k f H ps' m' n' X Y)) ->
+  within_Xs (RecVarList (X+vsum (map Gamma fs))) (seq_compose fs d Hd ps n q X Implement Y).
+Proof.
+induction k; intro.
++ refine (@case0 _ _ _ ); simpl; intros.
+  split; simpl; auto.
++ intro; revert k fs IHk. refine (@caseS _ _ _); simpl; intros.
+  elim Nat.ltb; auto.
+  - apply within_Xs_incl with (RecVarList (X + Gamma h)); auto.
+    apply RecVarList_incl; auto with arith.
+  - eapply within_Xs_incl.
+    2: apply IHk; auto.
+    apply RecVarList_incl.
+    rewrite plus_assoc; auto with arith.
+Qed.
+
+Lemma Implementation_aux_within_Xs : forall m (f:PRFunction m) d Hd ps q n X,
+  forall Y, within_Xs (RecVarList (X+Gamma f)) (Implementation_aux f d Hd ps q n X Y).
+Proof.
+intros m f d; revert m f.
+induction d. inversion Hd.
+do 2 intro; case f; intros; simpl.
++ (* Zero *)
+  simpl. unfold Pack1; simpl; intros.
+  elim RecVar_dec; simpl; auto.
+  apply RecVarList_In; rewrite plus_comm; auto with arith.
++ (* Successor *)
+  simpl. unfold Pack1; simpl; intros.
+  elim RecVar_dec; simpl; auto.
+  apply RecVarList_In; rewrite plus_comm; auto with arith.
++ (* Projection *)
+  simpl. unfold Pack1; simpl; intros.
+  elim RecVar_dec; simpl; auto.
+  apply RecVarList_In; rewrite plus_comm; auto with arith.
++ (* Composition *)
+  elim Nat.ltb.
+  - eapply within_Xs_incl.
+    2: apply seq_compose_within_Xs; auto.
+    apply RecVarList_incl. auto with arith.
+  - apply within_Xs_incl with (RecVarList (X + vsum (map Gamma fs) + Gamma g)); auto.
+    apply RecVarList_incl. rewrite (plus_comm (Gamma g)), plus_assoc; auto with arith.
++ (* Recursion *)
+  elim Nat.ltb; [idtac | elim RecVar_dec; [idtac | elim RecVar_dec; [idtac | elim RecVar_dec]]]; simpl.
+  - apply within_Xs_incl with (RecVarList (X + Gamma g)); auto.
+    apply RecVarList_incl. auto with arith.
+  - apply RecVarList_In.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
+  - split; apply RecVarList_In.
+    do 2 rewrite (plus_assoc X); auto with arith.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
+  - apply RecVarList_In.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
+  - apply within_Xs_incl with (RecVarList (X + Gamma g + 2 + Gamma h)); auto.
+    apply RecVarList_incl.
+    do 2 rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
++ (* Minimization *)
+  elim RecVar_dec; [idtac | elim RecVar_dec]; simpl.
+  - apply RecVarList_In. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
+  - split; apply RecVarList_In.
+    rewrite (plus_assoc X); auto with arith.
+    apply plus_le_compat_l; auto with arith.
+  - apply within_Xs_incl with (RecVarList (X + 1 + Gamma h)); auto.
+    apply RecVarList_incl.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
+Qed.
+
 (*
 Lemma Zero_Procs_WF : forall d Hd ps q n X Y,
   ~In q ps -> Choreography_WF (Implementation_aux Zero d Hd ps q n X Y).
@@ -168,7 +282,6 @@ intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
-*)
 
 Lemma Zero_Procs_within_Xs : forall d Hd ps q n X Y Xs,
   List.In X Xs -> List.In (S X) Xs ->
@@ -179,7 +292,6 @@ simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
 
-(*
 Lemma Succ_Procs_WF : forall d Hd ps q n X Y,
   ~In q ps -> Choreography_WF (Implementation_aux Successor d Hd ps q n X Y).
 Proof.
@@ -196,7 +308,6 @@ intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
-*)
 
 Lemma Succ_Procs_within_Xs : forall d Hd ps q n X Y Xs,
   List.In X Xs -> List.In (S X) Xs ->
@@ -207,7 +318,6 @@ simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
 
-(*
 Lemma Proj_Procs_WF : forall k m (Hp:k<m) d Hd ps q n X Y,
   ~In q ps -> Choreography_WF (Implementation_aux (Projection Hp) d Hd ps q n X Y).
 Proof.
@@ -224,7 +334,6 @@ intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
-*)
 
 Lemma Proj_Procs_within_Xs : forall k m (Hp:k<m) d Hd ps q n X Y Xs,
   List.In X Xs -> List.In (S X) Xs ->
@@ -235,7 +344,6 @@ simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
 
-(*
 Lemma Recursion_Procs_WF : forall m (f:PRFunction m) g d Hd ps q n X Y,
   ~In q ps -> Choreography_WF (Implementation_aux (Recursion f g) d Hd ps q n X Y).
 Proof.
@@ -246,40 +354,33 @@ intro; apply H. eapply In_nth; eauto.
 Qed.
 *)
 
+Lemma vmax_In : forall n v p, In p v -> p <= vmax (n:=n) v.
+Proof.
+induction n.
+* refine (@case0 _ _ _); simpl; intros. inversion H.
+* intro; revert n v IHn; refine (@caseS _ _ _); simpl; intros.
+  elim (In_elim H); intro.
+  - rewrite H0. apply Nat.le_max_l.
+  - transitivity (vmax t); auto. apply Nat.le_max_r.
+Qed.
+
 Lemma implements_WF : forall {n} (f:PRFunction n) ps q,
   ~In q ps -> MCP_WF (Implementation f ps q).
 Proof.
-assert (forall d n (f:PRFunction n) ps q, depth f < d -> ~In q ps -> MCP_WF (Implementation f ps q)); eauto.
-induction d; intros. inversion H.
-destruct f; simpl.
-+ (* Zero *)
-  exists (0::1::List.nil)%list; split.
-  - split. apply Implementation_Main_WF.
-    split. apply Implementation_Main_within_Xs; simpl; auto.
-    split. apply Implementation_aux_Procs_WF; auto with arith.
-    split. apply Zero_Procs_initial.
-    split. apply Implementation_Procs_Vars_not_nil.
-    apply Zero_Procs_within_Xs; simpl; auto.
-  - admit. (* for later *)
-+ (* Successor *)
-  exists (0::1::List.nil)%list; split.
-  - split. apply Implementation_Main_WF.
-    split. apply Implementation_Main_within_Xs; simpl; auto.
-    split. apply Succ_Procs_WF; auto.
-    split. apply Succ_Procs_initial.
-    split. apply Implementation_Procs_Vars_not_nil.
-    apply Succ_Procs_within_Xs; simpl; auto.
-  - admit. (* for later *)
-+ (* Projection *)
-  exists (0::1::List.nil)%list; split.
-  - split. apply Implementation_Main_WF.
-    split. apply Implementation_Main_within_Xs; simpl; auto.
-    split. apply Proj_Procs_WF; auto.
-    split. apply Proj_Procs_initial.
-    split. apply Implementation_Procs_Vars_not_nil.
-    apply Proj_Procs_within_Xs; simpl; auto.
-  - admit. (* for later *)
-
+intros.
+exists (RecVarList (0+Gamma f)); split.
++ split. apply Implementation_Main_WF.
+  split. apply Implementation_Main_within_Xs; apply RecVarList_In; auto with arith.
+  split.
+  1: { apply Implementation_aux_WF; intros; auto; apply le_n_S.
+    2: apply Nat.le_max_l.
+    transitivity (vmax ps). 2: apply Nat.le_max_r. apply vmax_In; auto.
+  }
+  split. apply Implementation_aux_initial.
+  split. apply Implementation_Procs_Vars_not_nil.
+  apply Implementation_aux_within_Xs; simpl; auto.
++ red.
+  unfold Vars; simpl.
 
 
 Fixpoint compatible (Defs:DefSet) (s:State) (tl:RichLabel) (C:Choreography) : Prop :=
