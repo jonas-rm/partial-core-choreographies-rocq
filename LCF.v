@@ -10,6 +10,22 @@ Module Export MC_Nat := Implementation.MC_Nat.
 
 Notation "A '&&&' B" := (sumbool_and _ _ _ _ A B).
 
+(** MOVE ME *)
+
+Lemma seq_labels_lt : forall x {m k} (fs:t (PRFunction m) k) n,
+  In x (seq_labels n fs) -> n <= x < n + k.
+Proof.
+induction k.
++ refine (@case0 _ _ _); simpl; intros. inversion H.
++ intro. revert k fs IHk. refine (@caseS _ _ _); simpl; intros.
+  elim (In_elim H); clear H; intro.
+  - rewrite H; split; auto with arith.
+    rewrite <- plus_Snm_nSm. apply le_plus_l.
+  - elim (IHk _ _ H); intros.
+    split; auto with arith. rewrite <- plus_Snm_nSm; auto.
+Qed.
+
+(** The stuff. *)
 Lemma Implementation_Main_WF : forall {n} (f:PRFunction n) ps q,
   Choreography_WF (Main (Implementation f ps q)).
 Proof. intros. simpl. split; simpl; auto. Qed.
@@ -17,6 +33,113 @@ Proof. intros. simpl. split; simpl; auto. Qed.
 Lemma Implementation_Main_within_Xs : forall {n} (f:PRFunction n) ps q Xs,
   List.In 0 Xs -> within_Xs Xs (Main (Implementation f ps q)).
 Proof. auto. Qed.
+
+Lemma seq_compose_WF : forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
+  (forall p, In p ps -> p < n) -> n + k <= q ->
+  (forall k f ps' m' n' H X Y, (forall p, In p ps' -> p < m') -> m' < n' -> Choreography_WF (Implement k f H ps' m' n' X Y)) ->
+  Choreography_WF (seq_compose fs d Hd ps n q X Implement Y).
+Proof.
+induction k; intro.
++ refine (@case0 _ _ _ ); simpl; intros.
+  split; simpl; auto.
++ intro; revert k fs IHk. refine (@caseS _ _ _); simpl; intros.
+  elim Nat.ltb; auto.
+  - assert (n0 < n0 + S n). rewrite <- plus_Snm_nSm; auto with arith.
+    apply H1; auto.
+    intros. apply lt_le_trans with (n0 + S n); auto.
+  - apply IHk; auto. intros; transitivity n0; auto.
+    rewrite plus_Snm_nSm. transitivity q; auto with arith.
+Qed.
+
+Lemma Implementation_aux_Procs_WF : forall m (f:PRFunction m) d Hd ps q n X Y,
+  ~In q ps -> (forall p, In p ps -> p < n) -> q < n ->
+  Choreography_WF (Implementation_aux f d Hd ps q n X Y).
+Proof.
+intros m f d; revert m f.
+induction d. inversion Hd.
+do 2 intro; case f; intros.
++ (* Zero *)
+  simpl. unfold Pack1; simpl.
+  elim RecVar_dec; repeat split; simpl; auto.
+  intro; apply H. eapply In_nth; eauto.
++ (* Successor *)
+  simpl. unfold Pack1; simpl.
+  elim RecVar_dec; repeat split; simpl; auto.
+  intro; apply H. eapply In_nth; eauto.
++ (* Projection *)
+  simpl. unfold Pack1; simpl.
+  elim RecVar_dec; repeat split; simpl; auto.
+  intro; apply H. eapply In_nth; eauto.
++ (* Composition *)
+  simpl. elim Nat.ltb.
+  - apply seq_compose_WF; intros; auto.
+    apply IHd; auto.
+    intro. apply (lt_irrefl m'); auto.
+    intros; transitivity m'; auto.
+  - apply IHd.
+    * intro. elim (seq_labels_lt _ _ _ H2); intros. apply (lt_irrefl n).
+      apply le_lt_trans with q; auto.
+    * intros. elim (seq_labels_lt _ _ _ H2); auto.
+    * apply lt_le_trans with n; auto with arith.
++ (* Recursion *)
+  assert (n+2 <> n). apply gt_neq; rewrite plus_comm; simpl; auto.
+  assert (n+3 <> n). apply gt_neq; rewrite plus_comm; simpl; auto.
+  assert (n+2 <> S n). apply gt_neq; rewrite plus_comm; simpl; auto.
+  simpl. elim Nat.ltb. 2: elim RecVar_dec. 3: elim RecVar_dec.  4: elim RecVar_dec.
+  - apply IHd; auto.
+    * intro. elim (lt_irrefl n). apply H0, In_tail; auto.
+    * transitivity n. apply H0, In_tail; auto. rewrite plus_comm; simpl; auto.
+    * rewrite plus_comm; simpl; auto.
+  - split; simpl; split; auto.
+  - split; simpl; repeat split; auto.
+    * apply lt_neq. transitivity n; auto. apply H0. apply In_nth with Fin.F1; auto.
+    * apply gt_neq; auto.
+  - split; simpl; repeat split; auto.
+  - apply IHd; auto with arith.
+    * intro. rewrite plus_comm in H5; simpl in H5.
+      elim (In_elim H5); intros. elim (lt_irrefl (S n)). rewrite H6 at 2; auto.
+      elim (In_elim H6); intros. elim (lt_irrefl n). rewrite H7 at 2; auto.
+      apply (lt_irrefl n). transitivity (S (S n)); auto. apply H0, In_tail; auto.
+    * intros. transitivity (n+2); auto with arith. rewrite plus_comm; simpl.
+      elim (In_elim H5); intros. rewrite <- H6; auto.
+      elim (In_elim H6); intros. rewrite <- H7; auto.
+      transitivity n; auto. apply H0, In_tail; auto.
++ (* Minimization *)
+  assert (n+1 <> n+2). apply lt_neq. rewrite plus_comm; rewrite (plus_comm n 2); auto.
+  assert (n <> n+2). apply lt_neq. rewrite plus_comm; simpl; auto.
+  simpl. elim RecVar_dec. 2: elim RecVar_dec.
+  - split; simpl; split; auto.
+  - split; simpl; repeat split; auto.
+    apply gt_neq; red. rewrite plus_comm. transitivity n; auto.
+  - assert (n < n+3). rewrite plus_comm; simpl; auto.
+    apply IHd; auto.
+    * intro. elim (shiftin_elim _ _ H5); intro. apply (lt_irrefl n); rewrite <- H6 at 2; auto.
+      apply (lt_irrefl n); auto.
+    * intros; transitivity (S (S n)). 2: rewrite plus_comm; simpl; auto.
+      elim (shiftin_elim _ _ H5); auto with arith. intro. rewrite <- H6; auto.
+Qed.
+
+Lemma seq_compose_initial : forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
+  (forall k f ps' m' n' H X Y, initial (Implement k f H ps' m' n' X Y)) ->
+  initial (seq_compose fs d Hd ps n q X Implement Y).
+Proof.
+induction k; intro.
++ refine (@case0 _ _ _ ); simpl; intros.
+  split; simpl; auto.
++ intro; revert k fs IHk. refine (@caseS _ _ _); simpl; intros.
+  elim Nat.ltb; auto.
+Qed.
+
+Lemma Implementation_aux_Procs_initial : forall m (f:PRFunction m) d Hd ps q n X Y,
+  initial (Implementation_aux f d Hd ps q n X Y).
+Proof.
+intros m f d; revert m f.
+induction d. inversion Hd.
+do 2 intro; case f; intros; simpl;
+  unfold Pack1; try (elim RecVar_dec; simpl; auto; fail);
+  try elim Nat.ltb; try (apply seq_compose_initial); auto;
+  repeat (elim RecVar_dec; simpl; auto).
+Qed.
 
 Lemma all_pids_not_nil : forall n, all_pids n <> List.nil.
 Proof. intros; case n; discriminate. Qed.
@@ -28,6 +151,7 @@ intros. unfold Vars; simpl.
 apply all_pids_not_nil.
 Qed.
 
+(*
 Lemma Zero_Procs_WF : forall d Hd ps q n X Y,
   ~In q ps -> Choreography_WF (Implementation_aux Zero d Hd ps q n X Y).
 Proof.
@@ -44,6 +168,7 @@ intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
+*)
 
 Lemma Zero_Procs_within_Xs : forall d Hd ps q n X Y Xs,
   List.In X Xs -> List.In (S X) Xs ->
@@ -54,6 +179,7 @@ simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
 
+(*
 Lemma Succ_Procs_WF : forall d Hd ps q n X Y,
   ~In q ps -> Choreography_WF (Implementation_aux Successor d Hd ps q n X Y).
 Proof.
@@ -70,6 +196,7 @@ intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
+*)
 
 Lemma Succ_Procs_within_Xs : forall d Hd ps q n X Y Xs,
   List.In X Xs -> List.In (S X) Xs ->
@@ -80,6 +207,7 @@ simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
 
+(*
 Lemma Proj_Procs_WF : forall k m (Hp:k<m) d Hd ps q n X Y,
   ~In q ps -> Choreography_WF (Implementation_aux (Projection Hp) d Hd ps q n X Y).
 Proof.
@@ -96,6 +224,7 @@ intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
+*)
 
 Lemma Proj_Procs_within_Xs : forall k m (Hp:k<m) d Hd ps q n X Y Xs,
   List.In X Xs -> List.In (S X) Xs ->
@@ -106,33 +235,16 @@ simpl. unfold Pack1; simpl.
 elim RecVar_dec; simpl; auto.
 Qed.
 
-(* time to think *)
-
-Lemma Comp_Procs_WF : forall k m (Hp:k<m) d Hd ps q n X Y,
-  ~In q ps -> Choreography_WF (Implementation_aux (Projection Hp) d Hd ps q n X Y).
+(*
+Lemma Recursion_Procs_WF : forall m (f:PRFunction m) g d Hd ps q n X Y,
+  ~In q ps -> Choreography_WF (Implementation_aux (Recursion f g) d Hd ps q n X Y).
 Proof.
 intros; induction d. inversion Hd.
-simpl. unfold Pack1; simpl.
+simpl. elim Nat.ltb.
 elim RecVar_dec; repeat split; simpl; auto.
 intro; apply H. eapply In_nth; eauto.
 Qed.
-
-Lemma Comp_Procs_initial : forall k m (Hp:k<m) d Hd ps q n X Y,
-  initial (Implementation_aux (Projection Hp) d Hd ps q n X Y).
-Proof.
-intros; induction d. inversion Hd.
-simpl. unfold Pack1; simpl.
-elim RecVar_dec; simpl; auto.
-Qed.
-
-Lemma Comp_Procs_within_Xs : forall k m (Hp:k<m) d Hd ps q n X Y Xs,
-  List.In X Xs -> List.In (S X) Xs ->
-  within_Xs Xs (Implementation_aux (Projection Hp) d Hd ps q n X Y).
-Proof.
-intros; induction d. inversion Hd.
-simpl. unfold Pack1; simpl.
-elim RecVar_dec; simpl; auto.
-Qed.
+*)
 
 Lemma implements_WF : forall {n} (f:PRFunction n) ps q,
   ~In q ps -> MCP_WF (Implementation f ps q).
@@ -144,7 +256,7 @@ destruct f; simpl.
   exists (0::1::List.nil)%list; split.
   - split. apply Implementation_Main_WF.
     split. apply Implementation_Main_within_Xs; simpl; auto.
-    split. apply Zero_Procs_WF; auto.
+    split. apply Implementation_aux_Procs_WF; auto with arith.
     split. apply Zero_Procs_initial.
     split. apply Implementation_Procs_Vars_not_nil.
     apply Zero_Procs_within_Xs; simpl; auto.

@@ -65,6 +65,18 @@ Proof.
 intros n m; rewrite plus_comm; apply O_plus_O.
 Qed.
 
+Lemma lt_neq : forall m n, m < n -> m <> n.
+Proof.
+intros. elim (eq_nat_dec m n); auto.
+intro. rewrite a in H; elim (lt_irrefl _ H).
+Qed.
+
+Lemma gt_neq : forall m n, m > n -> m <> n.
+Proof.
+intros. elim (eq_nat_dec m n); auto.
+intro. rewrite a in H; elim (lt_irrefl _ H).
+Qed.
+
 End Natural_Numbers.
 
 (** * Lists *)
@@ -548,6 +560,31 @@ induction H; simpl.
   rewrite H; constructor.
 + revert n v H IHt. refine (@caseS _  _ _); simpl; intros.
   constructor. auto.
+Qed.
+
+Lemma In_tail : forall {A} {n} (v:t A (S n)) x, In x (tl v) -> In x v.
+Proof.
+intro. refine (@caseS _  _ _); simpl; intros.
+constructor; auto.
+Qed.
+
+Lemma In_elim : forall {A} {n} (v:t A n) x y, In y (x::v) -> x = y \/ In y v.
+Proof.
+intros.
+inversion H; auto.
+inversion H3; auto.
+Qed.
+
+Lemma shiftin_elim : forall {A} {n} (v:t A n) x y, In y (shiftin x v) -> x = y \/ In y v.
+Proof.
+induction n; simpl; intros.
++ revert v H; refine (@case0 _ _ _); simpl; intros.
+  inversion H; auto. inversion H2.
++ revert n v H IHn. refine (@caseS _  _ _); simpl; intros.
+  elim (In_elim H); intros.
+  - right. rewrite H0; constructor.
+  - elim (IHn _ _ _ H0); auto.
+    right; constructor; auto.
 Qed.
 
 Fixpoint eta_elim_aux {A n} (v:t A (S n)) H :=

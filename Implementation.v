@@ -336,8 +336,8 @@ induction d.
     pose (max_lt_r _ _ _ Hd') as Hdfs.
     assert (forall i, depth fs[@i] < d).
     intros; rewrite <- nth_map'; apply vmax_lt; auto.
-    pose (seq_compose fs _ H ps init (init+k) X (fun m f => Implementation_aux m f d)) as Pfs.
-    pose (Implementation_aux _ f _ Hdf (seq_labels init fs) q (init + (vsum (map Pi fs))) (X + (vsum (map Gamma fs)))) as Pf.
+    pose (seq_compose fs _ H ps init (init+m) X (fun m f => Implementation_aux m f d)) as Pfs.
+    pose (Implementation_aux _ f _ Hdf (seq_labels init fs) q (init + m) (X + (vsum (map Gamma fs)))) as Pf.
     apply (fun Y => if Y <? X + vsum (map Gamma fs) then Pfs Y else Pf Y).
 
   (* Recursion *)
@@ -473,8 +473,8 @@ induction d.
     intros; rewrite <- nth_map'; apply vmax_lt; auto.
     set (init' := init + m*k).
     pose (copy_input_iter ps (vec_m_with_k init m k) X) as Hinit.
-    pose (par_compose fs _ H init' (init'+k) init (X+k) (fun m f => Par_Implementation_aux m f d)) as Pfs.
-    pose (Par_Implementation_aux _ f _ Hdf (seq_labels init' fs) q (init' + (vsum (map Pi fs))) (X + k + (vsum (map Gamma' fs)))) as Pf.
+    pose (par_compose fs _ H init' (init'+m) init (X+m) (fun m f => Par_Implementation_aux m f d)) as Pfs.
+    pose (Par_Implementation_aux _ f _ Hdf (seq_labels init' fs) q (init' + m) (X + k + (vsum (map Gamma' fs)))) as Pf.
     apply (fun Y =>
       if Y <? X + k then Hinit Y
       else if Y <? X + k + vsum (map Gamma fs) then Pfs Y else Pf Y).
