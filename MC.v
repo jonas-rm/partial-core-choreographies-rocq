@@ -391,6 +391,14 @@ induction C; simpl; auto.
   right; intro; destroy H1; auto.
 Qed.
 
+Lemma within_Xs_incl : forall C Xs Ys, (forall X, In X Xs -> In X Ys) ->
+  within_Xs Xs C -> within_Xs Ys C.
+Proof.
+induction C; simpl; auto.
++ intros. inversion_clear H0. split; eauto.
++ intros. inversion_clear H0. split; eauto.
+Qed.
+
 (** We need to consider the list of used process variables. *)
 
 Definition Program_WF (Xs:list RecVar) (P:Program) : Prop :=

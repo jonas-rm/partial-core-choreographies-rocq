@@ -663,6 +663,16 @@ induction p.
   apply IHp; eapply max_lt_r; exact H.
 Qed.
 
+Lemma vmax_In : forall n v p, In p v -> p <= vmax (n:=n) v.
+Proof.
+induction n.
+* refine (@case0 _ _ _); simpl; intros. inversion H.
+* intro; revert n v IHn; refine (@caseS _ _ _); simpl; intros.
+  elim (In_elim H); intro.
+  - rewrite H0. apply Nat.le_max_l.
+  - transitivity (vmax t); auto. apply Nat.le_max_r.
+Qed.
+
 (** Vector containing the numbers k to k+n. *)
 Fixpoint vec_k_to_n n k : t nat n :=
   match n with

@@ -12,20 +12,37 @@ Notation "A '&&&' B" := (sumbool_and _ _ _ _ A B).
 
 (** MOVE ME *)
 
-Lemma seq_labels_lt : forall x {m k} (fs:t (PRFunction m) k) n,
-  In x (seq_labels n fs) -> n <= x < n + k.
+(** List of recursion variables up to a given bound. *)
+Fixpoint RecVarList n : list RecVar :=
+match n with
+| 0 => (0::List.nil)%list
+| S m => (n::RecVarList m)
+end.
+
+Lemma RecVarList_In : forall m n, m <= n -> List.In m (RecVarList n).
 Proof.
-induction k.
-+ refine (@case0 _ _ _); simpl; intros. inversion H.
-+ intro. revert k fs IHk. refine (@caseS _ _ _); simpl; intros.
-  elim (In_elim H); clear H; intro.
-  - rewrite H; split; auto with arith.
-    rewrite <- plus_Snm_nSm. apply le_plus_l.
-  - elim (IHk _ _ H); intros.
-    split; auto with arith. rewrite <- plus_Snm_nSm; auto.
+induction n; simpl; auto with arith.
+intros.
+inversion H; auto.
 Qed.
 
-(** The stuff. *)
+Lemma In_RecVarList : forall m n, List.In m (RecVarList n) -> m <= n.
+Proof.
+induction n; simpl; intros.
++ inversion_clear H; inversion H0; auto.
++ inversion H; auto. rewrite H0; auto.
+Qed.
+
+Lemma RecVarList_incl : forall m n, m <= n ->
+  (forall X, List.In X (RecVarList m) -> List.In X (RecVarList n)).
+Proof.
+intros.
+apply RecVarList_In.
+transitivity m; auto.
+apply In_RecVarList; auto.
+Qed.
+
+(** Choreography implementations are well-formed. *)
 Lemma Implementation_Main_WF : forall {n} (f:PRFunction n) ps q,
   Choreography_WF (Main (Implementation f ps q)).
 Proof. intros. simpl. split; simpl; auto. Qed.
@@ -141,51 +158,11 @@ do 2 intro; case f; intros; simpl;
   repeat (elim RecVar_dec; simpl; auto).
 Qed.
 
-Lemma all_pids_not_nil : forall n, all_pids n <> List.nil.
-Proof. intros; case n; discriminate. Qed.
-
 Lemma Implementation_Procs_Vars_not_nil : forall {n} (f:PRFunction n) ps q X,
   Vars (Implementation f ps q) X <> List.nil.
 Proof.
 intros. unfold Vars; simpl.
 apply all_pids_not_nil.
-Qed.
-
-Fixpoint RecVarList n : list RecVar :=
-match n with
-| 0 => (0::List.nil)%list
-| S m => (n::RecVarList m)
-end.
-
-Lemma RecVarList_In : forall m n, m <= n -> List.In m (RecVarList n).
-Proof.
-induction n; simpl; auto with arith.
-intros.
-inversion H; auto.
-Qed.
-
-Lemma In_RecVarList : forall m n, List.In m (RecVarList n) -> m <= n.
-Proof.
-induction n; simpl; intros.
-+ inversion_clear H; inversion H0; auto.
-+ inversion H; auto. rewrite H0; auto.
-Qed.
-
-Lemma RecVarList_incl : forall m n, m <= n ->
-  (forall X, List.In X (RecVarList m) -> List.In X (RecVarList n)).
-Proof.
-intros.
-apply RecVarList_In.
-transitivity m; auto.
-apply In_RecVarList; auto.
-Qed.
-
-Lemma within_Xs_incl : forall C Xs Ys, (forall X, List.In X Xs -> List.In X Ys) ->
-  within_Xs Xs C -> within_Xs Ys C.
-Proof.
-induction C; simpl; auto.
-+ intros. inversion_clear H0. split; eauto.
-+ intros. inversion_clear H0. split; eauto.
 Qed.
 
 Lemma seq_compose_within_Xs : forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
@@ -353,16 +330,6 @@ elim RecVar_dec; repeat split; simpl; auto.
 intro; apply H. eapply In_nth; eauto.
 Qed.
 *)
-
-Lemma vmax_In : forall n v p, In p v -> p <= vmax (n:=n) v.
-Proof.
-induction n.
-* refine (@case0 _ _ _); simpl; intros. inversion H.
-* intro; revert n v IHn; refine (@caseS _ _ _); simpl; intros.
-  elim (In_elim H); intro.
-  - rewrite H0. apply Nat.le_max_l.
-  - transitivity (vmax t); auto. apply Nat.le_max_r.
-Qed.
 
 Lemma implements_WF : forall {n} (f:PRFunction n) ps q,
   ~In q ps -> MCP_WF (Implementation f ps q).

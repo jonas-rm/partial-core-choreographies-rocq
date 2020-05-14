@@ -268,11 +268,27 @@ Fixpoint all_pids (n:Pid) :=
   | S k => List.cons (S k) (all_pids k)
   end.
 
+Lemma all_pids_not_nil : forall n, all_pids n <> List.nil.
+Proof. intros; case n; discriminate. Qed.
+
 Fixpoint seq_labels (n:nat) {k} {m} (fs:t (PRFunction m) k) : t Pid k :=
   match fs with
   | [] => []
   | (_ :: fs') => (n :: seq_labels (S n) fs')
   end.
+
+Lemma seq_labels_lt : forall x {m k} (fs:t (PRFunction m) k) n,
+  In x (seq_labels n fs) -> n <= x < n + k.
+Proof.
+induction k.
++ refine (@case0 _ _ _); simpl; intros. inversion H.
++ intro. revert k fs IHk. refine (@caseS _ _ _); simpl; intros.
+  elim (In_elim H); clear H; intro.
+  - rewrite H; split; auto with arith.
+    rewrite <- plus_Snm_nSm. apply le_plus_l.
+  - elim (IHk _ _ H); intros.
+    split; auto with arith. rewrite <- plus_Snm_nSm; auto.
+Qed.
 
 Fixpoint skip_labels (n:nat) {k} {m} (fs:t (PRFunction m) k) : t Pid k :=
   match fs with
