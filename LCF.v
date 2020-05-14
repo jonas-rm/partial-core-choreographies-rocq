@@ -12,6 +12,48 @@ Notation "A '&&&' B" := (sumbool_and _ _ _ _ A B).
 
 (** MOVE ME *)
 
+Lemma MCT_Trans : forall c tl c' tl' c'',
+  c --[tl]-->* c' -> c' --[tl']-->* c'' -> c --[tl++tl']-->* c''.
+Proof.
+intros c tl; revert c.
+induction tl; simpl; intros; inversion H; auto.
+simpl. apply MCT_Step with c2; auto.
+apply IHtl with c'; auto.
+Qed.
+
+Lemma converges_Zero : forall ns y, converges Zero ns y -> y = 0.
+Proof.
+intros.
+apply (converges_inj _ _ _ _ H).
+exists 0; simpl.
+clear H y. replace ns with [hd ns].
+2: apply vector_1_inv.
+unfold Kleene.eval; auto.
+Qed.
+
+Lemma converges_Successor : forall ns y, converges Successor ns y -> y = S (hd ns).
+Proof.
+intros.
+apply (converges_inj _ _ _ _ H).
+exists 0; simpl.
+clear H y. replace ns with [hd ns].
+2: apply vector_1_inv.
+unfold Kleene.eval; simpl.
+rewrite plus_comm; auto.
+Qed.
+
+Lemma converges_Projection : forall m k (H:m<k) ns y,
+  converges (Projection H) ns y -> y = ns[@Fin.of_nat_lt H].
+Proof.
+intros.
+apply (converges_inj _ _ _ _ H0).
+exists 0; simpl.
+clear H0 y.
+unfold Kleene.eval; simpl.
+rewrite all_defined_map_Some.
+apply nth_map; auto.
+Qed.
+
 (** List of recursion variables up to a given bound. *)
 Fixpoint RecVarList n : list RecVar :=
 match n with
@@ -331,7 +373,7 @@ intro; apply H. eapply In_nth; eauto.
 Qed.
 *)
 
-Lemma implements_WF : forall {n} (f:PRFunction n) ps q,
+Lemma Implements_WF : forall {n} (f:PRFunction n) ps q,
   ~In q ps -> MCP_WF (Implementation f ps q).
 Proof.
 intros.
@@ -348,6 +390,94 @@ exists (RecVarList (0+Gamma f)); split.
   apply Implementation_aux_within_Xs; simpl; auto.
 + red.
   unfold Vars; simpl.
+Admitted.
+
+Lemma in_vec_k_to_n : forall n k m, In m (vec_k_to_n n k) ->
+  k <= m /\ m < k + n.
+Proof.
+induction n; simpl; intros. inversion H.
+elim (In_elim H); intros.
++ rewrite H0; split; auto with arith. rewrite <- plus_Snm_nSm; auto with arith.
++ elim (IHn _ _ H0); intros; split; eauto with arith.
+Qed.
+
+Lemma Implements'_WF : forall {n} (f:PRFunction n),
+  MCP_WF (Implementation' f).
+Proof.
+intros; apply Implements_WF.
+intro. elim (in_vec_k_to_n _ _ _ H); intros.
+inversion H0.
+Qed.
+
+Lemma Implementation_aux_converges : forall {n} (f:PRFunction n) d Hd ps q n X Defs ns y,
+  ~In q ps ->
+  (forall Y, X <= Y < X + Gamma f ->
+    fst (Defs X) <> List.nil /\ snd (Defs X) = Implementation_aux f d Hd ps q n X Y) ->
+  converges f ns y -> 
+  forall s, (forall H, s ps[@H] xx = ns[@H]) ->
+  exists s' tl, s' q xx = y /\ forall H, s' ps[@H] xx = s ps[@H] xx /\
+  (Build_Program Defs (Call X),s) --[tl]-->* (Build_Program Defs (Call (X + Gamma f)),s').
+Proof.
+intros; induction d. inversion Hd.
+rename H into Hq, H0 into HDefs, H1 into Hf, H2 into Hinput.
+induction f.
++ (* Zero *)
+  elim (HDefs X).
+  2: split; auto; rewrite plus_comm; auto with arith.
+  simpl; unfold Pack1; simpl.
+  rewrite Rdec.eqb_refl. intros HX HX'.
+  elim (Call_reduce _ _ s HX); intros tl Htl.
+  rewrite HX' in Htl.
+  set (s' := update s q xx 0).
+  exists s', (tl ++ (L_Com ps[@Fin.F1] 0 q :: List.nil))%list.
+  rewrite (converges_Zero _ _ Hf).
+  split. apply update_read.
+  split. apply update_read'. intro. apply Hq. eapply In_nth; eauto.
+  eapply MCT_Trans; eauto.
+  replace (L_Com ps[@Fin.F1] 0 q) with (forget (R_Com ps[@Fin.F1] 0 q xx)); auto.
+  econstructor; constructor. rewrite plus_comm; simpl. apply C_Com'.
++ (* Successor *)
+  set (x := s ps[@Fin.F1] xx).
+  elim (HDefs X).
+  2: split; auto; rewrite plus_comm; auto with arith.
+  simpl; unfold Pack1; simpl.
+  rewrite Rdec.eqb_refl. intros HX HX'.
+  elim (Call_reduce _ _ s HX); intros tl Htl.
+  rewrite HX' in Htl.
+  set (s' := update s q xx (S x)).
+  exists s', (tl ++ (L_Com ps[@Fin.F1] (S x) q :: List.nil))%list.
+  rewrite (converges_Successor _ _ Hf).
+  split. rewrite <- nth_hd, <- Hinput. apply update_read.
+  split. apply update_read'. intro. apply Hq. eapply In_nth; eauto.
+  eapply MCT_Trans; eauto.
+  replace (L_Com ps[@Fin.F1] (S x) q) with (forget (R_Com ps[@Fin.F1] (S x) q xx)); auto.
+  econstructor; constructor. rewrite plus_comm; simpl. apply C_Com'.
++ (* Projection *)
+  set (x := s ps[@Fin.of_nat_lt l] xx).
+  elim (HDefs X).
+  2: split; auto; rewrite plus_comm; auto with arith.
+  simpl; unfold Pack1; simpl.
+  rewrite Rdec.eqb_refl. intros HX HX'.
+  elim (Call_reduce _ _ s HX); intros tl Htl.
+  rewrite HX' in Htl.
+  set (s' := update s q xx x).
+  exists s', (tl ++ (L_Com ps[@Fin.of_nat_lt l] x q :: List.nil))%list.
+  rewrite (converges_Projection _ _ _ _ _ Hf).
+  split. rewrite <- Hinput. apply update_read.
+  split. apply update_read'. intro. apply Hq. eapply In_nth; eauto.
+  eapply MCT_Trans; eauto.
+  replace (L_Com ps[@Fin.of_nat_lt l] x q) with (forget (R_Com ps[@Fin.of_nat_lt l] x q xx)); auto.
+  econstructor; constructor. rewrite plus_comm; simpl. apply C_Com'.
++ (* Composition *)
+  admit.
++ (* Recursion *)
++ (* Minimization *)
+
+
+
+
+
+
 
 
 Fixpoint compatible (Defs:DefSet) (s:State) (tl:RichLabel) (C:Choreography) : Prop :=
