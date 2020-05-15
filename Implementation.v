@@ -71,6 +71,8 @@ End MC_BEval.
 Module Export MC_Nat :=
   MCBase Nat Bool Nat MC_Expressions Bool_Expressions Nat MC_Eval MC_BEval.
 
+Local Open Scope MC_scope.
+
 (** Restricted conditional. *)
 
 Definition Send p e q : Eta := p#e --> q$xx.
@@ -102,10 +104,10 @@ Proof.
 intros.
 unfold Send.
 generalize (C_Com P p e q xx (p#zero --> q$xx;;C) s1).
-set (C' := (p # e --> q $ xx;; p # zero --> q $ xx;; C)%MC).
+set (C' := p # e --> q $ xx;; p # zero --> q $ xx;; C).
 simpl. set (s' := CSt.update s1 q xx (eval_on_state e s1 p)). intros.
 generalize (C_Com P p zero q xx C s').
-set (C'' := (p # zero --> q $ xx;; C)%MC).
+set (C'' := p # zero --> q $ xx;; C).
 fold C'' in H.
 simpl. set (s'' := CSt.update s' q xx 0). intros.
 exists s'', (eval_on_state e s1 p); split.
@@ -211,7 +213,7 @@ Fixpoint Implementation_Choreography (m n:nat) (C:Choreography) :=
   | End => False
   | Call X => m <= X <= n
   | RT_Call X _ C' => m <= X <= n /\ Implementation_Choreography m n C'
-  | (Eta;; C')%MC => Implementation_Choreography m n C'
+  | Eta;; C' => Implementation_Choreography m n C'
   | If p ? b Then C1 Else C2 => Implementation_Choreography m n C1 /\ Implementation_Choreography m n C2
 end.
 
@@ -357,32 +359,32 @@ induction d.
     apply (fun Y => if Y <? X + vsum (map Gamma fs) then Pfs Y else Pf Y).
 
   (* Recursion *)
-  - rename f1 into f; rename f2 into g.
+  - rename f1 into g; rename f2 into h.
     simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
-    pose (max_lt_l _ _ _ Hd') as Hf.
-    pose (max_lt_r _ _ _ Hd') as Hg.
-    pose (Implementation_aux _ f _ Hf (tl ps) init (init+3) X) as Pf.
-    pose (Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f) (X + Gamma f + 2)) as Pg.
+    pose (max_lt_l _ _ _ Hd') as Hg.
+    pose (max_lt_r _ _ _ Hd') as Hh.
+    pose (Implementation_aux _ g _ Hg (tl ps) init (init+3) X) as Pg.
+    pose (Implementation_aux _ h _ Hh (S init :: init :: tl ps) (init+2) (init+3 + Pi g) (X + Gamma g + 2)) as Ph.
     apply (fun Y =>
-      if (Y <? X + Gamma f) then Pf Y
-      else if (RecVar_dec Y (X + Gamma f)) then
-         (Send (init+2) zero (S init);; Call (X + Gamma f + 1))%MC
-      else if (RecVar_dec Y (X + Gamma f + 1)) then 
-         (IfEq (S init) ps[@Fin.F1] (Send init this q;; Call (X + Gamma f + Gamma g + 3)) (Call (X + Gamma f + 2)))%MC
-      else if (RecVar_dec Y (X + Gamma f + Gamma g + 2)) then
-         (Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma f + 1))%MC
-      else Pg Y).
+      if (Y <? X + Gamma g) then Pg Y
+      else if (RecVar_dec Y (X + Gamma g)) then
+         Send (init+2) zero (S init);; Call (X + Gamma g + 1)
+      else if (RecVar_dec Y (X + Gamma g + 1)) then 
+         IfEq (S init) ps[@Fin.F1] (Send init this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2))
+      else if (RecVar_dec Y (X + Gamma g + Gamma h + 2)) then
+         Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma g + 1)
+      else Ph Y).
 
   (* Minimization *)
   - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
     pose (Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3) (X + 1)) as Pf.
     apply (fun Y =>
       if (RecVar_dec Y X) then
-         (Send (init+2) zero (init+1);; Call (X + 1))%MC
+         Send (init+2) zero (init+1);; Call (X + 1)
       else if (RecVar_dec Y (X + Gamma f + 1)) then
-         (Send (init+1) zero (init+2);; IfEq (init+2) init
+         Send (init+1) zero (init+2);; IfEq (init+2) init
             (Send (init+1) this q;; Call (X + Gamma f + 2))
-            (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1)))%MC
+            (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1))
         else Pf Y).
 Defined.
 
@@ -413,8 +415,179 @@ Eval compute in (map snd (map (Procedures (Implementation' PR_add)) [0;1;2;3;4;5
 Eval compute in (map snd (map (Procedures (Implementation' (Composition Successor [Projection aux23]))) [0;1;2])).
 *)
 
-(** There is also a parallel variant for composition. This is defined in the same steps, but
-    requires yet another auxiliary function. *)
+(** Again - since the definitions are interactive, we prove that they behave as expected. *)
+Lemma Zero_Procs : forall d Hd ps q n X,
+  Implementation_aux Zero d Hd ps q n X X = Send ps[@Fin.F1] zero q;; Call (S X).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+assert (X = X); auto.
+rewrite <- Rdec.eqb_eq in H. unfold RecVar_dec.
+rewrite H; auto.
+Qed.
+
+Lemma Successor_Procs : forall d Hd ps q n X,
+  Implementation_aux Successor d Hd ps q n X X = Send ps[@Fin.F1] succ_this q;; Call (S X).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+assert (X = X); auto.
+rewrite <- Rdec.eqb_eq in H. unfold RecVar_dec.
+rewrite H; auto.
+Qed.
+
+Lemma Projection_Procs : forall k m (Hp:k<m) d Hd ps q n X,
+  Implementation_aux (Projection Hp) d Hd ps q n X X = Send ps[@Fin.of_nat_lt Hp] this q;; Call (S X).
+Proof.
+intros; induction d. inversion Hd.
+simpl. unfold Pack1; simpl.
+assert (X = X); auto.
+rewrite <- Rdec.eqb_eq in H. unfold RecVar_dec.
+rewrite H; auto.
+Qed.
+
+(** The lemmas for Composition are currently missing. *)
+
+Lemma Recursion_Procs_g : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h) < S d) ps q n X Y,
+  X <= Y < X + Gamma g ->
+  let Hd' := (lt_S_n (Nat.max (depth g) (depth h)) d Hd) in
+  let Hg := (max_lt_l _ _ _ Hd') in
+  Implementation_aux (Recursion g h) _ Hd ps q n X Y =
+    Implementation_aux _ _ Hg (tl ps) n (n+3) X Y.
+Proof.
+intros; simpl.
+inversion_clear H.
+rewrite <- Nat.ltb_lt in H1. rewrite H1; auto.
+Qed.
+
+Lemma Recursion_Procs_0 : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h) < S d) ps q n X,
+  Implementation_aux (Recursion g h) _ Hd ps q n X (X + Gamma g) =
+    Send (n + 2) zero (S n);; Call (X + Gamma g + 1).
+Proof.
+intros; simpl.
+generalize (lt_irrefl (X+Gamma g)); intro.
+rewrite <- Nat.ltb_nlt in H. rewrite H.
+unfold RecVar_dec. generalize (eq_refl (X+Gamma g)); intro.
+apply Rdec.eqb_eq in H0. rewrite H0; auto.
+Qed.
+
+Lemma Recursion_Procs_1 : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h) < S d) ps q n X,
+  Implementation_aux (Recursion g h) _ Hd ps q n X (X + Gamma g + 1) =
+    IfEq (S n) ps[@Fin.F1] (Send n this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2)).
+Proof.
+intros; simpl.
+assert (~ X + Gamma g + 1 < X+Gamma g); intros.
++ intro. apply lt_irrefl with (X + Gamma g).
+  etransitivity; eauto. rewrite plus_comm in H; auto.
++ rewrite <- Nat.ltb_nlt in H. rewrite H.
+  unfold RecVar_dec.
+  assert (X + Gamma g + 1 <> X + Gamma g); intros.
+  1: apply gt_neq; rewrite plus_comm; auto.
+  apply Rdec.eqb_neq in H0. rewrite H0.
+  generalize (eq_refl (X+Gamma g + 1)); intro.
+  apply Rdec.eqb_eq in H1. rewrite H1; auto.
+Qed.
+
+Lemma Recursion_Procs_h : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h) < S d) ps q n X Y,
+  X + Gamma g + 2 <= Y < X + Gamma g + Gamma h + 2 ->
+  let Hd' := (lt_S_n (Nat.max (depth g) (depth h)) d Hd) in
+  let Hh := (max_lt_r _ _ _ Hd') in
+  Implementation_aux (Recursion g h) _ Hd ps q n X Y =
+    Implementation_aux _ _ Hh (S n :: n :: tl ps) (n+2) (n+3 + Pi g) (X + Gamma g + 2) Y.
+Proof.
+intros; simpl.
+inversion_clear H.
+assert (~ Y < X+Gamma g); intros.
++ intro. apply lt_irrefl with (X + Gamma g).
+  apply le_lt_trans with (X + Gamma g + 2); auto with arith.
+  apply le_lt_trans with Y; auto.
++ rewrite <- Nat.ltb_nlt in H. rewrite H.
+  unfold RecVar_dec.
+  assert (Y <> X + Gamma g); intros.
+  1: {
+    apply gt_neq.
+    apply lt_le_trans with (X + Gamma g + 2); auto with arith.
+    rewrite <- (plus_comm 2); auto with arith.
+  }
+  apply Rdec.eqb_neq in H2. rewrite H2.
+  assert (Y <> X + Gamma g + 1); intros.
+  1: {
+    apply gt_neq.
+    apply lt_le_trans with (X + Gamma g + 2); auto with arith.
+  }
+  apply Rdec.eqb_neq in H3. rewrite H3.
+  apply lt_neq, Rdec.eqb_neq in H1. simpl in H1; rewrite H1; auto.
+Qed.
+
+Lemma Recursion_Procs_2 : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h) < S d) ps q n X,
+  Implementation_aux (Recursion g h) _ Hd ps q n X (X + Gamma g + Gamma h + 2) =
+    Send (n+2) this n;; Send (S n) this (n+2);; Send (n+2) succ_this (S n);; Call (X + Gamma g + 1).
+Proof.
+intros; simpl.
+assert (~ X + Gamma g + Gamma h + 2 < X+Gamma g); intros.
++ intro. apply lt_irrefl with (X + Gamma g).
+  apply le_lt_trans with (X + Gamma g + Gamma h + 2); auto with arith.
++ rewrite <- Nat.ltb_nlt in H. simpl in H; rewrite H.
+  unfold RecVar_dec.
+  assert (X + Gamma g + Gamma h + 2 <> X + Gamma g); intros.
+  1: {
+    apply gt_neq.
+    apply lt_le_trans with (X + Gamma g + 2); auto with arith.
+    rewrite <- (plus_comm 2); auto with arith.
+  }
+  apply Rdec.eqb_neq in H0. simpl in H0; rewrite H0.
+  assert (X + Gamma g + Gamma h + 2 <> X + Gamma g + 1); intros.
+  1: {
+    apply gt_neq.
+    apply lt_le_trans with (X + Gamma g + 2); auto with arith.
+  }
+  apply Rdec.eqb_neq in H1. simpl in H1; rewrite H1.
+  generalize (eq_refl (X + Gamma g + Gamma h + 2)); intro.
+  apply Rdec.eqb_eq in H2. simpl in H2; rewrite H2; auto.
+Qed.
+
+Lemma Minimization_Procs_0 : forall k (h:PRFunction (S k)) d (Hd:depth (Minimization h) < S d) ps q n X,
+  Implementation_aux (Minimization h) _ Hd ps q n X X =
+    Send (n+2) zero (n+1);; Call (X + 1).
+Proof.
+intros; simpl.
+unfold RecVar_dec.
+generalize (eq_refl X); intro.
+apply Rdec.eqb_eq in H. rewrite H; auto.
+Qed.
+
+Lemma Minimization_Procs_h : forall k (h:PRFunction (S k)) d (Hd:depth (Minimization h) < S d) ps q n X Y,
+  S X <= Y < X + Gamma h + 1 ->
+  let Hh := (lt_S_n (depth h) d Hd) in
+  Implementation_aux (Minimization h) _ Hd ps q n X Y =
+    Implementation_aux h _ Hh (shiftin (S n) ps) n (n+3) (X + 1) Y.
+Proof.
+intros; simpl.
+inversion_clear H.
+assert (Y <> X). apply gt_neq; auto.
+unfold RecVar_dec.
+apply Rdec.eqb_neq in H. rewrite H.
+assert (Y <> X + Gamma h + 1). apply lt_neq; auto.
+apply Rdec.eqb_neq in H2. rewrite H2; auto.
+Qed.
+
+Lemma Minimization_Procs_1 : forall k (h:PRFunction (S k)) d (Hd:depth (Minimization h) < S d) ps q n X,
+  Implementation_aux (Minimization h) _ Hd ps q n X (X + Gamma h + 1) =
+    Send (n+1) zero (n+2);; IfEq (n+2) n
+            (Send (n+1) this q;; Call (X + Gamma h + 2))
+            (Send (n+1) this (n+2);; Send (n+2) succ_this (n+1);; Call (X + 1)).
+Proof.
+intros; simpl.
+assert (X + Gamma h + 1 <> X). apply gt_neq; rewrite <- (plus_comm 1); auto with arith.
+unfold RecVar_dec.
+apply Rdec.eqb_neq in H. rewrite H.
+generalize (eq_refl (X + Gamma h + 1)); intro.
+apply Rdec.eqb_eq in H0. rewrite H0; auto.
+Qed.
+
+(** ** Parallel implementation
+  There is also a parallel variant for composition. This is defined in the same steps, but
+  requires yet another auxiliary function. *)
 
 Definition copy_input {m} (ps qs:t Pid m) (X:RecVar) : Choreography.
 (*
@@ -426,7 +599,7 @@ Definition copy_input {m} (ps qs:t Pid m) (X:RecVar) : Choreography.
 Proof.
 induction m.
 + apply (Call X).
-+ apply (Send (hd ps) this (hd qs);; IHm (tl ps) (tl qs))%MC.
++ apply (Send (hd ps) this (hd qs);; IHm (tl ps) (tl qs)).
 Defined.
 
 Fixpoint copy_input_iter {m} (ps:t Pid m) {n} (qs: t (t Pid m) n) (X:RecVar) :
@@ -505,11 +678,11 @@ induction d.
     apply (fun Y =>
       if (Y <? X + Gamma' f) then Pf Y
       else if (RecVar_dec Y (X + Gamma' f)) then
-         (Send (init+2) zero (S init);; Call (X + Gamma' f + 1))%MC
+         Send (init+2) zero (S init);; Call (X + Gamma' f + 1)
       else if (RecVar_dec Y (X + Gamma' f + 1)) then 
-         (IfEq (S init) ps[@Fin.F1] (Send init this q;; Call (X + Gamma' f + Gamma' g + 3)) (Call (X + Gamma' f + 2)))%MC
+         IfEq (S init) ps[@Fin.F1] (Send init this q;; Call (X + Gamma' f + Gamma' g + 3)) (Call (X + Gamma' f + 2))
       else if (RecVar_dec Y (X + Gamma' f + Gamma' g + 2)) then
-         (Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma' f + 1))%MC
+         Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma' f + 1)
       else Pg Y).
 
   (* Minimization *)
@@ -517,11 +690,11 @@ induction d.
     pose (Par_Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3) (X + 1)) as Pf.
     apply (fun Y =>
       if (RecVar_dec Y X) then
-         (Send (init+2) zero (init+1);; Call (X + 1))%MC
+         Send (init+2) zero (init+1);; Call (X + 1)
       else if (RecVar_dec Y (X + Gamma' f + 1)) then
-         (Send (init+1) zero (init+2);; IfEq (init+2) init
-            (Send (init+1) this q;; Call (X + Gamma' f + 2))
-            (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1)))%MC
+         Send (init+1) zero (init+2);; IfEq (init+2) init
+           (Send (init+1) this q;; Call (X + Gamma' f + 2))
+           (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1))
         else Pf Y).
 Defined.
 

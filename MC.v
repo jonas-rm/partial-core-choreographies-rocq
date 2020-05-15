@@ -1734,6 +1734,15 @@ case_eq (set_size_pid (fst (Defs X))); intros; [idtac | case_eq n]; intros.
     rewrite H1; simpl; auto.
 Qed.
 
+Lemma MCT_Trans : forall c tl c' tl' c'',
+  c --[tl]-->* c' -> c' --[tl']-->* c'' -> c --[tl++tl']-->* c''.
+Proof.
+intros c tl; revert c.
+induction tl; simpl; intros; inversion H; auto.
+simpl. apply MCT_Step with c2; auto.
+apply IHtl with c'; auto.
+Qed.
+
 End BigStepSemantics.
 
 Section Confluence.

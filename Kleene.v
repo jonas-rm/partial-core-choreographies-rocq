@@ -315,6 +315,20 @@ simpl (map Some (x :: t)) in H0.
 simpl; simpl in H0; rewrite H0; auto.
 Qed.
 
+Lemma Recursion_correct_step' : forall k (g:PRFunction k) (h:PRFunction (2+k)) (ns:t nat (1+k)) steps x,
+  hd ns = S x -> (eval (Recursion g h) steps (x :: tl ns)) = None ->
+  eval (Recursion g h) steps ns = None.
+Proof.
+intros.
+revert k ns g h x H H0; refine (@caseS _ _ _).
+simpl; intros.
+unfold eval; rewrite H.
+unfold eval in H0.
+simpl (map Some (S x :: t)).
+simpl (map Some (x :: t)) in H0.
+simpl; simpl in H0; rewrite H0; auto.
+Qed.
+
 Lemma Minimization_correct : forall k (h:PRFunction (1+k)) (ns:t nat k) steps n,
   eval (Minimization h) steps ns = (Some n) ->
   exists s, eval h s (shiftin n ns) = (Some 0) /\ forall m, m < n -> exists n', eval h s (shiftin m ns) = (Some (S n')).
