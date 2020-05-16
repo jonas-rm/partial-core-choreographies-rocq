@@ -178,26 +178,10 @@ end.
 Definition more_branches_beh (B1 B2:Behaviour) := (merge_beh B1 B2) = Some B1.
 
 Lemma more_branches_beh_char_1 : forall (B1 B2:Behaviour), more_branches_beh B1 B2 -> more_branches_beh_direct B1 B2.
-intros.
-(*
-induction B1; induction B2; inversion H; auto.
+induction B1, B2; intros; inversion H; auto.
 + simpl; trivial.
-+ 
-+ induction B2; inversion H; auto.
-  simpl; auto.
-+ induction B2.
-+ 
-induction B1, B2.
-+ red in H.
-  simpl in H.
-  destruct B2; inversion H; simpl; auto.
-+ destruct B2; simpl; inversion H.
-  case_eq (Pid_dec p p0); intros; rewrite H0 in H1.
-  case_eq (Expr_dec e e0); intros; rewrite H2 in H1.
-  - simpl.
-    simpl in H1.
-    destruct (merge_beh B1 B2).
-*)
++ simpl.
+  case_eq (Pid_dec p p0); case_eq (Expr_dec e e0); intros; rewrite H0 in H1; rewrite H2 in H1; simpl in H1; simpl; inversion H1.
 Admitted.
 
 Lemma more_branches_beh_char_2 : forall (B1 B2:Behaviour), more_branches_beh_direct B1 B2 -> more_branches_beh B1 B2.
