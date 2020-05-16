@@ -161,7 +161,7 @@ match B1, B2 with
        | None, None => True
       end
       /\
-      match f left, f' left with
+      match f right, f' right with
        | Some B, Some B' => more_branches_beh_direct B B'
        | Some B, None => True
        | None, Some B' => False
@@ -177,11 +177,52 @@ end.
 
 Definition more_branches_beh (B1 B2:Behaviour) := (merge_beh B1 B2) = Some B1.
 
+Print Behaviour_ind.
+
 Lemma more_branches_beh_char_1 : forall (B1 B2:Behaviour), more_branches_beh B1 B2 -> more_branches_beh_direct B1 B2.
 induction B1, B2; intros; inversion H; auto.
 + simpl; trivial.
 + simpl.
   case_eq (Pid_dec p p0); case_eq (Expr_dec e e0); intros; rewrite H0 in H1; rewrite H2 in H1; simpl in H1; simpl; inversion H1.
+  specialize (IHB1 B2).
+  unfold more_branches_beh in IHB1.
+  destruct (merge_beh B1 B2).
+  - inversion H4.
+    rewrite H5 in IHB1.
+    auto.
+  - inversion H4.
++ simpl.
+  case_eq (Pid_dec p p0); case_eq (Var_dec v v0); intros; rewrite H0 in H1; rewrite H2 in H1; simpl in H1; simpl; inversion H1.
+  specialize (IHB1 B2).
+  unfold more_branches_beh in IHB1.
+  destruct (merge_beh B1 B2).
+  - inversion H4.
+    rewrite H5 in IHB1.
+    auto.
+  - inversion H4.
++ simpl.
+  case_eq (Pid_dec p p0); case_eq (eqb_label l l0); intros; rewrite H0 in H1; rewrite H2 in H1; simpl in H1; simpl; inversion H1.
+  specialize (IHB1 B2).
+  unfold more_branches_beh in IHB1.
+  destruct (merge_beh B1 B2).
+  - inversion H4.
+    rewrite H5 in IHB1.
+    auto.
+  - inversion H4.
++
+(* No induction hypothesis for branchings.. *)
+(* simpl.
+  case_eq (Pid_dec p p0); intros; rewrite H0 in H1.
+  2: inversion H1.
+  destruct (o left); destruct (o0 left); destruct (o right); destruct (o0 right); auto.
+  - destruct (merge_beh b b0); destruct (merge_beh b1 b2); inversion H1.
+    * 
+
+  case (o left) in H1.
+  case (o left); case (o0 left); case (o right); case (o0 right); auto.
+  - 
+  destruct (o left).
+*)
 Admitted.
 
 Lemma more_branches_beh_char_2 : forall (B1 B2:Behaviour), more_branches_beh_direct B1 B2 -> more_branches_beh B1 B2.
