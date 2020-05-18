@@ -244,6 +244,11 @@ Fixpoint Gamma {m} (f:PRFunction m) : nat :=
   | Minimization f => Gamma f + 2
   end.
 
+Lemma Gamma_neq_zero : forall m (f:PRFunction m), 0 < Gamma f.
+Proof.
+induction f; simpl; auto with arith.
+Qed.
+
 (*
 Eval compute in (Pi PR_sub).
 Eval compute in (Gamma PR_sub).

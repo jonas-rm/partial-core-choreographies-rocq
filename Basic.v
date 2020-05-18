@@ -553,7 +553,7 @@ induction n; simpl.
   simpl; auto.
 Qed.
 
-Lemma In_nth : forall {A} {n} (v:t A n) H x, v[@H] = x -> In x v.
+Lemma nth_In : forall {A} {n} (v:t A n) H x, v[@H] = x -> In x v.
 Proof.
 induction H; simpl.
 + revert n v. refine (@caseS _  _ _); simpl; intros.
@@ -575,6 +575,17 @@ inversion H; auto.
 inversion H3; auto.
 Qed.
 
+Lemma In_nth : forall {A} {n} (v:t A n) x, In x v -> exists H, v[@H] = x.
+Proof.
+induction n.
++ refine (@case0 _ _ _); simpl; intros. inversion H.
++ intro. revert n v IHn. refine (@caseS _  _ _); intros.
+  elim (In_elim H); intros.
+  - exists (Fin.F1); simpl; auto.
+  - elim (IHn _ _ H0); intros.
+    exists (Fin.FS x0); simpl; auto.
+Qed.
+
 Lemma shiftin_elim : forall {A} {n} (v:t A n) x y, In y (shiftin x v) -> x = y \/ In y v.
 Proof.
 induction n; simpl; intros.
@@ -592,6 +603,20 @@ Fixpoint eta_elim_aux {A n} (v:t A (S n)) H :=
   | Fin.F1 => hd v
   | Fin.FS H' => (tl v)[@H]
 end.
+
+Lemma hd_tl_eq : forall {A} {n} (v v':t A (S n)),
+  hd v = hd v' /\ (forall H, (tl v)[@H] = (tl v')[@H]) ->
+  forall H, v[@H] = v'[@H].
+Proof.
+intro. refine (@caseS _ _ _).
+intros a n t v'; revert n v' t. refine (@caseS _ _ _).
+intros.
+inversion_clear H.
+simpl in H1, H2.
+rewrite H1; clear H1.
+replace t with t0; auto.
+apply eq_nth_iff'; auto.
+Qed.
 
 (** Hopefully self-explanatory. *)
 Lemma map_shiftin : forall {A} {B} {n} (f:A->B) (v:t A n) x,
@@ -681,6 +706,15 @@ Fixpoint vec_k_to_n n k : t nat n :=
   end.
 
 Definition vec_1_to_n n : t nat n := vec_k_to_n n 1.
+
+Lemma in_vec_k_to_n : forall n k m, In m (vec_k_to_n n k) ->
+  k <= m /\ m < k + n.
+Proof.
+induction n; simpl; intros. inversion H.
+elim (In_elim H); intros.
++ rewrite H0; split; auto with arith. rewrite <- plus_Snm_nSm; auto with arith.
++ elim (IHn _ _ H0); intros; split; eauto with arith.
+Qed.
 
 (** Vector of vectors with values [[m; ...; m+n-1] [m+n; ...; m+2n-1] ... [m+(k-1)n; ...; m+kn-1]]. *)
 Fixpoint vec_m_with_k m k n :=
