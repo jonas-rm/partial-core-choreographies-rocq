@@ -11,6 +11,103 @@ Module Export MC_Nat := Implementation.MC_Nat.
 Notation "A '&&&' B" := (sumbool_and _ _ _ _ A B).
 
 (** MOVE ME *)
+Lemma diverges_Composition_arg : forall {m k} fs g ns H,
+  diverges fs[@H] ns -> diverges (@Composition m k g fs) ns.
+Proof.
+intros; intro.
+case_eq (Kleene.eval (Composition g fs) steps ns); auto.
+intros; exfalso.
+elim (converges_Composition' fs g ns n); intros.
+2: exists steps; auto.
+elim (H2 H); intros.
+rewrite H0 in H3; inversion H3.
+Qed.
+
+Lemma diverges_Composition_fun : forall {m k} fs g ns x,
+  (forall H, converges fs[@H] ns x[@H]) ->
+  diverges g x -> diverges (@Composition m k g fs) ns.
+Proof.
+intros; intro.
+case_eq (Kleene.eval (Composition g fs) steps ns); auto.
+intros; exfalso.
+elim (converges_Composition fs g ns n); intros.
+2: exists steps; auto.
+inversion_clear H2.
+replace x0 with x in H4. inversion_clear H4. rewrite H0 in H2; inversion H2.
+apply eq_nth_iff'; intro.
+apply converges_inj with fs[@p] ns; auto.
+Qed.
+
+Lemma diverges_Recursion_ind : forall {m} (g:PRFunction m) h x ns,
+  diverges (Recursion g h) (x::ns) ->
+  forall y, x<y -> diverges (Recursion g h) (y::ns).
+Proof.
+induction y; intros. inversion H0.
+assert (diverges (Recursion g h) (y::ns)).
++ inversion H0; auto. rewrite <- H2; auto.
++ intro. revert H1.
+  unfold diverges, Kleene.eval.
+  simpl.
+  intro; rewrite H1; auto.
+Qed.
+
+Lemma diverges_Recursion_base : forall {m} (g:PRFunction m) h ns,
+  diverges g (tl ns) -> diverges (Recursion g h) ns.
+Proof.
+intros.
+set (n := hd ns : nat). assert (hd ns = n); auto.
+clearbody n. revert ns H H0.
+induction n; intros.
++ intro. revert H.
+  rewrite (eta ns), H0.
+  unfold diverges, Kleene.eval; simpl; auto.
++ rewrite (eta ns). apply diverges_Recursion_ind with 0; auto.
+  rewrite H0; auto with arith.
+Qed.
+
+Lemma diverges_Recursion_step : forall {m} (g:PRFunction m) h x y ns,
+  converges (Recursion g h) (x::ns) y -> diverges h (x::y::ns)
+  -> forall z, x<z -> diverges (Recursion g h) (z::ns).
+Proof.
+induction z; intros. inversion H1.
+inversion H1.
+2: apply diverges_Recursion_ind with z; auto.
+intro.
+rewrite H3 in H, H0; clear IHz H1 H3 x.
+case_eq (Kleene.eval (Recursion g h) steps (z::ns)); intros.
++ inversion_clear H. unfold Kleene.eval in H1, H2.
+  rewrite (eval_opt_inj _ _ _ _ _ _ _ H1 H2) in H1. clear n H2.
+  generalize (H0 steps); clear H0; revert H1.
+  unfold diverges, Kleene.eval; simpl.
+  intros. rewrite H1; auto.
++ clear H; generalize (H0 steps). clear H0; revert H1.
+  unfold diverges, Kleene.eval; simpl.
+  intros. rewrite H1; auto.
+Qed.
+
+Lemma diverges_Minimization : forall {m} (h:PRFunction (1+m)) ns x,
+  (forall y, y < x -> exists z, converges h (shiftin y ns) (S z)) ->
+  diverges h (shiftin x ns) -> diverges (Minimization h) ns.
+Proof.
+red; intros.
+case_eq (Kleene.eval (Minimization h) steps ns); auto.
+intros; exfalso.
+assert (converges (Minimization h) ns n). exists steps; auto.
+elim (converges_Minimization _ _ _ H2); intros.
+generalize (converges_Minimization_mon _ _ _ H2); intros.
+elim (lt_eq_lt_dec x n); intros. inversion_clear a.
++ elim (H4 _ H5); intros. inversion_clear H6.
+  rewrite H0 in H7; inversion H7.
++ rewrite <- H5, H0 in H3; inversion H3.
++ elim (H _ b); intros. inversion_clear H5.
+  generalize (eval_inj_Some _ _ _ _ _ _ _ H3 H6). discriminate.
+Qed.
+
+(* STRATEGY
+  It is undecidable whether a function converges or not on a value.
+  We also cannot get inversion results on divergence.
+  So we prove that the choreography ending implies convergence.
+  From determinism we can get that divergence implies non-termination. *)
 
 (** List of recursion variables up to a given bound. *)
 Fixpoint RecVarList n : list RecVar :=
@@ -421,7 +518,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   econstructor; constructor. rewrite plus_comm; simpl. apply C_Com'.
 + (* Composition *)
   (* Here we start directly with the loop *)
-
+  admit.
 + (* Recursion *)
   set (Hd' := lt_S_n (Nat.max (depth g) (depth h)) d Hd).
   set (Hg := (max_lt_l _ _ _ Hd')).
@@ -866,7 +963,17 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
     * do 3 (eapply MCT_Trans; eauto).
       do 4 (eapply MCT_Step; eauto).
       rewrite plus_assoc; constructor.
-Qed.
+Admitted.
+
+Lemma converges_Implementation_aux_converges : forall {n} (f:PRFunction n) d Hd ps q i X Defs ns y,
+  ~In q ps -> (forall p, In p ps -> p < i) -> q < i ->
+  (forall Y, X <= Y < X + Gamma f -> fst (Defs Y) <> List.nil) ->
+  (forall Y, X <= Y < X + Gamma f -> snd (Defs Y) = Implementation_aux f d Hd ps q i X Y) ->
+  forall (s:State), (forall H, s ps[@H] xx = ns[@H]) ->
+  forall s' tl, s' q xx = y -> (forall p, p < i -> p <> q -> s' p xx = s p xx) ->
+  (Build_Program Defs (Call X),s) --[tl]-->* (Build_Program Defs (Call (X + Gamma f)),s')
+  -> converges f ns y.
+(* Ugh *)
 
 Fixpoint compatible (Defs:DefSet) (s:State) (tl:RichLabel) (C:Choreography) : Prop :=
   (match C, tl with
