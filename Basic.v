@@ -598,6 +598,26 @@ induction n; simpl; intros.
     right; constructor; auto.
 Qed.
 
+Lemma In_shiftin : forall {A} {n} (v:t A n) x y, In y v -> In y (shiftin x v).
+Proof.
+induction n; simpl.
+- refine (@case0 _ _ _); simpl; intros. inversion H.
+- intro. revert n v IHn.
+  refine (@caseS _ _ _); simpl; intros.
+  elim (In_elim H); intros.
+  rewrite H0; constructor.
+  constructor; auto.
+Qed.
+
+Lemma In_shiftin' : forall {A} {n} (v:t A n) y, In y (shiftin y v).
+Proof.
+induction n; simpl.
+- refine (@case0 _ _ _); simpl; intros. constructor.
+- intro. revert n v IHn.
+  refine (@caseS _ _ _); simpl; intros.
+  constructor; auto.
+Qed.
+
 Fixpoint eta_elim_aux {A n} (v:t A (S n)) H :=
   match H with
   | Fin.F1 => hd v
@@ -605,15 +625,14 @@ Fixpoint eta_elim_aux {A n} (v:t A (S n)) H :=
 end.
 
 Lemma hd_tl_eq : forall {A} {n} (v v':t A (S n)),
-  hd v = hd v' /\ (forall H, (tl v)[@H] = (tl v')[@H]) ->
+  hd v = hd v' -> (forall H, (tl v)[@H] = (tl v')[@H]) ->
   forall H, v[@H] = v'[@H].
 Proof.
 intro. refine (@caseS _ _ _).
 intros a n t v'; revert n v' t. refine (@caseS _ _ _).
 intros.
-inversion_clear H.
-simpl in H1, H2.
-rewrite H1; clear H1.
+simpl in H, H0.
+rewrite H; clear H.
 replace t with t0; auto.
 apply eq_nth_iff'; auto.
 Qed.
@@ -625,6 +644,25 @@ Proof.
 induction v; simpl; auto.
 intro.
 rewrite IHv; auto.
+Qed.
+
+Lemma shiftin_eq : forall {A} {n} (v v':t A n) x x',
+  x = x' -> (forall H, v[@H] = v'[@H]) ->
+  forall H, (shiftin x v)[@H] = (shiftin x' v')[@H].
+Proof.
+intros A n. case n.
++ repeat refine (@case0 _ _ _). intros.
+  rewrite H; auto.
++ clear n. refine (@caseS _ _ _).
+  intros a n t v'; revert n v' t. refine (@caseS _ _ _).
+  intros.
+  rewrite H; clear H.
+  replace a with h.
+  2: change (hd (h::t) = hd (a::t0)); repeat rewrite <- nth_hd; auto.
+  apply eq_nth_iff'; auto.
+  replace t with t0; auto.
+  apply eq_nth_iff'; intros.
+  change ((tl (a::t0))[@p] = (tl (h::t))[@p]). repeat rewrite <- nth_tl; auto.
 Qed.
 
 (** ** Alternative map function

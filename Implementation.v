@@ -382,7 +382,7 @@ induction d.
 
   (* Minimization *)
   - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
-    pose (Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3) (X + 1)) as Pf.
+    pose (Implementation_aux _ f _ Hf (shiftin (init+1) ps) init (init+3) (X + 1)) as Pf.
     apply (fun Y =>
       if (RecVar_dec Y X) then
          Send (init+2) zero (init+1);; Call (X + 1)
@@ -562,14 +562,14 @@ apply Rdec.eqb_eq in H. rewrite H; auto.
 Qed.
 
 Lemma Minimization_Procs_h : forall k (h:PRFunction (S k)) d (Hd:depth (Minimization h) < S d) ps q n X Y,
-  S X <= Y < X + Gamma h + 1 ->
+  (X + 1) <= Y < X + Gamma h + 1 ->
   let Hh := (lt_S_n (depth h) d Hd) in
   Implementation_aux (Minimization h) _ Hd ps q n X Y =
-    Implementation_aux h _ Hh (shiftin (S n) ps) n (n+3) (X + 1) Y.
+    Implementation_aux h _ Hh (shiftin (n+1) ps) n (n+3) (X + 1) Y.
 Proof.
 intros; simpl.
 inversion_clear H.
-assert (Y <> X). apply gt_neq; auto.
+assert (Y <> X). apply gt_neq; rewrite plus_comm in H0; auto.
 unfold RecVar_dec.
 apply Rdec.eqb_neq in H. rewrite H.
 assert (Y <> X + Gamma h + 1). apply lt_neq; auto.

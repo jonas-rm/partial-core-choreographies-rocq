@@ -87,6 +87,26 @@ simpl; induction m; intros.
   intros z Hz; inversion_clear Hz. eauto.
 Qed.
 
+Lemma converges_Minimization: forall {m} (h:PRFunction (1+m)) ns y,
+  converges (Minimization h) ns y -> converges h (shiftin y ns) 0.
+Proof.
+intros.
+destroy H.
+elim (Minimization_correct _ _ _ _ _ H); intros.
+inversion_clear H0; exists x0; auto.
+Qed.
+
+Lemma converges_Minimization_mon: forall {m} (h:PRFunction (1+m)) ns y,
+  converges (Minimization h) ns y ->
+  forall x, x < y -> exists z, converges h (shiftin x ns) (S z).
+Proof.
+intros.
+destroy H.
+elim (Minimization_correct _ _ _ _ _ H); intros.
+inversion_clear H1.
+elim (H3 _ H0); intros. exists x2, x1; auto.
+Qed.
+
 (** List of recursion variables up to a given bound. *)
 Fixpoint RecVarList n : list RecVar :=
 match n with
@@ -208,10 +228,10 @@ do 2 intro; case f; intros.
     apply gt_neq; red. rewrite plus_comm. transitivity n; auto.
   - assert (n < n+3). rewrite plus_comm; simpl; auto.
     apply IHd; auto.
-    * intro. elim (shiftin_elim _ _ H5); intro. apply (lt_irrefl n); rewrite <- H6 at 2; auto.
+    * intro. elim (shiftin_elim _ _ H5); intro. apply (lt_irrefl n). rewrite <- H6 at 2; auto. rewrite plus_comm; auto.
       apply (lt_irrefl n); auto.
     * intros; transitivity (S (S n)). 2: rewrite plus_comm; simpl; auto.
-      elim (shiftin_elim _ _ H5); auto with arith. intro. rewrite <- H6; auto.
+      elim (shiftin_elim _ _ H5); auto with arith. intro. rewrite <- H6, plus_comm; auto.
 Qed.
 
 Lemma seq_compose_initial : forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
@@ -639,7 +659,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
       1: {
         replace (sU (S i::i::tl ps)[@H6] xx) with (map (fun y => sU y xx) (S i::i::tl ps))[@H6].
         2: rewrite (nth_map _ _ _ _ (eq_refl _)); auto.
-        apply hd_tl_eq. split. 2: apply hd_tl_eq; split.
+        apply hd_tl_eq. 2: apply hd_tl_eq.
         * simpl. unfold sU; rewrite update_read''; auto. discriminate.
         * simpl. unfold sU; rewrite update_read'; auto.
         * simpl. intros. rewrite (nth_map _ _ _ _ (eq_refl _)).
@@ -741,13 +761,206 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
       do 3 (eapply MCT_Step; eauto).
       do 2 rewrite <- (plus_assoc X). constructor.
 + (* Minimization *)
-
-
-
-
-
-
-
+  set (Hd' := lt_S_n (depth h) d Hd).
+  assert (forall H, ps[@H] < i) as Hpsi.
+  1: { intros. apply Hps. eapply nth_In; auto. }
+  assert (S X = X + 1) as HXSX. rewrite plus_comm; auto.
+  (* Initialization *)
+  assert (X <= X < X + Gamma (Minimization h)).
+  1: {
+    split; auto with arith.
+    apply le_lt_trans with (X + 0); auto with arith.
+    apply plus_lt_compat_l; apply Gamma_neq_zero.
+  }
+  elim (Call_reduce Defs X s); auto. intros tl0 H00.
+  rewrite HDefs' in H00; auto.
+  rewrite Minimization_Procs_0 in H00.
+  generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (i+2) zero (i+1) xx (Call (X+1)) s)).
+  simpl. set (s0 := update s (i+1) xx 0); intro.
+  (* Setting up for the induction hypothesis on h *)
+  assert (forall Y, X + 1 <= Y < X + 1 + Gamma h -> X <= Y < X + (Gamma h + 2)) as H'.
+  1: {
+    intros. inversion_clear H1; split; simpl.
+    transitivity (X + 1); auto with arith.
+    transitivity (X + 1 + Gamma h); auto.
+    rewrite <- (plus_comm 2), plus_assoc.
+    auto with arith.
+  }
+  assert (forall Y, X + 1 <= Y < X + 1 + Gamma h -> fst (Defs Y) <> List.nil) as HhDefs. eauto.
+  assert (forall Y, X + 1 <= Y < X + 1 + Gamma h -> snd (Defs Y) = Implementation_aux h _ Hd' (shiftin (i+1) ps) i (i+3) (X+1) Y) as HhDefs'.
+  1: {
+    intros. elim H1; intros. generalize (HDefs' _ (H' _ H1)).
+    rewrite Minimization_Procs_h; auto.
+    split; auto.
+    rewrite <- plus_assoc, <- (plus_comm 1), plus_assoc; auto.
+  }
+  assert (~In i (shiftin (i+1) ps)) as Hi.
+  1: {
+    intro. apply (lt_irrefl i). elim (shiftin_elim _ _ H1); auto.
+    intros; rewrite <- H2 at 2; auto. rewrite plus_comm; auto.
+  }
+  assert (i < i+3) as Hi'. rewrite plus_comm; simpl; auto.
+  assert (forall p, In p (shiftin (i+1) ps) -> p < i+3) as Hpsh.
+  1: {
+    intros. elim (shiftin_elim _ _ H1); auto.
+    intro. rewrite <- H2; simpl; auto with arith.
+    transitivity i; auto.
+  }
+  assert (exists z, converges h (shiftin 0 ns) z).
+  1: {
+    elim (eq_nat_dec y 0); intros.
+    + exists 0. apply converges_Minimization.
+      rewrite <- a; auto.
+    + elim (converges_Minimization_mon _ _ _ Hf) with 0; eauto.
+      apply neq_0_lt; auto.
+  }
+  inversion_clear H1.
+  assert (forall H, s0 (shiftin (i+1) ps)[@H] xx = (shiftin 0 ns)[@H]) as Hinput'.
+  1: {
+    intro.
+    replace (s0 (shiftin (i+1) ps)[@H1] xx) with (map (fun y => s0 y xx) (shiftin (i+1) ps))[@H1]; auto.
+    2: rewrite (nth_map _ _ _ _ (eq_refl _)); auto.
+    rewrite map_shiftin.
+    apply shiftin_eq.
+    unfold s0. rewrite plus_comm; apply update_read.
+    intro. rewrite nth_map'. unfold s0; rewrite update_read'; auto.
+    apply gt_neq; red. transitivity i; auto. rewrite plus_comm; auto.
+  }
+  elim (IHd _ _ Hd' _ _ _ _ _ _ _ Hi Hpsh Hi' HhDefs HhDefs' H2 _ Hinput'); intros.
+  rename x0 into sI; destroy H1.
+  rename x0 into tlI, H1 into HI.
+  replace (X + 1 + Gamma h) with (X + Gamma h + 1) in HI.
+  2: repeat rewrite <- plus_assoc; rewrite <- (plus_comm 1); auto.
+  generalize (MCT_Trans _ _ _ _ _ H00 (MCT_Step _ _ _ _ _ H0 HI)).
+  set (P := Build_Program Defs (Call (X + Gamma h + 1))).
+  clear H0 H00 HI; intro HI.
+  assert (X <= X + Gamma h + 1 < X + Gamma (Minimization h)).
+  1: { split; simpl; auto with arith. rewrite plus_assoc; auto with arith. }
+  (* Loop *)
+  assert (forall m, m <= y -> exists t' s' y', (P,sI) --[ t' ]-->* (P,s')
+    /\ converges h (shiftin m ns) y' /\ s' i xx = y' /\ s' (i+1) xx = m /\ forall j, j < i -> s' j xx = s0 j xx).
+  - induction m; intros.
+    * exists List.nil, sI, x; repeat split; auto. constructor.
+      rewrite H4; auto with arith. unfold s0. rewrite plus_comm, update_read; auto.
+      apply gt_neq. red; rewrite plus_comm; auto.
+      intros; apply H4. transitivity i; auto. apply lt_neq; auto.
+    * elim IHm; auto with arith; clear IHm.
+      intros tlI' H''; destroy H''.
+      rename x1 into yI, x0 into sI', H5 into HI'.
+      elim (Call_reduce Defs (X + Gamma h + 1) sI'); intros; auto.
+      rename x0 into tlU, H5 into HU.
+      rewrite HDefs', Minimization_Procs_1 in HU; auto.
+      generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (i+1) zero (i+2) xx (IfEq (i+2) i (Send (i+1) this q;; Call (X + Gamma h + 2)) (Send (i+1) this (i+2);; Send (i+2) succ_this (i+1);; Call (X+1))) sI')).
+      simpl. set (s1 := update sI' (i+2) xx 0); intro.
+      generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs i this (i+2) yy (Cond (i+2) compare (Send (i+1) this q;; Call (X + Gamma h + 2)) (Send (i+1) this (i+2);; Send (i+2) succ_this (i+1);; Call (X+1))) s1)).
+      simpl. set (s2 := update s1 (i+2) yy (s1 i xx)); intro.
+      assert (beval_on_state compare s2 (i+2) = false).
+      1: {
+        unfold beval_on_state, beval, MC_BEval.eval.
+        apply Nat.eqb_neq.
+        unfold s2, s1.
+        rewrite update_read, update_read''; auto. 2: discriminate.
+        rewrite update_read, update_read'.
+        rewrite H7.
+        elim (converges_Minimization_mon _ _ _ Hf m); auto.
+        intros. rewrite (converges_inj _ _ _ _ H6 H10); discriminate.
+        apply gt_neq; rewrite plus_comm; simpl; auto.
+      }
+      generalize (MCP_To_intro _ _ _ _ _ _ (C_Else' Defs _ _ (Send (i+1) this q;; Call (X+Gamma h+2)) (Send (i+1) this (i+2);; Send (i+2) succ_this (i+1);; Call (X+1)) _ H10)).
+      simpl; clear H10; intro.
+      generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (i+1) this (i+2) xx (Send (i+2) succ_this (i+1);; Call (X+1)) s2)).
+      simpl. set (s3 := update s2 (i+2) xx (s2 (i+1) xx)); intro.
+      generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (i+2) succ_this (i+1) xx (Call (X+1)) s3)).
+      simpl. set (s4 := update s3 (i+1) xx (S (s3 (i+2) xx))); intro.
+      (* IH on H again *)
+      assert (exists z, converges h (shiftin (S m) ns) z).
+      1: {
+        inversion H1; intros.
+        + rewrite H13. elim (converges_Minimization _ _ _ Hf); intros.
+          exists 0, x0; eauto.
+        + elim (converges_Minimization_mon _ _ _ Hf) with (S m); eauto.
+          rewrite <- H14; auto with arith.
+      }
+      inversion_clear H13. rename x0 into x'.
+      assert (forall H, s4 (shiftin (i+1) ps)[@H] xx = (shiftin (S m) ns)[@H]) as Hinput''.
+      1: {
+        intro.
+        replace (s4 (shiftin (i+1) ps)[@H13] xx) with (map (fun y => s4 y xx) (shiftin (i+1) ps))[@H13]; auto.
+        2: rewrite (nth_map _ _ _ _ (eq_refl _)); auto.
+        rewrite map_shiftin.
+        apply shiftin_eq.
+        + unfold s4, s3, s2, s1.
+          repeat rewrite update_read. repeat rewrite update_read'.
+          2: apply gt_neq; red; auto with arith.
+          2: apply gt_neq; red; auto with arith.
+          rewrite <- H8; auto.
+        + intro. rewrite nth_map'. unfold s4, s3, s2, s1.
+          assert (i+2<>ps[@H15]). apply gt_neq; red; transitivity i; auto. rewrite plus_comm; simpl; auto.
+          repeat rewrite update_read'; auto.
+          2: apply gt_neq; red; auto with arith.
+          rewrite H'', <- Hinput; auto.
+          unfold s0. apply update_read'; auto.
+          apply gt_neq; red; rewrite plus_comm. transitivity i; auto.
+      }
+      elim (IHd _ _ Hd' _ _ _ _ _ _ _ Hi Hpsh Hi' HhDefs HhDefs' H14 _ Hinput''); intros.
+      rename x0 into sL; destroy H13.
+      rename x0 into tlL, H13 into HL.
+      replace (X + 1 + Gamma h) with (X + Gamma h + 1) in HL.
+      2: repeat rewrite <- plus_assoc; rewrite <- (plus_comm 1); auto.
+      fold P in HL, HU.
+      eexists; exists sL, x'; repeat split; auto.
+      -- do 2 (eapply MCT_Trans; eauto).
+         do 5 (eapply MCT_Step; eauto).
+      -- rewrite H16; auto with arith. 2: rewrite plus_comm; simpl; auto.
+         unfold s4, s3, s2, s1.
+         do 2 rewrite update_read. repeat rewrite update_read'.
+         2: apply gt_neq; red; auto with arith.
+         2: apply gt_neq; red; auto with arith.
+         rewrite <- H8; auto.
+      -- intros. rewrite H16. 2: transitivity i; auto with arith. 2: apply lt_neq; auto.
+         assert (i+2 <> j). apply gt_neq; red; rewrite plus_comm. transitivity i; simpl; auto.
+         unfold s4, s3, s2, s1. rewrite <- (plus_comm 1).
+         rewrite update_read. repeat rewrite update_read'; auto.
+         apply gt_neq; red; transitivity i; auto.
+  - elim (H1 y); auto.
+    intros tlL HL; destroy HL.
+    rename x0 into sL.
+    rewrite (converges_inj _ _ _ _ H6 (converges_Minimization _ _ _ Hf)) in H7; clear x1 H6.
+    elim (Call_reduce Defs (X + Gamma h + 1) sL); intros; auto.
+    rename x0 into tlU, H6 into HU.
+    rewrite HDefs', Minimization_Procs_1 in HU; auto.
+    generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (i+1) zero (i+2) xx (IfEq (i+2) i (Send (i+1) this q;; Call (X + Gamma h + 2)) (Send (i+1) this (i+2);; Send (i+2) succ_this (i+1);; Call (X+1))) sL)).
+    simpl. set (s1 := update sL (i+2) xx 0); intro.
+    generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs i this (i+2) yy (Cond (i+2) compare (Send (i+1) this q;; Call (X + Gamma h + 2)) (Send (i+1) this (i+2);; Send (i+2) succ_this (i+1);; Call (X+1))) s1)).
+    simpl. set (s2 := update s1 (i+2) yy (s1 i xx)); intro.
+    assert (beval_on_state compare s2 (i+2) = true).
+    1: {
+      unfold beval_on_state, beval, MC_BEval.eval.
+      apply Nat.eqb_eq.
+      unfold s2, s1.
+      rewrite update_read, update_read''; auto. 2: discriminate.
+      rewrite update_read, update_read'; auto.
+      apply gt_neq; rewrite plus_comm; simpl; auto.
+    }
+    generalize (MCP_To_intro _ _ _ _ _ _ (C_Then' Defs _ _ (Send (i+1) this q;; Call (X+Gamma h+2)) (Send (i+1) this (i+2);; Send (i+2) succ_this (i+1);; Call (X+1)) _ H10)).
+    simpl; clear H10; intro.
+    generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (i+1) this q xx (Call (X+Gamma h+2)) s2)).
+    simpl. set (s3 := update s2 q xx (s2 (i+1) xx)); intro.
+    exists s3; eexists. repeat split; auto.
+    * unfold s3, s2, s1.
+      rewrite update_read.
+      rewrite update_read'. 2: apply gt_neq; auto with arith.
+      rewrite update_read'; auto. apply gt_neq; auto with arith.
+    * intros. unfold s3, s2, s1.
+      rewrite update_read'; auto.
+      rewrite update_read'. 2: apply gt_neq; auto with arith.
+      rewrite update_read'. 2: apply gt_neq; auto with arith.
+      rewrite HL; auto.
+      unfold s0. apply update_read'. apply gt_neq; auto with arith.
+    * do 3 (eapply MCT_Trans; eauto).
+      do 4 (eapply MCT_Step; eauto).
+      rewrite plus_assoc; constructor.
+Qed.
 
 Fixpoint compatible (Defs:DefSet) (s:State) (tl:RichLabel) (C:Choreography) : Prop :=
   (match C, tl with
