@@ -271,7 +271,7 @@ apply nth_map'.
 Qed.
 
 Lemma Composition_correct : forall k m (g:PRFunction m) (f:t (PRFunction k) m) (ns:t nat k) (ms:t nat m) steps,
-  (forall Hi, eval (nth f Hi) steps ns = Some (nth ms Hi)) -> eval g steps ms = eval (Composition g f) steps ns.
+  (forall Hi, eval (nth f Hi) steps ns = Some (nth ms Hi)) -> eval (Composition g f) steps ns = eval g steps ms.
 Proof.
 intros; unfold eval; simpl.
 case_eq (all_defined (map_inv (map_inv (map eval_opt f) steps) (map Some ns))); simpl; intro.
@@ -422,7 +422,7 @@ intros; induction m.
 + simpl; auto.
 + unfold PR_mult.
   rewrite Recursion_correct_step with (x:=m) (y:=m*n); simpl; auto.
-  rewrite <- Composition_correct with (ms := [n; m*n]).
+  rewrite Composition_correct with (ms := [n; m*n]).
   - apply add_correct.
   - prove_composition_2.
 Qed.
@@ -460,7 +460,7 @@ Eval compute in (eval PR_pred 0 [0]).
 Lemma pred_correct : forall n steps, eval PR_pred steps [n] = Some (pred n).
 Proof.
 intros; unfold PR_pred.
-rewrite <- Composition_correct with (ms := [n; 0]).
+rewrite Composition_correct with (ms := [n; 0]).
 + induction n.
   - rewrite Recursion_correct_base; auto.
   - rewrite Recursion_correct_step with (x := n) (y := pred n); auto.
@@ -480,12 +480,12 @@ Eval compute in (eval PR_minus 0 [2; 3]).
 Lemma minus_correct : forall m n steps, eval PR_minus steps [n; m] = Some (n - m).
 Proof.
 intros; unfold PR_minus.
-rewrite <- Composition_correct with (ms := [m; n]).
+rewrite Composition_correct with (ms := [m; n]).
 * induction m.
   + rewrite Recursion_correct_base; auto; rewrite <- minus_n_O; auto.
   + rewrite Recursion_correct_step with (x := m) (y := n - m); simpl; auto.
     replace (n - S m) with (pred (n - m)).
-    - rewrite <- Composition_correct with (ms := [n-m]).
+    - rewrite Composition_correct with (ms := [n-m]).
       ** apply pred_correct.
       ** prove_composition_1.
     - rewrite minus_S; auto.
@@ -498,7 +498,7 @@ Definition PR_gt := Composition PR_sign [PR_minus].
 Lemma gt_correct_true : forall m n steps, n > m -> eval PR_gt steps [n; m] = Some 1.
 Proof.
 intros; unfold PR_gt.
-rewrite <- Composition_correct with (ms := [n-m]).
+rewrite Composition_correct with (ms := [n-m]).
 + red in H.
   elim (minus_is_S m n H); intros k Hk.
   rewrite Hk; apply sign_correct_S.
@@ -509,7 +509,7 @@ Qed.
 Lemma gt_correct_false : forall m n steps, n <= m -> eval PR_gt steps [n; m] = Some 0.
 Proof.
 intros; unfold PR_gt.
-rewrite <- Composition_correct with (ms := [n-m]).
+rewrite Composition_correct with (ms := [n-m]).
 + rewrite (not_lt_minus_0 n m); auto with arith.
 + prove_composition_1.
   rewrite minus_correct; auto.
@@ -539,7 +539,7 @@ Definition PR_le := Composition PR_minus [Composition Successor [Composition Zer
 Lemma le_correct_true : forall m n steps, m <= n -> eval PR_le steps [m; n] = Some 1.
 Proof.
 intros; unfold PR_le.
-rewrite <- Composition_correct with (ms := [1; 0]).
+rewrite Composition_correct with (ms := [1; 0]).
 + rewrite minus_correct; auto with arith.
 + prove_composition_2.
   apply gt_correct_false; auto.
@@ -548,7 +548,7 @@ Qed.
 Lemma le_correct_false : forall m n steps, n < m -> eval PR_le steps [m; n] = Some 0.
 Proof.
 intros; unfold PR_le.
-rewrite <- Composition_correct with (ms := [1; 1]).
+rewrite Composition_correct with (ms := [1; 1]).
 + rewrite minus_correct; auto with arith.
 + prove_composition_2.
   apply gt_correct_true; auto.
@@ -578,7 +578,7 @@ Definition PR_equal := Composition PR_mult [PR_le; Composition PR_le [Projection
 Lemma equal_correct_true : forall m n steps, m = n -> eval PR_equal steps [m; n] = Some 1.
 Proof.
 intros; unfold PR_equal.
-rewrite <- Composition_correct with (ms := [1; 1]).
+rewrite Composition_correct with (ms := [1; 1]).
 + rewrite mult_correct; auto with arith.
 + prove_composition_2; apply le_correct_true; rewrite H; auto.
 Qed.
@@ -587,12 +587,12 @@ Lemma equal_correct_false : forall m n steps, m <> n -> eval PR_equal steps [m; 
 Proof.
 intros; unfold PR_equal.
 elim (not_eq _ _ H); intro.
-- rewrite <- Composition_correct with (ms := [1; 0]).
+- rewrite Composition_correct with (ms := [1; 0]).
   + rewrite mult_correct; auto with arith.
   + prove_composition_2.
     * apply le_correct_true; auto with arith.
     * apply le_correct_false; auto.
-- rewrite <- Composition_correct with (ms := [0; 1]).
+- rewrite Composition_correct with (ms := [0; 1]).
   + rewrite mult_correct; auto with arith.
   + prove_composition_2.
     * apply le_correct_false; auto.
@@ -624,12 +624,12 @@ Lemma diff_correct_true : forall m n steps, m <> n -> eval PR_diff steps [m; n] 
 Proof.
 intros; unfold PR_diff.
 elim (not_eq _ _ H); intro.
-- rewrite <- Composition_correct with (ms := [0; 1]).
+- rewrite Composition_correct with (ms := [0; 1]).
   + rewrite add_correct; auto.
   + prove_composition_2.
     * apply gt_correct_false; auto with arith.
     * apply gt_correct_true; auto.
-- rewrite <- Composition_correct with (ms := [1; 0]).
+- rewrite Composition_correct with (ms := [1; 0]).
   + rewrite add_correct; auto.
   + prove_composition_2.
     * apply gt_correct_true; auto.
@@ -639,7 +639,7 @@ Qed.
 Lemma diff_correct_false : forall m n steps, m = n -> eval PR_diff steps [m; n] = Some 0.
 Proof.
 intros; unfold PR_diff.
-rewrite <- Composition_correct with (ms := [0; 0]).
+rewrite Composition_correct with (ms := [0; 0]).
 + rewrite add_correct; auto.
 + prove_composition_2; apply gt_correct_false; rewrite H; auto.
 Qed.
@@ -672,11 +672,11 @@ Definition PR_sub := Minimization PR_sub_aux.
 Lemma sub_aux_correct : forall m n k steps, eval PR_sub_aux steps [m; n; k] = Some 0 <-> m = n + k.
 Proof.
 intros; unfold PR_sub_aux.
-rewrite <- Composition_correct with (ms := [k+n; m]).
+rewrite Composition_correct with (ms := [k+n; m]).
 - rewrite <- diff_correct_0.
   rewrite plus_comm; split; auto.
 - prove_composition_2.
-  * rewrite <- Composition_correct with (ms := [n; k]).
+  * rewrite Composition_correct with (ms := [n; k]).
     + rewrite plus_comm; apply add_correct.
     + prove_composition_2.
 Qed.
@@ -1034,6 +1034,168 @@ split; intros; intro.
 + case_eq (eval f steps ns); auto.
   intros.
   elim (H n); exists steps; auto.
+Qed.
+
+(** Results about convergence using each constructor. *)
+Lemma converges_Zero : forall ns y, converges Zero ns y -> y = 0.
+Proof.
+intros.
+apply (converges_inj _ _ _ _ H).
+exists 0; simpl.
+clear H y. replace ns with [hd ns].
+2: apply vector_1_inv.
+apply Zero_correct.
+Qed.
+
+Lemma converges_Successor : forall ns y, converges Successor ns y -> y = S (hd ns).
+Proof.
+intros.
+apply (converges_inj _ _ _ _ H).
+exists 0; simpl.
+clear H y. replace ns with [hd ns].
+2: apply vector_1_inv.
+apply Successor_correct.
+Qed.
+
+Lemma converges_Projection : forall m k (H:m<k) ns y,
+  converges (Projection H) ns y -> y = ns[@Fin.of_nat_lt H].
+Proof.
+intros.
+apply (converges_inj _ _ _ _ H0).
+exists 0; simpl.
+apply Projection_correct.
+Qed.
+
+Lemma converges_Composition' : forall {m k} fs g ns y,
+  converges (@Composition m k g fs) ns y ->
+  exists ms, (forall H, converges fs[@H] ns ms[@H]).
+Proof.
+intros.
+elim H; intros.
+revert H0.
+unfold eval; simpl.
+case_eq (all_defined (map_inv (map_inv (map eval_opt fs) x) (map Some ns))); simpl; intros.
+2: inversion H1.
+case_eq (all_defined (map Some ns)); simpl; intros.
+2: rewrite H2 in H1; inversion H1.
+clear H1 H2 g H y.
+induction k.
++ exists (nil _). intro; inversion H.
++ generalize (all_defined_true _ _ H0); intro.
+  elim (IHk (tl fs)); intros.
+  2: {
+    case_eq (all_defined (map_inv (map_inv (map eval_opt (tl fs)) x) (map Some ns))); auto.
+    intro; exfalso.
+    elim (all_defined_false _ _ H1); intros.
+    apply H with (Fin.FS x0). rewrite <- H2.
+    repeat rewrite nth_map_inv'.
+    rewrite nth_tl, tl_map; auto.
+  }
+  elim (Some_or_None (eval_opt (hd fs) x (map Some ns))); intros.
+  1: {
+    elim (H Fin.F1).
+    rewrite <- a; repeat rewrite nth_map_inv'.
+    rewrite nth_hd, hd_map; auto.
+  }
+  inversion_clear b.
+  exists (x1::x0); intro.
+  apply hd_tl_induction' with (P:=fun x y => converges x ns y); auto.
+  simpl. exists x; auto.
+Qed.
+
+Lemma converges_Composition : forall {m k} fs g ns y,
+  converges (@Composition m k g fs) ns y ->
+  exists ms, (forall H, converges fs[@H] ns ms[@H]) /\ converges g ms y.
+Proof.
+intros.
+elim (converges_Composition' _ _ _ _ H); intros.
+rename x into ms; exists ms; split; auto.
+elim H; intros.
+revert H1.
+unfold eval; simpl.
+case_eq (all_defined (map_inv (map_inv (map eval_opt fs) x) (map Some ns))); simpl; intros.
+2: inversion H2.
+case_eq (all_defined (map Some ns)); simpl; intros.
+2: rewrite H3 in H2; inversion H2.
+rewrite H3 in H2.
+exists x; unfold eval.
+rewrite <- H2.
+replace (map Some ms) with (map_inv (map_inv (map eval_opt fs) x) (map Some ns)); auto.
+apply eq_nth_iff'; intro.
+do 2 rewrite nth_map_inv'. do 2 rewrite nth_map'.
+elim (H0 p); intros.
+unfold eval in H4.
+elim (Some_or_None (eval_opt fs[@p] x (map Some ns))); intro.
++ elim (all_defined_true _ _ H1 p); auto.
+  repeat rewrite nth_map_inv'; rewrite nth_map'; auto.
++ inversion_clear b; intros.
+  rewrite (eval_opt_inj _ _ _ _ _ _ _ H4 H5); auto.
+Qed.
+
+Lemma converges_Recursion_base : forall {m} (g:PRFunction m) h ns y,
+  converges (Recursion g h) ns y -> hd ns = 0 -> converges g (tl ns) y.
+Proof.
+intros.
+elim H; intros.
+exists x. rewrite Recursion_correct_base in H1; auto.
+Qed.
+
+Lemma converges_Recursion_step : forall {m} (g:PRFunction m) h ns x y,
+  converges (Recursion g h) ns y -> hd ns = (S x) ->
+  exists z, converges (Recursion g h) (x :: tl ns) z /\ converges h (x :: z :: tl ns) y.
+Proof.
+intros.
+elim H; intros. rename x0 into z.
+clear H. revert m ns g h H0 H1.
+refine (@caseS _ _ _); intros.
+simpl in H0. rewrite H0 in H1; rewrite H0; clear h H0.
+rename h0 into h.
+revert y H1; case x; intros.
++ unfold eval in H1; simpl in H1.
+  case_eq (eval_opt g z (map Some t)); intros; rewrite H in H1. 2: inversion H1.
+  exists n0. split; eexists; eauto; unfold eval; simpl; eauto.
++ clear x; rename n0 into x.
+  assert (hd (S (S x)::t) = S (S x)); auto.
+  case_eq (eval (Recursion g h) z (S x :: t)); intros.
+  - rewrite (Recursion_correct_step _ _ _ _ _ _ _ H H0) in H1.
+    exists n0. split; eexists; eauto.
+  - exfalso.
+    rewrite (Recursion_correct_step' _ _ _ _ _ _ H H0) in H1.
+    inversion H1.
+Qed.
+
+Lemma converges_Recursion_full : forall {m} (g:PRFunction m) h ns y,
+  converges (Recursion g h) ns y ->
+  forall x, x <= hd ns ->  exists z, converges (Recursion g h) (x :: tl ns) z.
+Proof.
+intros. revert m ns g h y H x H0.
+refine (@caseS _ _ _); intro m.
+simpl; induction m; intros.
++ exists y. inversion H0. apply converges_Recursion_base in H; auto.
++ inversion H0; eauto.
+  clear m0 H1.
+  elim (converges_Recursion_step _ _ _ m _ H); auto.
+  intros z Hz; inversion_clear Hz. eauto.
+Qed.
+
+Lemma converges_Minimization: forall {m} (h:PRFunction (1+m)) ns y,
+  converges (Minimization h) ns y -> converges h (shiftin y ns) 0.
+Proof.
+intros.
+destroy H.
+elim (Minimization_correct _ _ _ _ _ H); intros.
+inversion_clear H0; exists x0; auto.
+Qed.
+
+Lemma converges_Minimization_mon: forall {m} (h:PRFunction (1+m)) ns y,
+  converges (Minimization h) ns y ->
+  forall x, x < y -> exists z, converges h (shiftin x ns) (S z).
+Proof.
+intros.
+destroy H.
+elim (Minimization_correct _ _ _ _ _ H); intros.
+inversion_clear H1.
+elim (H3 _ H0); intros. exists x2, x1; auto.
 Qed.
 
 End Convergence.

@@ -12,101 +12,6 @@ Notation "A '&&&' B" := (sumbool_and _ _ _ _ A B).
 
 (** MOVE ME *)
 
-Lemma converges_Zero : forall ns y, converges Zero ns y -> y = 0.
-Proof.
-intros.
-apply (converges_inj _ _ _ _ H).
-exists 0; simpl.
-clear H y. replace ns with [hd ns].
-2: apply vector_1_inv.
-apply Zero_correct.
-Qed.
-
-Lemma converges_Successor : forall ns y, converges Successor ns y -> y = S (hd ns).
-Proof.
-intros.
-apply (converges_inj _ _ _ _ H).
-exists 0; simpl.
-clear H y. replace ns with [hd ns].
-2: apply vector_1_inv.
-apply Successor_correct.
-Qed.
-
-Lemma converges_Projection : forall m k (H:m<k) ns y,
-  converges (Projection H) ns y -> y = ns[@Fin.of_nat_lt H].
-Proof.
-intros.
-apply (converges_inj _ _ _ _ H0).
-exists 0; simpl.
-apply Projection_correct.
-Qed.
-
-Lemma converges_Recursion_base : forall {m} (g:PRFunction m) h ns y,
-  converges (Recursion g h) ns y -> hd ns = 0 -> converges g (tl ns) y.
-Proof.
-intros.
-elim H; intros.
-exists x. rewrite Recursion_correct_base in H1; auto.
-Qed.
-
-Lemma converges_Recursion_step : forall {m} (g:PRFunction m) h ns x y,
-  converges (Recursion g h) ns y -> hd ns = (S x) ->
-  exists z, converges (Recursion g h) (x :: tl ns) z /\ converges h (x :: z :: tl ns) y.
-Proof.
-intros.
-elim H; intros. rename x0 into z.
-clear H. revert m ns g h H0 H1.
-refine (@caseS _ _ _); intros.
-simpl in H0. rewrite H0 in H1; rewrite H0; clear h H0.
-rename h0 into h.
-revert y H1; case x; intros.
-+ unfold Kleene.eval in H1; simpl in H1.
-  case_eq (eval_opt g z (map Some t)); intros; rewrite H in H1. 2: inversion H1.
-  exists n0. split; eexists; eauto; unfold Kleene.eval; simpl; eauto.
-+ clear x; rename n0 into x.
-  assert (hd (S (S x)::t) = S (S x)); auto.
-  case_eq (Kleene.eval (Recursion g h) z (S x :: t)); intros.
-  - rewrite (Recursion_correct_step _ _ _ _ _ _ _ H H0) in H1.
-    exists n0. split; eexists; eauto.
-  - exfalso.
-    rewrite (Recursion_correct_step' _ _ _ _ _ _ H H0) in H1.
-    inversion H1.
-Qed.
-
-Lemma converges_Recursion_full : forall {m} (g:PRFunction m) h ns y,
-  converges (Recursion g h) ns y ->
-  forall x, x <= hd ns ->  exists z, converges (Recursion g h) (x :: tl ns) z.
-Proof.
-intros. revert m ns g h y H x H0.
-refine (@caseS _ _ _); intro m.
-simpl; induction m; intros.
-+ exists y. inversion H0. apply converges_Recursion_base in H; auto.
-+ inversion H0; eauto.
-  clear m0 H1.
-  elim (converges_Recursion_step _ _ _ m _ H); auto.
-  intros z Hz; inversion_clear Hz. eauto.
-Qed.
-
-Lemma converges_Minimization: forall {m} (h:PRFunction (1+m)) ns y,
-  converges (Minimization h) ns y -> converges h (shiftin y ns) 0.
-Proof.
-intros.
-destroy H.
-elim (Minimization_correct _ _ _ _ _ H); intros.
-inversion_clear H0; exists x0; auto.
-Qed.
-
-Lemma converges_Minimization_mon: forall {m} (h:PRFunction (1+m)) ns y,
-  converges (Minimization h) ns y ->
-  forall x, x < y -> exists z, converges h (shiftin x ns) (S z).
-Proof.
-intros.
-destroy H.
-elim (Minimization_correct _ _ _ _ _ H); intros.
-inversion_clear H1.
-elim (H3 _ H0); intros. exists x2, x1; auto.
-Qed.
-
 (** List of recursion variables up to a given bound. *)
 Fixpoint RecVarList n : list RecVar :=
 match n with
@@ -515,7 +420,8 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   replace (L_Com ps[@Fin.of_nat_lt l] x q) with (forget (R_Com ps[@Fin.of_nat_lt l] x q xx)); auto.
   econstructor; constructor. rewrite plus_comm; simpl. apply C_Com'.
 + (* Composition *)
-  admit.
+  (* Here we start directly with the loop *)
+
 + (* Recursion *)
   set (Hd' := lt_S_n (Nat.max (depth g) (depth h)) d Hd).
   set (Hg := (max_lt_l _ _ _ Hd')).

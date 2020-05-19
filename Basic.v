@@ -77,6 +77,11 @@ intros. elim (eq_nat_dec m n); auto.
 intro. rewrite a in H; elim (lt_irrefl _ H).
 Qed.
 
+Lemma Some_or_None : forall (n:option nat), {n = None} + {exists m, n = Some m}.
+Proof.
+induction n; eauto.
+Qed.
+
 End Natural_Numbers.
 
 (** * Lists *)
@@ -586,6 +591,14 @@ induction n.
     exists (Fin.FS x0); simpl; auto.
 Qed.
 
+Lemma In_induction : forall  {A} {n} (P:A -> Prop) (v:t A n),
+  (forall x, In x v -> P x) -> forall H, P (v[@H]).
+Proof.
+induction n; intros.
+1: inversion H0.
+apply H. eapply nth_In; eauto.
+Qed.
+
 Lemma shiftin_elim : forall {A} {n} (v:t A n) x y, In y (shiftin x v) -> x = y \/ In y v.
 Proof.
 induction n; simpl; intros.
@@ -699,6 +712,87 @@ Lemma nth_map_inv' {A} {B} {n} (f:t (A->B) n) v (p: Fin.t n) :
   (map_inv f v) [@p] = f[@p] v.
 Proof.
 apply nth_map_inv; auto.
+Qed.
+
+(** More about map. *)
+Lemma hd_map : forall {A B} (f:A->B) n (v:t A (S n)), hd (map f v) = f (hd v).
+Proof.
+intros.
+repeat rewrite <- nth_hd. apply nth_map'.
+Qed.
+
+Lemma tl_map : forall {A B} (f:A->B) n (v:t A (S n)), tl (map f v) = map f (tl v).
+Proof.
+intros.
+apply eq_nth_iff'.
+intros; rewrite <- nth_tl.
+repeat rewrite nth_map'.
+rewrite nth_tl; auto.
+Qed.
+
+(** Two interesting induction principles. *)
+Lemma hd_tl_induction : forall {A} {n} (P:A -> Prop) (v:t A (S n)),
+  P (hd v) -> (forall H, P (tl v)[@H]) -> forall H, P v[@H].
+Proof.
+intros A n P; revert n. refine (@caseS _ _ _). intros.
+simpl in H, H0.
+apply In_induction; intros.
+elim (In_elim H2); intros.
+- rewrite <- H3; auto.
+- elim (In_nth H3); intros.
+  rewrite <- H4; auto.
+Qed.
+
+Definition vpair {A B n} (v:t A n) (v':t B n) := map2 (fun a b => (a,b)) v v'.
+
+Lemma vpair_fst : forall A B n (v:t A n) (v':t B n),
+  map fst (vpair v v') = v.
+Proof.
+intros. unfold vpair.
+apply eq_nth_iff'; intros.
+rewrite nth_map', (nth_map2 _ _ _ _ _ _ (eq_refl _) (eq_refl _)).
+auto.
+Qed.
+
+Lemma vpair_snd : forall A B n (v:t A n) (v':t B n),
+  map snd (vpair v v') = v'.
+Proof.
+intros. unfold vpair.
+apply eq_nth_iff'; intros.
+rewrite nth_map', (nth_map2 _ _ _ _ _ _ (eq_refl _) (eq_refl _)).
+auto.
+Qed.
+
+Lemma nth_vpair : forall A B n (v:t A n) (v':t B n) H,
+  (vpair v v')[@H] = (v[@H],v'[@H]).
+Proof.
+intros.
+replace v[@H] with (map fst (vpair v v'))[@H].
+2: rewrite vpair_fst; auto.
+replace v'[@H] with (map snd (vpair v v'))[@H].
+2: rewrite vpair_snd; auto.
+rewrite surjective_pairing at 1.
+repeat rewrite nth_map'; auto.
+Qed.
+
+Lemma hd_tl_induction' : forall {A B} {n} (P:A -> B -> Prop)
+  (v:t A (S n)) (v':t B (S n)),
+  P (hd v) (hd v') -> (forall H, P (tl v)[@H] (tl v')[@H]) -> forall H, P v[@H] v'[@H].
+Proof.
+intros.
+set (P' := fun X => P (fst X) (snd X)).
+set (V := vpair v v').
+assert (P' V[@H1]).
+2: unfold P', V in H2; repeat rewrite nth_vpair in H2; auto.
+apply hd_tl_induction.
++ unfold P', V; simpl.
+  repeat rewrite <- nth_hd.
+  repeat rewrite nth_vpair; simpl.
+  repeat rewrite nth_hd; auto.
++ unfold P', V; simpl; intros.
+  repeat rewrite <- nth_tl.
+  repeat rewrite nth_vpair; simpl.
+  repeat rewrite nth_tl; auto.
 Qed.
 
 (** Maximum of a vector of natural numbers. *)
