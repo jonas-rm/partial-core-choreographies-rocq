@@ -14,6 +14,103 @@ Module Export CSt := GState P V X.
 
 Section MaybeMove.
 Definition Pid_In_dec := in_dec P.eq_dec.
+
+Print Behaviour_ind.
+Print Behaviour.
+Scheme Behaviour_rec := Induction for Behaviour Sort Type.
+Print Behaviour_rec.
+
+Definition option_apply_or_True {A B:Type} (f:Behaviour -> Type) (o:option Behaviour) : Type :=
+match o with
+| Some B => f B
+| _ => True
+end.
+
+(*
+Definition Behaviour_rec_2 :
+forall P : Behaviour -> Type,
+  P bnil%SP ->
+  (forall (p : Pid) (e : Expr) (b : Behaviour), P b -> P (p ! e; b)%SP) ->
+  (forall (p : Pid) (v : Var) (b : Behaviour), P b -> P (p ? v; b)%SP) ->
+  (forall (p : Pid) (l : Label) (b : Behaviour), P b -> P (p (+) l; b)%SP) ->
+  (forall (p : Pid) (o : Label -> option Behaviour),
+    option_apply_or_True P (o left) -> option_apply_or_True P (o right) ->
+    P (p & o)%SP
+  ) ->
+  (forall (b : BExpr) (b0 : Behaviour),
+  P b0 -> forall b1 : Behaviour, P b1 -> P (If b Then b0 Else b1)%SP) ->
+  (forall r : RecVar, P (Call r)) -> forall b : Behaviour, P b :=
+fun (P : Behaviour -> Type) (f : P bnil%SP)
+  (f0 : forall (p : Pid) (e : Expr) (b : Behaviour), P b -> P (p ! e; b)%SP)
+  (f1 : forall (p : Pid) (v : Var) (b : Behaviour), P b -> P (p ? v; b)%SP)
+  (f2 : forall (p : Pid) (l : Label) (b : Behaviour), P b -> P (p (+) l; b)%SP)
+  (f3 : forall (p : Pid) (o : Label -> option Behaviour),
+    option_apply_or_True P (o left) -> option_apply_or_True P (o right) ->
+    P (p & o)%SP
+  )
+  (f4 : forall (b : BExpr) (b0 : Behaviour),
+        P b0 -> forall b1 : Behaviour, P b1 -> P (If b Then b0 Else b1)%SP)
+  (f5 : forall r : RecVar, P (Call r)) =>
+fix F (b : Behaviour) : P b :=
+  match b as b0 return (P b0) with
+  | bnil%SP => f
+  | (p ! e; b0)%SP => f0 p e b0 (F b0)
+  | (p ? v; b0)%SP => f1 p v b0 (F b0)
+  | (p (+) l; b0)%SP => f2 p l b0 (F b0)
+  | (p & o)%SP => f3 p o (option_apply_or_True F (o left)) (option_apply_or_True F (o right))
+  | (If b0 Then b1 Else b2)%SP => f4 b0 b1 (F b1) b2 (F b2)
+  | Call r => f5 r
+  end
+.
+*)
+
+Check Behaviour_rec.
+
+(*
+Definition Behaviour_ind_b :
+  forall P : Behaviour -> Type,
+    P bnil%SP ->
+    (forall (p : Pid) (e : Expr) (b : Behaviour), P b -> P (p ! e; b)%SP) ->
+    (forall (p : Pid) (v : Var) (b : Behaviour), P b -> P (p ? v; b)%SP) ->
+    (forall (p : Pid) (l : Label) (b : Behaviour), P b -> P (p (+) l; b)%SP) ->
+    (forall (p : Pid) (o : Label -> option Behaviour),
+      forall B1, o left = Some B1 -> P B1 -> forall B2, o right = Some B2 -> P B2 ->
+      P (p & o)%SP
+    ) ->
+    (forall (b : BExpr) (b0 : Behaviour),
+    P b0 -> forall b1 : Behaviour, P b1 -> P (If b Then b0 Else b1)%SP) ->
+    (forall r : RecVar, P (Call r)) -> forall b : Behaviour, P b :=
+match b with
+  | bnil%SP => f
+  | (p ! e; b0)%SP => f0 p e b0 (F b0)
+  | (p ? v; b0)%SP => f1 p v b0 (F b0)
+  | (p (+) l; b0)%SP => f2 p l b0 (F b0)
+  | (p & o)%SP => f3 p o
+  | (If b0 Then b1 Else b2)%SP => f4 b0 b1 (F b1) b2 (F b2)
+  | Call r => f5 r
+  end
+.
+*)
+
+Theorem Behaviour_ind_b :
+  forall P : Behaviour -> Type,
+    P bnil%SP ->
+    (forall (p : Pid) (e : Expr) (b : Behaviour), P b -> P (p ! e; b)%SP) ->
+    (forall (p : Pid) (v : Var) (b : Behaviour), P b -> P (p ? v; b)%SP) ->
+    (forall (p : Pid) (l : Label) (b : Behaviour), P b -> P (p (+) l; b)%SP) ->
+    (forall (p : Pid) (o : Label -> option Behaviour),
+      forall B1, o left = Some B1 -> P B1 -> forall B2, o right = Some B2 -> P B2 ->
+      P (p & o)%SP
+    ) ->
+    (forall (b : BExpr) (b0 : Behaviour),
+    P b0 -> forall b1 : Behaviour, P b1 -> P (If b Then b0 Else b1)%SP) ->
+    (forall r : RecVar, P (Call r)) -> forall b : Behaviour, P b.
+Proof.
+intros.
+destruct b; auto.
++ specialize (X0 p e b).
+Admitted.
+
 End MaybeMove.
 
 Section EPP.
