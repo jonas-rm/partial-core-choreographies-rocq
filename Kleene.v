@@ -794,17 +794,17 @@ induction d; intros n f; case_eq f; intros; auto with arith;
   - apply le_S_n, Nat.max_lub_r in H6; auto.
 Qed.
 
-Theorem PRFunction_recursion : forall (P:forall (n:nat) (f:PRFunction n), Type),
-  P _ Zero -> P _ Successor ->
-  (forall i j (Hp:i<j), P _ (Projection Hp)) ->
-  (forall m k g fs, (forall H, P m fs[@H]) -> P k g -> P _ (Composition g fs)) ->
-  (forall k g h, P _ g -> P _ h -> P (1+k) (Recursion g h)) ->
-  (forall k h, P _ h -> P k (Minimization h)) ->
-  forall n f, P n f.
+Definition PRFunction_recursion : forall (F:forall (n:nat) (f:PRFunction n), Type),
+  F _ Zero -> F _ Successor ->
+  (forall i j (Hp:i<j), F _ (Projection Hp)) ->
+  (forall m k g fs, (forall H, F m fs[@H]) -> F k g -> F _ (Composition g fs)) ->
+  (forall k g h, F _ g -> F _ h -> F (1+k) (Recursion g h)) ->
+  (forall k h, F _ h -> F k (Minimization h)) ->
+  forall n f, F n f.
 Proof.
 intros.
 revert n f.
-assert (forall d n f, depth f <= d -> P n f); eauto.
+assert (forall d n f, depth f <= d -> F n f); eauto.
 induction d; intros n f; case_eq f; intros; auto with arith;
   try (exfalso; inversion H0; fail).
 + apply X2; intros; apply IHd.
@@ -814,7 +814,7 @@ induction d; intros n f; case_eq f; intros; auto with arith;
 + apply X3; apply IHd.
   - apply le_S_n, Nat.max_lub_l in H0; auto.
   - apply le_S_n, Nat.max_lub_r in H0; auto.
-Qed.
+Defined.
 
 (** Properties:
     - evaluation is injective (it cannot return two different values)

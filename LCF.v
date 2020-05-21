@@ -1071,6 +1071,56 @@ Lemma converges_Implementation_aux_converges : forall {n} (f:PRFunction n) d Hd 
   -> converges f ns y.
 (* Ugh *)
 
+(*
+Fixpoint seq_compose {m} {k} (fs:t (PRFunction m) k) (ps:t Pid m) (target init:nat) (X:RecVar)
+  (Implement : forall (H:Fin.t k) (ps':t Pid m) (q' i':nat) (k':RecVar), RecVar -> Choreography) {struct fs} : RecVar -> Choreography.
+(*
+  match fs with
+  | [] => End
+  | f :: fs' => Implement m f d (Hd Fin.F1) ps target init ;; compose_args fs' ps (S target) (init + Pi f) Implement
+  end.
+*)
+Proof.
+destruct fs.
+- apply (fun _ => End).
+- pose (Implement (Fin.F1) ps target init X) as Ph.
+  pose (seq_compose _ _ fs ps (S target) (init + Pi h) (X + Gamma h) (fun H => Implement (Fin.FS H))) as Pfs.
+  apply (fun Y => if Y <? X + Gamma h then (Ph Y) else (Pfs Y)).
+Defined.
+
+Definition Implementation_aux {m} (f:PRFunction m) :
+  t Pid m -> Pid -> nat -> RecVar -> RecVar -> Choreography
+  :=
+  PRFunction_recursion (fun m f => t Pid m -> Pid -> nat -> RecVar -> RecVar -> Choreography)
+  (fun ps q _ X => Pack1 X (Send ps[@Fin.F1] zero q;; Call (S X)))
+  (fun ps q _ X => Pack1 X (Send ps[@Fin.F1] succ_this q;; Call (S X)))
+  (fun i j Hp ps q _ X => Pack1 X (Send ps[@Fin.of_nat_lt Hp] this q;; Call (S X)))
+  (fun k m g fs Hfs Hg ps q init X => 
+    (fun Y => if Y <? X + vsum (map Gamma fs)
+      then seq_compose fs ps init (init+m) X Hfs Y
+      else Hg (seq_labels init fs) q (init + m) (X + (vsum (map Gamma fs))) Y))
+  (fun k g h Hg Hh ps q init X => 
+    (fun Y =>
+      if (Y <? X + Gamma g) then Hg (tl ps) init (init+3) X Y
+      else if (RecVar_dec Y (X + Gamma g)) then
+         Send (init+2) zero (S init);; Call (X + Gamma g + 1)
+      else if (RecVar_dec Y (X + Gamma g + 1)) then 
+         IfEq (S init) ps[@Fin.F1] (Send init this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2))
+      else if (RecVar_dec Y (X + Gamma g + Gamma h + 2)) then
+         Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma g + 1)
+      else Hh (S init :: init :: tl ps) (init+2) (init+3 + Pi g) (X + Gamma g + 2) Y))
+  (fun k h Hh ps q init X => 
+    (fun Y =>
+      if (RecVar_dec Y X) then
+         Send (init+2) zero (init+1);; Call (X + 1)
+      else if (RecVar_dec Y (X + Gamma h + 1)) then
+         Send (init+1) zero (init+2);; IfEq (init+2) init
+            (Send (init+1) this q;; Call (X + Gamma h + 2))
+            (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1))
+        else Hh (shiftin (init+1) ps) init (init+3) (X + 1) Y))
+  m f.
+*)
+
 Fixpoint compatible (Defs:DefSet) (s:State) (tl:RichLabel) (C:Choreography) : Prop :=
   (match C, tl with
   | Call X,           R_Call Y p       => X = Y /\ In p (fst (Defs X))
