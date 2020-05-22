@@ -520,41 +520,42 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   set (Hd' := lt_S_n (Nat.max (depth g) (vmax (map depth fs))) d Hd).
   set (Hfs := vmax_lt_map _ _ (max_lt_r _ _ _ Hd')).
   set (Hg := max_lt_l _ _ _ Hd').
+  elim (converges_Composition _ _ _ _ Hf); clear Hf; intros.
+  inversion_clear H. rename x into ms, H0 into H'fs, H1 into H'g.
   (* Here we start directly with the loop *)
   assert (exists sF tlF, (Build_Program Defs (Call X),s) --[tlF]-->* (Build_Program Defs (Call (X + vsum (map Gamma fs))),sF)
     /\ (forall p, p<i -> sF p xx = s p xx)
-    /\ forall z j (Hj:j<m), converges (fs[@Fin.of_nat_lt Hj]) ns z -> sF (i+j) xx = z).
-  - elim (converges_Composition' _ _ _ _ Hf); clear Hf; intros.
-    assert (forall Y, X <= Y < X + vsum (map Gamma fs) -> X <= Y < X + Gamma (Composition g fs)).
+    /\ forall z H, converges (fs[@H]) ns z -> sF (seq_labels i fs)[@H] xx = z).
+  - assert (forall Y, X <= Y < X + vsum (map Gamma fs) -> X <= Y < X + Gamma (Composition g fs)).
     1: {
-      intros. inversion_clear H0; split; auto.
+      intros. inversion_clear H; split; auto.
       simpl. rewrite (plus_comm (Gamma g)).
       etransitivity; eauto.
       rewrite <- plus_0_r at 1. rewrite plus_assoc.
       apply plus_lt_compat_l. apply Gamma_neq_zero.
     }
-    generalize (fun Y HY => HDefs Y (H0 Y HY)).
+    generalize (fun Y HY => HDefs Y (H Y HY)).
     clear HDefs; intro HDefs.
     assert (exists k, forall Y, X <= Y < X + vsum (map Gamma fs) ->
       snd (Defs Y) = seq_compose fs _ Hfs ps i (i+m+k) X (fun m f => Implementation_aux f d) Y).
     1: { exists 0; intros. rewrite HDefs'; auto. rewrite Composition_Procs_fs, plus_0_r; auto. }
     clearbody Hd' Hfs.
-    clear g H0 Hd Hd' Hg HDefs'; rename H1 into HDefs'.
+    clear g H'g H Hd Hd' Hg HDefs'; rename H0 into HDefs'.
     revert dependent X. revert dependent i. revert dependent s.
     induction m.
     * intros. exists s, List.nil.
       rewrite <- (vector_0_inv fs). repeat split; auto.
       simpl. rewrite plus_comm; constructor.
-      intros. inversion Hj.
+      intros. inversion H.
     * intros.
-      revert dependent x. revert IHm.
+      revert dependent ms. revert IHm.
       revert dependent fs. revert m. refine (@caseS _ _ _); intros.
       revert dependent t. revert IHm.
-      revert dependent x. revert n0. refine (@caseS _ _ _); intros.
+      revert dependent ms. revert n0. refine (@caseS _ _ _); intros.
       clear f. rename h into f, t0 into fs, h0 into x, t into xs, n0 into m.
       (* First f... *)
       assert (forall Y, X <= Y < X + Gamma f -> X <= Y < X + vsum (map Gamma (f::fs))).
-      1: { intros. inversion_clear H0; split; auto. simpl. rewrite plus_assoc; auto with arith. }
+      1: { intros. inversion_clear H; split; auto. simpl. rewrite plus_assoc; auto with arith. }
       elim HDefs'; clear HDefs'; intros k' HDefs'.
       assert (i < i + S m + k').
       1: { apply lt_le_trans with (i + S m); auto with arith. rewrite <- plus_n_Sm; auto with arith. }
@@ -564,16 +565,16 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
       2: {
         intros.
         rewrite HDefs'; auto.
-        simpl. inversion_clear H2.
-        apply Nat.ltb_lt in H4; rewrite H4. auto.
+        simpl. inversion_clear H1.
+        apply Nat.ltb_lt in H3; rewrite H3. auto.
       }
       2: { change (converges (hd (f::fs)) ns (hd (x::xs))). repeat rewrite <- nth_hd; auto. }
-      intros. destroy H2. rename x0 into sf, x1 into tlf.
+      intros. destroy H1. rename x0 into sf, x1 into tlf.
       (* ... then the rest. *)
       elim IHm with fs (fun H => Hfs (Fin.FS H)) xs sf (S i) (X + Gamma f); intros.
-      2: { change (converges (tl (f::fs))[@H5] ns (tl (x::xs))[@H5]). rewrite <- nth_tl. apply H. }
-      2: { assert (ps[@H5] < i). apply Hps; eapply nth_In; eauto.
-           rewrite H4; auto. transitivity i; auto. apply lt_neq; auto. }
+      2: { change (converges (tl (f::fs))[@H4] ns (tl (x::xs))[@H4]). rewrite <- nth_tl. apply H'fs. }
+      2: { assert (ps[@H4] < i). apply Hps; eapply nth_In; eauto.
+           rewrite H3; auto. transitivity i; auto. apply lt_neq; auto. }
       2: { apply lt_le_trans with i; auto. }
       2: { apply lt_le_trans with i; auto. }
       2: {
@@ -583,38 +584,44 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
       }
       2: {
         exists (k' + Pi f); intros.
-        inversion_clear H5. rewrite <- plus_assoc in H7.
+        inversion_clear H4. rewrite <- plus_assoc in H6.
         rewrite (HDefs' Y). 2: split; auto; transitivity (X + Gamma f); auto with arith.
-        simpl. generalize H6; intro.
-        apply le_not_lt, Nat.ltb_nlt in H6. rewrite H6.
+        simpl. generalize H5; intro.
+        apply le_not_lt, Nat.ltb_nlt in H5. rewrite H5.
         replace (i + S m + k' + Pi f) with (S (i + m + (k' + Pi f))); auto.
         repeat rewrite plus_assoc. rewrite <- plus_n_Sm; auto.
       }
       simpl (vsum (map Gamma (f::fs))).
-      destroy H5. rename x0 into s', x1 into tl'.
+      destroy H4. rename x0 into s', x1 into tl'.
       (* Wheee. *)
       exists s', (tlf ++ tl')%list; repeat split; auto.
       ++ rewrite plus_assoc. eapply MCT_Trans; eauto.
-      ++ intros; rewrite H7; auto.
-         apply H4. transitivity i; auto.
+      ++ intros; rewrite H6; auto.
+         apply H3. transitivity i; auto.
          apply lt_neq; auto.
-      ++ intros. case_eq j; intros.
-         1: {
-           rewrite plus_0_r.
-           rewrite H7, H3; auto.
-           generalize (H (Fin.of_nat_lt Hj)); intro.
-           generalize (converges_inj _ _ _ _ H10 H8).
-           revert dependent Hj; rewrite H9; auto.
-         }
-         revert dependent Hj. rewrite H9.
-         clear j H9; rename n0 into j; intros.
-         simpl in H8.
-         rewrite <- (H5 _ _ _ H8); auto.
-         rewrite <- plus_n_Sm; auto.
-  - admit.
-
-
-
+      ++ intros. revert H8.
+         apply (hd_tl_induction' (fun x y => converges x ns z -> s' y xx = z)); auto.
+         simpl; intros. rewrite H6; auto. rewrite (converges_inj _ _ _ _ H8 (H'fs Fin.F1)); auto.
+  - destroy H. rename x into sF, x0 into tlF.
+    assert (X + Gamma (Composition g fs) = X + vsum (map Gamma fs) + Gamma g) as HX.
+    simpl. rewrite (plus_comm (Gamma g)), plus_assoc; auto.
+    elim IHd with m g Hg (seq_labels i fs) q (i+m) (X + vsum (map Gamma fs)) Defs ms y sF; auto.
+    * intros. destroy H2. rename x into s', x0 into tl'.
+      exists s', (tlF++tl')%list; repeat split; auto.
+      ++ intros. rewrite H4; auto. apply lt_le_trans with i; auto with arith.
+      ++ eapply MCT_Trans; eauto.
+         rewrite HX; auto.
+    * intro. elim (seq_labels_lt _ _ _ H2); intros.
+      elim (lt_irrefl q). apply lt_le_trans with i; auto.
+    * intros. elim (seq_labels_lt _ _ _ H2); auto.
+    * apply lt_le_trans with i; auto with arith.
+    * intros. inversion_clear H2. apply HDefs; split; auto.
+      transitivity (X + vsum (map Gamma fs)); auto with arith.
+      rewrite HX; auto.
+    * intros. inversion_clear H2. rewrite HDefs'.
+      rewrite Composition_Procs_g; auto. rewrite HX; auto.
+      split; auto. transitivity (X + vsum (map Gamma fs)); auto with arith.
+      rewrite HX; auto.
 + (* Recursion *)
   set (Hd' := lt_S_n (Nat.max (depth g) (depth h)) d Hd).
   set (Hg := (max_lt_l _ _ _ Hd')).
@@ -1059,7 +1066,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
     * do 3 (eapply MCT_Trans; eauto).
       do 4 (eapply MCT_Step; eauto).
       rewrite plus_assoc; constructor.
-Admitted.
+Qed.
 
 Lemma converges_Implementation_aux_converges : forall {n} (f:PRFunction n) d Hd ps q i X Defs ns y,
   ~In q ps -> (forall p, In p ps -> p < i) -> q < i ->
