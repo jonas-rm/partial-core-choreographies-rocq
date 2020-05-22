@@ -805,20 +805,6 @@ Lemma implements_WF : forall {n} (f:PRFunction n) ps q,
 Proof.
 *)
 
-(* Prove this, and refactor the next result.
-Lemma Implementation_aux_input : forall {n} (f:PRFunction n) d Hd ps q i X Defs,
-  ~In q ps -> (forall p, In p ps -> p < i) -> q < i ->
-  (forall Y, X <= Y < X + Gamma f -> fst (Defs Y) <> List.nil) ->
-  (forall Y, X <= Y < X + Gamma f -> snd (Defs Y) = Implementation_aux f d Hd ps q i X Y) ->
-  forall s s' tl C,
-  (Build_Program Defs (Call X),s) --[tl]-->* (Build_Program Defs C,s')
-  -> forall p, p < i -> p <> q -> s' p xx = s p xx.
-Proof.
-intros n f d; revert n f. induction d. inversion Hd.
-intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 into HDefs, H3 into HDefs'.
-+ 
-*)
-
 Lemma Implementation_aux_converges : forall {n} (f:PRFunction n) d Hd ps q i X Defs ns y,
   ~In q ps -> (forall p, In p ps -> p < i) -> q < i ->
   (forall Y, X <= Y < X + Gamma f -> fst (Defs Y) <> List.nil) ->

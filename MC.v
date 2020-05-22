@@ -2063,6 +2063,21 @@ induction c, a. simpl in H0; rewrite H0 in H1.
 inversion H1. inversion H11.
 Qed.
 
+Lemma diamond_5 : forall P s tl1 tl2 P1 s1 P2 s2,
+  (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
+  Main P2 = End -> 
+  (exists tl1' s1',
+    (P1,s1) --[ tl1' ]-->* (P2,s1') /\ eq_state_ext s1' s2).
+Proof.
+intros.
+elim (diamond_4 _ _ _ _ _ _ _ _ H H0); intros.
+destroy H2.
+rename x into P', x0 into tl', x1 into tl'', x2 into s', x3 into s''.
+elim (MCP_ToStar_End _ _ _ H4 H1); intros.
+inversion H6.
+exists tl', s'; split; auto.
+Qed.
+
 Lemma termination_unique : forall c tl1 c1 tl2 c2,
   c --[tl1]-->* c1 -> c --[tl2]-->* c2 ->
   Main (fst c1) = End -> Main (fst c2) = End -> eq_state_ext (snd c1) (snd c2).
