@@ -357,8 +357,7 @@ induction d.
   - simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
     pose (max_lt_l _ _ _ Hd') as Hdf.
     pose (max_lt_r _ _ _ Hd') as Hdfs.
-    assert (forall i, depth fs[@i] < d).
-    intros; rewrite <- nth_map'; apply vmax_lt; auto.
+    pose (vmax_lt_map _ _ Hdfs) as H.
     pose (seq_compose fs _ H ps init (init+m) X (fun m f => Implementation_aux m f d)) as Pfs.
     pose (Implementation_aux _ f _ Hdf (seq_labels init fs) q (init + m) (X + (vsum (map Gamma fs)))) as Pf.
     apply (fun Y => if Y <? X + vsum (map Gamma fs) then Pfs Y else Pf Y).
@@ -451,7 +450,49 @@ rewrite <- Rdec.eqb_eq in H. unfold RecVar_dec.
 rewrite H; auto.
 Qed.
 
-(** The lemmas for Composition are currently missing. *)
+Lemma seq_compose_Procs_hd : forall m k f (fs:t (PRFunction m) k) d Hd ps q i X Implement Y,
+  X <= Y < X + Gamma f ->
+  seq_compose (f::fs) d Hd ps q i X Implement Y = 
+    Implement m f (Hd Fin.F1) ps q i X Y.
+Proof.
+intros; simpl.
+inversion_clear H.
+apply Nat.ltb_lt in H1; rewrite H1; auto.
+Qed.
+
+Lemma seq_compose_Procs_tl : forall m k f (fs:t (PRFunction m) k) d Hd ps q i X Implement Y,
+  X + Gamma f <= Y < X + (vsum (map Gamma (f::fs))) ->
+  seq_compose (f::fs) d Hd ps q i X Implement Y = 
+    seq_compose fs d (fun i => Hd (Fin.FS i)) ps (S q) (i + Pi f) (X + Gamma f) Implement Y.
+Proof.
+intros; simpl.
+inversion_clear H.
+apply le_not_lt, Nat.ltb_nlt in H0; rewrite H0; auto.
+Qed.
+
+Lemma Composition_Procs_fs : forall k m (fs:t (PRFunction k) m) g d (Hd:depth (Composition g fs) < S d) ps q n X Y,
+  X <= Y < X + (vsum (map Gamma fs)) ->
+  let Hd' := (lt_S_n (Nat.max (depth g) (vmax (map depth fs))) d Hd) in
+  let Hf := (vmax_lt_map _ _ (max_lt_r _ _ _ Hd')) in
+  Implementation_aux (Composition g fs) _ Hd ps q n X Y =
+    seq_compose fs _ Hf ps n (n+m) X (fun m f => Implementation_aux f d) Y.
+Proof.
+intros; simpl.
+inversion_clear H.
+rewrite <- Nat.ltb_lt in H1. rewrite H1; auto.
+Qed.
+
+Lemma Composition_Procs_g : forall k m (fs:t (PRFunction k) m) g d (Hd:depth (Composition g fs) < S d) ps q n X Y,
+  X + (vsum (map Gamma fs)) <= Y < X + Gamma (Composition g fs) ->
+  let Hd' := (lt_S_n (Nat.max (depth g) (vmax (map depth fs))) d Hd) in
+  let Hg := (max_lt_l _ _ _ Hd') in
+  Implementation_aux (Composition g fs) _ Hd ps q n X Y =
+    Implementation_aux g _ Hg (seq_labels n fs) q (n + m) (X + (vsum (map Gamma fs))) Y.
+Proof.
+intros; simpl.
+inversion_clear H.
+apply le_not_lt, Nat.ltb_nlt in H0. rewrite H0; auto.
+Qed.
 
 Lemma Recursion_Procs_g : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h) < S d) ps q n X Y,
   X <= Y < X + Gamma g ->

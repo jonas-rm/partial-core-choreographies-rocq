@@ -820,6 +820,10 @@ induction p.
   apply IHp; eapply max_lt_r; exact H.
 Qed.
 
+Lemma vmax_lt_map : forall {A n} (v:t A n) f x,
+    vmax (map f v) < x -> forall i, f v[@i] < x.
+Proof. intros; rewrite <- nth_map'; apply vmax_lt; auto. Qed.
+
 Lemma vmax_In : forall n v p, In p v -> p <= vmax (n:=n) v.
 Proof.
 induction n.
