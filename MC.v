@@ -212,12 +212,12 @@ match C with
 | Cond p _ C1 C2     => (set_union_pid (set_union_pid (p::nil) (MCC_pn C1 Pids)) (MCC_pn C2 Pids))
 end.
 
-Definition set_equals_Pid := set_equals P.eq_dec.
+Definition set_incl_Pid := set_incl P.eq_dec.
 
-(** A program is well-annotated if every procedure is annotated with the correct set of variables. *)
+(** A program is well-annotated if every process used by a procedure is in its annotation. *)
 
 Definition well_ann (P:Program) : Prop :=
-  forall X, set_equals_Pid (MCC_pn (Procs P X) (Vars P)) (Vars P X).
+  forall X, set_incl_Pid (MCC_pn (Procs P X) (Vars P)) (Vars P X).
 
 Lemma well_ann_Main_change : forall Defs C C',
   well_ann (Build_Program Defs C) -> well_ann (Build_Program Defs C').
