@@ -498,7 +498,7 @@ induction B1 using Behaviour_ind_b; induction B2 using Behaviour_ind_b; try easy
          2: {
            rewrite H10 in H3.
            inversion H3.
-           assert (Some b2 = None).
+           assert (Some b = None).
            2: inversion H11.
            set (f := (fun l : Label => match l with
                         | left => Some b2
@@ -509,7 +509,10 @@ induction B1 using Behaviour_ind_b; induction B2 using Behaviour_ind_b; try easy
                         | right => None
                         end)) in H12.
            change ((f right) = (g right)).
-About f_equal.
+           rewrite H12; auto.
+          }
+
+(*... *)
 assert (left = left); trivial.
 set (r := f_equal f H11).
 rewrite .
