@@ -492,7 +492,7 @@ induction B1 using Behaviour_ind_b; induction B2 using Behaviour_ind_b; try easy
     * case_eq (merge_beh b1 b0); intros.
       ** rewrite H9 in H3.
          assert (o = (fun l : Label => match l with
-                            | left => Some b2
+                            | left => Some b1
                             | right => None
                             end)).
          2: {
@@ -510,185 +510,282 @@ induction B1 using Behaviour_ind_b; induction B2 using Behaviour_ind_b; try easy
                         end)) in H12.
            change ((f right) = (g right)).
            rewrite H12; auto.
-          }
-
-(*... *)
-assert (left = left); trivial.
-set (r := f_equal f H11).
-rewrite .
-           set (ciao := f_equal H12).
-           subst.
-           set (gright := g right).
-           set (fleft := f left).
-           rewrite H12 in fleft.
-           rewrite H10 in H6.
-           rewrite <- H11.
-           rewrite <- (Some b2 = (fun l : Label => match l with
-                        | left => Some b2
-                        | right => Some b
-                        end) right).
-           rewrite <- H6.
-           rewrite H10.
-About f_equal.
-           f_equal.
-           red in H12.
-           rewrite .
-           rewrite <- ((fun l : Label => match l with
-                        | left => Some b2
-                        | right => Some b
-                        end)right = (fun l : Label => match l with
-                                                 | left => Some b2
-                                                 | right => None
-                                                 end)right).
-           rewrite H12.
-           
-About f_equal.
-
-apply H12 with H3.
-rewrite (f_equal o).
-           rewrite <- f_equal in H12.
-Check f_equal.
-           apply (f_equal) in H12.
-           
-case (merge_beh b2 b1) in H3; case
-       (merge_beh b0 b) in H3.
-
-      ** pose (Hleft := H _ H8 b1).
-         .
-         
-    
-case_eq (o left); case_eq (o right);
-  case_eq (o0 left); case_eq (o0 right);
-  simpl; case_eq (Pid_dec p p0);
-  intros.
-  - inversion H6.
-    generalize H8.
-    clear H8.
-    rewrite H1, H2, H3, H4, H5.
-    
-
-+ intro. red. simpl. simpl in H3.
-  case_eq (Pid_dec p p0).
-  - intro.
-    rewrite H4 in H3.
-    inversion_clear H3.
-    case_eq (o left); case_eq (o0 left); case_eq (o right); case_eq (o0 right); intros.
-    all: rewrite H9, H8 in H5.
-    all: rewrite H7, H3 in H6.
-    all: try easy.
-    * pose (Hleft := H _ H9 _ H5).
-      inversion Hleft.
-      rewrite H11.
-      pose (Hright := H0 _ H7 b H6).
-      inversion Hright.
-      rewrite H12.
-      assert (o = (fun l : Label => match l with
-                            | left => Some b2
-                            | right => Some b0
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hleft := H _ H9 _ H5).
-      inversion Hleft.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
-                            | left => Some b1
-                            | right => Some b
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hleft := H _ H9 _ H5).
-      inversion Hleft.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
+         }
+         apply functional_extensionality.
+         intro.
+         case x; auto.
+      ** rewrite H9 in H3.
+         inversion H3.
+    * case_eq (merge_beh b0 b); intros.
+      ** rewrite H9 in H3.
+         assert (o = (fun l : Label => match l with
                             | left => Some b0
                             | right => None
                             end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hright := H0 _ H7 b H6).
-      inversion Hright.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
+         1: apply functional_extensionality; intro; case x; auto.
+         rewrite H10 in H3.
+         inversion H3. clear H3.
+         set (f := (fun l : Label => match l with
+                      | left => Some b1
+                      | right => None
+                      end)) in H12.
+         set (g := (fun l : Label => match l with
+                      | left => Some b0
+                      | right => None
+                      end)) in H12.
+         assert (Some b0 = Some b1).
+         1: { change ((g left) = (f left)). rewrite H12; auto. }
+         inversion H3.
+         rewrite <- H13.
+         rewrite <- H13 in H9.
+         assert (more_branches_beh b0 b).
+         1: apply H9.
+         apply (H _ H8 _ H11).
+      ** rewrite H9 in H3.
+         inversion H3.
+    * case_eq (merge_beh b0 b); intros; rewrite H9 in H3.
+      ** assert (o = (fun l : Label => match l with
                             | left => Some b1
                             | right => Some b0
                             end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+         1: apply functional_extensionality; intro; case x; auto.
+         rewrite H10 in H3.
+         inversion H3. clear H3.
+         set (f := (fun l : Label => match l with
+                      | left => Some b1
+                      | right => Some b2
+                      end)) in H12.
+         set (g := (fun l : Label => match l with
+                      | left => Some b1
+                      | right => Some b0
+                      end)) in H12.
+         assert (Some b2 = Some b0).
+         1: { change ((f right) = (g right)). rewrite H12; auto. }
+         inversion H3.
+         rewrite <- H13 in H9.
+         assert (more_branches_beh b2 b).
+         1: apply H9.
+         pose (Hright := H0 b2).
+         rewrite <- H13.
+         rewrite <- H13 in H6.
+         apply (H0 _ H6 _ H11).
+      ** inversion H3.
     * assert (o = (fun l : Label => match l with
                             | left => Some b0
-                            | right => Some b
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * assert (o = (fun l : Label => match l with
-                            | left => Some b
                             | right => None
                             end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hright := H0 _ H7 b H6).
-      inversion Hright.
-      rewrite H11.
+      1: apply functional_extensionality; intro; case x; auto.
+      rewrite H9 in H3.
+      set (f := (fun l : Label => match l with
+                   | left => Some b0
+                   | right => Some b
+                   end)) in H3.
+      set (g := (fun l : Label => match l with
+                   | left => Some b0
+                   | right => None
+                   end)) in H3.
+      assert (Some b = None).
+      2: inversion H10.
+      change ((f right) = (g right)).
+      inversion H3; auto.
+    * case_eq (merge_beh b0 b); intros; rewrite H9 in H3.
+      2: inversion H3.
       assert (o = (fun l : Label => match l with
-                            | left => None
-                            | right => Some b0
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+                          | left => None
+                          | right => Some b0
+                          end)).
+      1: apply functional_extensionality; intro; case x; auto.
+      rewrite H10 in H3.
+      set (f := (fun l : Label => match l with
+                   | left => Some b1
+                   | right => Some b2
+                   end)) in H3.
+      set (g := (fun l : Label => match l with
+                   | left => None
+                   | right => Some b0
+                   end)) in H3.
+      inversion H3.
+      assert (Some b1 = None).
+      2: inversion H11.
+      change ((f left) = (g left)).
+      inversion H3; auto.
+    * case_eq (merge_beh b0 b); intros; rewrite H9 in H3.
+      2: inversion H3.
+      assert (o = (fun l : Label => match l with
+                          | left => None
+                          | right => Some b0
+                          end)).
+      1: apply functional_extensionality; intro; case x; auto.
+      rewrite H10 in H3.
+      set (f := (fun l : Label => match l with
+                   | left => Some b1
+                   | right => Some b2
+                   end)) in H3.
+      set (g := (fun l : Label => match l with
+                   | left => None
+                   | right => Some b0
+                   end)) in H3.
+      inversion H3.
+      assert (Some b1 = None).
+      2: inversion H11.
+      change ((f left) = (g left)).
+      inversion H3; auto.
     * assert (o = (fun l : Label => match l with
-                            | left => None
-                            | right => Some b
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+                          | left => None
+                          | right => Some b
+                          end)).
+      1: apply functional_extensionality; intro; case x; auto.
+      rewrite H9 in H3.
+      set (f := (fun l : Label => match l with
+                   | left => Some b0
+                   | right => Some b
+                   end)) in H3.
+      set (g := (fun l : Label => match l with
+                   | left => None
+                   | right => Some b
+                   end)) in H3.
+      inversion H3.
+      assert (Some b0 = None).
+      2: inversion H10.
+      change ((f left) = (g left)).
+      inversion H3; auto.
     * assert (o = (fun l : Label => match l with
-                            | left => None
-                            | right => None
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+                        | left => None
+                        | right => None
+                        end)).
+      1: apply functional_extensionality; intro; case x; auto.
+      rewrite H9 in H3.
+      set (f := (fun l : Label => match l with
+                   | left => Some b0
+                   | right => Some b
+                   end)) in H3.
+      set (g := (fun l : Label => match l with
+                   | left => None
+                   | right => None
+                   end)) in H3.
+      inversion H3.
+      assert (Some b0 = None).
+      2: inversion H10.
+      change ((f left) = (g left)).
+      inversion H3; auto.
+    * assert (o = (fun l : Label => match l with
+                        | left => None
+                        | right => None
+                        end)).
+      1: apply functional_extensionality; intro; case x; auto.
+      rewrite H9 in H3.
+      set (f := (fun l : Label => match l with
+                   | left => Some b0
+                   | right => Some b
+                   end)) in H3.
+      set (g := (fun l : Label => match l with
+                   | left => None
+                   | right => None
+                   end)) in H3.
+      inversion H3.
+      assert (Some b0 = None).
+      2: inversion H10.
+      change ((f left) = (g left)).
+      inversion H3; auto.
+    * assert (o = (fun l : Label => match l with
+                        | left => None
+                        | right => None
+                        end)).
+      1: apply functional_extensionality; intro; case x; auto.
+      rewrite H9 in H3.
+      set (f := (fun l : Label => match l with
+                   | left => Some b
+                   | right => None
+                   end)) in H3.
+      set (g := (fun l : Label => match l with
+                   | left => None
+                   | right => None
+                   end)) in H3.
+      inversion H3.
+      assert (Some b = None).
+      2: inversion H10.
+      change ((f left) = (g left)).
+      inversion H3; auto.
+    * case_eq (merge_beh b0 b); intros; rewrite H9 in H3.
+      2: inversion H3.
+      assert (o = (fun l : Label => match l with
+                          | left => None
+                          | right => Some b0
+                          end)).
+      1: apply functional_extensionality; intro; case x; auto.
+      rewrite H10 in H3.
+      set (f := (fun l : Label => match l with
+                   | left => None
+                   | right => Some b1
+                   end)) in H3.
+      set (g := (fun l : Label => match l with
+                   | left => None
+                   | right => Some b0
+                   end)) in H3.
+      inversion H3.
+      assert (Some b1 = Some b0).
+      1: { change ((f right) = (g right)). rewrite H12; auto. }
+      inversion H11.
+      rewrite H14 in H9.
+      assert (more_branches_beh b0 b).
+      1: apply H9.
+      rewrite <- H14.
+      rewrite <- H14 in H6.
+      apply (H0 _ H6).
+      rewrite H14; trivial.
+    * assert (o = (fun l : Label => match l with
+                        | left => None
+                        | right => None
+                        end)).
+      1: apply functional_extensionality; intro; case x; auto.
+      rewrite H9 in H3.
+      set (f := (fun l : Label => match l with
+                   | left => None
+                   | right => Some b
+                   end)) in H3.
+      set (g := (fun l : Label => match l with
+                   | left => None
+                   | right => None
+                   end)) in H3.
+      inversion H3.
+      assert (Some b = None).
+      2: inversion H10.
+      change ((f right) = (g right)).
+      inversion H3; auto.
   - intro.
     rewrite H4 in H3.
-    exfalso; auto.
-
-
-    
-    rewrite H1, H2, H3, H4, H5 in H8.
-    generalize H
-    pose (Hm := 
-
-
-case_eq (Pid_dec p p0); case_eq (o left); case_eq (o0 left); case_eq (o right); case_eq (o0 right); intros; auto.
-  - case_eq (more_branches_beh b b0).
-
-red in H.
-    
-  all: rewrite H2, H3, H4, H5 in H1.
-  - pose (Hl := (H left)).
-    rewrite H6 in Hl.
-    red in Hl.
-    split.
-    apply Hl.
- case_eq (merge_beh b2 b1); case_eq (merge_beh b0 b); intros.
-    * rewrite H6, H7 in H1.
-  
-2: rewrite H2 in H1; simpl in H1; inversion H1.
-  
-    
-  pose (Hl := (X left)).
-
-  destruct (o left); destruct (o0 left); destruct (o right); destruct (o0 right); auto.
-  2: {
-    split; auto.
-
-    
-  split.
-  - destruct (o left); destruct (o0 left); auto.
-    2: {
-simpl in H1.
-    2: {
-      destruct (o0 left); auto.
-      intros.
-      
-
- case (o left); case (o0 left); auto.
-    * case (o0 left); auto.
-      intros.
-      apply X0.
-*)
-Admitted.
+    inversion H3.
++ intros.
+  simpl.
+  red in H.
+  simpl in H.
+  case_eq (BExpr_dec b b0); intros.
+  1: split.
+  - rewrite H0 in H.
+    apply IHB1_1.
+    red.
+    case_eq (merge_beh B1_1 B2_1); intros; rewrite H1 in H.
+    2: inversion H.
+    case_eq (merge_beh B1_2 B2_2); intros; rewrite H2 in H.
+    2: inversion H.
+    inversion H; auto.
+  - rewrite H0 in H.
+    apply IHB1_2.
+    red.
+    case_eq (merge_beh B1_1 B2_1); intros; rewrite H1 in H.
+    2: inversion H.
+    case_eq (merge_beh B1_2 B2_2); intros; rewrite H2 in H.
+    2: inversion H.
+    inversion H; auto.
+  - rewrite H0 in H.
+    inversion H.
++ intros.
+  inversion H.
+  simpl.
+  case_eq (RecVar_dec r r0); intros; auto.
+  rewrite H0 in H1.
+  inversion H1.
+Qed.
 
 Lemma more_branches_beh_char : forall (B1 B2:Behaviour), more_branches_beh B1 B2 <-> more_branches_beh_direct B1 B2.
 Proof.
