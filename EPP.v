@@ -102,35 +102,6 @@ induction d; intros; case_eq b; intros; auto; rewrite H7 in H6; try (exfalso; in
 + apply H4; apply IHd; simpl in H; apply le_S_n in H6.
   - etransitivity. eapply Nat.le_max_l. eauto.
   - etransitivity. eapply Nat.le_max_r. eauto.
-(*
-induction d; intros; case_eq b; intros; auto; rewrite H0 in H; try (exfalso; inversion H; fail).
-+ apply X0. apply IHd. simpl in H. auto with arith.
-+ apply X1. apply IHd. simpl in H. auto with arith.
-+ apply X2. apply IHd. simpl in H. auto with arith.
-+ apply X3. intro.
-  case_eq (o l); simpl; auto.
-  intros.
-  apply IHd. simpl in H.
-  revert H.
-  induction l.
-  - rewrite H1.
-    case (o right); auto with arith.
-    intros.
-    apply le_S_n in H.
-    etransitivity.
-    eapply Nat.le_max_l.
-    eauto.
-  - rewrite H1.
-    case (o left); auto with arith.
-    intros.
-    apply le_S_n in H.
-    etransitivity.
-    eapply Nat.le_max_r.
-    eauto.
-+ apply X4; apply IHd; simpl in H; apply le_S_n in H.
-  - etransitivity. eapply Nat.le_max_l. eauto.
-  - etransitivity. eapply Nat.le_max_r. eauto.
-*)
 Qed.
 
 End MaybeMove.
@@ -251,15 +222,11 @@ match ps with
            end
 end.
 
-(* Mmh we gotta discuss how to import SPBase with RecVars = RecVars * Pid *)
-
 (* Definition epp (Defs:DefSet) (C:Choreography) (ps:list Pid) *)
 
 (* Definition epp (Defs:DefSet) (C:Choreography) : option Network := epp_list Defs C (??). *)
 
 End EPP.
-
-Print within_ps.
 
 Section EPP_Properties.
 
@@ -295,123 +262,6 @@ match B1, B2 with
 end.
 
 Definition more_branches_beh (B1 B2:Behaviour) := (merge_beh B1 B2) = Some B1.
-
-Lemma more_branches_beh_char_2 : forall (B1 B2:Behaviour), more_branches_beh_direct B1 B2 -> more_branches_beh B1 B2.
-induction B1 using Behaviour_ind_b; induction B2 using Behaviour_ind_b; try easy.
-+ intro. red. simpl. simpl in H.
-  case_eq (Pid_dec p p0); case_eq (Expr_dec e e0);
-  simpl;
-  intros; rewrite H0, H1 in H; simpl in H; try easy.
-  pose (Hm := IHB1 B2 H).
-  inversion Hm.
-  rewrite H3; auto.
-+ intro. red. simpl. simpl in H.
-  case_eq (Pid_dec p p0); case_eq (Var_dec v v0);
-  simpl;
-  intros; rewrite H0, H1 in H; simpl in H; try easy.
-  pose (Hm := IHB1 B2 H).
-  inversion Hm.
-  rewrite H3; auto.
-+ intro. red. simpl. simpl in H.
-  case_eq (Pid_dec p p0); case_eq (eqb_label l l0);
-  simpl;
-  intros; rewrite H0, H1 in H; simpl in H; try easy.
-  pose (Hm := IHB1 B2 H).
-  inversion Hm.
-  rewrite H3; auto.
-+ intro. red. simpl. simpl in H3.
-  case_eq (Pid_dec p p0).
-  - intro.
-    rewrite H4 in H3.
-    inversion_clear H3.
-    case_eq (o left); case_eq (o0 left); case_eq (o right); case_eq (o0 right); intros.
-    all: rewrite H9, H8 in H5.
-    all: rewrite H7, H3 in H6.
-    all: try easy.
-    * pose (Hleft := H _ H9 _ H5).
-      inversion Hleft.
-      rewrite H11.
-      pose (Hright := H0 _ H7 b H6).
-      inversion Hright.
-      rewrite H12.
-      assert (o = (fun l : Label => match l with
-                            | left => Some b2
-                            | right => Some b0
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hleft := H _ H9 _ H5).
-      inversion Hleft.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
-                            | left => Some b1
-                            | right => Some b
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hleft := H _ H9 _ H5).
-      inversion Hleft.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
-                            | left => Some b0
-                            | right => None
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hright := H0 _ H7 b H6).
-      inversion Hright.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
-                            | left => Some b1
-                            | right => Some b0
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * assert (o = (fun l : Label => match l with
-                            | left => Some b0
-                            | right => Some b
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * assert (o = (fun l : Label => match l with
-                            | left => Some b
-                            | right => None
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hright := H0 _ H7 b H6).
-      inversion Hright.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
-                            | left => None
-                            | right => Some b0
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * assert (o = (fun l : Label => match l with
-                            | left => None
-                            | right => Some b
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * assert (o = (fun l : Label => match l with
-                            | left => None
-                            | right => None
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-  - intro.
-    rewrite H4 in H3.
-    exfalso; auto.
-+ intro. red. simpl. simpl in H.
-  case_eq (BExpr_dec b b0).
-  - intro.
-    rewrite H0 in H. inversion_clear H.
-    pose (Hm := IHB1_1 B2_1 H1).
-    inversion Hm.
-    rewrite H3.
-    pose (Hm2 := IHB1_2 B2_2 H2).
-    inversion Hm2.
-    rewrite H4; auto.
-  - intro.
-    rewrite H0 in H.
-    exfalso; auto.
-+ intro. red. simpl. simpl in H.
-  case_eq (RecVar_dec r r0);
-  simpl;
-  intros; rewrite H0 in H; simpl in H; easy.
-Qed.
 
 Lemma more_branches_beh_char_1 : forall (B1 B2:Behaviour), more_branches_beh B1 B2 -> more_branches_beh_direct B1 B2.
 induction B1 using Behaviour_ind_b; induction B2 using Behaviour_ind_b; try easy.
@@ -787,6 +637,123 @@ induction B1 using Behaviour_ind_b; induction B2 using Behaviour_ind_b; try easy
   inversion H1.
 Qed.
 
+Lemma more_branches_beh_char_2 : forall (B1 B2:Behaviour), more_branches_beh_direct B1 B2 -> more_branches_beh B1 B2.
+induction B1 using Behaviour_ind_b; induction B2 using Behaviour_ind_b; try easy.
++ intro. red. simpl. simpl in H.
+  case_eq (Pid_dec p p0); case_eq (Expr_dec e e0);
+  simpl;
+  intros; rewrite H0, H1 in H; simpl in H; try easy.
+  pose (Hm := IHB1 B2 H).
+  inversion Hm.
+  rewrite H3; auto.
++ intro. red. simpl. simpl in H.
+  case_eq (Pid_dec p p0); case_eq (Var_dec v v0);
+  simpl;
+  intros; rewrite H0, H1 in H; simpl in H; try easy.
+  pose (Hm := IHB1 B2 H).
+  inversion Hm.
+  rewrite H3; auto.
++ intro. red. simpl. simpl in H.
+  case_eq (Pid_dec p p0); case_eq (eqb_label l l0);
+  simpl;
+  intros; rewrite H0, H1 in H; simpl in H; try easy.
+  pose (Hm := IHB1 B2 H).
+  inversion Hm.
+  rewrite H3; auto.
++ intro. red. simpl. simpl in H3.
+  case_eq (Pid_dec p p0).
+  - intro.
+    rewrite H4 in H3.
+    inversion_clear H3.
+    case_eq (o left); case_eq (o0 left); case_eq (o right); case_eq (o0 right); intros.
+    all: rewrite H9, H8 in H5.
+    all: rewrite H7, H3 in H6.
+    all: try easy.
+    * pose (Hleft := H _ H9 _ H5).
+      inversion Hleft.
+      rewrite H11.
+      pose (Hright := H0 _ H7 b H6).
+      inversion Hright.
+      rewrite H12.
+      assert (o = (fun l : Label => match l with
+                            | left => Some b2
+                            | right => Some b0
+                            end)).
+      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+    * pose (Hleft := H _ H9 _ H5).
+      inversion Hleft.
+      rewrite H11.
+      assert (o = (fun l : Label => match l with
+                            | left => Some b1
+                            | right => Some b
+                            end)).
+      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+    * pose (Hleft := H _ H9 _ H5).
+      inversion Hleft.
+      rewrite H11.
+      assert (o = (fun l : Label => match l with
+                            | left => Some b0
+                            | right => None
+                            end)).
+      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+    * pose (Hright := H0 _ H7 b H6).
+      inversion Hright.
+      rewrite H11.
+      assert (o = (fun l : Label => match l with
+                            | left => Some b1
+                            | right => Some b0
+                            end)).
+      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+    * assert (o = (fun l : Label => match l with
+                            | left => Some b0
+                            | right => Some b
+                            end)).
+      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+    * assert (o = (fun l : Label => match l with
+                            | left => Some b
+                            | right => None
+                            end)).
+      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+    * pose (Hright := H0 _ H7 b H6).
+      inversion Hright.
+      rewrite H11.
+      assert (o = (fun l : Label => match l with
+                            | left => None
+                            | right => Some b0
+                            end)).
+      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+    * assert (o = (fun l : Label => match l with
+                            | left => None
+                            | right => Some b
+                            end)).
+      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+    * assert (o = (fun l : Label => match l with
+                            | left => None
+                            | right => None
+                            end)).
+      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
+  - intro.
+    rewrite H4 in H3.
+    exfalso; auto.
++ intro. red. simpl. simpl in H.
+  case_eq (BExpr_dec b b0).
+  - intro.
+    rewrite H0 in H. inversion_clear H.
+    pose (Hm := IHB1_1 B2_1 H1).
+    inversion Hm.
+    rewrite H3.
+    pose (Hm2 := IHB1_2 B2_2 H2).
+    inversion Hm2.
+    rewrite H4; auto.
+  - intro.
+    rewrite H0 in H.
+    exfalso; auto.
++ intro. red. simpl. simpl in H.
+  case_eq (RecVar_dec r r0);
+  simpl;
+  intros; rewrite H0 in H; simpl in H; easy.
+Qed.
+
 Lemma more_branches_beh_char : forall (B1 B2:Behaviour), more_branches_beh B1 B2 <-> more_branches_beh_direct B1 B2.
 Proof.
 intros; split.
@@ -794,6 +761,8 @@ intros; split.
 + apply more_branches_beh_char_2.
 Qed.
 
-(* Theorem EPP_Theorem : forall Defs C s, *)
+(*
+Theorem EPP_Theorem : forall c l c', MCP_To c l c' -> SP_To
+*)
 
 End EPP_Properties.
