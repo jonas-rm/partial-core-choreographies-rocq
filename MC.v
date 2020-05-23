@@ -1950,9 +1950,9 @@ Qed.
 
 (** In this one we unfold the configuration because of the equivalence.
   Furthermore, we use logical disjunction - the labels are too weak... *)
-Lemma diamond_3 : forall P s tl1 tl2 P1 s1 P2 s2,
+Lemma diamond_3a : forall P s tl1 tl2 P1 s1 P2 s2,
   (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]--> (P2,s2) ->
-  (exists tl' s1', (P2,s2) --[ tl' ]-->* (P1,s1') /\ eq_state_ext s1 s1')
+  (exists tl' s1', (P2,s2) --[ tl' ]-->* (P1,s1') /\ eq_state_ext s1 s1' /\ length tl1 = S (length tl'))
   \/ (exists P' s', (P1,s1) --[ tl2 ]--> (P',s') /\ (P2,s2) --[ tl1 ]-->* (P',s')).
 Proof.
 induction P, P1, P2.
@@ -1979,8 +1979,8 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
     rewrite <- H3 in H, H4, H6; rewrite <- H3; clear H3 Main0.
     left; exists tl1. case_eq tl1; intros.
     * rewrite H2 in H6. inversion H6. exists s2; split. constructor.
-      rewrite <- H8; ESEs.
-    * rewrite <- H2. exists s1; split. 2: ESEr.
+      split. rewrite <- H8; ESEs. auto.
+    * rewrite <- H2. exists s1; split. 2: split; auto; ESEr.
       apply MCP_ToStar_eq with b s1; auto. ESEs. ESEr. rewrite H2; discriminate.
   - inversion_clear b0.
     induction x, a0; inversion_clear H.
@@ -1996,10 +1996,21 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
       apply MCT_Step with (Build_Program Defs C',b0); auto.
 Qed.
 
-Lemma diamond_4 : forall P s tl1 tl2 P1 s1 P2 s2,
+Lemma diamond_3 : forall P s tl1 tl2 P1 s1 P2 s2,
+  (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]--> (P2,s2) ->
+  (exists tl' s1', (P2,s2) --[ tl' ]-->* (P1,s1') /\ eq_state_ext s1 s1')
+  \/ (exists P' s', (P1,s1) --[ tl2 ]--> (P',s') /\ (P2,s2) --[ tl1 ]-->* (P',s')).
+Proof.
+intros.
+elim (diamond_3a _ _ _ _ _ _ _ _ H H0); intros; auto.
+destroy H1; eauto.
+Qed.
+
+Lemma diamond_4a : forall P s tl1 tl2 P1 s1 P2 s2,
   (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
   (exists P' tl1' tl2' s1' s2',
-    (P1,s1) --[ tl1' ]-->* (P',s1') /\ (P2,s2) --[ tl2' ]-->* (P',s2') /\ eq_state_ext s1' s2').
+    (P1,s1) --[ tl1' ]-->* (P',s1') /\ (P2,s2) --[ tl2' ]-->* (P',s2')
+    /\ eq_state_ext s1' s2' /\ length tl1 + length tl1' = length tl2 + length tl2').
 Proof.
 induction P, P1, P2.
 rename Procedures1 into Defs', Main1 into C1.
@@ -2022,22 +2033,23 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
   clear t l H1 H2 c1 c3 H3 H5.
   induction c2, a0.
   rewrite <- (MCP_To_Defs_stable _ _ _ _ _ _ _ H4) in H6, H4; clear Procedures0.
-  elim (diamond_3 _ _ _ _ _ _ _ _ H H4); intros.
+  elim (diamond_3a _ _ _ _ _ _ _ _ H H4); intros.
   - destroy H0.
     rename x into tl', x0 into s', Main0 into C0.
     elim (IHtl2 _ _ _ _ _ _ _ H1 H6); intros.
-    destroy H2.
+    destroy H3.
     induction x.
-    rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H3) in H5, H3; clear Procedures0.
+    rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H5) in H7, H5; clear Procedures0.
     rename Main0 into C', x0 into tl1', x1 into tl2', x2 into s1', x3 into s2'.
     case_eq tl1'; intros.
-    * rewrite H7 in H3. inversion H3.
-      rewrite <- H9; rewrite <- H9 in H3, H5; clear C' tl1' H7 H9.
-      rewrite <- H11 in H3, H2. clear s1' H11 c H8.
+    * rewrite H9 in H5. inversion H5.
+      rewrite <- H11; rewrite <- H11 in H5, H7; rewrite H9 in H3; clear C' tl1' H11 H9.
+      rewrite <- H13 in H5, H8. clear s1' H13 c H10.
       exists (Build_Program Defs C1), nil, tl2', s1, s2'; repeat split; auto.
-      constructor. ESEt s'.
+      constructor. ESEt s'. simpl. rewrite <- H3, H0. auto.
     * exists (Build_Program Defs C'), tl1', tl2', s1', s2'; repeat split; auto.
-      apply MCP_ToStar_eq with s' s1'; auto. ESEs. ESEr. rewrite H7; discriminate.
+      apply MCP_ToStar_eq with s' s1'; auto. ESEs. ESEr. rewrite H9; discriminate.
+      simpl. rewrite <- H3, H0; auto.
   - destroy H0.
     induction x.
     rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0) in H1, H0; clear Procedures0.
@@ -2049,6 +2061,17 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
     rename Main0 into C'', x0 into tl1'', x1 into tl2'', x2 into s1'', x3 into s2''.
     exists (Build_Program Defs C''), (a::tl1''), tl2'', s1'', s2''; repeat split; auto.
     apply MCT_Step with (Build_Program Defs C',s'); auto.
+    simpl. rewrite <- H2. auto.
+Qed.
+
+Lemma diamond_4 : forall P s tl1 tl2 P1 s1 P2 s2,
+  (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
+  (exists P' tl1' tl2' s1' s2',
+    (P1,s1) --[ tl1' ]-->* (P',s1') /\ (P2,s2) --[ tl2' ]-->* (P',s2') /\ eq_state_ext s1' s2').
+Proof.
+intros.
+elim (diamond_4a _ _ _ _ _ _ _ _ H H0); auto.
+intros. destroy H1. exists x, x0, x1, x2, x3; auto.
 Qed.
 
 (** Useful particular cases. *)
@@ -2063,6 +2086,22 @@ induction c, a. simpl in H0; rewrite H0 in H1.
 inversion H1. inversion H11.
 Qed.
 
+Lemma diamond_5a : forall P s tl1 tl2 P1 s1 P2 s2,
+  (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
+  Main P2 = End -> 
+  (exists tl1' s1',
+    (P1,s1) --[ tl1' ]-->* (P2,s1') /\ eq_state_ext s1' s2 /\ length tl1 + length tl1' = length tl2).
+Proof.
+intros.
+elim (diamond_4a _ _ _ _ _ _ _ _ H H0); intros.
+destroy H2.
+rename x into P', x0 into tl', x1 into tl'', x2 into s', x3 into s''.
+elim (MCP_ToStar_End _ _ _ H4 H1); intros.
+inversion H7.
+exists tl', s'; repeat split; auto.
+rewrite H6, plus_0_r in H2; auto.
+Qed.
+
 Lemma diamond_5 : forall P s tl1 tl2 P1 s1 P2 s2,
   (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
   Main P2 = End -> 
@@ -2070,12 +2109,8 @@ Lemma diamond_5 : forall P s tl1 tl2 P1 s1 P2 s2,
     (P1,s1) --[ tl1' ]-->* (P2,s1') /\ eq_state_ext s1' s2).
 Proof.
 intros.
-elim (diamond_4 _ _ _ _ _ _ _ _ H H0); intros.
-destroy H2.
-rename x into P', x0 into tl', x1 into tl'', x2 into s', x3 into s''.
-elim (MCP_ToStar_End _ _ _ H4 H1); intros.
-inversion H6.
-exists tl', s'; split; auto.
+elim (diamond_5a _ _ _ _ _ _ _ _ H H0 H1).
+intros. destroy H2; eauto.
 Qed.
 
 Lemma termination_unique : forall c tl1 c1 tl2 c2,

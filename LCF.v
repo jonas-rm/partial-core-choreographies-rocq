@@ -992,8 +992,6 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
       apply Hps'; auto. transitivity i; auto. apply lt_neq; auto.
 + (* Minimization *)
   set (Hd' := lt_S_n (depth h) d Hd).
-  assert (forall H, ps[@H] < i) as Hpsi.
-  1: { intros. apply Hps. eapply nth_In; auto. }
   assert (S X = X + 1) as HXSX. rewrite plus_comm; auto.
   (* Initialization *)
   assert (X <= X < X + Gamma (Minimization h)).
@@ -1036,29 +1034,11 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
     intro. rewrite <- H2; simpl; auto with arith.
     transitivity i; auto.
   }
-  assert (exists z, converges h (shiftin 0 ns) z).
-  1: {
-    elim (eq_nat_dec y 0); intros.
-    + exists 0. apply converges_Minimization.
-      rewrite <- a; auto.
-    + elim (converges_Minimization_mon _ _ _ Hf) with 0; eauto.
-      apply neq_0_lt; auto.
-  }
-  inversion_clear H1.
-  assert (forall H, s0 (shiftin (i+1) ps)[@H] xx = (shiftin 0 ns)[@H]) as Hinput'.
-  1: {
-    intro.
-    replace (s0 (shiftin (i+1) ps)[@H1] xx) with (map (fun y => s0 y xx) (shiftin (i+1) ps))[@H1]; auto.
-    2: rewrite (nth_map _ _ _ _ (eq_refl _)); auto.
-    rewrite map_shiftin.
-    apply shiftin_eq.
-    unfold s0. rewrite plus_comm; apply update_read.
-    intro. rewrite nth_map'. unfold s0; rewrite update_read'; auto.
-    apply gt_neq; red. transitivity i; auto. rewrite plus_comm; auto.
-  }
-  elim (IHd _ _ Hd' _ _ _ _ _ _ _ Hi Hpsh Hi' HhDefs HhDefs' H2 _ Hinput'); intros.
-  rename x0 into sI; destroy H1.
-  rename x0 into tlI, H1 into HI.
+  elim (diamond_5 _ _ _ _ _ _ _ _ (MCT_Trans _ _ _ _ _ H00 (MCT_Step _ _ _ _ _ H0 (MCT_Refl _))) Htl (eq_refl _)); intros.
+  destroy H1. clear H1.
+  elim IHd with (1+k) h Hd' (shiftin (i+1) ps) i (i+3) (X+1) Defs s0 x0 x; auto; intros.
+  destroy H1. rename x1 into tlI, x2 into sI, H3 into HI.
+  clear x x0 H2.
   replace (X + 1 + Gamma h) with (X + Gamma h + 1) in HI.
   2: repeat rewrite <- plus_assoc; rewrite <- (plus_comm 1); auto.
   generalize (MCT_Trans _ _ _ _ _ H00 (MCT_Step _ _ _ _ _ H0 HI)).
@@ -1066,8 +1046,9 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
   clear H0 H00 HI; intro HI.
   assert (X <= X + Gamma h + 1 < X + Gamma (Minimization h)).
   1: { split; simpl; auto with arith. rewrite plus_assoc; auto with arith. }
+  (* NEEDS LENGTH ON TRANSITION LABELS IN ORDER TO PROVE TERMINATION *)
   (* Loop *)
-  assert (forall m, m <= y -> exists t' s' y', (P,sI) --[ t' ]-->* (P,s')
+  assert (forall m, m <= y -> exists t' s', (P,sI) --[ t' ]-->* (P,s')
     /\ converges h (shiftin m ns) y' /\ s' i xx = y' /\ s' (i+1) xx = m /\ forall j, j < i -> s' j xx = s0 j xx).
   - induction m; intros.
     * exists List.nil, sI, x; repeat split; auto. constructor.
