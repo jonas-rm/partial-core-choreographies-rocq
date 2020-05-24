@@ -14,6 +14,7 @@ Inductive Label : Type :=
  | left : Label
  | right : Label
 .
+
 Lemma eq_label_dec : forall (l l' : Label), { l = l' } + { l <> l' }.
 Proof.
 decide equality.
@@ -25,6 +26,13 @@ match l, l' with
  | right, right => true
  | _, _ => false
 end.
+
+Lemma label_eqb_eq : forall (l l':Label), (eqb_label l l') = true <-> l = l'.
+Proof.
+intros; unfold eqb; elim (eq_label_dec l l'); intros; split; auto.
++ intro. rewrite <- H. case l; auto.
++ generalize b. case l; case l'; try easy.
+Qed.
 
 End Labels.
 
@@ -90,7 +98,7 @@ Module LState (V X : DecType).
 Module Vdec := DecidableType V.
 Module Xdec := DecidableType X.
 
-Definition Value := V.t.
+Definition Value := V.t. 
 Definition Value_dec := Vdec.eqb.
 Definition Var := X.t.
 Definition Var_dec := Xdec.eqb.

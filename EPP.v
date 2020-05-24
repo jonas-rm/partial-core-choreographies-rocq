@@ -761,8 +761,86 @@ intros; split.
 + apply more_branches_beh_char_2.
 Qed.
 
+Definition more_branches_net (N N':Network) (ps:list Pid) :=
+  forall p, In p ps -> more_branches_beh (N p) (N' p).
+
+Definition more_branches_defs (SPDefs SPDefs' : RecVar -> Behaviour) :=
+  forall X, more_branches_beh (SPDefs X) (SPDefs' X).
+
+Inductive MoreBranches : Behaviour -> Behaviour -> Prop :=
+| MB_Send p e B B' : MoreBranches (p ! e ; B)%SP (p ! e ; B')%SP
+| MB_Recv p x B B' : MoreBranches (p ? x ; B)%SP (p ? x ; B')%SP
+| MB_Sel p l B B' : MoreBranches (p (+) l; B)%SP (p (+) l; B')%SP
+| MB_Branching p o o' :
+  (forall Bleft, o left = Some Bleft -> exists Bleft', o' left = Some Bleft' ->
+    MoreBranches Bleft Bleft') ->
+  (forall Bright, o right = Some Bright -> exists Bright', o' right = Some Bright' ->
+    MoreBranches Bright Bright') ->
+  MoreBranches (p & o) (p & o')
+| MB_Cond b B1 B2 B1' B2' :
+  MoreBranches B1 B1' -> MoreBranches B2 B2' ->
+  MoreBranches
+    (If b Then B1 Else B2)%SP (If b Then B1' Else B2')%SP
+| MB_Call X : MoreBranches (Call X)%SP (Call X)%SP
+| MB_End : MoreBranches bnil%SP bnil%SP.
+
+Lemma more_branches_beh_MoreBranches : forall B B', more_branches_beh B B' -> MoreBranches B B'.
+Proof.
+intro. intro.
+induction B using Behaviour_ind_b; induction B' using Behaviour_ind_b; intros; try easy.
++ constructor.
++ clear IHB IHB'. red in H. inversion H. clear H. generalize H1. clear H1.
+  case_eq (Pid_dec p p0); case_eq (Expr_dec e e0); intros; try easy.
+  simpl in H1.
+  rewrite Pdec.eqb_eq in H0. rewrite <- H0.
+  rewrite Edec.eqb_eq in H. rewrite <- H.
+  constructor.
++ clear IHB IHB'. red in H. inversion H. clear H. generalize H1. clear H1.
+  case_eq (Pid_dec p p0); case_eq (Var_dec v v0); intros; try easy.
+  simpl in H1.
+  rewrite Pdec.eqb_eq in H0. rewrite <- H0.
+  rewrite Xdec.eqb_eq in H. rewrite <- H.
+  constructor.
++ clear IHB IHB'. red in H. inversion H. clear H. generalize H1. clear H1.
+  case_eq (Pid_dec p p0); case_eq (eqb_label l l0); intros; try easy.
+  simpl in H1.
+  rewrite Pdec.eqb_eq in H0. rewrite <- H0.
+  rewrite label_eqb_eq in H. rewrite <- H.
+  constructor.
++ admit.
++ admit.
++ red in H. inversion H. clear H. generalize H1. clear H1.
+  case_eq (RecVar_dec r r0); intros; try easy.
+  rewrite Rdec.eqb_eq in H.
+  rewrite H.
+  constructor.
+Admitted.
+
+Lemma more_branches_completeness :
+  forall N1 N1' N2 N2' ps SPDefs1 SPDefs2 s s' t,
+    within_ps ps N1 -> within_ps ps N2 ->
+    more_branches_net N1 N2 ps ->
+    more_branches_defs SPDefs1 SPDefs2 ->
+    SP_To SPDefs1 N1 s t N1' s' ->
+    SP_To SPDefs2 N2 s t N2' s' /\ more_branches_net N1' N2' ps.
+Proof.
+intros.
+red in H, H0, H1, H2.
+inversion H3.
++ red in H8.
+  split.
+  - elim (In_dec P.eq_dec p ps); intro.
+    2: { pose (Hp := H _ b). rewrite Hp in H4. inversion H4. }
+    pose (Hp := H1 p a).
+    rewrite more_branches_beh_char in Hp.
+    rewrite H4 in Hp.
+    red in Hp.
+    case_eq (N2 p); intros; try rewrite H14 in Hp; try inversion Hp.
+Admitted.
+
 (*
 Theorem EPP_Theorem : forall c l c', MCP_To c l c' -> SP_To
 *)
-
 End EPP_Properties.
+
+End EPPBase.
