@@ -799,3 +799,5 @@ Admitted.
 Theorem EPP_Theorem : forall c l c', MCP_To c l c' -> SP_To
 *)
 End EPP_Properties.
+
+End EPPBase.
