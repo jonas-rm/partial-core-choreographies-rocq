@@ -761,8 +761,41 @@ intros; split.
 + apply more_branches_beh_char_2.
 Qed.
 
+Definition more_branches_net (N N':Network) (ps:list Pid) :=
+  forall p, In p ps -> more_branches_beh (N p) (N' p).
+
+Definition more_branches_defs (SPDefs SPDefs' : RecVar -> Behaviour) :=
+  forall X, more_branches_beh (SPDefs X) (SPDefs' X).
+
+Lemma more_branches_completeness :
+  forall N1 N1' N2 N2' ps SPDefs1 SPDefs2 s s' t,
+    within_ps ps N1 -> within_ps ps N2 ->
+    more_branches_net N1 N2 ps ->
+    more_branches_defs SPDefs1 SPDefs2 ->
+    SP_To SPDefs1 N1 s t N1' s' ->
+    SP_To SPDefs2 N2 s t N2' s' /\ more_branches_net N1' N2' ps.
+Proof.
+intros.
+red in H, H0, H1, H2.
+inversion H3.
++ red in H8.
+  split.
+  - elim (In_dec P.eq_dec p ps); intro.
+    2: { pose (Hp := H p b). rewrite Hp in H4. inversion H4. }
+    pose (Hp := H1 p a).
+    inversion Hp. clear Hp.
+    rewrite H4 in H15.
+    inversion H15. clear H15.
+    case_eq (N2 p); intros; try rewrite H14 in H16; inversion H16.
+    clear H17.
+    case_eq (Pid_dec q p0); case_eq (Expr_dec e e0); intros; rewrite H15, H17 in H16; simpl in H16; try inversion H16.
+    clear H19.
+    case_eq (merge_beh B b); intros.
+    * rewrite H18 in H16.
+      inversion H16.
+Admitted.
+
 (*
 Theorem EPP_Theorem : forall c l c', MCP_To c l c' -> SP_To
 *)
-
 End EPP_Properties.
