@@ -1,6 +1,6 @@
 Require Import Common.
 Require Export MC.
-Require Import Kleene.
+Require Export Kleene.
 
 Local Open Scope nat_scope.
 

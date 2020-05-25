@@ -1,15 +1,10 @@
+Require Import Arith.
 Require Export Basic.
 Require Export Common.
 Require Export MC.
-Require Import Sumbool.
-
-Require Export Kleene.
 Require Export Implementation.
-Require Import Arith.
 
 Module Export MC_Nat := Implementation.MC_Nat.
-
-Notation "A '&&&' B" := (sumbool_and _ _ _ _ A B).
 
 (** MOVE ME *)
 Lemma diverges_Composition_arg : forall {m k} fs g ns H,
@@ -1104,11 +1099,33 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
       apply gt_neq; red; transitivity i; auto. rewrite plus_comm; auto.
     * repeat apply lt_n_S. repeat rewrite app_length; simpl.
       rewrite <- (plus_comm 2). rewrite plus_comm. simpl; auto with arith.
-  - 
+  - assert (forall n, length tlP' <= n -> exists s tl, (P,sP) --[ tl ]-->* (P,s) /\ beval_on_state compare s (i+2) = true /\ forall p, p<i -> s p xx = sP p xx).
+    * intro. revert dependent tlP'. revert dependent sP. clearbody tlP; revert tlP sP'.
+      rename n0 into z; induction z.
+      ++ intros. exfalso. inversion H4. rewrite length_zero_iff_nil in H6.
+         rewrite H6 in H3. inversion H3.
+      ++ intros. case_eq (beval_on_state compare sP (i+2)).
+         exists sP, List.nil; split; auto. constructor.
+         intros. elim (H2 sP); clear H2; intros.
+         elim (H6 H5 _ _ H3); clear H6; intros. destroy H6.
+         elim (diamond_5a _ _ _ _ _ _ _ _ H7 H3 (eq_refl _)); intros.
+         destroy H9. elim (IHz _ _ _ (MCT_Trans _ _ _ _ _ HP H7) _ H10); intros.
+         destroy H12. exists x3, (x++x4)%list; repeat split; auto. eapply MCT_Trans; eauto.
+         intros. rewrite H12, H8; auto.
+         clear H11 H10 x2 H8 H7 x0 H2 H5.
+         rewrite <- H9 in H4. apply le_S_n. transitivity (length x + length x1); auto.
+         change (0 + length x1 < length x + length x1). apply plus_lt_compat_r.
+         transitivity 3; auto with arith.
+    * elim (H4 (length tlP')); auto. intros. clear H4. destroy H5.
+      elim (H2 x); intros. clear H2 H8. generalize (H7 H6); clear H7; intros.
+      exists (tlP ++ x0 ++ (L_Tau (i+2) :: L_Com (i+1) (x (i+1) xx) q :: List.nil))%list, (update x q xx (x (i+1) xx)).
+      repeat split; auto. do 2 (eapply MCT_Trans; eauto). rewrite plus_assoc; auto.
+      intros. rewrite update_read', H5; auto.
+      assert (i+2 <> p). apply gt_neq; red. transitivity i; auto. rewrite plus_comm; simpl; auto.
+      unfold sP. repeat rewrite update_read'; auto.
+      rewrite <- H1; auto. unfold s0. rewrite update_read'; auto.
+      apply gt_neq; red. transitivity i; auto. rewrite plus_comm; auto. transitivity i; auto. apply lt_neq; auto.
 Qed.
-
-
-
 
 Theorem Implementation_diverges : forall {n} (f:PRFunction n) ps q ns,
   ~In q ps -> diverges f ns -> 
@@ -1121,15 +1138,18 @@ set (Hd := Nat.lt_succ_diag_r (depth f)).
 set (i := (S (max q (vmax ps)))).
 induction c; induction a.
 simpl in H3; rewrite H3 in H2; clear Main0 H3. rename b into s'.
+elim (Implementation_aux_End f _ Hd ps q i 0 (Procedures (Implementation f ps q))) with s s' tl; intros; auto.
+destroy H3. clear H2 s' tl. rename x into tl, x0 into s'.
 elim (converges_Implementation_aux f _ Hd ps q i 0 (Procedures (Implementation f ps q)) ns (s' q xx) H) with s s' tl; intros; auto.
-+ destroy H4. rewrite H0 in H4. inversion H4.
++ destroy H5. rewrite H0 in H5. inversion H5.
 + apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
 + apply le_n_S. apply Nat.le_max_l.
 + apply all_pids_not_nil.
-+ (* ouch. *)
-
-
-
++ apply all_pids_not_nil.
++ apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
++ apply le_n_S. apply Nat.le_max_l.
++ unfold Implementation in H2. rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H2) in H2; auto.
+Qed.
 
 (*
 Fixpoint seq_compose {m} {k} (fs:t (PRFunction m) k) (ps:t Pid m) (target init:nat) (X:RecVar)
@@ -1180,6 +1200,10 @@ Definition Implementation_aux {m} (f:PRFunction m) :
         else Hh (shiftin (init+1) ps) init (init+3) (X + 1) Y))
   m f.
 *)
+
+Require Import Sumbool.
+
+Notation "A '&&&' B" := (sumbool_and _ _ _ _ A B).
 
 Fixpoint compatible (Defs:DefSet) (s:State) (tl:RichLabel) (C:Choreography) : Prop :=
   (match C, tl with
