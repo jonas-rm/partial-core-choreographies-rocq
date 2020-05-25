@@ -173,11 +173,11 @@ do 2 intro; case f; intros.
 + (* Zero *)
   simpl. unfold Pack1; simpl.
   elim RecVar_dec; repeat split; simpl; auto.
-  intro; apply H. eapply nth_In; eauto.
+  intro; apply H. eapply nth_In. rewrite nth_hd; auto.
 + (* Successor *)
   simpl. unfold Pack1; simpl.
   elim RecVar_dec; repeat split; simpl; auto.
-  intro; apply H. eapply nth_In; eauto.
+  intro; apply H. eapply nth_In. rewrite nth_hd; auto.
 + (* Projection *)
   simpl. unfold Pack1; simpl.
   elim RecVar_dec; repeat split; simpl; auto.
@@ -204,7 +204,7 @@ do 2 intro; case f; intros.
     * rewrite plus_comm; simpl; auto.
   - split; simpl; split; auto.
   - split; simpl; repeat split; auto.
-    * apply lt_neq. transitivity n; auto. apply H0. apply nth_In with Fin.F1; auto.
+    * apply lt_neq. transitivity n; auto. apply H0. apply nth_In with Fin.F1; apply nth_hd.
     * apply gt_neq; auto.
   - split; simpl; repeat split; auto.
   - apply IHd; auto with arith.
@@ -641,14 +641,30 @@ elim (Implementation_aux_converges f _ Hd ps q i 0 (Procedures (Implementation f
 Qed.
 
 Lemma converges_Implementation_aux : forall {n} (f:PRFunction n) d Hd ps q i X Defs ns y,
-  ~In q ps -> (forall p, In p ps -> p < i) -> q < i ->
   (forall Y, X <= Y < X + Gamma f -> fst (Defs Y) <> List.nil) ->
   (forall Y, X <= Y < X + Gamma f -> snd (Defs Y) = Implementation_aux f d Hd ps q i X Y) ->
+  (forall p, In p ps -> p < i) -> ~In q ps -> q < i ->
   forall (s:State), (forall H, s ps[@H] xx = ns[@H]) ->
   forall s' tl, s' q xx = y -> (Build_Program Defs (Call X),s) --[tl]-->* (Build_Program Defs (Call (X + Gamma f)),s')
   -> (forall p, p < i -> p <> q -> s' p xx = s p xx) /\ converges f ns y.
-(* Ugh *)
 Admitted.
+(* Hmmm.
+Proof.
+intros n f d; revert n f. induction d. inversion Hd.
+intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2 into Hq, H3 into Hq', H4 into Htl.
++ (* Zero *)
+  assert (X <= X < X + Gamma Zero). split; auto; rewrite plus_comm; auto with arith.
+  generalize (HDefs _ H), (HDefs' _ H).
+  simpl; unfold Pack1; simpl.
+  rewrite Rdec.eqb_refl. intros HX HX'.
+  elim (Call_reduce _ _ s HX); intros tl' Htl'.
+  rewrite HX' in Htl'.
+  generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) zero q xx (Call (S X)) s)).
+  simpl; set (s'' := update s q xx 0); intros.
+  generalize (MCT_Trans _ _ _ _ _ Htl' (MCT_Step _ _ _ _ _ H0 (MCT_Refl _))); intros.
+  clear Htl' H0.
+  elim (diamond_4 _ _ _ _ _ _ _ _ H6 H1); intros.
+*)
 
 (** This proof is a refactoring of the proof of Implementation_aux_converges. However,
   we can't reuse that lemma because there is no assumption on f converging.
@@ -670,23 +686,23 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
   rewrite Rdec.eqb_refl. intros HX HX'.
   elim (Call_reduce _ _ s HX); intros tl' Htl'.
   rewrite HX' in Htl'.
-  generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs ps[@Fin.F1] zero q xx (Call (S X)) s)).
+  generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) zero q xx (Call (S X)) s)).
   simpl; set (s'' := update s q xx 0); intros.
   generalize (MCT_Trans _ _ _ _ _ Htl' (MCT_Step _ _ _ _ _ H0 (MCT_Refl _))); intros.
-  exists (tl' ++ (L_Com ps[@Fin.F1] 0 q :: List.nil))%list, s''; split.
+  exists (tl' ++ (L_Com (hd ps) 0 q :: List.nil))%list, s''; split.
   - eapply MCT_Trans; eauto. eapply MCT_Step; eauto. rewrite plus_comm; constructor.
   - intros. unfold s''. rewrite update_read'; auto.
 + (* Successor *)
-  set (x := s ps[@Fin.F1] xx).
+  set (x := s (hd ps) xx).
   assert (X <= X < X + Gamma Successor). split; auto; rewrite plus_comm; auto with arith.
   generalize (HDefs _ H), (HDefs' _ H).
   simpl; unfold Pack1; simpl.
   rewrite Rdec.eqb_refl. intros HX HX'.
   elim (Call_reduce _ _ s HX); intros tl' Htl'.
   rewrite HX' in Htl'.
-  generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs ps[@Fin.F1] succ_this q xx (Call (S X)) s)).
+  generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) succ_this q xx (Call (S X)) s)).
   simpl; fold x; set (s'' := update s q xx (S x)); intros.
-  exists (tl' ++ (L_Com ps[@Fin.F1] (S x) q :: List.nil))%list, s''; split.
+  exists (tl' ++ (L_Com (hd ps) (S x) q :: List.nil))%list, s''; split.
   - eapply MCT_Trans; eauto. eapply MCT_Step; eauto. rewrite plus_comm; constructor.
   - intros. unfold s''. rewrite update_read'; auto.
 + (* Projection *)
@@ -853,7 +869,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
       elim (Call_reduce Defs (X + Gamma g + 1) sI); intros; auto.
       rename x into tlU, H3 into HU.
       rewrite HDefs', Recursion_Procs_1 in HU; auto.
-      unfold IfEq in HU. rewrite nth_hd in HU.
+      unfold IfEq in HU.
       generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S i) yy (If (S i) ? compare Then Send i this q;; Call (X + Gamma g + Gamma h + 3) Else Call (X + Gamma g + 2)) sI)).
       simpl; intro.
       assert (beval_on_state compare (update sI (S i) yy (sI (hd ps) xx)) (S i) = false).
@@ -961,7 +977,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
     elim (Call_reduce Defs (X + Gamma g + 1) sF); auto; intros.
     rewrite HDefs', Recursion_Procs_1 in H3; auto.
     rename x into tlU, H3 into HU.
-    unfold IfEq in HU. rewrite nth_hd in HU.
+    unfold IfEq in HU.
     generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S i) yy (If (S i) ? compare Then Send i this q;; Call (X + Gamma g + Gamma h + 3) Else Call (X + Gamma g + 2)) sF)).
     simpl; intro.
     assert (beval_on_state compare (update sF (S i) yy (sF (hd ps) xx)) (S i) = true).
@@ -1140,11 +1156,11 @@ induction c; induction a.
 simpl in H3; rewrite H3 in H2; clear Main0 H3. rename b into s'.
 elim (Implementation_aux_End f _ Hd ps q i 0 (Procedures (Implementation f ps q))) with s s' tl; intros; auto.
 destroy H3. clear H2 s' tl. rename x into tl, x0 into s'.
-elim (converges_Implementation_aux f _ Hd ps q i 0 (Procedures (Implementation f ps q)) ns (s' q xx) H) with s s' tl; intros; auto.
+elim (converges_Implementation_aux f _ Hd ps q i 0 (Procedures (Implementation f ps q)) ns (s' q xx)) with s s' tl; intros; auto.
 + destroy H5. rewrite H0 in H5. inversion H5.
++ apply all_pids_not_nil.
 + apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
 + apply le_n_S. apply Nat.le_max_l.
-+ apply all_pids_not_nil.
 + apply all_pids_not_nil.
 + apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
 + apply le_n_S. apply Nat.le_max_l.

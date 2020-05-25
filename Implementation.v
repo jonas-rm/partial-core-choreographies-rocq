@@ -345,10 +345,10 @@ induction d.
 + destruct f; intros; revert X0.
 
   (* Zero *)
-  - apply (Pack1 X (Send ps[@Fin.F1] zero q;; Call (S X))).
+  - apply (Pack1 X (Send (hd ps) zero q;; Call (S X))).
 
   (* Successor *)
-  - apply (Pack1 X (Send ps[@Fin.F1] succ_this q;; Call (S X))).
+  - apply (Pack1 X (Send (hd ps) succ_this q;; Call (S X))).
 
   (* Projection *)
   - apply (Pack1 X (Send ps[@Fin.of_nat_lt l] this q;; Call (S X))).
@@ -374,7 +374,7 @@ induction d.
       else if (RecVar_dec Y (X + Gamma g)) then
          Send (init+2) zero (S init);; Call (X + Gamma g + 1)
       else if (RecVar_dec Y (X + Gamma g + 1)) then 
-         IfEq (S init) ps[@Fin.F1] (Send init this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2))
+         IfEq (S init) (hd ps) (Send init this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2))
       else if (RecVar_dec Y (X + Gamma g + Gamma h + 2)) then
          Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma g + 1)
       else Ph Y).
@@ -421,7 +421,7 @@ Eval compute in (map snd (map (Procedures (Implementation' (Composition Successo
 
 (** Again - since the definitions are interactive, we prove that they behave as expected. *)
 Lemma Zero_Procs : forall d Hd ps q n X,
-  Implementation_aux Zero d Hd ps q n X X = Send ps[@Fin.F1] zero q;; Call (S X).
+  Implementation_aux Zero d Hd ps q n X X = Send (hd ps) zero q;; Call (S X).
 Proof.
 intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
@@ -431,7 +431,7 @@ rewrite H; auto.
 Qed.
 
 Lemma Successor_Procs : forall d Hd ps q n X,
-  Implementation_aux Successor d Hd ps q n X X = Send ps[@Fin.F1] succ_this q;; Call (S X).
+  Implementation_aux Successor d Hd ps q n X X = Send (hd ps) succ_this q;; Call (S X).
 Proof.
 intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
@@ -519,7 +519,7 @@ Qed.
 
 Lemma Recursion_Procs_1 : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h) < S d) ps q n X,
   Implementation_aux (Recursion g h) _ Hd ps q n X (X + Gamma g + 1) =
-    IfEq (S n) ps[@Fin.F1] (Send n this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2)).
+    IfEq (S n) (hd ps) (Send n this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2)).
 Proof.
 intros; simpl.
 assert (~ X + Gamma g + 1 < X+Gamma g); intros.
@@ -692,10 +692,10 @@ induction d.
 + destruct f; intros; revert X0.
 
   (* Zero *)
-  - apply (Pack1 X (Send ps[@Fin.F1] zero q;; Call (S X))).
+  - apply (Pack1 X (Send (hd ps) zero q;; Call (S X))).
 
   (* Successor *)
-  - apply (Pack1 X (Send ps[@Fin.F1] succ_this q;; Call (S X))).
+  - apply (Pack1 X (Send (hd ps) succ_this q;; Call (S X))).
 
   (* Projection *)
   - apply (Pack1 X (Send ps[@Fin.of_nat_lt l] this q;; Call (S X))).
@@ -726,7 +726,7 @@ induction d.
       else if (RecVar_dec Y (X + Gamma' f)) then
          Send (init+2) zero (S init);; Call (X + Gamma' f + 1)
       else if (RecVar_dec Y (X + Gamma' f + 1)) then 
-         IfEq (S init) ps[@Fin.F1] (Send init this q;; Call (X + Gamma' f + Gamma' g + 3)) (Call (X + Gamma' f + 2))
+         IfEq (S init) (hd ps) (Send init this q;; Call (X + Gamma' f + Gamma' g + 3)) (Call (X + Gamma' f + 2))
       else if (RecVar_dec Y (X + Gamma' f + Gamma' g + 2)) then
          Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma' f + 1)
       else Pg Y).
@@ -824,15 +824,15 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   elim (Call_reduce _ _ s HX); intros tl Htl.
   rewrite HX' in Htl.
   set (s' := update s q xx 0).
-  exists s', (tl ++ (L_Com ps[@Fin.F1] 0 q :: List.nil))%list.
+  exists s', (tl ++ (L_Com (hd ps) 0 q :: List.nil))%list.
   rewrite (converges_Zero _ _ Hf).
   split. apply update_read.
   split. intros; apply update_read'. auto.
   eapply MCT_Trans; eauto.
-  replace (L_Com ps[@Fin.F1] 0 q) with (forget (R_Com ps[@Fin.F1] 0 q xx)); auto.
+  replace (L_Com (hd ps) 0 q) with (forget (R_Com (hd ps) 0 q xx)); auto.
   econstructor; constructor. rewrite plus_comm; simpl. apply C_Com'.
 + (* Successor *)
-  set (x := s ps[@Fin.F1] xx).
+  set (x := s (hd ps) xx).
   assert (X <= X < X + Gamma Zero). split; auto; rewrite plus_comm; auto with arith.
   generalize (HDefs _ H), (HDefs' _ H).
   simpl; unfold Pack1; simpl.
@@ -840,12 +840,12 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   elim (Call_reduce _ _ s HX); intros tl Htl.
   rewrite HX' in Htl.
   set (s' := update s q xx (S x)).
-  exists s', (tl ++ (L_Com ps[@Fin.F1] (S x) q :: List.nil))%list.
+  exists s', (tl ++ (L_Com (hd ps) (S x) q :: List.nil))%list.
   rewrite (converges_Successor _ _ Hf).
-  split. rewrite <- nth_hd, <- Hinput. apply update_read.
+  split. rewrite <- nth_hd, <- Hinput, nth_hd. apply update_read.
   split. intros; apply update_read'. auto.
   eapply MCT_Trans; eauto.
-  replace (L_Com ps[@Fin.F1] (S x) q) with (forget (R_Com ps[@Fin.F1] (S x) q xx)); auto.
+  replace (L_Com (hd ps) (S x) q) with (forget (R_Com (hd ps) (S x) q xx)); auto.
   econstructor; constructor. rewrite plus_comm; simpl. apply C_Com'.
 + (* Projection *)
   set (x := s ps[@Fin.of_nat_lt l] xx).
@@ -1054,21 +1054,21 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
       rename x into tlU, H5 into HU.
       rewrite HDefs', Recursion_Procs_1 in HU; auto.
       unfold IfEq in HU.
-      generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs ps[@Fin.F1] this (S i) yy (If (S i) ? compare Then Send i this q;; Call (X + Gamma g + Gamma h + 3) Else Call (X + Gamma g + 2)) sI)).
+      generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S i) yy (If (S i) ? compare Then Send i this q;; Call (X + Gamma g + Gamma h + 3) Else Call (X + Gamma g + 2)) sI)).
       simpl; intro.
-      assert (beval_on_state compare (update sI (S i) yy (sI ps[@Fin.F1] xx)) (S i) = false).
+      assert (beval_on_state compare (update sI (S i) yy (sI (hd ps) xx)) (S i) = false).
       1: { 
         unfold beval_on_state, beval, MC_BEval.eval.
         rewrite update_read. rewrite update_read''. 2: discriminate.
-        rewrite H4. rewrite H'; auto. rewrite Hs0.
-        rewrite Nat.eqb_neq. apply lt_neq.
-        rewrite nth_hd; auto.
+        rewrite H4, H', <- nth_hd, Hs0; auto.
+        rewrite Nat.eqb_neq. apply lt_neq. auto.
+        rewrite nth_hd; auto. rewrite <- nth_hd; auto.
       }
       generalize (MCP_To_intro _ _ _ _ _ _ (C_Else' Defs (S i) compare (Send i this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2)) _ H6)).
       simpl; clear H6; intro.
       assert (X <= X + Gamma g + 2 < X + Gamma (Recursion g h)).
       1: { split; simpl; auto with arith.  repeat (rewrite <- plus_assoc; apply plus_lt_compat_l); auto with arith. }
-      set (sU := update sI (S i) yy (sI ps[@Fin.F1] xx)).
+      set (sU := update sI (S i) yy (sI (hd ps) xx)).
       generalize (MCT_Trans _ _ _ _ _ HU (MCT_Step _ _ _ _ _ H5 (MCT_Step _ _ _ _ _ H6 (MCT_Refl _)))).
       clear HU H5 H6; intro.
       (* Setting up for the induction hypothesis on h *)
@@ -1143,7 +1143,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
       simpl. set (sF'' := update sF' (i+2) xx (sF' (S i) xx)); intros.
       generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (i+2) succ_this (S i) xx (Call (X + Gamma g + 1)) sF'')).
       simpl. set (sF''' := update sF'' (S i) xx (S (sF'' (i+2) xx))); intros.
-      exists (tlI ++ (tlU ++ L_Com ps[@Fin.F1] (sI ps[@Fin.F1] xx) (S i) :: L_Tau (S i) :: List.nil) ++ tlF ++ x0 ++ L_Com (i+2) (sF (i+2) xx) i :: L_Com (S i) (sF' (S i) xx) (i+2) :: L_Com (i+2) (S (sF'' (i+2) xx)) (S i) :: List.nil)%list.
+      exists (tlI ++ (tlU ++ L_Com (hd ps) (sI (hd ps) xx) (S i) :: L_Tau (S i) :: List.nil) ++ tlF ++ x0 ++ L_Com (i+2) (sF (i+2) xx) i :: L_Com (S i) (sF' (S i) xx) (i+2) :: L_Com (i+2) (S (sF'' (i+2) xx)) (S i) :: List.nil)%list.
       exists sF''', x. repeat split; auto.
       ++ do 4 (eapply MCT_Trans; eauto).
          do 3 (eapply MCT_Step; eauto).
@@ -1189,21 +1189,21 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
     rewrite HDefs', Recursion_Procs_1 in H4; auto.
     rename x into tlU, H4 into HU.
     unfold IfEq in HU.
-    generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs ps[@Fin.F1] this (S i) yy (If (S i) ? compare Then Send i this q;; Call (X + Gamma g + Gamma h + 3) Else Call (X + Gamma g + 2)) sF)).
+    generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S i) yy (If (S i) ? compare Then Send i this q;; Call (X + Gamma g + Gamma h + 3) Else Call (X + Gamma g + 2)) sF)).
     simpl; intro.
-    assert (beval_on_state compare (update sF (S i) yy (sF ps[@Fin.F1] xx)) (S i) = true).
+    assert (beval_on_state compare (update sF (S i) yy (sF (hd ps) xx)) (S i) = true).
     1: { 
       unfold beval_on_state, beval, MC_BEval.eval.
       rewrite update_read. rewrite update_read''. 2: discriminate.
-      rewrite H3. rewrite Htl; auto. rewrite Hs0.
-        rewrite Nat.eqb_eq. rewrite nth_hd; auto.
+      rewrite H3, Htl, <- nth_hd, <- nth_hd, Hs0; auto.
+        rewrite Nat.eqb_eq; auto. rewrite <- nth_hd; auto.
     }
     generalize (MCP_To_intro _ _ _ _ _ _ (C_Then' Defs (S i) compare (Send i this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2)) _ H5)).
-    set (sF' := update sF (S i) yy (sF ps[@Fin.F1] xx)).
+    set (sF' := update sF (S i) yy (sF (hd ps) xx)).
     simpl; clear H5; intro.
     generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs i this q xx (Call (X + Gamma g + Gamma h + 3)) sF')).
     simpl; set (sF'' := update sF' q xx (sF' i xx)); intro.
-    exists sF'', (t ++ tl ++ (tlU ++ L_Com ps[@Fin.F1] (sF ps[@Fin.F1] xx) (S i) :: L_Tau (S i) :: L_Com i (sF' i xx) q :: List.nil))%list.
+    exists sF'', (t ++ tl ++ (tlU ++ L_Com (hd ps) (sF (hd ps) xx) (S i) :: L_Tau (S i) :: L_Com i (sF' i xx) q :: List.nil))%list.
     repeat split; auto.
     * unfold sF'', sF'. rewrite update_read.
       rewrite update_read'; auto.
