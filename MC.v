@@ -76,6 +76,7 @@ End Syntax.
 
 (** Pretty-printing rules for choreographies. *)
 
+Declare Scope MC_scope.
 Delimit Scope MC_scope with MC.
 
 Bind Scope MC_scope with Choreography.

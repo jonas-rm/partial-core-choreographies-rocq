@@ -2,23 +2,6 @@ Require Export Basic.
 Require Export Vector.
 Export VectorNotations.
 
-Require Import Coq.Program.Equality.
-
-Section Lemmas.
-
-(** * Required lemmas
-      These lemmas are not included in Basic.v because they require Coq.Program.Equality.
-*)
-
-Lemma eta_elim : forall {A} {n} (v:t A (S n)) x Hi, v[@Hi] = x -> hd v = x \/ exists Hi', (tl v)[@Hi'] = x.
-Proof.
-dependent induction Hi; intros.
-- left; rewrite nth_hd in H; auto.
-- right; rewrite nth_tl in H; eauto.
-Qed.
-
-End Lemmas.
-
 (** * Definitions
     Our class of partial recursive functions, together with their semantics. *)
 Section Definitions.

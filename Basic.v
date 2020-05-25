@@ -795,6 +795,10 @@ apply hd_tl_induction.
   repeat rewrite nth_tl; auto.
 Qed.
 
+(** Destruction of nth. *)
+Lemma eta_elim : forall {A} {n} (v:t A (S n)) x Hi, v[@Hi] = x -> hd v = x \/ exists Hi', (tl v)[@Hi'] = x.
+Proof. intros. revert H. apply hd_tl_induction; eauto. Qed.
+
 (** Maximum of a vector of natural numbers. *)
 Fixpoint vmax {n} (v:t nat n) :=
   match v with

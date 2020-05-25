@@ -30,3 +30,5 @@ nlia.cache
 nra.cache
 *.html
 *.css
+*.vok
+*.vos
