@@ -119,7 +119,7 @@ induction n.
 + rewrite (eta v) in H.
   revert H; case_eq (hd v); intros.
   - generalize (IHn _ H1); clear IHn H1; intros.
-    elim (eta_elim _ _ _ H0); intros.
+    elim (eta_elim _ _ H0); intros.
     * rewrite H2 in H; inversion H.
     * elim H2; eapply H1; assumption.
   - inversion H1.
@@ -720,7 +720,7 @@ induction f; intros.
   symmetry; apply all_defined_false' with Hi; auto.
 + case_eq (hd ns); intros.
   2: simpl; rewrite H0; auto.
-  elim (eta_elim _ _ _ H); intro.
+  elim (eta_elim _ _ H); intro.
   - rewrite H1 in H0; inversion H0.
   - inversion_clear H1.
     clear H Hi; revert ns H0 x H2.
