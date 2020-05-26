@@ -419,6 +419,10 @@ Eval compute in (map snd (map (Procedures (Implementation' PR_add)) [0;1;2;3;4;5
 Eval compute in (map snd (map (Procedures (Implementation' (Composition Successor [Projection aux23]))) [0;1;2])).
 *)
 
+End Definitions.
+
+Section Soundness.
+
 (** Again - since the definitions are interactive, we prove that they behave as expected. *)
 Lemma Zero_Procs : forall d Hd ps q n X,
   Implementation_aux Zero d Hd ps q n X X = Send (hd ps) zero q;; Call (S X).
@@ -631,147 +635,209 @@ generalize (eq_refl (X + Gamma h + 1)); intro.
 apply Rdec.eqb_eq in H0. rewrite H0; auto.
 Qed.
 
-(** ** Parallel implementation
-  There is also a parallel variant for composition. This is defined in the same steps, but
-  requires yet another auxiliary function. *)
-
-Definition copy_input {m} (ps qs:t Pid m) (X:RecVar) : Choreography.
-(*
-  match m with
-  | 0 => End
-  | S _ => (hd ps # this --> hd qs; copy_input (tl ps) (tl qs))
-  end.
-*)
+Lemma Implementation_aux_ge : forall {n} (f:PRFunction n) d Hd ps q i X Y,
+  Y >= X + Gamma f -> Implementation_aux f d Hd ps q i X Y = End.
 Proof.
-induction m.
-+ apply (Call X).
-+ apply (Send (hd ps) this (hd qs);; IHm (tl ps) (tl qs)).
-Defined.
+intros n f d; revert n f. induction d. inversion Hd.
+intros n f. case f; intros.
++ simpl in H; red in H. rewrite plus_comm in H.
+  simpl. unfold Pack1, RecVar_dec; simpl.
+  assert (Y <> X). apply gt_neq; auto with arith.
+  rewrite <- Rdec.eqb_neq in H0. rewrite H0; auto.
++ simpl in H; red in H. rewrite plus_comm in H.
+  simpl. unfold Pack1, RecVar_dec; simpl.
+  assert (Y <> X). apply gt_neq; auto with arith.
+  rewrite <- Rdec.eqb_neq in H0. rewrite H0; auto.
++ simpl in H; red in H. rewrite plus_comm in H.
+  simpl. unfold Pack1, RecVar_dec; simpl.
+  assert (Y <> X). apply gt_neq; auto with arith.
+  rewrite <- Rdec.eqb_neq in H0. rewrite H0; auto.
++ red in H.
+  simpl.
+  assert (Y >= X + vsum (map Gamma fs)). red. transitivity (X + (Gamma (Composition g fs))); simpl; auto with arith.
+  apply le_not_lt in H0. rewrite <- Nat.ltb_nlt in H0. rewrite H0.
+  apply IHd; rewrite <- plus_assoc, <- (plus_comm (Gamma g)); auto.
++ red in H.
+  simpl; unfold RecVar_dec.
+  assert (Y > X + Gamma g + 1).
+  1: { red. apply lt_le_trans with (X + (Gamma (Recursion g h))); simpl; auto.
+       repeat (rewrite <- plus_assoc; apply plus_lt_compat_l). rewrite plus_comm. simpl; auto with arith. }
+  assert (Y >= X + Gamma g). red; red in H0. transitivity (X + Gamma g + 1); auto with arith.
+  apply le_not_lt in H1. rewrite <- Nat.ltb_nlt in H1. rewrite H1.
+  assert (Y <> X + Gamma g). apply gt_neq; auto. red. transitivity (X + Gamma g + 1); auto. rewrite <- (plus_comm 1); auto.
+  rewrite <- Rdec.eqb_neq in H2. rewrite H2.
+  assert (Y <> X + Gamma g + 1).
+  1: apply gt_neq; auto.
+  rewrite <- Rdec.eqb_neq in H3. rewrite H3.
+  assert (Y <> X + Gamma g + Gamma h + 2).
+  1: { apply gt_neq; simpl in H. red; apply lt_le_trans with (X + Gamma g + Gamma h + 3).
+       apply plus_lt_compat_l; auto. rewrite (plus_assoc X) in H; rewrite <- (plus_assoc X); auto. }
+  rewrite <- Rdec.eqb_neq in H4. simpl in H4. rewrite H4.
+  apply IHd; red. transitivity (X + (Gamma (Recursion g h))); auto.
+  simpl. repeat rewrite <- plus_assoc; repeat apply plus_le_compat_l.
+  rewrite plus_comm; auto with arith.
++ red in H.
+  simpl; unfold RecVar_dec.
+  assert (Y <> X).
+  1: { apply gt_neq; red. apply lt_le_trans with (X + Gamma (Minimization h)); auto with arith. 
+       rewrite <- plus_0_r at 1. apply plus_lt_compat_l, Gamma_neq_zero. }
+  rewrite <- Rdec.eqb_neq in H0. rewrite H0.
+  assert (Y <> X + (@Gamma (S k) h) + 1).
+  1: { apply gt_neq; red. apply lt_le_trans with (X + (Gamma (Minimization h))); simpl; auto.
+       rewrite <- plus_assoc; apply plus_lt_compat_l. auto with arith. }
+  rewrite <- Rdec.eqb_neq in H1. rewrite H1.
+  apply IHd; red. transitivity (X + (Gamma (Minimization h))); auto.
+  simpl. repeat rewrite <- plus_assoc; repeat apply plus_le_compat_l.
+  rewrite plus_comm; auto with arith.
+Qed.
 
-Fixpoint copy_input_iter {m} (ps:t Pid m) {n} (qs: t (t Pid m) n) (X:RecVar) :
-  RecVar -> Choreography :=
-  match qs with
-  | nil _ => (fun _ => End)
-  | (rs::qs') => (fun Y => if RecVar_dec X Y
-        then copy_input ps rs (S X)
-        else copy_input_iter ps qs' (S X) Y)
-  end.
-
-(*
-Eval compute in (map (copy_input_iter [1;3;5] [[2;4;6];[7;8;9]] 2) [0;1;2;3;4;5]).
-*)
-
-Fixpoint Gamma' {m} (f:PRFunction m) : nat :=
-  match f with
-  | Zero => 1
-  | Successor => 1
-  | Projection _ => 1
-  | @Composition k _ g fs => Gamma g + vsum (map Gamma fs) + k
-  | Recursion f g => Gamma f + Gamma g + 3
-  | Minimization f => Gamma f + 2
-  end.
-
-(** The extra argument ps_start is for the processes where the inputs in fs[@0] come from. *)
-Fixpoint par_compose {m} {k} (fs:t (PRFunction m) k) d (Hd:forall i, depth fs[@i] < d) (target init ps_start:nat) (X:RecVar)
-  (Implement : forall m' (f:PRFunction m') (Hd:depth f < d) (ps':t Pid m') (q' i':nat) (k':RecVar), RecVar -> Choreography) {struct fs} : RecVar -> Choreography.
-Proof.
-destruct fs.
-- apply (fun _ => End).
-- assert (forall i, depth fs[@i] < d).
-  intro; apply (Hd (Fin.FS i)).
-  pose (Implement m h (Hd Fin.F1) (vec_k_to_n m ps_start) target init X) as Ph.
-  pose (par_compose _ _ fs d H (S target) (init + Pi h) (ps_start + m) (X + Gamma h) Implement) as Pfs.
-  apply (fun Y => if Y <? X + Gamma h then (Ph Y) else (Pfs Y)).
-Defined.
-
-Fixpoint Par_Implementation_aux {m} (f:PRFunction m) d (Hd:depth f<d)
-  (ps:t Pid m) (q:Pid) (init:nat) (X:RecVar) {struct d}: RecVar -> Choreography.
-Proof.
-induction d.
-+ elim (Nat.nlt_0_r _ Hd).
-+ destruct f; intros; revert X0.
-
-  (* Zero *)
-  - apply (Pack1 X (Send (hd ps) zero q;; Call (S X))).
-
-  (* Successor *)
-  - apply (Pack1 X (Send (hd ps) succ_this q;; Call (S X))).
-
-  (* Projection *)
-  - apply (Pack1 X (Send ps[@Fin.of_nat_lt l] this q;; Call (S X))).
-
-  (* Composition *)
-  - simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
-    pose (max_lt_l _ _ _ Hd') as Hdf.
-    pose (max_lt_r _ _ _ Hd') as Hdfs.
-    assert (forall i, depth fs[@i] < d).
-    intros; rewrite <- nth_map'; apply vmax_lt; auto.
-    set (init' := init + m*k).
-    pose (copy_input_iter ps (vec_m_with_k init m k) X) as Hinit.
-    pose (par_compose fs _ H init' (init'+m) init (X+m) (fun m f => Par_Implementation_aux m f d)) as Pfs.
-    pose (Par_Implementation_aux _ f _ Hdf (seq_labels init' fs) q (init' + m) (X + k + (vsum (map Gamma' fs)))) as Pf.
-    apply (fun Y =>
-      if Y <? X + k then Hinit Y
-      else if Y <? X + k + vsum (map Gamma fs) then Pfs Y else Pf Y).
-
-  (* Recursion *)
-  - rename f1 into f; rename f2 into g.
-    simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
-    pose (max_lt_l _ _ _ Hd') as Hf.
-    pose (max_lt_r _ _ _ Hd') as Hg.
-    pose (Par_Implementation_aux _ f _ Hf (tl ps) init (init+3) X) as Pf.
-    pose (Par_Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f) (X + Gamma' f + 2)) as Pg.
-    apply (fun Y =>
-      if (Y <? X + Gamma' f) then Pf Y
-      else if (RecVar_dec Y (X + Gamma' f)) then
-         Send (init+2) zero (S init);; Call (X + Gamma' f + 1)
-      else if (RecVar_dec Y (X + Gamma' f + 1)) then 
-         IfEq (S init) (hd ps) (Send init this q;; Call (X + Gamma' f + Gamma' g + 3)) (Call (X + Gamma' f + 2))
-      else if (RecVar_dec Y (X + Gamma' f + Gamma' g + 2)) then
-         Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma' f + 1)
-      else Pg Y).
-
-  (* Minimization *)
-  - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
-    pose (Par_Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3) (X + 1)) as Pf.
-    apply (fun Y =>
-      if (RecVar_dec Y X) then
-         Send (init+2) zero (init+1);; Call (X + 1)
-      else if (RecVar_dec Y (X + Gamma' f + 1)) then
-         Send (init+1) zero (init+2);; IfEq (init+2) init
-           (Send (init+1) this q;; Call (X + Gamma' f + 2))
-           (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1))
-        else Pf Y).
-Defined.
-
-Definition Par_Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Program :=
-  Build_Program
-    (fun X => (all_pids ((max q (vmax ps)) + Pi f),
-               Par_Implementation_aux f _ (lt_n_Sn (depth f)) ps q (S (max q (vmax ps))) 0 X))
-    (Call 0).
-
-(** By default, we take process 0 for q and 1..m for the ps. *)
-Definition Par_Implementation' {m} (f:PRFunction m) : Program :=
-  Par_Implementation f (vec_1_to_n m) 0.
-
-(* Sanity checks.
-Eval compute in (Main (Par_Implementation' (Composition Successor [Zero]))).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Successor [Zero]))) [0;1;2;3])).
-
-Eval compute in (Main (Par_Implementation' (Composition Zero [Projection aux13]))).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Zero [Projection aux13]))) [0;1;2;3])).
-
-Eval compute in (Main (Par_Implementation' (Composition (Projection aux22) [Zero; Successor]))).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition (Projection aux22) (Zero :: [Successor])))) [0;1;2;3;4;5])).
-
-Eval compute in (Main (Par_Implementation' PR_add)).
-Eval compute in (map snd (map (Procedures (Par_Implementation' PR_add)) [0;1;2;3;4;5;6;7;8;9])).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Successor [Projection aux23]))) [0;1;2;3])).
+(** We prove some auxiliary results about how these functions reduce.
 *)
 
-End Definitions.
+Section LargeStepSemantics.
 
-Section Soundness.
+Lemma Zero_reduce : forall Defs (ps: t Pid 1) q X s,
+  exists t, (Build_Program Defs (Send (hd ps) zero q;; Call X),s) --[t]--> (Build_Program Defs (Call X), update s q xx 0).
+Proof. intros. exists (forget (R_Com (hd ps) 0 q xx)); constructor. apply C_Com'. Qed.
+
+Lemma Successor_reduce : forall Defs (ps: t Pid 1) q X s,
+  exists t, (Build_Program Defs (Send (hd ps) succ_this q;; Call X),s) --[t]--> (Build_Program Defs (Call X), update s q xx (S (s (hd ps) xx))).
+Proof. intros. exists (forget (R_Com (hd ps) (S (s (hd ps) xx)) q xx)); constructor. apply C_Com'. Qed.
+
+Lemma Projection_reduce : forall k m (Hp:k<m) Defs ps q X s,
+  exists t, (Build_Program Defs (Send ps[@Fin.of_nat_lt Hp] this q;; Call X),s) --[t]--> (Build_Program Defs (Call X), update s q xx (s ps[@Fin.of_nat_lt Hp] xx)).
+Proof. intros. exists (forget (R_Com ps[@Fin.of_nat_lt Hp] (s ps[@Fin.of_nat_lt Hp] xx) q xx)); constructor. apply C_Com'. Qed.
+
+Lemma Recursion_reduce_0 : forall Defs X n s,
+  exists t, (Build_Program Defs (Send (n + 2) zero (S n);; Call X),s) --[t]--> (Build_Program Defs (Call X),update s (S n) xx 0).
+Proof. intros. exists (forget (R_Com (n+2) 0 (S n) xx)); constructor. apply C_Com'. Qed.
+
+Lemma Recursion_reduce_1_true : forall m Defs X Y n (ps:t Pid (S m)) q s,
+  s (S n) xx = s (hd ps) xx ->
+  exists t s', (Build_Program Defs (IfEq (S n) (hd ps) (Send n this q;; Call X) (Call Y)),s) --[t]-->* (Build_Program Defs (Call X), s')
+    /\ s' q xx = s n xx /\ forall p, p <> q -> s' p xx = s p xx.
+Proof.
+intros. unfold IfEq.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S n) yy (If S n ? compare Then Send n this q;; Call X Else Call Y) s)).
+simpl; intro.
+assert (beval_on_state compare (update s (S n) yy (s (hd ps) xx)) (S n) = true).
+1: { unfold beval_on_state, beval, MC_BEval.eval. rewrite update_read, update_read'', Nat.eqb_eq; auto. discriminate. }
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Then' Defs (S n) compare (Send n this q;; Call X) (Call Y) _ H1)).
+simpl; intro.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs n this q xx (Call X) (update s (S n) yy (s (hd ps) xx)))).
+simpl; intro.
+do 2 eexists; split. 2: split.
++ do 3 (eapply MCT_Step; eauto). constructor.
++ rewrite update_read, update_read'; auto.
++ intros. rewrite update_read', update_read''; auto. discriminate.
+Qed.
+
+Lemma Recursion_reduce_1_false : forall m Defs X Y n (ps:t Pid (S m)) q s,
+  s (S n) xx <> s (hd ps) xx ->
+  exists t, (Build_Program Defs (IfEq (S n) (hd ps) (Send n this q;; Call X) (Call Y)),s) --[t]-->* (Build_Program Defs (Call Y), update s (S n) yy (s (hd ps) xx)).
+Proof.
+intros. unfold IfEq.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S n) yy (If S n ? compare Then Send n this q;; Call X Else Call Y) s)).
+simpl; intro.
+assert (beval_on_state compare (update s (S n) yy (s (hd ps) xx)) (S n) = false).
+1: { unfold beval_on_state, beval, MC_BEval.eval. rewrite update_read, update_read'', Nat.eqb_neq; auto. discriminate. }
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Else' Defs (S n) compare (Send n this q;; Call X) (Call Y) _ H1)).
+simpl; intro.
+eexists. do 2 (eapply MCT_Step; eauto). constructor.
+Qed.
+
+Lemma Recursion_reduce_2 : forall Defs X n s, 
+  exists t s', (Build_Program Defs (Send (n+2) this n;; Send (S n) this (n+2);; Send (n+2) succ_this (S n);; Call X),s) --[t]-->* (Build_Program Defs (Call X),s')
+    /\ (forall p, p < n -> s' p xx = s p xx) /\ s' n xx = s (n+2) xx /\ s' (S n) xx = S (s (S n) xx) /\ s' (n+2) xx = s (S n) xx.
+Proof.
+intros.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n+2) this n xx (Send (S n) this (n+2);; Send (n+2) succ_this (S n);; Call X) s)).
+simpl. set (s1 := update s n xx (s (n+2) xx)); intro.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (S n) this (n+2) xx (Send (n+2) succ_this (S n);; Call X) s1)).
+simpl. set (s2 := update s1 (n+2) xx (s1 (S n) xx)); intro.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n+2) succ_this (S n) xx (Call X) s2)).
+simpl. set (s3 := update s2 (S n) xx (S (s2 (n+2) xx))); intro.
+do 2 eexists. split. do 3 (eapply MCT_Step; eauto); constructor.
+assert (n+2<>n). apply gt_neq; red; rewrite plus_comm; simpl; auto.
+unfold s3, s2, s1. repeat split. 
++ intros. repeat rewrite update_read'; auto; apply gt_neq; red; auto. rewrite plus_comm; simpl; auto.
++ rewrite update_read, update_read', update_read', update_read; auto.
++ rewrite update_read, update_read, update_read'; auto.
++ rewrite update_read', update_read, update_read'; auto. rewrite plus_comm; simpl; auto.
+Qed.
+
+Lemma Minimization_reduce_0 : forall Defs X n s,
+  exists t, (Build_Program Defs (Send (n + 2) zero (n + 1);; Call X),s) --[t]--> (Build_Program Defs (Call X),update s (n + 1) xx 0).
+Proof. intros. exists (forget (R_Com (n+2) 0 (n + 1) xx)); constructor. apply C_Com'. Qed.
+
+Lemma Minimization_reduce_1_true : forall Defs X Y n s q,
+  q < n -> s n xx = 0 -> exists t s', (Build_Program Defs (Send (n+1) zero (n+2);; IfEq (n+2) n
+     (Send (n+1) this q;; Call X)
+     (Send (n+1) this (n+2);; Send (n+2) succ_this (n+1);; Call Y)),s) --[t]-->* (Build_Program Defs (Call X),s')
+  /\ (forall p, p < n -> p <> q -> s' p xx = s p xx) /\ s' q xx = s (n+1) xx  /\ s' n xx = s n xx /\ s' (n+1) xx = s (n+1) xx /\ s' (n+2) xx = 0.
+Proof.
+intros. unfold IfEq.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n+1) zero (n+2) xx (n # this --> n + 2 $ yy;; If n + 2 ? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s)).
+simpl. set (s1 := update s (n+2) xx 0); intro.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs n this (n+2) yy (If n + 2 ? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s1)).
+simpl. set (s2 := update s1 (n+2) yy (s1 n xx)); intro.
+assert (beval_on_state compare s2 (n+2) = true).
+1: {
+  unfold beval_on_state, beval, MC_BEval.eval, s2, s1.
+  rewrite update_read, update_read'', update_read, update_read', Nat.eqb_eq; auto.
+  rewrite plus_comm; simpl; apply gt_neq; auto. discriminate.
+}
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Then' Defs (n+2) compare (Send (n + 1) this q;; Call X) (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y) s2 H3)).
+simpl; intro.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n + 1) this q xx (Call X) s2)).
+simpl; intro.
+do 2 eexists; split. do 4 (eapply MCT_Step; eauto). constructor.
+assert (n+2 <> n+1). apply gt_neq; red; do 2 rewrite (plus_comm n); simpl; auto.
+assert (n+2 <> n). apply gt_neq; red; rewrite (plus_comm n); simpl; auto.
+unfold s2, s1; repeat split.
++ intros. repeat rewrite update_read'; auto. all: apply gt_neq; red; auto; rewrite plus_comm; simpl; auto.
++ rewrite update_read, update_read', update_read'; auto.
++ rewrite update_read', update_read', update_read'; auto. apply lt_neq; auto.
++ rewrite update_read', update_read', update_read'; auto. apply lt_neq; rewrite plus_comm; auto.
++ rewrite update_read', update_read'', update_read; auto. discriminate.
+  apply lt_neq; rewrite plus_comm; simpl; auto.
+Qed.
+
+Lemma Minimization_reduce_1_false : forall Defs X Y n s q,
+  q < n -> s n xx <> 0 -> exists t s', (Build_Program Defs (Send (n+1) zero (n+2);; IfEq (n+2) n
+     (Send (n+1) this q;; Call X)
+     (Send (n+1) this (n+2);; Send (n+2) succ_this (n+1);; Call Y)),s) --[t]-->* (Build_Program Defs (Call Y),s')
+  /\ (forall p, p < n -> s' p xx = s p xx) /\ s' n xx = s n xx /\ s' (n+1) xx = S (s (n+1) xx) /\ s' (n+2) xx = s (n+1) xx.
+Proof.
+intros. unfold IfEq.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n+1) zero (n+2) xx (n # this --> n + 2 $ yy;; If n + 2 ? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s)).
+simpl. set (s1 := update s (n+2) xx 0); intro.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs n this (n+2) yy (If n + 2 ? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s1)).
+simpl. set (s2 := update s1 (n+2) yy (s1 n xx)); intro.
+assert (beval_on_state compare s2 (n+2) = false).
+1: {
+  unfold beval_on_state, beval, MC_BEval.eval, s2, s1.
+  rewrite update_read, update_read'', update_read, update_read', Nat.eqb_neq; auto.
+  rewrite plus_comm; simpl; apply gt_neq; auto. discriminate.
+}
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Else' Defs (n+2) compare (Send (n + 1) this q;; Call X) (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y) s2 H3)).
+simpl; intro.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n+1) this (n+2) xx (Send (n + 2) succ_this (n + 1);; Call Y) s2)).
+simpl. set (s3 := update s2 (n+2) xx (s2 (n+1) xx)); intro.
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n+2) succ_this (n+1) xx (Call Y) s3)).
+simpl; intro.
+do 2 eexists; split. do 5 (eapply MCT_Step; eauto). constructor.
+assert (n+2 <> n+1). apply gt_neq; red; do 2 rewrite (plus_comm n); simpl; auto.
+assert (n+2 <> n). apply gt_neq; red; rewrite (plus_comm n); simpl; auto.
+assert (n+1 <> n). apply gt_neq; red; rewrite (plus_comm n); simpl; auto.
+unfold s3, s2, s1. repeat split; auto.
++ intros. repeat rewrite update_read'; auto. all: apply gt_neq; red; auto; rewrite plus_comm; simpl; auto.
++ rewrite update_read, update_read', update_read', update_read', update_read'; auto.
++ rewrite update_read, update_read, update_read', update_read'; auto.
++ rewrite update_read, update_read', update_read, update_read'', update_read'; auto. discriminate.
+Qed.
+
+End LargeStepSemantics.
 
 (* Without classical logic we can't make PRFunctions into PFunctions. *)
 
@@ -823,46 +889,43 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   rewrite Rdec.eqb_refl. intros HX HX'.
   elim (Call_reduce _ _ s HX); intros tl Htl.
   rewrite HX' in Htl.
+  elim (Zero_reduce Defs ps q (S X) s); intros tl' Htl'.
   set (s' := update s q xx 0).
-  exists s', (tl ++ (L_Com (hd ps) 0 q :: List.nil))%list.
+  exists s', (tl ++ tl' :: List.nil)%list.
   rewrite (converges_Zero _ _ Hf).
   split. apply update_read.
   split. intros; apply update_read'. auto.
-  eapply MCT_Trans; eauto.
-  replace (L_Com (hd ps) 0 q) with (forget (R_Com (hd ps) 0 q xx)); auto.
-  econstructor; constructor. rewrite plus_comm; simpl. apply C_Com'.
+  eapply MCT_Trans; eauto. econstructor; eauto. rewrite plus_comm; constructor.
 + (* Successor *)
   set (x := s (hd ps) xx).
-  assert (X <= X < X + Gamma Zero). split; auto; rewrite plus_comm; auto with arith.
+  assert (X <= X < X + Gamma Successor). split; auto; rewrite plus_comm; auto with arith.
   generalize (HDefs _ H), (HDefs' _ H).
   simpl; unfold Pack1; simpl.
   rewrite Rdec.eqb_refl. intros HX HX'.
   elim (Call_reduce _ _ s HX); intros tl Htl.
   rewrite HX' in Htl.
+  elim (Successor_reduce Defs ps q (S X) s); intros tl' Htl'.
   set (s' := update s q xx (S x)).
-  exists s', (tl ++ (L_Com (hd ps) (S x) q :: List.nil))%list.
+  exists s', (tl ++ tl' :: List.nil)%list.
   rewrite (converges_Successor _ _ Hf).
   split. rewrite <- nth_hd, <- Hinput, nth_hd. apply update_read.
   split. intros; apply update_read'. auto.
-  eapply MCT_Trans; eauto.
-  replace (L_Com (hd ps) (S x) q) with (forget (R_Com (hd ps) (S x) q xx)); auto.
-  econstructor; constructor. rewrite plus_comm; simpl. apply C_Com'.
+  eapply MCT_Trans; eauto. econstructor; eauto. rewrite plus_comm; constructor.
 + (* Projection *)
   set (x := s ps[@Fin.of_nat_lt l] xx).
-  assert (X <= X < X + Gamma Zero). split; auto; rewrite plus_comm; auto with arith.
+  assert (X <= X < X + Gamma (Projection l)). split; auto; rewrite plus_comm; auto with arith.
   generalize (HDefs _ H), (HDefs' _ H).
   simpl; unfold Pack1; simpl.
   rewrite Rdec.eqb_refl. intros HX HX'.
   elim (Call_reduce _ _ s HX); intros tl Htl.
   rewrite HX' in Htl.
+  elim (Projection_reduce _ _ l Defs ps q (S X) s); intro tl'.
   set (s' := update s q xx x).
-  exists s', (tl ++ (L_Com ps[@Fin.of_nat_lt l] x q :: List.nil))%list.
+  exists s', (tl ++ tl' :: List.nil)%list.
   rewrite (converges_Projection _ _ _ _ _ Hf).
   split. rewrite <- Hinput. apply update_read.
   split. intros; apply update_read'. auto.
-  eapply MCT_Trans; eauto.
-  replace (L_Com ps[@Fin.of_nat_lt l] x q) with (forget (R_Com ps[@Fin.of_nat_lt l] x q xx)); auto.
-  econstructor; constructor. rewrite plus_comm; simpl. apply C_Com'.
+  eapply MCT_Trans; eauto. econstructor; eauto. rewrite plus_comm; constructor.
 + (* Composition *)
   set (Hd' := lt_S_n (Nat.max (depth g) (vmax (map depth fs))) d Hd).
   set (Hfs := vmax_lt_map _ _ (max_lt_r _ _ _ Hd')).
@@ -1415,9 +1478,175 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
       rewrite plus_assoc; constructor.
 Qed.
 
+Theorem Implementation_converges : forall {n} (f:PRFunction n) ps q ns y,
+  ~In q ps -> converges f ns y -> 
+  forall (s:State), (forall H, s ps[@H] xx = ns[@H]) ->
+  exists c' tl, (Implementation f ps q, s) --[tl]-->* c' /\ Main (fst c') = End /\ snd c' q xx = y.
+Proof.
+intros.
+set (Hd := Nat.lt_succ_diag_r (depth f)).
+set (i := (S (max q (vmax ps)))).
+elim (Implementation_aux_converges f _ Hd ps q i 0 (Procedures (Implementation f ps q)) ns y H) with s; intros; auto.
++ destroy H2. rename x into s', x0 into tl.
+  simpl (0 + Gamma f) in H2.
+  elim (Call_reduce (Procedures (Implementation f ps q)) (Gamma f) s'); intros.
+  2: apply all_pids_not_nil.
+  rename x into tl'.
+  eexists. exists (tl++tl')%list; repeat split.
+  * eapply MCT_Trans; eauto.
+  * change (snd (Procedures (Implementation f ps q) (Gamma f)) = End).
+    apply Implementation_aux_ge; auto with arith.
+  * auto.
++ apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
++ apply le_n_S. apply Nat.le_max_l.
++ apply all_pids_not_nil.
+Qed.
+
 (*
 Theorem encoding_sound : forall n (f:PRFunction n),
   implements (Implementation' f) f (vec_1_to_n n) 0.
 *)
 
 End Soundness.
+
+Section ParallelImplementation.
+
+(** ** Parallel implementation
+  There is also a parallel variant for composition. This is defined in the same steps, but
+  requires yet another auxiliary function. *)
+
+Definition copy_input {m} (ps qs:t Pid m) (X:RecVar) : Choreography.
+(*
+  match m with
+  | 0 => End
+  | S _ => (hd ps # this --> hd qs; copy_input (tl ps) (tl qs))
+  end.
+*)
+Proof.
+induction m.
++ apply (Call X).
++ apply (Send (hd ps) this (hd qs);; IHm (tl ps) (tl qs)).
+Defined.
+
+Fixpoint copy_input_iter {m} (ps:t Pid m) {n} (qs: t (t Pid m) n) (X:RecVar) :
+  RecVar -> Choreography :=
+  match qs with
+  | nil _ => (fun _ => End)
+  | (rs::qs') => (fun Y => if RecVar_dec X Y
+        then copy_input ps rs (S X)
+        else copy_input_iter ps qs' (S X) Y)
+  end.
+
+(*
+Eval compute in (map (copy_input_iter [1;3;5] [[2;4;6];[7;8;9]] 2) [0;1;2;3;4;5]).
+*)
+
+Fixpoint Gamma' {m} (f:PRFunction m) : nat :=
+  match f with
+  | Zero => 1
+  | Successor => 1
+  | Projection _ => 1
+  | @Composition k _ g fs => Gamma g + vsum (map Gamma fs) + k
+  | Recursion f g => Gamma f + Gamma g + 3
+  | Minimization f => Gamma f + 2
+  end.
+
+(** The extra argument ps_start is for the processes where the inputs in fs[@0] come from. *)
+Fixpoint par_compose {m} {k} (fs:t (PRFunction m) k) d (Hd:forall i, depth fs[@i] < d) (target init ps_start:nat) (X:RecVar)
+  (Implement : forall m' (f:PRFunction m') (Hd:depth f < d) (ps':t Pid m') (q' i':nat) (k':RecVar), RecVar -> Choreography) {struct fs} : RecVar -> Choreography.
+Proof.
+destruct fs.
+- apply (fun _ => End).
+- assert (forall i, depth fs[@i] < d).
+  intro; apply (Hd (Fin.FS i)).
+  pose (Implement m h (Hd Fin.F1) (vec_k_to_n m ps_start) target init X) as Ph.
+  pose (par_compose _ _ fs d H (S target) (init + Pi h) (ps_start + m) (X + Gamma h) Implement) as Pfs.
+  apply (fun Y => if Y <? X + Gamma h then (Ph Y) else (Pfs Y)).
+Defined.
+
+Fixpoint Par_Implementation_aux {m} (f:PRFunction m) d (Hd:depth f<d)
+  (ps:t Pid m) (q:Pid) (init:nat) (X:RecVar) {struct d}: RecVar -> Choreography.
+Proof.
+induction d.
++ elim (Nat.nlt_0_r _ Hd).
++ destruct f; intros; revert X0.
+
+  (* Zero *)
+  - apply (Pack1 X (Send (hd ps) zero q;; Call (S X))).
+
+  (* Successor *)
+  - apply (Pack1 X (Send (hd ps) succ_this q;; Call (S X))).
+
+  (* Projection *)
+  - apply (Pack1 X (Send ps[@Fin.of_nat_lt l] this q;; Call (S X))).
+
+  (* Composition *)
+  - simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
+    pose (max_lt_l _ _ _ Hd') as Hdf.
+    pose (max_lt_r _ _ _ Hd') as Hdfs.
+    assert (forall i, depth fs[@i] < d).
+    intros; rewrite <- nth_map'; apply vmax_lt; auto.
+    set (init' := init + m*k).
+    pose (copy_input_iter ps (vec_m_with_k init m k) X) as Hinit.
+    pose (par_compose fs _ H init' (init'+m) init (X+m) (fun m f => Par_Implementation_aux m f d)) as Pfs.
+    pose (Par_Implementation_aux _ f _ Hdf (seq_labels init' fs) q (init' + m) (X + k + (vsum (map Gamma' fs)))) as Pf.
+    apply (fun Y =>
+      if Y <? X + k then Hinit Y
+      else if Y <? X + k + vsum (map Gamma fs) then Pfs Y else Pf Y).
+
+  (* Recursion *)
+  - rename f1 into f; rename f2 into g.
+    simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
+    pose (max_lt_l _ _ _ Hd') as Hf.
+    pose (max_lt_r _ _ _ Hd') as Hg.
+    pose (Par_Implementation_aux _ f _ Hf (tl ps) init (init+3) X) as Pf.
+    pose (Par_Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f) (X + Gamma' f + 2)) as Pg.
+    apply (fun Y =>
+      if (Y <? X + Gamma' f) then Pf Y
+      else if (RecVar_dec Y (X + Gamma' f)) then
+         Send (init+2) zero (S init);; Call (X + Gamma' f + 1)
+      else if (RecVar_dec Y (X + Gamma' f + 1)) then 
+         IfEq (S init) (hd ps) (Send init this q;; Call (X + Gamma' f + Gamma' g + 3)) (Call (X + Gamma' f + 2))
+      else if (RecVar_dec Y (X + Gamma' f + Gamma' g + 2)) then
+         Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma' f + 1)
+      else Pg Y).
+
+  (* Minimization *)
+  - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
+    pose (Par_Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3) (X + 1)) as Pf.
+    apply (fun Y =>
+      if (RecVar_dec Y X) then
+         Send (init+2) zero (init+1);; Call (X + 1)
+      else if (RecVar_dec Y (X + Gamma' f + 1)) then
+         Send (init+1) zero (init+2);; IfEq (init+2) init
+           (Send (init+1) this q;; Call (X + Gamma' f + 2))
+           (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1))
+        else Pf Y).
+Defined.
+
+Definition Par_Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Program :=
+  Build_Program
+    (fun X => (all_pids ((max q (vmax ps)) + Pi f),
+               Par_Implementation_aux f _ (lt_n_Sn (depth f)) ps q (S (max q (vmax ps))) 0 X))
+    (Call 0).
+
+(** By default, we take process 0 for q and 1..m for the ps. *)
+Definition Par_Implementation' {m} (f:PRFunction m) : Program :=
+  Par_Implementation f (vec_1_to_n m) 0.
+
+(* Sanity checks.
+Eval compute in (Main (Par_Implementation' (Composition Successor [Zero]))).
+Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Successor [Zero]))) [0;1;2;3])).
+
+Eval compute in (Main (Par_Implementation' (Composition Zero [Projection aux13]))).
+Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Zero [Projection aux13]))) [0;1;2;3])).
+
+Eval compute in (Main (Par_Implementation' (Composition (Projection aux22) [Zero; Successor]))).
+Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition (Projection aux22) (Zero :: [Successor])))) [0;1;2;3;4;5])).
+
+Eval compute in (Main (Par_Implementation' PR_add)).
+Eval compute in (map snd (map (Procedures (Par_Implementation' PR_add)) [0;1;2;3;4;5;6;7;8;9])).
+Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Successor [Projection aux23]))) [0;1;2;3])).
+*)
+
+End ParallelImplementation.

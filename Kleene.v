@@ -876,7 +876,7 @@ induction f using PRFunction_induction.
 Qed.
 
 Lemma eval_opt_mon : forall m (f : PRFunction m) s ns k,
-    eval_opt f s ns = Some k -> forall s', s' > s -> eval_opt f s' ns = Some k.
+    eval_opt f s ns = Some k -> forall s', s' >= s -> eval_opt f s' ns = Some k.
 Proof.
 induction f using PRFunction_induction; auto.
 + intros. revert H0; simpl.
@@ -946,7 +946,7 @@ induction f using PRFunction_induction; auto.
   * generalize (find_zero_from_bound _ _ _ _ _ H1);
     generalize (find_zero_from_middle _ _ _ _ _ H1);
     generalize (find_zero_from_value _ _ _ _ _ H1); clear H1; intros fn_m fn_lt m_lt.
-    apply lt_S_n in H0. rename H0 into Hnn'.
+    apply le_S_n in H0. rename H0 into Hnn'.
     elim (find_zero_from_None _ _ _ _ H); clear H; simpl; intros.
     ** elim a; clear a; intros x a; elim a; clear a; intros Hx a.
        elim a; clear a; intros fn'_None fn'_lt.
@@ -969,7 +969,7 @@ induction f using PRFunction_induction; auto.
           assert (None = Some (S x0)). 2: inversion H1.
           rewrite <- H0, <- fn'_None; auto.
     ** elim (b m); intros.
-       2: split; auto with arith; transitivity n; auto.
+       2: split; auto with arith; apply lt_le_trans with n; auto.
        generalize (eval_opt_inj _ _ _ _ _ _ _ fn_m H); intro exf; inversion exf.
 Qed.
 
@@ -982,11 +982,10 @@ intros.
 inversion H0.
 + rewrite H2 in H1; rewrite H1 in H; auto.
 + rewrite (eval_opt_mon _ _ _ _ _ H1) in H; auto.
-  red; apply le_lt_trans with m0; auto; rewrite <- H3; auto with arith.
 Qed.
 
 Lemma eval_mon : forall m (f:PRFunction m) steps ns k, eval f steps ns = (Some k) ->
-  forall s', s' > steps -> eval f s' ns = (Some k).
+  forall s', s' >= steps -> eval f s' ns = (Some k).
 Proof. intros. apply eval_opt_mon with steps; auto. Qed.
 
 Lemma eval_inj_Some : forall m (f:PRFunction m) s s' ns m m', eval f s ns = Some m -> eval f s' ns = Some m' -> m = m'.

@@ -367,13 +367,14 @@ Proof.
   rewrite <- Pdec.eqb_neq in H; rewrite H; auto.
 Qed.
 
-Lemma update_read'' : forall s p x y v, x <> y ->
-  update s p x v p y = s p y.
+Lemma update_read'' : forall s p q x y v, x <> y ->
+  update s p x v q y = s q y.
 Proof.
   intros.
-  unfold update.
-  rewrite Pdec.eqb_refl.
-  apply LSt.update_read''; auto.
+  unfold update, Pid_dec.
+  elim (P.eq_dec p q); intro.
+  generalize a; intro. rewrite <- Pdec.eqb_eq in a; rewrite a, a0. apply update_read''; auto.
+  rewrite <- Pdec.eqb_neq in b; rewrite b. auto.
 Qed.
 
 Lemma update_update : forall s p x v w P,
