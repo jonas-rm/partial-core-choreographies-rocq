@@ -1889,8 +1889,6 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
          exists x1; auto.
 Qed.
 
-Check implements_char.
-
 Theorem Implementation_converges' : forall {n} (f:PRFunction n) ps q ns y,
   ~In q ps -> forall (s:State), (forall H, s ps[@H] xx = ns[@H]) ->
   (exists c' tl, (Implementation f ps q, s) --[tl]-->* c' /\ Main (fst c') = End /\ snd c' q xx = y)
