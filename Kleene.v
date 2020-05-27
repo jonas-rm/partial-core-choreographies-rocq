@@ -231,6 +231,35 @@ induction steps; intros.
     * intros; elim (lt_irrefl init); apply le_lt_trans with k0; inversion_clear H1; auto.
 Qed.
 
+(** Monotonicity. *)
+Lemma find_zero_from_mon : forall k h ns y m st s s', s <= s' ->
+  find_zero_from (@eval_opt (1+k) h st) (map Some ns) m s = Some y -> 
+  find_zero_from (@eval_opt (1+k) h st) (map Some ns) m s' = Some y.
+Proof.
+intros k h ns y m st s; revert m.
+induction s; intros. inversion H0.
+inversion H; auto.
+revert H0; simpl.
+case_eq (eval_opt h st (shiftin (Some m) (map Some ns))).
++ simpl; intros n Hn; rewrite Hn.
+  case n; auto. intros; apply IHs; auto with arith.
++ simpl; intro Hn; rewrite Hn; auto.
+Qed.
+
+(** A useful characterization result. *)
+Lemma find_zero_from_compute : forall k h ns init m steps,
+  (forall x, x < init+m -> exists y, h (shiftin (Some x) ns) = (Some (S y))) ->
+  @find_zero_from k h ns init (m+steps) = find_zero_from h ns (m+init) steps.
+Proof.
+intros k h ns init m; revert init.
+induction m; auto.
+intros. simpl. elim (H init).
+2: rewrite <- plus_n_Sm; auto with arith.
+intros. rewrite H0.
+rewrite plus_n_Sm. apply IHm; intros.
+rewrite plus_Sn_m, plus_n_Sm in H1; auto.
+Qed.
+
 End Auxiliary_Lemmas.
 
 (** Since our definition of eval is very indirect, we now prove that it behaves as expected. *)
@@ -1021,7 +1050,82 @@ split; intros; intro.
   elim (H n); exists steps; auto.
 Qed.
 
-(** Results about convergence using each constructor. *)
+(** Results for recursively proving convergence. *)
+Lemma Composition_converges : forall m k g fs ns ms y,
+  (forall H, converges fs[@H] ns ms[@H]) -> converges g ms y ->
+  converges (@Composition m k g fs) ns y.
+Proof.
+intros.
+assert (exists steps, forall H, Kleene.eval fs[@H] steps ns = Some ms[@H]).
++ clear dependent g. induction fs.
+  - exists 0; intros. inversion H0.
+  - elim (IHfs (tl ms)). intros s Hs.
+    2: intro; replace fs with (tl (h::fs)); auto; repeat rewrite <- nth_tl; auto.
+    elim (H Fin.F1); intros s' Hs'.
+    exists (max s s'); intros.
+    apply (hd_tl_induction' (fun x y => Kleene.eval x (max s s') ns = Some y)).
+    * simpl. apply eval_mon with s'. replace h with (hd (h::fs)); auto. repeat rewrite <- nth_hd; auto.
+      apply Nat.le_max_r.
+    * intro. apply eval_mon with s; auto. apply Nat.le_max_l.
++ inversion_clear H1. inversion_clear H0.
+  rename x into s, x0 into s'.
+  exists (max s s').
+  rewrite (Composition_correct m k g fs ns ms); intros.
+  - apply eval_mon with s'; auto. apply Nat.le_max_r.
+  - apply eval_mon with s; auto. apply Nat.le_max_l.
+Qed.
+
+Lemma Recursion_converges_base : forall k g h ns y,
+  converges g (tl ns) y -> converges (@Recursion k g h) (0::tl ns) y.
+Proof. auto. Qed.
+
+Lemma Recursion_converges_step : forall k g h ns x y z,
+  converges (@Recursion k g h) (x::ns) y ->
+  converges h (x::y::ns) z -> converges (Recursion g h) (S x::ns) z.
+Proof.
+intros.
+elim H0; intros s Hs; elim H; intros s' Hs'; clear H0 H.
+exists (max s s').
+rewrite (Recursion_correct_step k g h (S x::ns) (max s s') x) with y; auto.
++ apply eval_mon with s; auto. apply Nat.le_max_l.
++ apply eval_mon with s'; auto. apply Nat.le_max_r.
+Qed.
+
+Lemma converges_max : forall k h ns y,
+  (forall x, x<y -> exists z, converges h (shiftin x ns) (S z)) ->
+  exists s, forall x, x<y -> exists z, @Kleene.eval (S k) h s (shiftin x ns) = Some (S z).
+induction y; intros.
++ exists 0; intros. inversion H0.
++ elim IHy; auto. intros. rename x into s.
+  elim (H y); auto. intros. inversion_clear H1. rename x0 into s'.
+  exists (max s s'); intros.
+  inversion H1. exists x; apply eval_mon with s'; auto. apply Nat.le_max_r.
+  elim (H0 x0); auto. intros. exists x1; apply eval_mon with s; auto. apply Nat.le_max_l.
+Qed.
+
+Lemma Minimization_converges : forall k h ns y,
+  (forall x, x<y -> exists z, converges h (shiftin x ns) (S z)) -> converges h (shiftin y ns) 0 ->
+  converges (@Minimization k h) ns y.
+Proof.
+intros.
+elim H0. intros sh Hh. clear H0.
+elim (converges_max _ _ _ _ H). intros s' Hs'; clear H.
+exists (y + (S (S (max sh s')))).
+unfold Kleene.eval; simpl.
+rewrite <- plus_n_Sm.
+rewrite find_zero_from_compute.
++ rewrite <- plus_n_Sm, plus_0_r. simpl.
+  rewrite <- map_shiftin.
+  replace (eval_opt h (S (y + max sh s')) (map Some (shiftin y ns))) with (Some 0); auto.
+  symmetry. apply eval_opt_mon with sh; auto.
+  red. apply le_S. transitivity (max sh s'); auto with arith. apply Nat.le_max_l.
++ simpl; intros. rewrite <- map_shiftin.
+  elim (Hs' x); auto; intros.
+  exists x0. apply eval_opt_mon with s'; auto.
+  red. transitivity (max sh s'); auto with arith. apply Nat.le_max_r.
+Qed.
+
+(** Inversion results about convergence using each constructor. *)
 Lemma converges_Zero : forall ns y, converges Zero ns y -> y = 0.
 Proof.
 intros.
@@ -1184,3 +1288,101 @@ elim (H3 _ H0); intros. exists x2, x1; auto.
 Qed.
 
 End Convergence.
+
+Section Divergence.
+
+(** Lemmas about divergence - currently unused. *)
+
+Lemma diverges_Composition_arg : forall {m k} fs g ns H,
+  diverges fs[@H] ns -> diverges (@Composition m k g fs) ns.
+Proof.
+intros; intro.
+case_eq (Kleene.eval (Composition g fs) steps ns); auto.
+intros; exfalso.
+elim (converges_Composition' fs g ns n); intros.
+2: exists steps; auto.
+elim (H2 H); intros.
+rewrite H0 in H3; inversion H3.
+Qed.
+
+Lemma diverges_Composition_fun : forall {m k} fs g ns x,
+  (forall H, converges fs[@H] ns x[@H]) ->
+  diverges g x -> diverges (@Composition m k g fs) ns.
+Proof.
+intros; intro.
+case_eq (Kleene.eval (Composition g fs) steps ns); auto.
+intros; exfalso.
+elim (converges_Composition fs g ns n); intros.
+2: exists steps; auto.
+inversion_clear H2.
+replace x0 with x in H4. inversion_clear H4. rewrite H0 in H2; inversion H2.
+apply eq_nth_iff'; intro.
+apply converges_inj with fs[@p] ns; auto.
+Qed.
+
+Lemma diverges_Recursion_ind : forall {m} (g:PRFunction m) h x ns,
+  diverges (Recursion g h) (x::ns) ->
+  forall y, x<y -> diverges (Recursion g h) (y::ns).
+Proof.
+induction y; intros. inversion H0.
+assert (diverges (Recursion g h) (y::ns)).
++ inversion H0; auto. rewrite <- H2; auto.
++ intro. revert H1.
+  unfold diverges, Kleene.eval.
+  simpl.
+  intro; rewrite H1; auto.
+Qed.
+
+Lemma diverges_Recursion_base : forall {m} (g:PRFunction m) h ns,
+  diverges g (tl ns) -> diverges (Recursion g h) ns.
+Proof.
+intros.
+set (n := hd ns : nat). assert (hd ns = n); auto.
+clearbody n. revert ns H H0.
+induction n; intros.
++ intro. revert H.
+  rewrite (eta ns), H0.
+  unfold diverges, Kleene.eval; simpl; auto.
++ rewrite (eta ns). apply diverges_Recursion_ind with 0; auto.
+  rewrite H0; auto with arith.
+Qed.
+
+Lemma diverges_Recursion_step : forall {m} (g:PRFunction m) h x y ns,
+  converges (Recursion g h) (x::ns) y -> diverges h (x::y::ns)
+  -> forall z, x<z -> diverges (Recursion g h) (z::ns).
+Proof.
+induction z; intros. inversion H1.
+inversion H1.
+2: apply diverges_Recursion_ind with z; auto.
+intro.
+rewrite H3 in H, H0; clear IHz H1 H3 x.
+case_eq (Kleene.eval (Recursion g h) steps (z::ns)); intros.
++ inversion_clear H. unfold Kleene.eval in H1, H2.
+  rewrite (eval_opt_inj _ _ _ _ _ _ _ H1 H2) in H1. clear n H2.
+  generalize (H0 steps); clear H0; revert H1.
+  unfold diverges, Kleene.eval; simpl.
+  intros. rewrite H1; auto.
++ clear H; generalize (H0 steps). clear H0; revert H1.
+  unfold diverges, Kleene.eval; simpl.
+  intros. rewrite H1; auto.
+Qed.
+
+Lemma diverges_Minimization : forall {m} (h:PRFunction (1+m)) ns x,
+  (forall y, y < x -> exists z, converges h (shiftin y ns) (S z)) ->
+  diverges h (shiftin x ns) -> diverges (Minimization h) ns.
+Proof.
+red; intros.
+case_eq (Kleene.eval (Minimization h) steps ns); auto.
+intros; exfalso.
+assert (converges (Minimization h) ns n). exists steps; auto.
+elim (converges_Minimization _ _ _ H2); intros.
+generalize (converges_Minimization_mon _ _ _ H2); intros.
+elim (lt_eq_lt_dec x n); intros. inversion_clear a.
++ elim (H4 _ H5); intros. inversion_clear H6.
+  rewrite H0 in H7; inversion H7.
++ rewrite <- H5, H0 in H3; inversion H3.
++ elim (H _ b); intros. inversion_clear H5.
+  generalize (eval_inj_Some _ _ _ _ _ _ _ H3 H6). discriminate.
+Qed.
+
+End Divergence.
