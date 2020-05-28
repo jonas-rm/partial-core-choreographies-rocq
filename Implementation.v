@@ -229,7 +229,7 @@ Fixpoint Pi {m} (f:PRFunction m) : nat :=
   | Zero => 0
   | Successor => 0
   | Projection _ => 0
-  | @Composition k _ g fs => Pi g + vsum (map Pi fs) + k
+  | @Composition k m g fs => Pi g + vsum (map Pi fs) + m
   | Recursion f g => Pi f + Pi g + 3
   | Minimization f => Pi f + 3
   end.
@@ -1959,144 +1959,475 @@ Qed.
 
 End Soundness.
 
-Section ParallelImplementation.
+Section WellFormedness.
 
-(** ** Parallel implementation
-  There is also a parallel variant for composition. This is defined in the same steps, but
-  requires yet another auxiliary function. *)
+(** ** Well formedness
+  We now show that implementation choreographies are well-formed. This is strictly speaking not necessary,
+  but it is relevant. *)
 
-Definition copy_input {m} (ps qs:t Pid m) (X:RecVar) : Choreography.
-(*
-  match m with
-  | 0 => End
-  | S _ => (hd ps # this --> hd qs; copy_input (tl ps) (tl qs))
-  end.
-*)
+(** We need to use the list of recursion variables up to a given bound. *)
+Fixpoint RecVarList n : list RecVar :=
+match n with
+| 0 => (0::List.nil)%list
+| S m => (n::RecVarList m)
+end.
+
+Lemma RecVarList_In : forall m n, m <= n -> List.In m (RecVarList n).
 Proof.
-induction m.
-+ apply (Call X).
-+ apply (Send (hd ps) this (hd qs);; IHm (tl ps) (tl qs)).
-Defined.
+induction n; simpl; auto with arith.
+intros.
+inversion H; auto.
+Qed.
 
-Fixpoint copy_input_iter {m} (ps:t Pid m) {n} (qs: t (t Pid m) n) (X:RecVar) :
-  RecVar -> Choreography :=
-  match qs with
-  | nil _ => (fun _ => End)
-  | (rs::qs') => (fun Y => if RecVar_dec X Y
-        then copy_input ps rs (S X)
-        else copy_input_iter ps qs' (S X) Y)
-  end.
-
-(*
-Eval compute in (map (copy_input_iter [1;3;5] [[2;4;6];[7;8;9]] 2) [0;1;2;3;4;5]).
-*)
-
-Fixpoint Gamma' {m} (f:PRFunction m) : nat :=
-  match f with
-  | Zero => 1
-  | Successor => 1
-  | Projection _ => 1
-  | @Composition k _ g fs => Gamma g + vsum (map Gamma fs) + k
-  | Recursion f g => Gamma f + Gamma g + 3
-  | Minimization f => Gamma f + 2
-  end.
-
-(** The extra argument ps_start is for the processes where the inputs in fs[@0] come from. *)
-Fixpoint par_compose {m} {k} (fs:t (PRFunction m) k) d (Hd:forall i, depth fs[@i] < d) (target init ps_start:nat) (X:RecVar)
-  (Implement : forall m' (f:PRFunction m') (Hd:depth f < d) (ps':t Pid m') (q' i':nat) (k':RecVar), RecVar -> Choreography) {struct fs} : RecVar -> Choreography.
+Lemma In_RecVarList : forall m n, List.In m (RecVarList n) -> m <= n.
 Proof.
-destruct fs.
-- apply (fun _ => End).
-- assert (forall i, depth fs[@i] < d).
-  intro; apply (Hd (Fin.FS i)).
-  pose (Implement m h (Hd Fin.F1) (vec_k_to_n m ps_start) target init X) as Ph.
-  pose (par_compose _ _ fs d H (S target) (init + Pi h) (ps_start + m) (X + Gamma h) Implement) as Pfs.
-  apply (fun Y => if Y <? X + Gamma h then (Ph Y) else (Pfs Y)).
-Defined.
+induction n; simpl; intros.
++ inversion_clear H; inversion H0; auto.
++ inversion H; auto. rewrite H0; auto.
+Qed.
 
-Fixpoint Par_Implementation_aux {m} (f:PRFunction m) d (Hd:depth f<d)
-  (ps:t Pid m) (q:Pid) (init:nat) (X:RecVar) {struct d}: RecVar -> Choreography.
+Lemma RecVarList_incl : forall m n, m <= n ->
+  (forall X, List.In X (RecVarList m) -> List.In X (RecVarList n)).
 Proof.
-induction d.
-+ elim (Nat.nlt_0_r _ Hd).
-+ destruct f; intros; revert X0.
+intros.
+apply RecVarList_In.
+transitivity m; auto.
+apply In_RecVarList; auto.
+Qed.
 
-  (* Zero *)
-  - apply (Pack1 X (Send (hd ps) zero q;; Call (S X))).
+(** Choreography implementations are well-formed. *)
+Lemma Implementation_Main_WF : forall {n} (f:PRFunction n) ps q,
+  Choreography_WF (Main (Implementation f ps q)).
+Proof. intros. simpl. split; simpl; auto. Qed.
 
-  (* Successor *)
-  - apply (Pack1 X (Send (hd ps) succ_this q;; Call (S X))).
+Lemma Implementation_Main_within_Xs : forall {n} (f:PRFunction n) ps q Xs,
+  List.In 0 Xs -> within_Xs Xs (Main (Implementation f ps q)).
+Proof. auto. Qed.
 
-  (* Projection *)
-  - apply (Pack1 X (Send ps[@Fin.of_nat_lt l] this q;; Call (S X))).
+Lemma seq_compose_WF : forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
+  (forall p, In p ps -> p < n) -> n + k <= q ->
+  (forall k f ps' m' n' H X Y, (forall p, In p ps' -> p < m') -> m' < n' -> Choreography_WF (Implement k f H ps' m' n' X Y)) ->
+  Choreography_WF (seq_compose fs d Hd ps n q X Implement Y).
+Proof.
+induction k; intro.
++ refine (@case0 _ _ _ ); simpl; intros.
+  split; simpl; auto.
++ intro; revert k fs IHk. refine (@caseS _ _ _); simpl; intros.
+  elim Nat.ltb; auto.
+  - assert (n0 < n0 + S n). rewrite <- plus_Snm_nSm; auto with arith.
+    apply H1; auto.
+    intros. apply lt_le_trans with (n0 + S n); auto.
+  - apply IHk; auto. intros; transitivity n0; auto.
+    rewrite plus_Snm_nSm. transitivity q; auto with arith.
+Qed.
 
-  (* Composition *)
-  - simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
-    pose (max_lt_l _ _ _ Hd') as Hdf.
-    pose (max_lt_r _ _ _ Hd') as Hdfs.
-    assert (forall i, depth fs[@i] < d).
-    intros; rewrite <- nth_map'; apply vmax_lt; auto.
-    set (init' := init + m*k).
-    pose (copy_input_iter ps (vec_m_with_k init m k) X) as Hinit.
-    pose (par_compose fs _ H init' (init'+m) init (X+m) (fun m f => Par_Implementation_aux m f d)) as Pfs.
-    pose (Par_Implementation_aux _ f _ Hdf (seq_labels init' fs) q (init' + m) (X + k + (vsum (map Gamma' fs)))) as Pf.
-    apply (fun Y =>
-      if Y <? X + k then Hinit Y
-      else if Y <? X + k + vsum (map Gamma fs) then Pfs Y else Pf Y).
+Lemma Implementation_aux_WF : forall m (f:PRFunction m) d Hd ps q n X Y,
+  ~In q ps -> (forall p, In p ps -> p < n) -> q < n ->
+  Choreography_WF (Implementation_aux f d Hd ps q n X Y).
+Proof.
+intros m f d; revert m f.
+induction d. inversion Hd.
+do 2 intro; case f; intros.
++ (* Zero *)
+  simpl. unfold Pack1; simpl.
+  elim RecVar_dec; repeat split; simpl; auto.
+  intro; apply H. eapply nth_In. rewrite nth_hd; auto.
++ (* Successor *)
+  simpl. unfold Pack1; simpl.
+  elim RecVar_dec; repeat split; simpl; auto.
+  intro; apply H. eapply nth_In. rewrite nth_hd; auto.
++ (* Projection *)
+  simpl. unfold Pack1; simpl.
+  elim RecVar_dec; repeat split; simpl; auto.
+  intro; apply H. eapply nth_In; eauto.
++ (* Composition *)
+  simpl. elim Nat.ltb.
+  - apply seq_compose_WF; intros; auto.
+    apply IHd; auto.
+    intro. apply (lt_irrefl m'); auto.
+    intros; transitivity m'; auto.
+  - apply IHd.
+    * intro. elim (seq_labels_lt _ _ _ H2); intros. apply (lt_irrefl n).
+      apply le_lt_trans with q; auto.
+    * intros. elim (seq_labels_lt _ _ _ H2); auto.
+    * apply lt_le_trans with n; auto with arith.
++ (* Recursion *)
+  assert (n+2 <> n). apply gt_neq; rewrite plus_comm; simpl; auto.
+  assert (n+3 <> n). apply gt_neq; rewrite plus_comm; simpl; auto.
+  assert (n+2 <> S n). apply gt_neq; rewrite plus_comm; simpl; auto.
+  simpl. elim Nat.ltb. 2: elim RecVar_dec. 3: elim RecVar_dec.  4: elim RecVar_dec.
+  - apply IHd; auto.
+    * intro. elim (lt_irrefl n). apply H0, In_tail; auto.
+    * transitivity n. apply H0, In_tail; auto. rewrite plus_comm; simpl; auto.
+    * rewrite plus_comm; simpl; auto.
+  - split; simpl; split; auto.
+  - split; simpl; repeat split; auto.
+    * apply lt_neq. transitivity n; auto. apply H0. apply nth_In with Fin.F1; apply nth_hd.
+    * apply gt_neq; auto.
+  - split; simpl; repeat split; auto.
+  - apply IHd; auto with arith.
+    * intro. rewrite plus_comm in H5; simpl in H5.
+      elim (In_elim H5); intros. elim (lt_irrefl (S n)). rewrite H6 at 2; auto.
+      elim (In_elim H6); intros. elim (lt_irrefl n). rewrite H7 at 2; auto.
+      apply (lt_irrefl n). transitivity (S (S n)); auto. apply H0, In_tail; auto.
+    * intros. transitivity (n+2); auto with arith. rewrite plus_comm; simpl.
+      elim (In_elim H5); intros. rewrite <- H6; auto.
+      elim (In_elim H6); intros. rewrite <- H7; auto.
+      transitivity n; auto. apply H0, In_tail; auto.
++ (* Minimization *)
+  assert (n+1 <> n+2). apply lt_neq. rewrite plus_comm; rewrite (plus_comm n 2); auto.
+  assert (n <> n+2). apply lt_neq. rewrite plus_comm; simpl; auto.
+  simpl. elim RecVar_dec. 2: elim RecVar_dec.
+  - split; simpl; split; auto.
+  - split; simpl; repeat split; auto.
+    apply gt_neq; red. rewrite plus_comm. transitivity n; auto.
+  - assert (n < n+3). rewrite plus_comm; simpl; auto.
+    apply IHd; auto.
+    * intro. elim (shiftin_elim _ _ H5); intro. apply (lt_irrefl n). rewrite <- H6 at 2; auto. rewrite plus_comm; auto.
+      apply (lt_irrefl n); auto.
+    * intros; transitivity (S (S n)). 2: rewrite plus_comm; simpl; auto.
+      elim (shiftin_elim _ _ H5); auto with arith. intro. rewrite <- H6, plus_comm; auto.
+Qed.
 
-  (* Recursion *)
-  - rename f1 into f; rename f2 into g.
-    simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
-    pose (max_lt_l _ _ _ Hd') as Hf.
-    pose (max_lt_r _ _ _ Hd') as Hg.
-    pose (Par_Implementation_aux _ f _ Hf (tl ps) init (init+3) X) as Pf.
-    pose (Par_Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f) (X + Gamma' f + 2)) as Pg.
-    apply (fun Y =>
-      if (Y <? X + Gamma' f) then Pf Y
-      else if (RecVar_dec Y (X + Gamma' f)) then
-         Send (init+2) zero (S init);; Call (X + Gamma' f + 1)
-      else if (RecVar_dec Y (X + Gamma' f + 1)) then 
-         IfEq (S init) (hd ps) (Send init this q;; Call (X + Gamma' f + Gamma' g + 3)) (Call (X + Gamma' f + 2))
-      else if (RecVar_dec Y (X + Gamma' f + Gamma' g + 2)) then
-         Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma' f + 1)
-      else Pg Y).
+Lemma seq_compose_initial : forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
+  (forall k f ps' m' n' H X Y, initial (Implement k f H ps' m' n' X Y)) ->
+  initial (seq_compose fs d Hd ps n q X Implement Y).
+Proof.
+induction k; intro.
++ refine (@case0 _ _ _ ); simpl; intros.
+  split; simpl; auto.
++ intro; revert k fs IHk. refine (@caseS _ _ _); simpl; intros.
+  elim Nat.ltb; auto.
+Qed.
 
-  (* Minimization *)
-  - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
-    pose (Par_Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3) (X + 1)) as Pf.
-    apply (fun Y =>
-      if (RecVar_dec Y X) then
-         Send (init+2) zero (init+1);; Call (X + 1)
-      else if (RecVar_dec Y (X + Gamma' f + 1)) then
-         Send (init+1) zero (init+2);; IfEq (init+2) init
-           (Send (init+1) this q;; Call (X + Gamma' f + 2))
-           (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1))
-        else Pf Y).
-Defined.
+Lemma Implementation_aux_initial : forall m (f:PRFunction m) d Hd ps q n X Y,
+  initial (Implementation_aux f d Hd ps q n X Y).
+Proof.
+intros m f d; revert m f.
+induction d. inversion Hd.
+do 2 intro; case f; intros; simpl;
+  unfold Pack1; try (elim RecVar_dec; simpl; auto; fail);
+  try elim Nat.ltb; try (apply seq_compose_initial); auto;
+  repeat (elim RecVar_dec; simpl; auto).
+Qed.
 
-Definition Par_Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Program :=
-  Build_Program
-    (fun X => (all_pids ((max q (vmax ps)) + Pi f),
-               Par_Implementation_aux f _ (lt_n_Sn (depth f)) ps q (S (max q (vmax ps))) 0 X))
-    (Call 0).
+Lemma Implementation_Procs_Vars_not_nil : forall {n} (f:PRFunction n) ps q X,
+  Vars (Implementation f ps q) X <> List.nil.
+Proof.
+intros. unfold Vars; simpl.
+apply all_pids_not_nil.
+Qed.
 
-(** By default, we take process 0 for q and 1..m for the ps. *)
-Definition Par_Implementation' {m} (f:PRFunction m) : Program :=
-  Par_Implementation f (vec_1_to_n m) 0.
+Lemma seq_compose_within_Xs : forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
+  (forall k f ps' m' n' H X Y, within_Xs (RecVarList (X+Gamma f)) (Implement k f H ps' m' n' X Y)) ->
+  within_Xs (RecVarList (X+vsum (map Gamma fs))) (seq_compose fs d Hd ps n q X Implement Y).
+Proof.
+induction k; intro.
++ refine (@case0 _ _ _ ); simpl; intros.
+  split; simpl; auto.
++ intro; revert k fs IHk. refine (@caseS _ _ _); simpl; intros.
+  elim Nat.ltb; auto.
+  - apply within_Xs_incl with (RecVarList (X + Gamma h)); auto.
+    apply RecVarList_incl; auto with arith.
+  - eapply within_Xs_incl.
+    2: apply IHk; auto.
+    apply RecVarList_incl.
+    rewrite plus_assoc; auto with arith.
+Qed.
 
-(* Sanity checks.
-Eval compute in (Main (Par_Implementation' (Composition Successor [Zero]))).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Successor [Zero]))) [0;1;2;3])).
+Lemma Implementation_aux_within_Xs : forall m (f:PRFunction m) d Hd ps q n X,
+  forall Y, within_Xs (RecVarList (X+Gamma f)) (Implementation_aux f d Hd ps q n X Y).
+Proof.
+intros m f d; revert m f.
+induction d. inversion Hd.
+do 2 intro; case f; intros; simpl.
++ (* Zero *)
+  simpl. unfold Pack1; simpl; intros.
+  elim RecVar_dec; simpl; auto.
+  apply RecVarList_In; rewrite plus_comm; auto with arith.
++ (* Successor *)
+  simpl. unfold Pack1; simpl; intros.
+  elim RecVar_dec; simpl; auto.
+  apply RecVarList_In; rewrite plus_comm; auto with arith.
++ (* Projection *)
+  simpl. unfold Pack1; simpl; intros.
+  elim RecVar_dec; simpl; auto.
+  apply RecVarList_In; rewrite plus_comm; auto with arith.
++ (* Composition *)
+  elim Nat.ltb.
+  - eapply within_Xs_incl.
+    2: apply seq_compose_within_Xs; auto.
+    apply RecVarList_incl. auto with arith.
+  - apply within_Xs_incl with (RecVarList (X + vsum (map Gamma fs) + Gamma g)); auto.
+    apply RecVarList_incl. rewrite (plus_comm (Gamma g)), plus_assoc; auto with arith.
++ (* Recursion *)
+  elim Nat.ltb; [idtac | elim RecVar_dec; [idtac | elim RecVar_dec; [idtac | elim RecVar_dec]]]; simpl.
+  - apply within_Xs_incl with (RecVarList (X + Gamma g)); auto.
+    apply RecVarList_incl. auto with arith.
+  - apply RecVarList_In.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
+  - split; apply RecVarList_In.
+    do 2 rewrite (plus_assoc X); auto with arith.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
+  - apply RecVarList_In.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
+  - apply within_Xs_incl with (RecVarList (X + Gamma g + 2 + Gamma h)); auto.
+    apply RecVarList_incl.
+    do 2 rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
++ (* Minimization *)
+  elim RecVar_dec; [idtac | elim RecVar_dec]; simpl.
+  - apply RecVarList_In. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
+  - split; apply RecVarList_In.
+    rewrite (plus_assoc X); auto with arith.
+    apply plus_le_compat_l; auto with arith.
+  - apply within_Xs_incl with (RecVarList (X + 1 + Gamma h)); auto.
+    apply RecVarList_incl.
+    rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm; auto with arith.
+Qed.
 
-Eval compute in (Main (Par_Implementation' (Composition Zero [Projection aux13]))).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Zero [Projection aux13]))) [0;1;2;3])).
+Lemma all_pids_In : forall m n, m <= n -> List.In m (all_pids n).
+Proof.
+induction n; simpl; auto with arith.
+intro. inversion_clear H; auto.
+Qed.
 
-Eval compute in (Main (Par_Implementation' (Composition (Projection aux22) [Zero; Successor]))).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition (Projection aux22) (Zero :: [Successor])))) [0;1;2;3;4;5])).
+Lemma In_all_pids : forall m n, List.In m (all_pids n) -> m <= n.
+Proof.
+induction n; simpl; intros; inversion_clear H; auto; inversion H0; auto.
+Qed.
 
-Eval compute in (Main (Par_Implementation' PR_add)).
-Eval compute in (map snd (map (Procedures (Par_Implementation' PR_add)) [0;1;2;3;4;5;6;7;8;9])).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Successor [Projection aux23]))) [0;1;2;3])).
-*)
+Lemma all_pids_incl : forall m n, m <= n -> set_incl_Pid (all_pids m) (all_pids n).
+red; red; intros.
+apply all_pids_In. transitivity m; auto. apply In_all_pids; auto.
+Qed.
 
-End ParallelImplementation.
+Lemma MCC_pn_all_pids_incl : forall C m n, m <= n ->
+  (set_incl_Pid (MCC_pn C (fun _ => all_pids m)) (all_pids m))
+  -> (set_incl_Pid (MCC_pn C (fun _ => all_pids n)) (all_pids n)).
+Proof.
+induction C; simpl; unfold set_incl_Pid, set_incl; intros; auto.
+- inversion H1.
+- unfold set_incl_Pid, set_incl in IHC.
+  elim (set_union_elim _ _ _ _ H1); intros.
+  apply (all_pids_incl m); auto. apply H0. apply set_union_iff; auto.
+  apply IHC with m; auto. intros; apply H0. apply set_union_iff; auto.
+- unfold set_incl_Pid, set_incl in IHC.
+  elim (set_union_elim _ _ _ _ H1); intros.
+  apply (all_pids_incl m); auto. apply H0. apply set_union_iff; auto.
+  apply IHC with m; auto. intros; apply H0. apply set_union_iff; auto.
+- unfold set_incl_Pid, set_incl in IHC1, IHC2.
+  elim (set_union_elim _ _ _ _ H1); intros. elim (set_union_elim _ _ _ _ a); intros.
+  apply (all_pids_incl m); auto. apply H0. apply set_union_iff; left. apply set_union_iff; auto.
+  apply IHC1 with m; auto. intros; apply H0. apply set_union_iff; left. apply set_union_iff; auto.
+  apply IHC2 with m; auto. intros; apply H0. apply set_union_iff; auto.
+Qed.
+
+Lemma MCC_pn_eta : forall p f f' C, (forall X, f X = f' X) -> List.In p (MCC_pn C f) -> List.In p (MCC_pn C f').
+Proof.
+induction C; simpl; auto; intros.
++ rewrite <- H; auto.
++ apply set_union_intro; elim (set_union_elim _ _ _ _ H0); auto.
+  right; apply IHC; auto.
++ apply set_union_intro; elim (set_union_elim _ _ _ _ H0); auto.
+  right; apply IHC; auto.
++ apply set_union_intro; elim (set_union_elim _ _ _ _ H0); auto.
+  2: right; apply IHC2; auto.
+  left. apply set_union_intro; elim (set_union_elim _ _ _ _ a); auto.
+  right; apply IHC1; auto.
+Qed.
+
+Lemma seq_compose_well_ann : forall {k m} (fs:t (PRFunction k) m) d Hd ps target init X Impl Y,
+  (forall p, In p ps -> p <= init) -> (forall p, In p ps -> p <= target) -> target + m <= init ->
+  (forall H p Hd' q i' X' Y', q <= i' -> (forall p, In p ps -> p <= q) ->
+    List.In p (MCC_pn (Impl k fs[@H] Hd' ps q (S i') X' Y') (fun _ => all_pids (i' + Pi fs[@H]))) -> p <= i' + Pi fs[@H]) ->
+  forall p, List.In p (MCC_pn (seq_compose fs d Hd ps (S target) (S init) X Impl Y) (fun _ => all_pids (init + vsum (map Pi fs)))) -> p <= init + vsum (map Pi fs).
+Proof.
+intros. revert init target H H0 H1 X Y p H2 H3. revert dependent m. induction m.
++ refine (@case0 _ _ _ ); simpl; intros. inversion H3.
++ intro. revert m fs IHm. refine (@caseS _ _ _); intros.
+  revert H3; simpl. rewrite plus_assoc. elim Nat.ltb; intros.
+  - apply In_all_pids. revert H3.
+    apply MCC_pn_all_pids_incl with (init + Pi h). auto with arith.
+    red; red; intros. apply all_pids_In.
+    replace h with (hd (h::t)); auto. rewrite <- nth_hd.
+    apply (H2 Fin.F1 z (Hd Fin.F1) (S target) init X Y); auto.
+    transitivity (target + S n); auto. rewrite <- plus_n_Sm; auto with arith.
+  - apply IHm with (fun H => Hd (Fin.FS H)) (S target) (X+Gamma h) Y; auto with arith.
+    * transitivity init; auto with arith. rewrite plus_Sn_m, plus_n_Sm; auto.
+    * intros. replace t with (tl (h::t)); auto. rewrite <- nth_tl.
+      apply H2 with Hd' q X' Y'; auto.
+Qed.
+
+Lemma Implements_aux_well_ann : forall {m} (f:PRFunction m) d Hd ps q i X Y,
+  (forall p, In p ps -> p <= i) -> q <= i -> forall p,
+  List.In p (MCC_pn (Implementation_aux f d Hd ps q (S i) X Y) (fun _ => all_pids (i + Pi f))) -> p <= i + Pi f.
+Proof.
+intros m f d; revert m f.
+induction d. inversion Hd.
+do 2 intro; case f; simpl; intros; revert H1.
+- unfold Pack1. rewrite plus_0_r.
+  elim RecVar_dec; simpl; intros. 2: inversion H1.
+  elim (set_union_elim _ _ _ _ H1); intros. inversion_clear a.
+  * apply H; eapply nth_In; rewrite nth_hd; eauto.
+  * revert H0. inversion_clear H2; inversion H0; auto.
+  * apply In_all_pids; auto.
+- unfold Pack1. rewrite plus_0_r.
+  elim RecVar_dec; simpl; intros. 2: inversion H1.
+  elim (set_union_elim _ _ _ _ H1); intros. inversion_clear a.
+  * apply H; eapply nth_In; rewrite nth_hd; eauto.
+  * revert H0. inversion_clear H2; inversion H0; auto.
+  * apply In_all_pids; auto.
+- unfold Pack1. rewrite plus_0_r.
+  elim RecVar_dec; simpl; intros. 2: inversion H1.
+  elim (set_union_elim _ _ _ _ H1); intros. inversion_clear a.
+  * apply H; eapply nth_In; eauto.
+  * revert H0. inversion_clear H2; inversion H0; auto.
+  * apply In_all_pids; auto.
+- set (Hd' := lt_S_n (Nat.max (depth g) (vmax (map depth fs))) d Hd).
+  set (Hfs := vmax_lt_map _ _ (max_lt_r _ _ _ Hd')).
+  set (Hg := max_lt_l _ _ _ Hd').
+  rename m into n; rename m0 into m.
+  elim Nat.ltb; intro.
+  * apply In_all_pids. revert H1. apply MCC_pn_all_pids_incl with (i + m + vsum (map Pi fs)).
+    repeat rewrite <- plus_assoc. rewrite (plus_comm m); auto with arith.
+    red; red; intros.
+    apply all_pids_In. revert H1. apply seq_compose_well_ann; auto with arith.
+    intros. apply IHd with Hd'0 ps q0 X' Y'; auto.
+    intros; transitivity q0; auto.
+  * apply In_all_pids.
+    revert H1. apply MCC_pn_all_pids_incl with (i+m+Pi g).
+    repeat rewrite <- plus_assoc. apply plus_le_compat_l.
+    rewrite plus_comm. apply plus_le_compat_l; auto with arith.
+    red; red; intros. apply all_pids_In.
+    apply IHd with Hg (seq_labels (S i) fs) q (X + vsum (map Gamma fs)) Y; auto with arith.
+    intros. elim (seq_labels_lt _ _ _ H2); auto with arith.
+- set (Hd' := lt_S_n (Nat.max (depth g) (depth h)) d Hd).
+  set (Hg := (max_lt_l _ _ _ Hd')).
+  set (Hh := (max_lt_r _ _ _ Hd')).
+  assert (forall p, In p (tl ps) -> p <= i+3).
+  1:{ intros. transitivity i; auto with arith. apply H, In_tail; auto. }
+  assert (S i <= i+3). rewrite plus_comm; simpl; auto.
+  generalize (IHd _ _ Hg (tl ps) (S i) (i+3) X Y H1 H2 p).
+  assert (forall p, In p (S (S i) :: S i :: tl ps) -> p <= i + 3 + Pi g).
+  1: {
+    intros. elim (In_elim H3); intros. rewrite <- H4, <- (plus_comm 3). auto with arith.
+    elim (In_elim H4); intros. rewrite <- H5, <- (plus_comm 3). simpl; auto with arith.
+    transitivity i; auto with arith. apply H, In_tail; auto.
+  }
+  assert (S (i + 2) <= i + 3 + Pi g). auto with arith.
+  generalize (IHd _ _ Hh (S (S i) :: S i :: tl ps) (S (i + 2)) (i+3+Pi g) (X+Gamma g+2) Y H3 H4 p).
+  do 2 intro.
+  assert (S (S i) <= i + (Pi g + Pi h + 3)) as Hi. transitivity (i+3); auto with arith. rewrite plus_comm; simpl; auto.
+  assert (S i <= i + (Pi g + Pi h + 3)) as Hi'. transitivity (i+3); auto with arith.
+  assert (S (i+2) <= i + (Pi g + Pi h + 3)) as Hi''. transitivity (i+3); auto with arith.
+  elim Nat.ltb. 2: elim RecVar_dec. 3: elim RecVar_dec. 4: elim RecVar_dec.
+  * intros.
+    apply In_all_pids. revert H7. apply MCC_pn_all_pids_incl with (i+3+Pi g).
+    rewrite <- plus_assoc, (plus_comm 3). auto with arith.
+    red; red; intros. apply all_pids_In; eauto.
+  * simpl; intros.
+    elim (set_union_elim _ _ _ _ H7); intro. inversion_clear a; inversion H8; auto.
+    + rewrite <- H9; auto.
+    + inversion H9.
+    + apply In_all_pids; auto.
+  * simpl; intros.
+    elim (set_union_elim _ _ _ _ H7); intro. inversion_clear a; inversion H8.
+    + transitivity i; auto with arith. apply H. rewrite <- nth_hd. eapply nth_In; auto.
+    + rewrite <- H9; auto.
+    + inversion H9.
+    + elim (set_union_elim _ _ _ _ b); intro. elim (set_union_elim _ _ _ _ a); intro.
+      ++ inversion_clear a0; inversion H8; auto.
+      ++ elim (set_union_elim _ _ _ _ b0); intro. inversion_clear a0.
+         rewrite <- H8; auto.
+         inversion_clear H8; inversion H9. rewrite <- H9. transitivity i; auto with arith.
+         apply In_all_pids; auto.
+      ++ apply In_all_pids; auto.
+  * simpl; intros.
+    elim (set_union_elim _ _ _ _ H7); intro. inversion_clear a; inversion H8; auto.
+    + rewrite <- H9; auto.
+    + inversion H9.
+    + elim (set_union_elim _ _ _ _ b); intro. inversion_clear a.
+      ++ rewrite <- H8; auto.
+      ++ inversion_clear H8; inversion H9; auto.
+      ++ elim (set_union_elim _ _ _ _ b0); intro. inversion_clear a.
+         rewrite <- H8; auto.
+         inversion_clear H8; inversion H9; auto.
+         apply In_all_pids; auto.
+  * rewrite (plus_comm (Pi g + Pi h)), plus_assoc, plus_assoc.
+    auto.
+- set (Hd' := lt_S_n (depth h) d Hd).
+  assert (forall p, In p (shiftin (S (i+1)) ps) -> p <= i+3).
+  1:{ intros. elim (shiftin_elim _ _ H1); auto with arith.
+      intro; rewrite <- H2, plus_comm, <- (plus_comm 3); simpl; auto. }
+  assert (S i <= i+3). rewrite plus_comm; simpl; auto.
+  generalize (IHd _ _ Hd' _ _ _ (X+1) Y H1 H2 p); intro.
+  assert (S (i+2) <= i + (Pi h + 3)) as Hi. rewrite <- (plus_comm 3); simpl; auto with arith.
+  assert (S i <= i + (Pi h + 3)) as Hi'. transitivity (S (i+2)); auto with arith.
+  assert (S (i+1) <= i + (Pi h + 3)) as Hi''. transitivity (S (i+2)); auto with arith.
+  elim RecVar_dec. 2: elim RecVar_dec.
+  * simpl; intro. elim (set_union_elim _ _ _ _ H4); intro. inversion_clear a; inversion H5; auto.
+    + rewrite <- H6; auto.
+    + inversion H6.
+    + apply In_all_pids; auto.
+  * simpl; intro. elim (set_union_elim _ _ _ _ H4); intro.
+    1: { inversion_clear a; inversion H5; auto; inversion H6; auto. }
+    elim (set_union_elim _ _ _ _ b); intro.
+    1: { inversion_clear a; inversion H5; auto; inversion H6; auto. }
+    elim (set_union_elim _ _ _ _ b0); intro.
+    1: { elim (set_union_elim _ _ _ _ a); intro.
+        inversion_clear a0; inversion H5; auto.
+        elim (set_union_elim _ _ _ _ b1); intro.
+        inversion_clear a0; inversion H5; auto; inversion H6; auto.
+        rewrite <- H6. transitivity i; auto with arith.
+        apply In_all_pids; auto. }
+    elim (set_union_elim _ _ _ _ b1); intro.
+    1: { inversion_clear a; inversion H5; auto; inversion H6; auto. }
+    elim (set_union_elim _ _ _ _ b2); intro.
+    1: { inversion_clear a; inversion H5; auto; inversion H6; auto. }
+    apply In_all_pids; auto.
+  * rewrite (plus_comm (Pi h)), plus_assoc; auto.
+Qed.
+
+Lemma Implements_WF : forall {n} (f:PRFunction n) ps q,
+  ~In q ps -> MCP_WF (Implementation f ps q).
+Proof.
+intros.
+exists (RecVarList (0+Gamma f)); split.
++ split. apply Implementation_Main_WF.
+  split. apply Implementation_Main_within_Xs; apply RecVarList_In; auto with arith.
+  split.
+  1: { apply Implementation_aux_WF; intros; auto; apply le_n_S.
+    2: apply Nat.le_max_l.
+    transitivity (vmax ps). 2: apply Nat.le_max_r. apply vmax_In; auto.
+  }
+  split. apply Implementation_aux_initial.
+  split. apply Implementation_Procs_Vars_not_nil.
+  apply Implementation_aux_within_Xs; simpl; auto.
++ red; intro. unfold Vars; simpl.
+  do 2 red; intros.
+  unfold Procs, Implementation, Procedures in H0.
+  apply Implements_aux_well_ann in H0.
+  - apply all_pids_In; auto.
+  - intros. apply Nat.max_le_iff. right; apply vmax_In; auto.
+  - apply Nat.le_max_l.
+Qed.
+
+Lemma Implements'_WF : forall {n} (f:PRFunction n),
+  MCP_WF (Implementation' f).
+Proof.
+intros; apply Implements_WF.
+intro. elim (in_vec_k_to_n _ H); intros.
+inversion H0.
+Qed.
+
+End WellFormedness.
