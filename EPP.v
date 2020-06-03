@@ -15,7 +15,6 @@ Module Export CSt := GState P V X.
 *)
 
 Section MaybeMove.
-Definition Pid_In_dec := in_dec P.eq_dec.
 
 (*
 Definition option_apply_or_True (f:Behaviour -> Type) (o:option Behaviour) : Type :=
@@ -179,6 +178,7 @@ match cont1 with
 | _ => None
 end.
 
+
 (* DefSet is overkill, we might wanna just get RecVar -> list Pid *)
 Fixpoint bproj (Defs:DefSet) (C:Choreography) (r:Pid) : option Behaviour :=
 match C with
@@ -206,25 +206,24 @@ match C with
                                     | Some B1, Some B2 => (merge_beh B1 B2)
                                     | _, _ => None
                                    end
-| MCBase.Call X => if Pid_In_dec r (fst (Defs X)) then Some (Call X) else Some End
-| MCBase.RT_Call X ps C' => if Pid_In_dec r ps then Some (Call X) else bproj Defs C' r
+| MCBase.Call X => if In_dec P.eq_dec r (fst (Defs X)) then Some (Call X) else Some End
+| MCBase.RT_Call X ps C' => if In_dec P.eq_dec r ps then Some (Call X) else bproj Defs C' r
 end.
 
-Fixpoint epp_list (Defs:DefSet) (C:Choreography) (ps:list Pid) : option Network :=
-match ps with
-| nil => Some nnil%SP
-| p::qs => match epp_list Defs C qs with
-            | Some N => match bproj Defs C p with
-                         | Some B => Some (p[B] | N)%SP
-                         | None => None
-                        end
-            | None => None
-           end
-end.
+Definition epp_list (Defs:DefSet) (C:Choreography) (ps:list Pid) : list (Pid * option Behaviour) :=
+  map (fun p => (p, bproj Defs C p)) ps.
 
-(* Definition epp (Defs:DefSet) (C:Choreography) (ps:list Pid) *)
+Definition projectable Defs C ps := all_defined (map snd (epp_list Defs C ps)).
 
-(* Definition epp (Defs:DefSet) (C:Choreography) : option Network := epp_list Defs C (??). *)
+Fixpoint epp (Defs:DefSet) (C:Choreography) (ps:list Pid) : projectable Defs C ps -> Network.
+Proof.
+unfold projectable.
+induction ps.
++ intro. apply EmptyNet.
++ simpl. case_eq (bproj Defs C a); intros.
+  - intro p. apply (if (P.eq_dec a p) then b else (epp _ _ _ H0 p)).
+  - inversion H0.
+Defined.
 
 End EPP.
 
@@ -768,13 +767,19 @@ Definition more_branches_defs (SPDefs SPDefs' : RecVar -> Behaviour) :=
   forall X, more_branches_beh (SPDefs X) (SPDefs' X).
 
 Inductive MoreBranches : Behaviour -> Behaviour -> Prop :=
-| MB_Send p e B B' : MoreBranches (p ! e ; B)%SP (p ! e ; B')%SP
-| MB_Recv p x B B' : MoreBranches (p ? x ; B)%SP (p ? x ; B')%SP
-| MB_Sel p l B B' : MoreBranches (p (+) l; B)%SP (p (+) l; B')%SP
+| MB_Send p e B B' :
+  MoreBranches B B' ->
+  MoreBranches (p ! e ; B)%SP (p ! e ; B')%SP
+| MB_Recv p x B B' :
+  MoreBranches B B' ->
+  MoreBranches (p ? x ; B)%SP (p ? x ; B')%SP
+| MB_Sel p l B B' :
+  MoreBranches B B' ->
+  MoreBranches (p (+) l; B)%SP (p (+) l; B')%SP
 | MB_Branching p o o' :
-  (forall Bleft, o left = Some Bleft -> exists Bleft', o' left = Some Bleft' ->
+  (forall Bleft', o' left = Some Bleft' -> exists Bleft, o left = Some Bleft ->
     MoreBranches Bleft Bleft') ->
-  (forall Bright, o right = Some Bright -> exists Bright', o' right = Some Bright' ->
+  (forall Bright', o' right = Some Bright' -> exists Bright, o right = Some Bright ->
     MoreBranches Bright Bright') ->
   MoreBranches (p & o) (p & o')
 | MB_Cond b B1 B2 B1' B2' :
@@ -784,63 +789,190 @@ Inductive MoreBranches : Behaviour -> Behaviour -> Prop :=
 | MB_Call X : MoreBranches (Call X)%SP (Call X)%SP
 | MB_End : MoreBranches bnil%SP bnil%SP.
 
-Lemma more_branches_beh_MoreBranches : forall B B', more_branches_beh B B' -> MoreBranches B B'.
+Lemma more_branches_beh_MoreBranches_1 :
+  forall B B',
+  more_branches_beh B B' -> MoreBranches B B'.
 Proof.
-intro. intro.
-induction B using Behaviour_ind_b; induction B' using Behaviour_ind_b; intros; try easy.
-+ constructor.
-+ clear IHB IHB'. red in H. inversion H. clear H. generalize H1. clear H1.
-  case_eq (Pid_dec p p0); case_eq (Expr_dec e e0); intros; try easy.
-  simpl in H1.
+intro.
+induction B using Behaviour_ind_b; intro; induction B' using Behaviour_ind_b; try easy.
++ intro. constructor.
++ specialize (IHB B').
+  intro.
+  red in H. inversion H. clear H.
+  generalize H1. clear H1.
+  case_eq (Pid_dec p p0); case_eq (Expr_dec e e0); try easy.
+  intro. intro.
   rewrite Pdec.eqb_eq in H0. rewrite <- H0.
   rewrite Edec.eqb_eq in H. rewrite <- H.
+  simpl.
+  case_eq (merge_beh B B'); try easy.
+  intros.
   constructor.
-+ clear IHB IHB'. red in H. inversion H. clear H. generalize H1. clear H1.
-  case_eq (Pid_dec p p0); case_eq (Var_dec v v0); intros; try easy.
-  simpl in H1.
+  inversion H2. clear H2.
+  rewrite H4 in H1.
+  apply (IHB H1).
++ specialize (IHB B').
+  intro.
+  red in H. inversion H. clear H.
+  generalize H1. clear H1.
+  case_eq (Pid_dec p p0); case_eq (Var_dec v v0); try easy.
+  intro. intro.
   rewrite Pdec.eqb_eq in H0. rewrite <- H0.
   rewrite Xdec.eqb_eq in H. rewrite <- H.
+  simpl.
+  case_eq (merge_beh B B'); try easy.
+  intros.
   constructor.
-+ clear IHB IHB'. red in H. inversion H. clear H. generalize H1. clear H1.
-  case_eq (Pid_dec p p0); case_eq (eqb_label l l0); intros; try easy.
-  simpl in H1.
+  inversion H2. clear H2.
+  rewrite H4 in H1.
+  apply (IHB H1).
++ specialize (IHB B').
+  intro.
+  red in H. inversion H. clear H.
+  generalize H1. clear H1.
+  case_eq (Pid_dec p p0); case_eq (eqb_label l l0); try easy.
+  intro. intro.
   rewrite Pdec.eqb_eq in H0. rewrite <- H0.
   rewrite label_eqb_eq in H. rewrite <- H.
+  simpl.
+  case_eq (merge_beh B B'); try easy.
+  intros.
   constructor.
-+ admit.
-+ admit.
-+ red in H. inversion H. clear H. generalize H1. clear H1.
-  case_eq (RecVar_dec r r0); intros; try easy.
+  inversion H2. clear H2.
+  rewrite H4 in H1.
+  apply (IHB H1).
++ clear H1 H2.
+  rewrite more_branches_beh_char.
+  intro. red in H1.
+  generalize H1. clear H1.
+  case_eq (Pid_dec p p0); try easy.
+  intro.
+  rewrite Pdec.eqb_eq in H1. rewrite <- H1.
+  case_eq (o left); case_eq (o right); case_eq (o0 left); case_eq (o0 right); constructor; try easy.
+  - intros. exists b2. intro.
+    apply H; auto.
+    rewrite more_branches_beh_char.
+    rewrite H3 in H7. inversion H7. clear H7.
+    rewrite <- H10.
+    apply H6.
+  - intros. exists b1. intro.
+    apply H0; auto.
+    rewrite more_branches_beh_char.
+    rewrite H2 in H7. inversion H7. clear H7.
+    rewrite <- H10.
+    apply H6.
+  - intros. exists b1. intro.
+    apply H; auto.
+    rewrite more_branches_beh_char.
+    rewrite H3 in H7. inversion H7. clear H7.
+    rewrite <- H10.
+    apply H6.
+  - intros. rewrite H2 in H7. inversion H7.
+  - intros. rewrite H3 in H7. inversion H7.
+  - intros. exists b0. intro.
+    apply H0; auto.
+    rewrite more_branches_beh_char.
+    rewrite H2 in H7. inversion H7. clear H7.
+    rewrite <- H10.
+    apply H6.
+  - intros. rewrite H3 in H7. inversion H7.
+  - intros. rewrite H2 in H7. inversion H7.
+  - intros. exists b0. intro.
+    apply H; auto.
+    rewrite more_branches_beh_char.
+    rewrite H3 in H7. inversion H7. clear H7.
+    rewrite <- H10.
+    apply H6.
+  - intros. rewrite H2 in H7. inversion H7.
+  - intros. rewrite H3 in H7. inversion H7.
+  - intros. rewrite H2 in H7. inversion H7.
+  - intros. rewrite H3 in H7. inversion H7.
+  - intros. exists b0. intro.
+    apply H0; auto.
+    rewrite more_branches_beh_char.
+    rewrite H2 in H7. inversion H7. clear H7.
+    rewrite <- H10.
+    apply H6.
+  - intros. rewrite H3 in H7. inversion H7.
+  - intros. rewrite H2 in H7. inversion H7.
+  - intros. rewrite H3 in H7. inversion H7.
+  - intros. rewrite H2 in H7. inversion H7.
++ clear IHB'1 IHB'2.
+  intro. rewrite more_branches_beh_char in H. red in H. generalize H. clear H.
+  case_eq (BExpr_dec b b0).
+  2: easy.
+  intros.
+  specialize (IHB1 B'1). specialize (IHB2 B'2).
+  rewrite more_branches_beh_char in IHB1, IHB2.
+  inversion H0. clear H0.
+  pose (Hthen := IHB1 H1). pose (Helse := IHB2 H2).
+  rewrite Bdec.eqb_eq in H.
+  rewrite <- H.
+  constructor; auto.
++ rewrite more_branches_beh_char.
+  intro. red in H. generalize H. clear H.
+  case_eq (RecVar_dec r r0).
+  2: easy.
+  intros.
   rewrite Rdec.eqb_eq in H.
   rewrite H.
   constructor.
-Admitted.
+Qed.
 
 Lemma more_branches_completeness :
-  forall N1 N1' N2 N2' ps SPDefs1 SPDefs2 s s' t,
+  forall N1 N2 N2' ps SPDefs1 SPDefs2 s s' t,
     within_ps ps N1 -> within_ps ps N2 ->
     more_branches_net N1 N2 ps ->
     more_branches_defs SPDefs1 SPDefs2 ->
-    SP_To SPDefs1 N1 s t N1' s' ->
-    SP_To SPDefs2 N2 s t N2' s' /\ more_branches_net N1' N2' ps.
+    SP_To SPDefs1 N2 s t N2' s' ->
+    exists N1', SP_To SPDefs2 N1 s t N1' s' /\ more_branches_net N1' N2' ps.
 Proof.
 intros.
 red in H, H0, H1, H2.
 inversion H3.
-+ red in H8.
++ assert (In p ps) as Hp. elim (In_dec P.eq_dec p ps); auto. intro; rewrite H0 in H4; auto; inversion H4.
+  assert (In q ps) as Hq. elim (In_dec P.eq_dec q ps); auto. intro; rewrite H0 in H5; auto; inversion H5.
+  generalize (H1 _ Hp); generalize (H1 _ Hq); intros.
+  apply more_branches_beh_MoreBranches_1 in H14.
+  apply more_branches_beh_MoreBranches_1 in H15.
+  rewrite H4 in H15; rewrite H5 in H14.
+  inversion H14; inversion H15.
+  rewrite H17, H19 in H16; clear p0 H17 x0 H19 B'0 H20.
+  rewrite H22, H24 in H21; clear B'1 H25 e0 H24 p1 H22.
+  exists (fun r => if (Pid_dec r p) then B1 else if (Pid_dec r q) then B0 else N1 r); split.
+  - apply S_Com with B1 B0; auto.
+    case_eq (Pid_dec p p); auto. intro. apply Pdec.eqb_neq in H17. elim H17; auto.
+    assert (q <> p). intro. rewrite H17 in H16; rewrite <- H16 in H21; inversion H21.
+    rewrite <- Pdec.eqb_neq in H17; unfold Pid_dec at 1; rewrite H17; auto.
+    case_eq (Pid_dec q q); auto. intro. apply Pdec.eqb_neq in H19. elim H19; auto.
+    red; intros.
+    case_eq (Pid_dec p0 p); intros.
+    1: { rewrite Pdec.eqb_eq in H19. rewrite H19 in H17. elim H17; simpl; auto. }
+    case_eq (Pid_dec p0 q); intros.
+    1: { rewrite Pdec.eqb_eq in H20. rewrite H20 in H17. elim H17; simpl; auto. }
+    auto.
+  - red.
+(*
+red in H8.
   split.
-  - elim (In_dec P.eq_dec p ps); intro.
-    2: { pose (Hp := H _ b). rewrite Hp in H4. inversion H4. }
-    pose (Hp := H1 p a).
-    rewrite more_branches_beh_char in Hp.
-    rewrite H4 in Hp.
-    red in Hp.
-    case_eq (N2 p); intros; try rewrite H14 in Hp; try inversion Hp.
+  - elim (In_dec P.eq_dec p ps); elim (In_dec P.eq_dec q ps); intro; intro.
+    3: { pose (H' := H _ b). rewrite H' in H4. inversion H4. }
+    3: { pose (H' := H _ b). rewrite H' in H5. inversion H5. }
+    2: { pose (H' := H _ b). rewrite H' in H5. inversion H5. }
+    pose (Hp := H1 p a0). pose (Hq := H1 q a).
+    apply (more_branches_beh_MoreBranches_1 _ _) in Hp.
+    apply (more_branches_beh_MoreBranches_1 _ _) in Hq.
+    rewrite H4 in Hp. rewrite H5 in Hq.
+    inversion Hp. inversion Hq.
+    apply (S_Com _ _ _ _ _ _ _ _ (B'0) (B'1)); try (easy; fail).
+Print C_Com.
+Print S_Com.
+    * 
 Admitted.
 
-(*
-Theorem EPP_Theorem : forall c l c', MCP_To c l c' -> SP_To
 *)
+Admitted.
+
 End EPP_Properties.
 
 End EPPBase.

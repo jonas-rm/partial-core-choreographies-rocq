@@ -258,6 +258,15 @@ apply disjoint_char.
 apply disjoint_not_in_snd; auto.
 Qed.
 
+(** ** Miscellaneous *)
+
+Fixpoint all_defined {T} (l:list (option T)) : Prop :=
+match l with
+  | nil            => True
+  | (Some _) :: l' => all_defined l'
+  | None :: _      => False
+end.
+
 (** ** On sets *)
 
 Set Implicit Arguments.
