@@ -215,15 +215,35 @@ Definition epp_list (Defs:DefSet) (C:Choreography) (ps:list Pid) : list (Pid * o
 
 Definition projectable Defs C ps := all_defined (map snd (epp_list Defs C ps)).
 
-Fixpoint epp (Defs:DefSet) (C:Choreography) (ps:list Pid) : projectable Defs C ps -> Network.
+Fixpoint epp_net (Defs:DefSet) (C:Choreography) (ps:list Pid) : projectable Defs C ps -> Network.
 Proof.
 unfold projectable.
 induction ps.
 + intro. apply EmptyNet.
 + simpl. case_eq (bproj Defs C a); intros.
-  - intro p. apply (if (P.eq_dec a p) then b else (epp _ _ _ H0 p)).
+  - intro p. apply (if (P.eq_dec a p) then b else (epp_net _ _ _ H0 p)).
   - inversion H0.
 Defined.
+
+(*
+Fixpoint epp (Defs:DefSet) (Xs: list RecVar) (C:Choreography) (ps:list Pid) :
+  (forall X, In X Xs -> projectable Defs (snd (Defs X)) (fst (Defs X))) ->
+  projectable Defs C ps ->
+  (RecVar -> Behaviour) * Network :=
+fun projXs => fun projMain =>
+(
+  fun X => if false then projXs else ,
+  epp_net Defs C ps projMain
+).
+
+Fixpoint epp_Program (P:MCBase.Program) (ps:list Pid) :
+  projectable (MCBase.Procedures P) (Main P) ps -> SPBase.Program :=
+fun x =>
+  Build_Program
+    (fun X => End)
+    (EmptyNet)
+.
+*)
 
 End EPP.
 
@@ -951,7 +971,12 @@ inversion H3.
     case_eq (Pid_dec p0 q); intros.
     1: { rewrite Pdec.eqb_eq in H20. rewrite H20 in H17. elim H17; simpl; auto. }
     auto.
-  - red.
+  - red. intros.
+    case_eq (Pid_dec p0 p); intros.
+    * rewrite Pdec.eqb_eq in H19. rewrite H19 in H17. rewrite H19.
+      pose (Hp0 := H1 _ H17).
+      rewrite <- H21 in Hp0.
+      inversion Hp0.
 (*
 red in H8.
   split.
@@ -972,6 +997,8 @@ Admitted.
 
 *)
 Admitted.
+
+
 
 End EPP_Properties.
 
