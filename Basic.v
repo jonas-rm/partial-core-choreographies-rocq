@@ -880,3 +880,10 @@ Fixpoint vsum {n} (v:t nat n) :=
 end.
 
 End Vectors.
+
+(*
+Definition option_apply_or_True (f:Behaviour -> Prop) (o:option Behaviour) : Prop :=
+  forall B, o = Some B -> f B
+  /\
+  o = None -> True.
+*)
