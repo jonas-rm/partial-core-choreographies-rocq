@@ -14,6 +14,88 @@ Module Export PSt := LState V X.
 Module Export CSt := GState P V X.
 *)
 
+Section MaybeMove.
+
+Definition Network_rm (N:Network) (p:Pid) :=
+  fun r => if (Pid_dec r p) then End else N r.
+
+Lemma Network_rm_add :
+  forall N p, Network_eq (Network_rm N p | p [N p])%SP N.
+Proof.
+intros.
+red. unfold Network_rm. unfold Process. unfold Par. intro.
+case_eq (Pid_dec p0 p); intros.
++ rewrite Pdec.eqb_eq in H. rewrite H.
+  elim (Behaviour_eq_End_dec bnil); auto.
+  intro H'. contradiction.
++ elim (Behaviour_eq_End_dec (N p0)); auto.
+Qed.
+
+(* Generalisation of the above to lists of processes. *)
+
+Definition Network_rm_ps (N:Network) (ps:list Pid) :=
+  fun r => if (in_dec P.eq_dec r ps) then End else N r.
+
+Definition Network_res_ps (N:Network) (ps:list Pid) :=
+  fun r => if (in_dec P.eq_dec r ps) then N r else End.
+
+Lemma Network_rm_res_ps :
+  forall N ps, Network_eq (Network_rm_ps N ps | Network_res_ps N ps)%SP N.
+Proof.
+intros.
+red. unfold Network_rm_ps. unfold Network_res_ps. unfold Par. intro.
+case_eq (in_dec P.eq_dec p ps); intros.
++ elim (Behaviour_eq_End_dec bnil); auto.
+  intro. contradiction.
++ elim (Behaviour_eq_End_dec (N p)); auto.
+Qed.
+
+Definition SPDefs_eq (Defs Defs':RecVar -> Behaviour) : Prop := forall X, Defs X = Defs' X.
+
+Lemma Network_eq_corr :
+  forall N1 N1' N2 SPDefs1 SPDefs2 s s' t,
+    Network_eq N1 N2 ->
+    SPDefs_eq SPDefs1 SPDefs2 ->
+    SP_To SPDefs1 N1 s t N1' s' ->
+    exists N2', SP_To SPDefs2 N2 s t N2' s' /\ Network_eq N1' N2'.
+Proof.
+intros.
+inversion H1.
++ set (N2' := fun r => if Pid_dec p r then B else (if Pid_dec q r then B' else N2 r)).
+  exists N2'.
+  split.
+  - apply (S_Com _ _ _ _ _ _ _ _ B B').
+    * pose (H p) as H'. rewrite <- H'. assumption.
+    * pose (H q) as H'. rewrite <- H'. assumption.
+    * unfold N2'. rewrite Pdec.eqb_refl. reflexivity.
+    * unfold N2'. rewrite Pdec.eqb_refl.
+      case_eq (Pid_dec p q); auto.
+      intro. rewrite Pdec.eqb_eq in H12.
+      rewrite H12 in H4.
+      rewrite <- H4. rewrite <- H5. reflexivity.
+    * unfold N2'.
+      red. intros.
+      case_eq (Pid_dec p p0); case_eq (Pid_dec q p0); auto.
+      ** intros.
+         rewrite Pdec.eqb_eq in H14.
+         rewrite H14 in H12.
+         elim H12. constructor. reflexivity.
+      ** intros.
+         rewrite Pdec.eqb_eq in H14.
+         rewrite H14 in H12.
+         elim H12. constructor. reflexivity.
+      ** intros.
+         rewrite Pdec.eqb_eq in H13.
+         rewrite H13 in H12.
+         elim H12.
+         apply in_cons. constructor. reflexivity.
+  - red. intro.
+    case_eq (Pid_dec p p0).
+         
+Admitted.
+
+End MaybeMove.
+
 Section EPP.
 
 Fixpoint merge_beh (B1:Behaviour) (B2:Behaviour) : option Behaviour :=

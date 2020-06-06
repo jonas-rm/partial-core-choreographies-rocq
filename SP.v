@@ -131,7 +131,7 @@ elim b; auto.
 Qed.
 
 Definition Process (p:Pid) (b:Behaviour) : Network :=
-  fun p' => if (P.eq_dec p p') then b else End.
+  fun p' => if (Pid_dec p' p) then b else End.
 
 Record Program : Type :=
   { Procedures : RecVar -> Behaviour;
