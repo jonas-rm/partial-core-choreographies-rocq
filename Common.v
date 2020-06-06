@@ -34,6 +34,11 @@ intros; unfold eqb; elim (eq_label_dec l l'); intros; split; auto.
 + generalize b. case l; case l'; try easy.
 Qed.
 
+Lemma label_eqb_refl : forall l, eqb_label l l = true.
+Proof.
+intro. rewrite label_eqb_eq. auto.
+Qed.
+
 End Labels.
 
 (** * Decidable types

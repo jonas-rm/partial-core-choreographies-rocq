@@ -797,9 +797,9 @@ Inductive MoreBranches : Behaviour -> Behaviour -> Prop :=
   MoreBranches B B' ->
   MoreBranches (p (+) l; B)%SP (p (+) l; B')%SP
 | MB_Branching p o o' :
-  (forall Bleft', o' left = Some Bleft' -> exists Bleft, o left = Some Bleft ->
+  (forall Bleft', o' left = Some Bleft' -> exists Bleft, o left = Some Bleft /\
     MoreBranches Bleft Bleft') ->
-  (forall Bright', o' right = Some Bright' -> exists Bright, o right = Some Bright ->
+  (forall Bright', o' right = Some Bright' -> exists Bright, o right = Some Bright /\
     MoreBranches Bright Bright') ->
   MoreBranches (p & o) (p & o')
 | MB_Cond b B1 B2 B1' B2' :
@@ -869,49 +869,49 @@ induction B using Behaviour_ind_b; intro; induction B' using Behaviour_ind_b; tr
   intro.
   rewrite Pdec.eqb_eq in H1. rewrite <- H1.
   case_eq (o left); case_eq (o right); case_eq (o0 left); case_eq (o0 right); constructor; try easy.
-  - intros. exists b2. intro.
+  - intros. exists b2. split. apply H5.
     apply H; auto.
     rewrite more_branches_beh_char.
     rewrite H3 in H7. inversion H7. clear H7.
-    rewrite <- H10.
+    rewrite <- H9.
     apply H6.
-  - intros. exists b1. intro.
+  - intros. exists b1. split. apply H4.
     apply H0; auto.
     rewrite more_branches_beh_char.
     rewrite H2 in H7. inversion H7. clear H7.
-    rewrite <- H10.
+    rewrite <- H9.
     apply H6.
-  - intros. exists b1. intro.
+  - intros. exists b1. split. apply H5.
     apply H; auto.
     rewrite more_branches_beh_char.
     rewrite H3 in H7. inversion H7. clear H7.
-    rewrite <- H10.
+    rewrite <- H9.
     apply H6.
   - intros. rewrite H2 in H7. inversion H7.
   - intros. rewrite H3 in H7. inversion H7.
-  - intros. exists b0. intro.
+  - intros. exists b0. split. apply H4.
     apply H0; auto.
     rewrite more_branches_beh_char.
     rewrite H2 in H7. inversion H7. clear H7.
-    rewrite <- H10.
+    rewrite <- H9.
     apply H6.
   - intros. rewrite H3 in H7. inversion H7.
   - intros. rewrite H2 in H7. inversion H7.
-  - intros. exists b0. intro.
+  - intros. exists b0. split. apply H5.
     apply H; auto.
     rewrite more_branches_beh_char.
     rewrite H3 in H7. inversion H7. clear H7.
-    rewrite <- H10.
+    rewrite <- H9.
     apply H6.
   - intros. rewrite H2 in H7. inversion H7.
   - intros. rewrite H3 in H7. inversion H7.
   - intros. rewrite H2 in H7. inversion H7.
   - intros. rewrite H3 in H7. inversion H7.
-  - intros. exists b0. intro.
+  - intros. exists b0. split. apply H4.
     apply H0; auto.
     rewrite more_branches_beh_char.
     rewrite H2 in H7. inversion H7. clear H7.
-    rewrite <- H10.
+    rewrite <- H9.
     apply H6.
   - intros. rewrite H3 in H7. inversion H7.
   - intros. rewrite H2 in H7. inversion H7.
@@ -937,6 +937,39 @@ induction B using Behaviour_ind_b; intro; induction B' using Behaviour_ind_b; tr
   rewrite Rdec.eqb_eq in H.
   rewrite H.
   constructor.
+Qed.
+
+Lemma more_branches_beh_MoreBranches_2 :
+  forall B B',
+  MoreBranches B B' -> more_branches_beh B B'.
+Proof.
+intros. apply more_branches_beh_char. revert H. revert B'.
+induction B using Behaviour_ind_b; intro; induction B' using Behaviour_ind_b; try (easy; fail).
+all: intro HMB; inversion HMB; clear HMB.
++ (*rewrite <- H3. rewrite <- H4.*) clear H H1 H2 H3 H4 H5.
+  simpl. rewrite Pdec.eqb_refl. rewrite Edec.eqb_refl. simpl.
+  apply (IHB _ H0).
++ simpl. rewrite Pdec.eqb_refl. rewrite Xdec.eqb_refl. simpl.
+  apply (IHB _ H0).
++ simpl. rewrite Pdec.eqb_refl. rewrite label_eqb_refl. simpl.
+  apply (IHB _ H0).
++ simpl. rewrite Pdec.eqb_refl. split.
+  - case_eq (o left); case_eq (o0 left); auto.
+    * intros.
+      apply (H _ H10).
+      specialize (H6 _ H9). destruct H6. inversion H6.
+      rewrite H10 in H11. inversion H11. apply H6.
+    * intros. specialize (H6 _ H9). destruct H6. inversion H6. rewrite H11 in H10. inversion H10.
+  - case_eq (o right); case_eq (o0 right); auto.
+    * intros.
+      apply (H0 _ H10).
+      specialize (H8 _ H9). destruct H8. inversion H8.
+      rewrite H10 in H11. inversion H11. apply H12.
+    * intros. specialize (H8 _ H9). destruct H8. inversion H8. rewrite H11 in H10. inversion H10.
++ simpl. rewrite Bdec.eqb_refl. split.
+  - apply (IHB1 _ H1).
+  - apply (IHB2 _ H6).
++ simpl. rewrite Rdec.eqb_refl. trivial.
 Qed.
 
 Lemma more_branches_completeness :
