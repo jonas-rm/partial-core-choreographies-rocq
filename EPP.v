@@ -215,7 +215,8 @@ Definition epp_list (Defs:DefSet) (C:Choreography) (ps:list Pid) : list (Pid * o
 
 Definition projectable Defs C ps := all_defined (map snd (epp_list Defs C ps)).
 
-Fixpoint epp_net (Defs:DefSet) (C:Choreography) (ps:list Pid) : projectable Defs C ps -> Network.
+Fixpoint epp_net (Defs:DefSet) (C:Choreography) (ps:list Pid) :
+  projectable Defs C ps -> Network.
 Proof.
 unfold projectable.
 induction ps.
@@ -809,6 +810,12 @@ Inductive MoreBranches : Behaviour -> Behaviour -> Prop :=
 | MB_Call X : MoreBranches (Call X)%SP (Call X)%SP
 | MB_End : MoreBranches bnil%SP bnil%SP.
 
+Inductive MoreBranches_net : Network -> Network -> list Pid -> Prop :=
+| MBN_nil N N' : MoreBranches_net N N' nil
+| MBN_cons N N' p ps :
+  MoreBranches (N p) (N' p) -> MoreBranches_net N N' ps ->
+  MoreBranches_net N N' (p::ps).
+
 Lemma more_branches_beh_MoreBranches_1 :
   forall B B',
   more_branches_beh B B' -> MoreBranches B B'.
@@ -972,6 +979,66 @@ all: intro HMB; inversion HMB; clear HMB.
 + simpl. rewrite Rdec.eqb_refl. trivial.
 Qed.
 
+Lemma more_branches_beh_MoreBranches :
+  forall B B',
+  more_branches_beh B B' <-> MoreBranches B B'.
+Proof.
+split. apply more_branches_beh_MoreBranches_1. apply more_branches_beh_MoreBranches_2.
+Qed.
+
+Lemma more_branches_net_MoreBranches_2 :
+  forall N N' ps,
+  MoreBranches_net N N' ps -> more_branches_net N N' ps.
+Proof.
+intro. intro.
+induction ps.
+1: { red. intros. inversion H0. }
+intro.
+inversion H.
+red.
+rewrite <- H0 in H4. rewrite <- H0.
+intros.
+inversion H6.
+- rewrite <- H7. apply more_branches_beh_MoreBranches. apply H4.
+- pose (H' := IHps H5).
+  apply (H' _ H7).
+Qed.
+
+Lemma more_branches_net_mono :
+  forall N N' p ps,
+  more_branches_net N N' (p::ps) -> more_branches_net N N' ps.
+Proof.
+red. intros.
+case (P.eq_dec p0 p); intros.
++ rewrite e.
+  red in H. apply (H p). constructor. reflexivity.
++ red in H. apply (H p0). apply in_cons. assumption.
+Qed.
+
+Lemma more_branches_net_MoreBranches_1 :
+  forall N N' ps,
+  more_branches_net N N' ps -> MoreBranches_net N N' ps.
+Proof.
+intro. intro.
+induction ps; intros.
+1: constructor.
+constructor.
+- red in H. specialize (H a).
+  assert (In a (a::ps)).
+  1: constructor; trivial.
+  pose (Ha := H H0).
+  apply more_branches_beh_MoreBranches; auto.
+- apply more_branches_net_mono in H.
+  apply (IHps H).
+Qed.
+
+Lemma more_branches_net_MoreBranches :
+  forall N N' ps,
+  more_branches_net N N' ps <-> MoreBranches_net N N' ps.
+Proof.
+split. apply more_branches_net_MoreBranches_1. apply more_branches_net_MoreBranches_2.
+Qed.
+
 Lemma more_branches_completeness :
   forall N1 N2 N2' ps SPDefs1 SPDefs2 s s' t,
     within_ps ps N1 -> within_ps ps N2 ->
@@ -1006,32 +1073,20 @@ inversion H3.
     auto.
   - red. intros.
     case_eq (Pid_dec p0 p); intros.
-    * rewrite Pdec.eqb_eq in H19. rewrite H19 in H17. rewrite H19.
-      pose (Hp0 := H1 _ H17).
-      rewrite <- H21 in Hp0.
-      inversion Hp0.
-(*
-red in H8.
-  split.
-  - elim (In_dec P.eq_dec p ps); elim (In_dec P.eq_dec q ps); intro; intro.
-    3: { pose (H' := H _ b). rewrite H' in H4. inversion H4. }
-    3: { pose (H' := H _ b). rewrite H' in H5. inversion H5. }
-    2: { pose (H' := H _ b). rewrite H' in H5. inversion H5. }
-    pose (Hp := H1 p a0). pose (Hq := H1 q a).
-    apply (more_branches_beh_MoreBranches_1 _ _) in Hp.
-    apply (more_branches_beh_MoreBranches_1 _ _) in Hq.
-    rewrite H4 in Hp. rewrite H5 in Hq.
-    inversion Hp. inversion Hq.
-    apply (S_Com _ _ _ _ _ _ _ _ (B'0) (B'1)); try (easy; fail).
-Print C_Com.
-Print S_Com.
-    * 
+    * rewrite Pdec.eqb_eq in H19. rewrite H19.
+      rewrite H6. apply (more_branches_beh_MoreBranches). auto.
+    * case_eq (Pid_dec p0 q); intros.
+      ** rewrite Pdec.eqb_eq in H20. rewrite H20.
+         rewrite H7. apply (more_branches_beh_MoreBranches). auto.
+      ** rewrite Pdec.eqb_neq in H19, H20.
+         red in H8. specialize (H8 p0).
+         assert (~ In p0 (p::q::nil)).
+         *** simpl. red. intros.
+             inversion H22; auto.
+             inversion H24; auto.
+         *** pose (H' := H8 H22).
+             rewrite H'. auto.
 Admitted.
-
-*)
-Admitted.
-
-
 
 End EPP_Properties.
 
