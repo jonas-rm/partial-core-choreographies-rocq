@@ -52,6 +52,26 @@ Qed.
 
 Definition SPDefs_eq (Defs Defs':RecVar -> Behaviour) : Prop := forall X, Defs X = Defs' X.
 
+Ltac Pid_dec_rewrite p q Hpq :=
+  try rewrite Pdec.eqb_refl;
+  case_eq (Pid_dec p q); [
+    auto; rewrite (Pdec.eqb_eq p q); intro Hpq; try rewrite Hpq; auto
+    |
+    auto; rewrite (Pdec.eqb_neq p q); intro Hpq; try rewrite Hpq; auto
+  ].
+
+Ltac NotIn_from_neq_1 H :=
+  simpl; intro H; inversion H; auto.
+
+Ltac assert_NotIn_from_neq_1 x y H :=
+  assert (~ In x (y :: nil)); [NotIn_from_neq_1 H | ].
+
+Ltac NotIn_from_neq_2 x y z H H' :=
+  simpl; intro H; inversion H as [H' | H']; inversion H'; auto.
+
+Ltac assert_NotIn_from_neq_2 x y z H H' :=
+  assert (~ In x (y :: z :: nil)); [NotIn_from_neq_2 x y z H H' | ].
+
 Lemma Network_eq_corr :
   forall N1 N1' N2 SPDefs1 SPDefs2 s s' t,
     Network_eq N1 N2 ->
@@ -61,6 +81,125 @@ Lemma Network_eq_corr :
 Proof.
 intros.
 inversion H1.
++ exists (fun r => if Pid_dec p r then (N1' p) else (if Pid_dec q r then (N1' q) else N2 r)).
+  split.
+  - apply (S_Com _ _ _ _ _ _ _ _ B B').
+    * rewrite <- (H p); assumption.
+    * rewrite <- (H q); assumption.
+    * Pid_dec_rewrite p q Hpq.
+    * Pid_dec_rewrite p q Hpq.
+    * red. intros p0 Hin.
+      Pid_dec_rewrite p p0 Hpp0; Pid_dec_rewrite q p0 Hqp0; intros;
+      try (elim Hin; constructor; auto; fail).
+      elim Hin. apply in_cons. rewrite Hqp0. constructor. auto.
+  - red. intro.
+    Pid_dec_rewrite p p0 Hpp0.
+    Pid_dec_rewrite q p0 Hqp0.
+    red in H6. specialize (H6 p0).
+    assert_NotIn_from_neq_2 p0 p q H' H''.
+    rewrite (H6 H12); auto.
++ exists (fun r => if Pid_dec p r then (N1' p) else (if Pid_dec q r then (N1' q) else N2 r)).
+  split.
+  - apply (S_Sel _ _ _ _ _ _ _ B f B').
+    * rewrite <- (H p); assumption.
+    * rewrite <- (H q); assumption.
+    * auto.
+    * Pid_dec_rewrite p q Hpq.
+    * Pid_dec_rewrite p q Hpq.
+    * red. intros p0 Hin.
+      Pid_dec_rewrite p p0 Hpp0; Pid_dec_rewrite q p0 Hqp0; intros;
+      try (elim Hin; constructor; auto; fail).
+      elim Hin. apply in_cons. rewrite Hqp0. constructor. auto.
+  - red. intro.
+    Pid_dec_rewrite p p0 Hpp0.
+    Pid_dec_rewrite q p0 Hqp0.
+    red in H7. specialize (H7 p0).
+    assert_NotIn_from_neq_2 p0 p q H' H''.
+    rewrite (H7 H13); auto.
++ exists (fun r => if Pid_dec p r then (N1' p) else N2 r).
+  split.
+  - apply (S_Then _ _ _ _ _ b B1 B2); auto.
+    * rewrite <- (H p); assumption.
+    * rewrite Pdec.eqb_refl; auto.
+    * red. intros p0 Hin.
+      Pid_dec_rewrite p p0 Hpp0; intros;
+      elim Hin; constructor; auto.
+  - red. intro.
+    Pid_dec_rewrite p p0 Hpp0.
+    red in H5. specialize (H5 p0).
+    assert_NotIn_from_neq_1 p0 p H'.
+    rewrite (H5 H11); auto.
++ exists (fun r => if Pid_dec p r then (N1' p) else N2 r).
+  split.
+  - apply (S_Else _ _ _ _ _ b B1 B2); auto.
+    * rewrite <- (H p); assumption.
+    * rewrite Pdec.eqb_refl; auto.
+    * red. intros p0 Hin.
+      Pid_dec_rewrite p p0 Hpp0; intros;
+      elim Hin; constructor; auto.
+  - red. intro.
+    Pid_dec_rewrite p p0 Hpp0.
+    red in H5. specialize (H5 p0).
+    assert_NotIn_from_neq_1 p0 p H'.
+    rewrite (H5 H11); auto.
++ exists (fun r => if Pid_dec p r then (N1' p) else N2 r).
+  split.
+  - apply (S_Call _ _ _ _ _ X).
+    * rewrite <- (H p); assumption.
+    * rewrite Pdec.eqb_refl.
+      rewrite <- (H0 X); assumption.
+    * red. intros p0 Hin.
+      Pid_dec_rewrite p p0 Hpp0; intros;
+      elim Hin; constructor; auto.
+  - red. intro.
+    Pid_dec_rewrite p p0 Hpp0.
+    red in H4. specialize (H4 p0).
+    assert_NotIn_from_neq_1 p0 p H'.
+    rewrite (H4 H10); auto.
+Qed.
+
+(* Dumber
++ set (N2' := fun r => if Pid_dec p r then (N1' p) else (if Pid_dec q r then (N1' q) else N2 r)).
+  exists N2'.
+  split.
+  - apply (S_Com _ _ _ _ _ _ _ _ B B').
+    * rewrite <- (H p); assumption.
+    * rewrite <- (H q); assumption.
+    * unfold N2'. rewrite Pdec.eqb_refl. assumption.
+    * unfold N2'. rewrite Pdec.eqb_refl.
+      case_eq (Pid_dec p q); auto.
+      intro. rewrite Pdec.eqb_eq in H12. rewrite H12. assumption.
+    * unfold N2'. red. intros.
+      case_eq (Pid_dec p p0); case_eq (Pid_dec q p0); auto.
+      ** intros.
+         rewrite Pdec.eqb_eq in H14.
+         rewrite H14 in H12.
+         elim H12. constructor. reflexivity.
+      ** intros.
+         rewrite Pdec.eqb_eq in H14.
+         rewrite H14 in H12.
+         elim H12. constructor. reflexivity.
+      ** intros.
+         rewrite Pdec.eqb_eq in H13.
+         rewrite H13 in H12.
+         elim H12.
+         apply in_cons. constructor. reflexivity.
+  - red. intro.
+    case_eq (Pid_dec p p0).
+    * intro H'. unfold N2'. rewrite H'.
+      rewrite Pdec.eqb_eq in H'. rewrite <- H'. reflexivity.
+    * intro H'. unfold N2'. rewrite H'.
+      case_eq (Pid_dec q p0).
+      ** intro H''. rewrite Pdec.eqb_eq in H''. rewrite <- H''. reflexivity.
+      ** intro H''.
+         red in H6.
+         specialize (H6 p0).
+         rewrite Pdec.eqb_neq in H', H''.
+         assert (~ In p0 (p :: q :: nil)).
+         *** simpl. red. intros. inversion H12; inversion H13; auto.
+         *** rewrite (H6 H12); auto.
+*)
+(* Dumbest
 + set (N2' := fun r => if Pid_dec p r then B else (if Pid_dec q r then B' else N2 r)).
   exists N2'.
   split.
@@ -91,8 +230,20 @@ inversion H1.
          apply in_cons. constructor. reflexivity.
   - red. intro.
     case_eq (Pid_dec p p0).
-         
-Admitted.
+    * intro H'. unfold N2'. rewrite H'.
+      rewrite Pdec.eqb_eq in H'. rewrite <- H'.
+      assumption.
+    * intro H'. unfold N2'. rewrite H'.
+      case_eq (Pid_dec q p0).
+      ** intro H''. rewrite Pdec.eqb_eq in H''. rewrite <- H''. assumption.
+      ** intro H''.
+         red in H6.
+         specialize (H6 p0).
+         rewrite Pdec.eqb_neq in H', H''.
+         assert (~ In p0 (p :: q :: nil)).
+         *** simpl. red. intros. inversion H12; inversion H13; auto.
+         *** rewrite (H6 H12); auto.
+*)
 
 End MaybeMove.
 
