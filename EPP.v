@@ -7,7 +7,31 @@ Local Open Scope nat_scope.
 
 Module EPPBase (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
-Module Import SPBase := SPBase P X V E B R Ev BEv.
+Module Type DecType.
+
+Parameter t : Type.
+Parameter eq_dec : forall x y:t, {x = y} + {x <> y}.
+
+End DecType.
+
+Module PR <: DecType.
+
+Definition t : Type := R.t * P.t.
+
+Lemma eq_dec : forall (R R' : t), { R = R' } + { R <> R' }.
+Proof.
+intros. case R as [X p]. case R' as [Y q].
+case (P.eq_dec p q); case (R.eq_dec X Y); intros.
++ left. rewrite e. rewrite e0. auto.
++ right. red. intro. inversion H. contradiction.
++ right. red. intro. inversion H. contradiction.
++ right. red. intro. inversion H. contradiction.
+Qed.
+
+End PR.
+
+Module Import MCBase := MCBase P X V E B R Ev BEv.
+Module Import SP_EPP := SPBase P X V E B PR Ev BEv.
 
 (*
 Module Export PSt := LState V X.
@@ -348,14 +372,17 @@ match C with
                                     | Some B1, Some B2 => (merge_beh B1 B2)
                                     | _, _ => None
                                    end
-| MCBase.Call X => if In_dec P.eq_dec r (fst (Defs X)) then Some (Call X) else Some End
-| MCBase.RT_Call X ps C' => if In_dec P.eq_dec r ps then Some (Call X) else bproj Defs C' r
+| MCBase.Call X => if In_dec P.eq_dec r (fst (Defs X)) then Some (Call (X, r)) else Some End
+| MCBase.RT_Call X ps C' => if In_dec P.eq_dec r ps then Some (Call (X, r)) else bproj Defs C' r
 end.
 
 Definition epp_list (Defs:DefSet) (C:Choreography) (ps:list Pid) : list (Pid * option Behaviour) :=
   map (fun p => (p, bproj Defs C p)) ps.
 
 Definition projectable Defs C ps := all_defined (map snd (epp_list Defs C ps)).
+
+Definition projectable_Defs (Defs:DefSet) (Xs:list MCBase.RecVar) :=
+  Forall (fun X => projectable Defs (snd (Defs X)) (fst (Defs X))) Xs.
 
 Fixpoint epp_net (Defs:DefSet) (C:Choreography) (ps:list Pid) :
   projectable Defs C ps -> Network.
@@ -369,16 +396,82 @@ induction ps.
 Defined.
 
 (*
-Fixpoint epp (Defs:DefSet) (Xs: list RecVar) (C:Choreography) (ps:list Pid) :
-  (forall X, In X Xs -> projectable Defs (snd (Defs X)) (fst (Defs X))) ->
+Lemma projectable_Defs_weaken :
+  forall Defs X Xs,
+  (forall Y, In Y (X::Xs) -> projectable Defs (snd (Defs X)) (fst (Defs X))) ->
+  (forall Y, In Y Xs -> projectable Defs (snd (Defs X)) (fst (Defs X))).
+Proof.
+*)
+
+Fixpoint epp (Defs:DefSet) (Xs: list MCBase.RecVar) (C:Choreography) (ps:list Pid) :
+  projectable_Defs Defs Xs ->
   projectable Defs C ps ->
-  (RecVar -> Behaviour) * Network :=
+  (RecVar -> Behaviour) * Network.
+Proof.
+(*
+intro projDefs.
+intro projMain.
+split.
++ intro PX.
+  destruct PX as [X p].
+  induction Xs as [| Y Ys].
+  - apply bnil%SP.
+  - red in projDefs. rewrite Forall_forall in projDefs.
+    specialize (projDefs X).
+  induction projXs.
+  - 
+  case (in_dec R.eq_dec X Xs).
+  - intro InX.
+    pose (projX := projXs X InX).
+    unfold projectable in projX.
+    case (in_dec P.eq_dec p (fst (Defs X))).
+    2: intro; apply bnil%SP.
+    
+    destruct (fst (Defs X)).
+    unfold projectable in projX.
+    case_eq (bproj Defs (snd (Defs X)) p).
+    * intros. apply b.
+    * intros.
+    revert dependent X.
+    
+    apply (epp_net Defs (snd (Defs X)) (fst (Defs X)) (projXs X InH)).
+    
+
 fun projXs => fun projMain =>
 (
-  fun X => if false then projXs else ,
+  fun X =>
+    match in_dec PR.eq_dec X Xs with
+     | (In X Xs) as InH => epp_net Defs (snd (Defs X)) (fst (Defs X)) (projXs InH)
+     | _ => bnil%SP
+    end
+  ,
   epp_net Defs C ps projMain
 ).
 
+*)
+(*
+Proof.
+intros projXs projMain.
+split.
++ induction Xs as [| X].
+  * apply (fun X => bnil%SP).
+  * assert (In X (X :: Xs)). constructor; auto.
+    apply (fun X => bnil%SP).
++ apply (epp_net Defs C ps projMain).
+Defined.
+*)
+(*
+fun projXs => fun projMain =>
+(
+  fun X =>
+    
+    if false then bnil%SP else bnil%SP
+  ,
+  epp_net Defs C ps projMain
+).
+*)
+
+(*
 Fixpoint epp_Program (P:MCBase.Program) (ps:list Pid) :
   projectable (MCBase.Procedures P) (Main P) ps -> SPBase.Program :=
 fun x =>
@@ -387,6 +480,7 @@ fun x =>
     (EmptyNet)
 .
 *)
+Abort.
 
 End EPP.
 

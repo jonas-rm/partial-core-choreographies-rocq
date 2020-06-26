@@ -1,13 +1,32 @@
+Require Export Common.
 Require Import MC.
 
 Local Open Scope nat_scope.
 
 Module SPBase (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
-Module Export MCBase := MCBase P X V E B R Ev BEv.
-
 Module Export PSt := LState V X.
 Module Export CSt := GState P V X.
+
+Module Bdec := DecidableType B.
+Module Edec := DecidableType E.
+Module Rdec := DecidableType R.
+
+Definition Expr := E.t.
+Definition Expr_dec := Edec.eqb.
+Definition BExpr := B.t.
+Definition BExpr_dec := Bdec.eqb.
+Definition RecVar := R.t.
+Definition RecVar_dec := Rdec.eqb.
+
+Definition eval := Ev.eval.
+Definition beval := BEv.eval.
+
+(** Expression evaluation on the state of a process *)
+
+Definition eval_on_state (e:Expr) (s:State) (p:Pid) : Value := eval e (s p).
+Definition beval_on_state (b:BExpr) (s:State) (p:Pid) : bool := beval b (s p).
+
 
 Section Syntax.
 

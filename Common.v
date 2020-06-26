@@ -492,6 +492,22 @@ Ltac ESEt x := apply eq_state_ext_trans with x; auto.
 Ltac eESEt := eapply eq_state_ext_trans; eauto.
 Ltac ESEc := apply eq_state_ext_congr.
 
+(** * Transition labels *)
+
+Inductive TransitionLabel : Type :=
+| L_Com (p:Pid) (v:Value) (q:Pid) : TransitionLabel
+| L_Sel (p:Pid) (q:Pid) (l:Label) : TransitionLabel
+| L_Tau (p:Pid) : TransitionLabel
+.
+
+Lemma TransitionLabel_eq_dec : forall (x y:TransitionLabel), {x=y}+{x<>y}.
+Proof.
+decide equality; try (apply P.eq_dec).
++ apply V.eq_dec.
++ decide equality.
+Qed.
+
+
 End GState.
 
 (** * Evaluation
@@ -505,3 +521,4 @@ Parameter eval_wd : forall f f', (forall x, f x = f' x) ->
   forall e, eval e f = eval e f'.
 
 End Eval.
+
