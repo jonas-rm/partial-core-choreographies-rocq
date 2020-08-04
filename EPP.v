@@ -1,34 +1,11 @@
 Require Import MC.
 Require Import SP.
 
-From Coq Require Import FunctionalExtensionality.
-
 Local Open Scope nat_scope.
 
 Module EPPBase (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
-Module Type DecType.
-
-Parameter t : Type.
-Parameter eq_dec : forall x y:t, {x = y} + {x <> y}.
-
-End DecType.
-
-Module PR <: DecType.
-
-Definition t : Type := R.t * P.t.
-
-Lemma eq_dec : forall (R R' : t), { R = R' } + { R <> R' }.
-Proof.
-intros. case R as [X p]. case R' as [Y q].
-case (P.eq_dec p q); case (R.eq_dec X Y); intros.
-+ left. rewrite e. rewrite e0. auto.
-+ right. red. intro. inversion H. contradiction.
-+ right. red. intro. inversion H. contradiction.
-+ right. red. intro. inversion H. contradiction.
-Qed.
-
-End PR.
+Module PR := DecProd R P.
 
 Module Import MCBase := MCBase P X V E B R Ev BEv.
 Module Import SP_EPP := SPBase P X V E B PR Ev BEv.
@@ -39,40 +16,6 @@ Module Export CSt := GState P V X.
 *)
 
 Section MaybeMove.
-
-Definition Network_rm (N:Network) (p:Pid) :=
-  fun r => if (Pid_dec r p) then End else N r.
-
-Lemma Network_rm_add :
-  forall N p, Network_eq (Network_rm N p | p [N p])%SP N.
-Proof.
-intros.
-red. unfold Network_rm. unfold Process. unfold Par. intro.
-case_eq (Pid_dec p0 p); intros.
-+ rewrite Pdec.eqb_eq in H. rewrite H.
-  elim (Behaviour_eq_End_dec bnil); auto.
-  intro H'. contradiction.
-+ elim (Behaviour_eq_End_dec (N p0)); auto.
-Qed.
-
-(* Generalisation of the above to lists of processes. *)
-
-Definition Network_rm_ps (N:Network) (ps:list Pid) :=
-  fun r => if (in_dec P.eq_dec r ps) then End else N r.
-
-Definition Network_res_ps (N:Network) (ps:list Pid) :=
-  fun r => if (in_dec P.eq_dec r ps) then N r else End.
-
-Lemma Network_rm_res_ps :
-  forall N ps, Network_eq (Network_rm_ps N ps | Network_res_ps N ps)%SP N.
-Proof.
-intros.
-red. unfold Network_rm_ps. unfold Network_res_ps. unfold Par. intro.
-case_eq (in_dec P.eq_dec p ps); intros.
-+ elim (Behaviour_eq_End_dec bnil); auto.
-  intro. contradiction.
-+ elim (Behaviour_eq_End_dec (N p)); auto.
-Qed.
 
 Definition SPDefs_eq (Defs Defs':RecVar -> Behaviour) : Prop := forall X, Defs X = Defs' X.
 
@@ -105,11 +48,13 @@ Lemma Network_eq_corr :
 Proof.
 intros.
 inversion H1.
-+ exists (fun r => if Pid_dec p r then (N1' p) else (if Pid_dec q r then (N1' q) else N2 r)).
++ exists (Network_rm (Network_rm N2 p) q | p [(N1' p)] | q [(N1' q)])%SP.
+(* exists (fun r => if Pid_dec p r then (N1' p) else (if Pid_dec q r then (N1' q) else N2 r)). *)
   split.
-  - apply (S_Com _ _ _ _ _ _ _ _ B B').
+  - apply S_Com with B B'.
     * rewrite <- (H p); assumption.
     * rewrite <- (H q); assumption.
+    * 
     * Pid_dec_rewrite p q Hpq.
     * Pid_dec_rewrite p q Hpq.
     * red. intros p0 Hin.

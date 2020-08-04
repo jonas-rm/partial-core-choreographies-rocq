@@ -52,6 +52,22 @@ Parameter eq_dec : forall x y:t, {x = y} + {x <> y}.
 
 End DecType.
 
+(** Cartesian product of two decidable types. *)
+
+Module DecProd (A B:DecType) <: DecType.
+
+Definition t : Type := A.t * B.t.
+
+Lemma eq_dec : forall (p1 p2:t), {p1 = p2} + {p1 <> p2}.
+Proof.
+intros. case p1 as [X p]. case p2 as [Y q].
+case (B.eq_dec p q); case (A.eq_dec X Y); intros;
+  try (right; intro; inversion H; auto; fail).
+rewrite e, e0; auto.
+Qed.
+
+End DecProd.
+
 (** * Booleans as a decidable type *)
 Module Bool <: DecType.
 
@@ -492,6 +508,27 @@ Ltac ESEt x := apply eq_state_ext_trans with x; auto.
 Ltac eESEt := eapply eq_state_ext_trans; eauto.
 Ltac ESEc := apply eq_state_ext_congr.
 
+End GState.
+
+(** * Evaluation
+    Evaluation is parameterized on the types of expressions and values.
+    Decidability of expressions makes choreography equality decidable. *)
+
+Module Type Eval (Expression Vars Input Output : DecType).
+
+Parameter eval : Expression.t -> (Vars.t -> Input.t) -> Output.t.
+Parameter eval_wd : forall f f', (forall x, f x = f' x) -> 
+  forall e, eval e f = eval e f'.
+
+End Eval.
+
+Module TransitionLabels (P V X R:DecType).
+
+Module Export PSt := LState V X.
+Module Export CSt := GState P V X.
+
+Definition RecVar := R.t.
+
 (** * Transition labels *)
 
 Inductive TransitionLabel : Type :=
@@ -507,18 +544,44 @@ decide equality; try (apply P.eq_dec).
 + decide equality.
 Qed.
 
+(** The semantics uses a labeled transition system with more expressive labels. *)
 
-End GState.
+Inductive RichLabel : Type :=
+| R_Com (p:Pid) (v:Value) (q:Pid) (x:Var) : RichLabel
+| R_Sel (p:Pid) (q:Pid) (l:Label) : RichLabel
+| R_Cond (p:Pid) : RichLabel
+| R_Call (X:RecVar) (p:Pid) : RichLabel
+.
 
-(** * Evaluation
-    Evaluation is parameterized on the types of expressions and values.
-    Decidability of expressions makes choreography equality decidable. *)
+Lemma RichLabel_eq_dec : forall (x y:RichLabel), {x=y}+{x<>y}.
+Proof.
+decide equality; try (apply P.eq_dec).
++ apply X.eq_dec.
++ apply V.eq_dec.
++ decide equality.
++ apply R.eq_dec.
+Qed.
 
-Module Type Eval (Expression Vars Input Output : DecType).
+Definition forget (t:RichLabel) : TransitionLabel :=
+  match t with
+  | R_Com p v q _ => L_Com p v q
+  | R_Sel p q l   => L_Sel p q l
+  | R_Cond p      => L_Tau p
+  | R_Call _ p    => L_Tau p
+end.
 
-Parameter eval : Expression.t -> (Vars.t -> Input.t) -> Output.t.
-Parameter eval_wd : forall f f', (forall x, f x = f' x) -> 
-  forall e, eval e f = eval e f'.
+(** Useful for rewriting in proofs. *)
+Lemma forget_Com : forall x p v q, forget (R_Com p v q x) = L_Com p v q.
+Proof. auto. Qed.
 
-End Eval.
+Lemma forget_Sel : forall p q l, forget (R_Sel p q l) = L_Sel p q l.
+Proof. auto. Qed.
+
+Lemma forget_Cond : forall p, forget (R_Cond p) = L_Tau p.
+Proof. auto. Qed.
+
+Lemma forget_Call : forall X p, forget (R_Call X p) = L_Tau p.
+Proof. auto. Qed.
+
+End TransitionLabels.
 

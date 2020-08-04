@@ -11,6 +11,7 @@ Module MCBase (P X V E B R: DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
 Module Export PSt := LState V X.
 Module Export CSt := GState P V X.
+Module Export TL := TransitionLabels P V X R.
 
 Module Bdec := DecidableType B.
 Module Edec := DecidableType E.
@@ -640,58 +641,6 @@ case_eq (Pid_dec q p); auto.
 intro; elim H.
 apply Pdec.eqb_eq in H0; auto.
 Qed.
-
-(** The semantics uses a labeled transition system. We first define the type of labels. *)
-
-Inductive RichLabel : Type :=
-| R_Com (p:Pid) (v:Value) (q:Pid) (x:Var) : RichLabel
-| R_Sel (p:Pid) (q:Pid) (l:Label) : RichLabel
-| R_Cond (p:Pid) : RichLabel
-| R_Call (X:RecVar) (p:Pid) : RichLabel
-.
-
-Lemma RichLabel_eq_dec : forall (x y:RichLabel), {x=y}+{x<>y}.
-Proof.
-decide equality; try (apply P.eq_dec).
-+ apply X.eq_dec.
-+ apply V.eq_dec.
-+ decide equality.
-+ apply R.eq_dec.
-Qed.
-
-Inductive TransitionLabel : Type :=
-| L_Com (p:Pid) (v:Value) (q:Pid) : TransitionLabel
-| L_Sel (p:Pid) (q:Pid) (l:Label) : TransitionLabel
-| L_Tau (p:Pid) : TransitionLabel
-.
-
-Lemma TransitionLabel_eq_dec : forall (x y:TransitionLabel), {x=y}+{x<>y}.
-Proof.
-decide equality; try (apply P.eq_dec).
-+ apply V.eq_dec.
-+ decide equality.
-Qed.
-
-Definition forget (t:RichLabel) : TransitionLabel :=
-  match t with
-  | R_Com p v q _ => L_Com p v q
-  | R_Sel p q l   => L_Sel p q l
-  | R_Cond p      => L_Tau p
-  | R_Call _ p    => L_Tau p
-end.
-
-(** Useful for rewriting in proofs. *)
-Lemma forget_Com : forall x p v q, forget (R_Com p v q x) = L_Com p v q.
-Proof. auto. Qed.
-
-Lemma forget_Sel : forall p q l, forget (R_Sel p q l) = L_Sel p q l.
-Proof. auto. Qed.
-
-Lemma forget_Cond : forall p, forget (R_Cond p) = L_Tau p.
-Proof. auto. Qed.
-
-Lemma forget_Call : forall X p, forget (R_Call X p) = L_Tau p.
-Proof. auto. Qed.
 
 Definition disjoint_p_rl (p:Pid) (t:RichLabel) : Prop :=
 match t with
