@@ -23,10 +23,51 @@ Definition RecVar_dec := Rdec.eqb.
 Definition eval := Ev.eval.
 Definition beval := BEv.eval.
 
+(** ** These things should be somehow shared with MC. *)
+
 (** Expression evaluation on the state of a process *)
 
 Definition eval_on_state (e:Expr) (s:State) (p:Pid) : Value := eval e (s p).
 Definition beval_on_state (b:BExpr) (s:State) (p:Pid) : bool := beval b (s p).
+
+(** Consistency with state equivalence. *)
+Lemma eval_eq : forall e s s' p, eq_state_ext s s' ->
+  eval_on_state e s p = eval_on_state e s' p.
+Proof.
+intros; unfold eval_on_state; simpl.
+apply Ev.eval_wd.
+apply H.
+Qed.
+
+Lemma eval_neq : forall e s p q x v, p <> q ->
+  eval_on_state e s p = eval_on_state e (update s q x v) p.
+Proof.
+intros; unfold eval_on_state; simpl.
+replace (s p) with (update s q x v p); auto.
+unfold update.
+case_eq (Pid_dec q p); auto.
+intro; elim H.
+apply Pdec.eqb_eq in H0; auto.
+Qed.
+
+Lemma beval_eq : forall b s s' p, eq_state_ext s s' ->
+  beval_on_state b s p = beval_on_state b s' p.
+Proof.
+intros; unfold beval_on_state; simpl.
+apply BEv.eval_wd.
+apply H.
+Qed.
+
+Lemma beval_neq : forall b s p q x v, p <> q ->
+  beval_on_state b s p = beval_on_state b (update s q x v) p.
+Proof.
+intros; unfold beval_on_state; simpl.
+replace (s p) with (update s q x v p); auto.
+unfold update.
+case_eq (Pid_dec q p); auto.
+intro; elim H.
+apply Pdec.eqb_eq in H0; auto.
+Qed.
 
 (** * Syntax of processes *)
 
@@ -573,7 +614,7 @@ Qed.
 
 End SyntacticProperties.
 
-(** ** Semantics of SP *)
+(** * Semantics of SP *)
 
 Section Semantics.
 
@@ -656,8 +697,8 @@ Inductive SPP_ToStar : Configuration -> list TransitionLabel -> Configuration ->
 .
 
 Bind Scope SP_scope with SP_To.
-Notation "N --[ l ]--> N'" := (SPP_To N l N') (at level 50, left associativity) : SP_scope.
-Notation "N --[ ls ]-->* N'" := (SPP_ToStar N ls N') (at level 50, left associativity) : SP_scope.
+Notation "C --[ l ]--> C'" := (SPP_To C l C') (at level 50, left associativity) : SP_scope.
+Notation "C --[ ls ]-->* C'" := (SPP_ToStar C ls C') (at level 50, left associativity) : SP_scope.
 
 End Semantics.
 
@@ -736,6 +777,59 @@ Definition deterministic_P (P:Program) : Prop :=
   (deterministic_D (Procedures P)) /\ deterministic_N (Net P).
 
 (** Many aspects of the semantics are deterministic anyway. *)
+
+Lemma SP_To_eq : forall Defs N tl s1 N' s2 s1' s2',
+  eq_state_ext s1 s1' -> eq_state_ext s2 s2' ->
+  SP_To Defs N s1 tl N' s2 -> SP_To Defs N s1' tl N' s2'.
+Proof.
+intros.
+induction H1.
++ unfold v.
+  rewrite (eval_eq e s s1'); auto.
+  apply S_Com with B B'; auto.
+  ESEt s'. ESEs. eESEt.
+  rewrite <- (eval_eq e s s1'); auto. fold v.
+  ESEc; auto.
++ apply S_Sel with B c B'; auto. ESEt s. ESEs. ESEt s'.
++ apply S_Then with b B1 B2; auto.
+  rewrite <- (beval_eq b s); auto.
+  ESEt s. ESEs. ESEt s'.
++ apply S_Else with b B1 B2; auto.
+  rewrite <- (beval_eq b s); auto.
+  ESEt s. ESEs. ESEt s'.
++ apply S_Call; auto. ESEt s. ESEs. ESEt s'.
+Qed.
+
+(** FIXME: notation *)
+
+Lemma SPP_To_eq : forall P s1 tl P' s2 s1' s2',
+  eq_state_ext s1 s1' -> eq_state_ext s2 s2' ->
+  SPP_To (P,s1) tl (P',s2) -> SPP_To (P,s1') tl (P',s2').
+Proof.
+intros.
+induction P.
+inversion H1; constructor.
+apply SP_To_eq with s1 s2; auto.
+Qed.
+
+Lemma SPP_ToStar_eq : forall P s1 tl P' s2 s1' s2',
+  eq_state_ext s1 s1' -> eq_state_ext s2 s2' -> tl <> nil ->
+  SPP_ToStar (P,s1) tl (P',s2) -> SPP_ToStar (P,s1') tl (P',s2').
+Proof.
+intros P s1 tl; revert P s1.
+induction tl; intros. elim H1; auto.
+case_eq tl; intros.
++ rewrite H3 in H2; inversion H2.
+  inversion H9. rewrite H12 in H7.
+  apply SPT_Step with (P',s2'). 2: constructor.
+  apply SPP_To_eq with s1 s2; auto.
++ inversion H2.
+  induction c2.
+  apply SPT_Step with (a0,b).
+  - apply SPP_To_eq with s1 b; auto. ESEr.
+  - rewrite <- H3. eapply IHtl; eauto. ESEr.
+    rewrite H3; discriminate.
+Qed.
 
 (** Others explicitly depend on the program being deterministic. *)
 
