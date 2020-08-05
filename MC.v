@@ -801,6 +801,7 @@ Inductive MCC_To (Defs : DefSet) :
 .
 
 (* Grrrr *)
+(** Useful for inferring a transition automatically. *)
 
 Lemma C_Com' : forall Defs p e q x C s, let v := (eval_on_state e s p) in
         MCC_To Defs (p # e --> q $ x;; C) s (R_Com p v q x) C (update s q x v).

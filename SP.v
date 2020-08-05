@@ -28,9 +28,11 @@ Definition beval := BEv.eval.
 Definition eval_on_state (e:Expr) (s:State) (p:Pid) : Value := eval e (s p).
 Definition beval_on_state (b:BExpr) (s:State) (p:Pid) : bool := beval b (s p).
 
+(** * Syntax of processes *)
+
 Section Syntax.
 
-(** ** Syntax of processes *)
+(** ** Behaviours *)
 
 Inductive Behaviour : Type :=
 | End : Behaviour
@@ -209,9 +211,20 @@ Qed.
 
 Definition finite_support (N:Network) := exists ps, within_ps ps N.
 
-(** Network equality *)
+(** ** Network equality *)
 
 Definition Network_eq (N N':Network) : Prop := forall p, N p = N' p.
+
+(** Network equality is an equivalence relation, as expected. *)
+
+Lemma Network_eq_refl : reflexive _ Network_eq.
+Proof. red. red. auto. Qed.
+
+Lemma Network_eq_sym : symmetric _ Network_eq.
+Proof. red. red. auto. Qed.
+
+Lemma Network_eq_trans : transitive _ Network_eq.
+Proof. red. red. intros. transitivity (y p); auto. Qed.
 
 Lemma Network_eq_within_ps : forall ps N N',
   within_ps ps N -> within_ps ps N' ->
@@ -362,11 +375,19 @@ Qed.
 
 (** Programs in SP are pairs, like choreography programs in MC. *)
 
+Definition DefSetB := RecVar -> Behaviour.
+
 Record Program : Type :=
-  { Procedures : RecVar -> Behaviour;
+  { Procedures : DefSetB;
     Net        : Network }.
 
 End Syntax.
+
+Add Parametric Relation : Network Network_eq
+  reflexivity proved by Network_eq_refl
+  symmetry proved by Network_eq_sym
+  transitivity proved by Network_eq_trans
+  as Network_eq_rel.
 
 Declare Scope SP_scope.
 Delimit Scope SP_scope with SP.
@@ -393,11 +414,11 @@ Check (If 0 Then bnil Else bnil)%SP.
 Check (0!zero; 0?; 1+left; bnil)%SP.
 *)
 
-Section SyntacticProperties.
-
 (** ** Syntactic properties *)
 
-(** Equivalence of processes *)
+Section SyntacticProperties.
+
+(** Equivalence of processes - where? *)
 (* 
 Fixpoint Behaviour_equiv (B1 B2:Behaviour) : Prop :=
 match B1, B2 with
@@ -443,10 +464,10 @@ Fixpoint Behaviour_WF (p:Pid) (B:Behaviour) : Prop :=
 match B with
 | bnil%SP => True
 | Call _ => True
-| (q ! _; B)%SP => p <> q /\ Behaviour_WF p B
-| (q ? _; B)%SP => p <> q /\ Behaviour_WF p B
-| (q (+) l; B)%SP => p <> q /\ Behaviour_WF p B
-| (q & c)%SP => p <> q /\ fold_right and True (map (fun case => match case with (_, B) => Behaviour_WF p B end) c)
+| (q ! _; B')%SP => p <> q /\ Behaviour_WF p B'
+| (q ? _; B')%SP => p <> q /\ Behaviour_WF p B'
+| (q (+) l; B')%SP => p <> q /\ Behaviour_WF p B'
+| (q & c)%SP => p <> q /\ fold_right and True (map (fun case => match case with (_, B') => Behaviour_WF p B' end) c)
 | (If e Then B1 Else B2)%SP => Behaviour_WF p B1 /\ Behaviour_WF p B2
 end.
 
@@ -552,47 +573,82 @@ Qed.
 
 End SyntacticProperties.
 
+(** ** Semantics of SP *)
+
 Section Semantics.
 
+(** Needed? *)
 Definition Network_eq_upTo (N:Network) ps N' : Prop :=
   forall p, ~In p ps -> N' p = N p.
 
-Inductive SP_To (Procs : RecVar -> Behaviour) :
+(** Same strategy as for MC. *)
+
+Inductive SP_To (Defs : DefSetB) :
   Network -> State -> RichLabel -> Network -> State -> Prop :=
  | S_Com N p e B q x B' N' s s' :
     N p = (q ! e ; B)%SP -> N q = (p ? x ; B')%SP ->
     let v := (eval_on_state e s p) in
     Network_eq N' ((Network_rm (Network_rm N p) q) | p[B] | q[B']) ->
     eq_state_ext s' (update s q x v) ->
-    SP_To Procs N s (R_Com p v q x) N' s'
+    SP_To Defs N s (R_Com p v q x) N' s'
  | S_Sel N p l B q c B' N' s s' :
     N p = (q (+) l ; B)%SP -> N q = (p & c)%SP -> In (l, B') c ->
     Network_eq N' ((Network_rm (Network_rm N p) q) | p[B] | q[B']) ->
     eq_state_ext s s' ->
-    SP_To Procs N s (R_Sel p q l) N' s'
+    SP_To Defs N s (R_Sel p q l) N' s'
  | S_Then N p b B1 B2 N' s s' :
     N p = (If b Then B1 Else B2)%SP ->
     beval_on_state b s p = true ->
     Network_eq N' ((Network_rm N p) | p[B1]) ->
     eq_state_ext s s' ->
-    SP_To Procs N s (R_Cond p) N' s'
+    SP_To Defs N s (R_Cond p) N' s'
  | S_Else N p b B1 B2 N' s s' :
     N p = (If b Then B1 Else B2)%SP ->
     beval_on_state b s p = false ->
     Network_eq N' ((Network_rm N p) | p[B2]) ->
     eq_state_ext s s' ->
-    SP_To Procs N s (R_Cond p) N' s'
+    SP_To Defs N s (R_Cond p) N' s'
  | S_Call N p X N' s s' :
     N p = Call X ->
-    Network_eq N' ((Network_rm N p) | p[Procs X]) ->
+    Network_eq N' ((Network_rm N p) | p[Defs X]) ->
     eq_state_ext s s' ->
-    SP_To Procs N s (R_Call X p) N' s'.
+    SP_To Defs N s (R_Call X p) N' s'.
+
+(** Default reductions. *)
+
+Lemma S_Com' : forall Defs N p e B q x B' s,
+  N p = (q ! e ; B)%SP -> N q = (p ? x ; B')%SP ->
+  let v := (eval_on_state e s p) in
+  SP_To Defs N s (R_Com p v q x) ((Network_rm (Network_rm N p) q) | p[B] | q[B']) (update s q x v).
+Proof. intros. apply S_Com with B B'; auto. reflexivity. ESEr. Qed.
+
+Lemma S_Sel' : forall Defs N p l B q c B' s,
+  N p = (q (+) l ; B)%SP -> N q = (p & c)%SP -> In (l, B') c ->
+  SP_To Defs N s (R_Sel p q l) ((Network_rm (Network_rm N p) q) | p[B] | q[B']) s.
+Proof. intros. apply S_Sel with B c B'; auto. reflexivity. ESEr. Qed.
+
+Lemma S_Then' : forall Defs N p b B1 B2 s,
+  N p = (If b Then B1 Else B2)%SP ->
+  beval_on_state b s p = true ->
+  SP_To Defs N s (R_Cond p) ((Network_rm N p) | p[B1]) s.
+Proof. intros. apply S_Then with b B1 B2; auto. reflexivity. ESEr. Qed.
+
+Lemma S_Else' : forall Defs N p b B1 B2 s,
+  N p = (If b Then B1 Else B2)%SP ->
+  beval_on_state b s p = false ->
+  SP_To Defs N s (R_Cond p) ((Network_rm N p) | p[B2]) s.
+Proof. intros. apply S_Else with b B1 B2; auto. reflexivity. ESEr. Qed.
+
+Lemma S_Call' : forall Defs N p X s,
+  N p = Call X ->
+  SP_To Defs N s (R_Call X p) ((Network_rm N p) | p[Defs X]) s.
+Proof. intros. apply S_Call; auto. reflexivity. ESEr. Qed.
 
 Definition Configuration : Type := Program * State.
 
 Inductive SPP_To : Configuration -> TransitionLabel -> Configuration -> Prop :=
- | SPP_To_intro Procs N s t N' s' : SP_To Procs N s t N' s' ->
-     SPP_To (Build_Program Procs N,s) (forget t) (Build_Program Procs N',s').
+ | SPP_To_intro Defs N s t N' s' : SP_To Defs N s t N' s' ->
+     SPP_To (Build_Program Defs N,s) (forget t) (Build_Program Defs N',s').
 
 Inductive SPP_ToStar : Configuration -> list TransitionLabel -> Configuration -> Prop :=
  | SPT_Refl c : SPP_ToStar c nil c
@@ -604,5 +660,85 @@ Notation "N --[ l ]--> N'" := (SPP_To N l N') (at level 50, left associativity) 
 Notation "N --[ ls ]-->* N'" := (SPP_ToStar N ls N') (at level 50, left associativity) : SP_scope.
 
 End Semantics.
+
+Section Determinism.
+
+(** ** Determinism
+  A process is deterministic if every branching term contains at most
+  one behaviour for each label. A network is deterministic if every
+  process in it is deterministic.
+*)
+
+Fixpoint deterministic_B (B:Behaviour) : Prop :=
+match B with
+| bnil%SP => True
+| Call _ => True
+| (_ ! _; B')%SP => deterministic_B B'
+| (_ ? _; B')%SP => deterministic_B B'
+| (_ (+) _; B')%SP => deterministic_B B'
+| (_ & c)%SP => NoDup (map fst c) /\
+    fold_right and True (map (fun case => match case with (_, B') => deterministic_B B' end) c)
+| (If e Then B1 Else B2)%SP => deterministic_B B1 /\ deterministic_B B2
+end.
+
+Lemma deterministic_B_dec : forall B, {deterministic_B B} + {~deterministic_B B}.
+Proof.
+induction B using Behaviour_rec'; simpl; auto.
++ elim (ListDec.NoDup_dec eq_label_dec (map fst c)); intro Hc.
+  2: right; intro H'; apply Hc; inversion_clear H'; auto.
+  assert ({fold_right and True (map (fun case : Label * Behaviour => let (_, B) := case in deterministic_B B) c)} +
+  {~ (fold_right and True (map (fun case : Label * Behaviour => let (_, B) := case in deterministic_B B) c))}).
+  - induction c; simpl; auto.
+    induction a.
+    elim (X a b); simpl; auto.
+    2: right; intro H'; inversion_clear H'; auto.
+    intro.
+    elim IHc; auto.
+    1: right; intro H'; inversion_clear H'; auto.
+    intros. apply X with l; simpl; auto.
+    inversion Hc; auto.
+  - elim H; auto.
+    right; intro H'; inversion_clear H'; auto.
++ inversion_clear IHB1.
+  2: right; intro H'; inversion_clear H'; auto.
+  inversion_clear IHB2; auto.
+  right; intro H'; inversion_clear H'; auto.
+Qed.
+
+Definition deterministic_N (N:Network) : Prop :=
+  forall p, deterministic_B (N p).
+
+Lemma deterministic_N_dec : forall ps N, within_ps ps N ->
+  {deterministic_N N} + {~deterministic_N N}.
+Proof.
+induction ps; simpl; intros.
++ left; intro; rewrite H; simpl; auto.
++ elim (deterministic_B_dec (N a)); intro.
+  2: right; intro; auto.
+  elim (IHps (Network_rm N a)).
+  3: apply Network_rm_within_ps; auto.
+  - left; intro.
+    case (P.eq_dec p a); intro.
+    1: rewrite e; auto.
+    generalize (a1 p).
+    rewrite <- Pdec.eqb_neq in n.
+    unfold Network_rm. unfold Pid_dec. rewrite n; auto.
+  - right; intro.
+    apply b; intro.
+    unfold Network_rm.
+    case Pid_dec; simpl; auto.
+Qed.
+
+Definition deterministic_D (D:DefSetB) : Prop :=
+  forall X, deterministic_B (D X).
+
+Definition deterministic_P (P:Program) : Prop :=
+  (deterministic_D (Procedures P)) /\ deterministic_N (Net P).
+
+(** Many aspects of the semantics are deterministic anyway. *)
+
+(** Others explicitly depend on the program being deterministic. *)
+
+End Determinism.
 
 End SPBase.
