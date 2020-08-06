@@ -459,8 +459,7 @@ Check (0!zero; 0?; 1+left; bnil)%SP.
 
 Section SyntacticProperties.
 
-(** Equivalence of processes - where? *)
-(* 
+(* Equivalence of processes - where?
 Fixpoint Behaviour_equiv (B1 B2:Behaviour) : Prop :=
 match B1, B2 with
 | bnil%SP, bnil%SP => True
@@ -483,23 +482,10 @@ match O, O' with
 end.
 *)
 
-(*
-Definition Behaviour_WF (p:Pid) : Behaviour -> Prop :=
-  Behaviour_rec' _ 
-  True
-  (fun q e B H => p<>q /\ H)
-  (fun q v B H => p<>q /\ H)
-  (fun q l B H => p<>q /\ H)
-  (fun q c H => p<>q /\ forall l B H', (H l B H'))
-  (fun b B1 B2 H1 H2 => H1 /\ H2)
-  (fun X => True).
+(**
+  We do not know whether we need well-formedness of processes yet.
+  Well-formedness does not check that, in branchings, all labels are distinct.
 *)
-
-(* We probably want a sanity check for Behaviour_WF, comparing it to the commented
-  definition below. *)
-
-(** Well-formedness does not check that, in branchings, all labels are distinct.
-  We might want to add this later. *)
 
 Fixpoint Behaviour_WF (p:Pid) (B:Behaviour) : Prop :=
 match B with
@@ -618,9 +604,10 @@ End SyntacticProperties.
 
 Section Semantics.
 
-(** Needed? *)
+(* Needed?
 Definition Network_eq_upTo (N:Network) ps N' : Prop :=
   forall p, ~In p ps -> N' p = N p.
+*)
 
 (** Same strategy as for MC. *)
 
@@ -696,11 +683,11 @@ Inductive SPP_ToStar : Configuration -> list TransitionLabel -> Configuration ->
  | SPT_Step c1 t c2 l c3 : SPP_To c1 t c2 -> SPP_ToStar c2 l c3 -> SPP_ToStar c1 (t::l) c3
 .
 
+End Semantics.
+
 Bind Scope SP_scope with SP_To.
 Notation "C --[ l ]--> C'" := (SPP_To C l C') (at level 50, left associativity) : SP_scope.
 Notation "C --[ ls ]-->* C'" := (SPP_ToStar C ls C') (at level 50, left associativity) : SP_scope.
-
-End Semantics.
 
 Section Determinism.
 
@@ -800,11 +787,11 @@ induction H1.
 + apply S_Call; auto. ESEt s. ESEs. ESEt s'.
 Qed.
 
-(** FIXME: notation *)
+Open Scope SP_scope.
 
 Lemma SPP_To_eq : forall P s1 tl P' s2 s1' s2',
   eq_state_ext s1 s1' -> eq_state_ext s2 s2' ->
-  SPP_To (P,s1) tl (P',s2) -> SPP_To (P,s1') tl (P',s2').
+  (P,s1) --[tl]--> (P',s2) -> (P,s1') --[tl]--> (P',s2').
 Proof.
 intros.
 induction P.
@@ -814,7 +801,7 @@ Qed.
 
 Lemma SPP_ToStar_eq : forall P s1 tl P' s2 s1' s2',
   eq_state_ext s1 s1' -> eq_state_ext s2 s2' -> tl <> nil ->
-  SPP_ToStar (P,s1) tl (P',s2) -> SPP_ToStar (P,s1') tl (P',s2').
+  (P,s1) --[tl]-->* (P',s2) -> (P,s1') --[tl]-->* (P',s2').
 Proof.
 intros P s1 tl; revert P s1.
 induction tl; intros. elim H1; auto.

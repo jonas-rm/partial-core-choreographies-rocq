@@ -17,7 +17,7 @@ Module Export CSt := GState P V X.
 
 Section MaybeMove.
 
-Definition SPDefs_eq (Defs Defs':RecVar -> Behaviour) : Prop := forall X, Defs X = Defs' X.
+(* Definition SPDefs_eq (Defs Defs':RecVar -> Behaviour) : Prop := forall X, Defs X = Defs' X. *)
 
 Ltac Pid_dec_rewrite p q Hpq :=
   try rewrite Pdec.eqb_refl;
@@ -40,11 +40,10 @@ Ltac assert_NotIn_from_neq_2 x y z H H' :=
   assert (~ In x (y :: z :: nil)); [NotIn_from_neq_2 x y z H H' | ].
 
 Lemma Network_eq_corr :
-  forall N1 N1' N2 SPDefs1 SPDefs2 s s' t,
+  forall N1 N1' N2 SPDefs s s' t,
     Network_eq N1 N2 ->
-    SPDefs_eq SPDefs1 SPDefs2 ->
-    SP_To SPDefs1 N1 s t N1' s' ->
-    exists N2', SP_To SPDefs2 N2 s t N2' s' /\ Network_eq N1' N2'.
+    SP_To SPDefs N1 s t N1' s' ->
+    exists N2', SP_To SPDefs N2 s t N2' s' /\ Network_eq N1' N2'.
 Proof.
 intros.
 inversion H1.
