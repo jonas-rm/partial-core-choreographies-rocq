@@ -11,7 +11,7 @@ Module MCBase (P X V E B R: DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
 Module Export PSt := LState V X.
 Module Export CSt := GState P V X.
-Module Export TL := TransitionLabels P V X R.
+Module Export TL := Transitions P V X R.
 
 Module Bdec := DecidableType B.
 Module Edec := DecidableType E.
@@ -642,81 +642,9 @@ intro; elim H.
 apply Pdec.eqb_eq in H0; auto.
 Qed.
 
-Definition disjoint_p_rl (p:Pid) (t:RichLabel) : Prop :=
-match t with
-| R_Com r _ s _ => p <> r /\ p <> s
-| R_Sel r s _   => p <> r /\ p <> s
-| R_Cond r      => p <> r
-| R_Call _ r    => p <> r
-end.
-
-Fixpoint disjoint_ps_rl (ps:list Pid) (t:RichLabel) : Prop :=
-match ps with
-| nil    => True
-| p::ps' => disjoint_p_rl p t /\ disjoint_ps_rl ps' t
-end.
-
-Lemma disjoint_ps_rl_In p ps t :
-  In p ps -> disjoint_ps_rl ps t -> disjoint_p_rl p t.
-Proof.
-induction ps; intros; inversion H; inversion_clear H0; auto.
-rewrite <- H1; auto.
-Qed.
-
-Lemma disjoint_ps_Sel : forall p q l ps,
-  disjoint_ps_rl ps (R_Sel p q l) -> disjoint (p::q::nil) ps.
-Proof.
-intros. intro; intro. inversion_clear H0.
-induction ps; auto.
-inversion_clear H.
-inversion_clear H2; auto.
-rewrite H in H0. inversion_clear H0.
-inversion_clear H1; auto. inversion_clear H0; auto.
-Qed.
-
-Lemma disjoint_ps_Com : forall p v q x ps,
-  disjoint_ps_rl ps (R_Com p v q x) -> disjoint (p::q::nil) ps.
-Proof.
-intros. intro; intro. inversion_clear H0.
-induction ps; auto.
-inversion_clear H.
-inversion_clear H2; auto.
-rewrite H in H0. inversion_clear H0.
-inversion_clear H1; auto. inversion_clear H0; auto.
-Qed.
-
-Lemma disjoint_ps_Cond : forall p ps,
-  disjoint_ps_rl ps (R_Cond p) -> ~In p ps.
-Proof.
-induction ps; intros; simpl; auto.
-intro. inversion_clear H. simpl in H1.
-inversion_clear H0; auto.
-apply IHps; auto.
-Qed.
-
-Lemma disjoint_ps_Call : forall p ps X,
-  disjoint_ps_rl ps (R_Call X p) -> ~In p ps.
-Proof.
-induction ps; intros; simpl; auto.
-intro. inversion_clear H. simpl in H1.
-inversion_clear H0; auto.
-eapply IHps; eauto.
-Qed.
-
-Lemma disjoint_ps_char : forall ps tl,
-  (forall p, In p ps -> disjoint_p_rl p tl) -> disjoint_ps_rl ps tl.
-Proof.
-induction ps; simpl; auto.
-Qed.
-
-Lemma disjoint_ps_remove : forall p ps tl,
-  disjoint_ps_rl ps tl -> disjoint_ps_rl (set_remove_pid p ps) tl.
-Proof.
-intros.
-apply disjoint_ps_char; intros.
-apply disjoint_ps_rl_In with ps; auto.
-eapply set_remove'_1; apply H0.
-Qed.
+(** The next definition and lemmas extend some lemmas in module
+  [Transitions] to communication actions, which are specific to
+  MC. *)
 
 Definition disjoint_eta_rl (eta:Eta) (t:RichLabel) : Prop :=
 match eta with

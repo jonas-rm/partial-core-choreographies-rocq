@@ -7,7 +7,7 @@ Module SPBase (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
 Module Export PSt := LState V X.
 Module Export CSt := GState P V X.
-Module Export TL := TransitionLabels P V X R.
+Module Export TL := Transitions P V X R.
 
 Module Bdec := DecidableType B.
 Module Edec := DecidableType E.
