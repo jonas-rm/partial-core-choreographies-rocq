@@ -636,7 +636,7 @@ apply IHps; auto.
 Qed.
 
 Lemma disjoint_ps_Call : forall p ps X,
-  disjoint_ps_rl ps (R_Call X p) -> ~In p ps.
+  disjoint_ps_rl ps (R_Call X p) -> ~In  p ps.
 Proof.
 induction ps; intros; simpl; auto.
 intro. inversion_clear H. simpl in H1.
@@ -660,4 +660,3 @@ eapply set_remove'_1; apply H0.
 Qed.
 
 End Transitions.
-
