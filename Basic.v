@@ -677,7 +677,7 @@ induction n; simpl.
   constructor; auto.
 Qed.
 
-Fixpoint eta_elim_aux {A n} (v:t A (S n)) H :=
+Definition eta_elim_aux {A n} (v:t A (S n)) H :=
   match H with
   | Fin.F1 => hd v
   | Fin.FS H' => (tl v)[@H]
