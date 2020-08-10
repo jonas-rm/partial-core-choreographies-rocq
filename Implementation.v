@@ -721,7 +721,7 @@ intros. unfold IfEq.
 generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S n) yy (If S n ? compare Then Send n this q;; Call X Else Call Y) s)).
 simpl; intro.
 assert (beval_on_state compare (update s (S n) yy (s (hd ps) xx)) (S n) = true).
-1: { unfold beval_on_state, beval, MC_BEval.eval. rewrite update_read, update_read'', Nat.eqb_eq; auto. discriminate. }
+1: { unfold beval_on_state, beval, BEvSt.eval_on_state, MC_BEval.eval. rewrite update_read, update_read'', Nat.eqb_eq; auto. discriminate. }
 generalize (MCP_To_intro _ _ _ _ _ _ (C_Then' Defs (S n) compare (Send n this q;; Call X) (Call Y) _ H1)).
 simpl; intro.
 generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs n this q xx (Call X) (update s (S n) yy (s (hd ps) xx)))).
@@ -740,7 +740,7 @@ intros. unfold IfEq.
 generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S n) yy (If S n ? compare Then Send n this q;; Call X Else Call Y) s)).
 simpl; intro.
 assert (beval_on_state compare (update s (S n) yy (s (hd ps) xx)) (S n) = false).
-1: { unfold beval_on_state, beval, MC_BEval.eval. rewrite update_read, update_read'', Nat.eqb_neq; auto. discriminate. }
+1: { unfold beval_on_state, beval, BEvSt.eval_on_state, MC_BEval.eval. rewrite update_read, update_read'', Nat.eqb_neq; auto. discriminate. }
 generalize (MCP_To_intro _ _ _ _ _ _ (C_Else' Defs (S n) compare (Send n this q;; Call X) (Call Y) _ H1)).
 simpl; intro.
 eexists. do 2 (eapply MCT_Step; eauto). constructor.
@@ -783,7 +783,7 @@ generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs n this (n+2) yy (If n + 2 ? co
 simpl. set (s2 := update s1 (n+2) yy (s1 n xx)); intro.
 assert (beval_on_state compare s2 (n+2) = true).
 1: {
-  unfold beval_on_state, beval, MC_BEval.eval, s2, s1.
+  unfold beval_on_state, beval, BEvSt.eval_on_state, MC_BEval.eval, s2, s1.
   rewrite update_read, update_read'', update_read, update_read', Nat.eqb_eq; auto.
   rewrite plus_comm; simpl; apply gt_neq; auto. discriminate.
 }
@@ -816,7 +816,7 @@ generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs n this (n+2) yy (If n + 2 ? co
 simpl. set (s2 := update s1 (n+2) yy (s1 n xx)); intro.
 assert (beval_on_state compare s2 (n+2) = false).
 1: {
-  unfold beval_on_state, beval, MC_BEval.eval, s2, s1.
+  unfold beval_on_state, beval, BEvSt.eval_on_state, MC_BEval.eval, s2, s1.
   rewrite update_read, update_read'', update_read, update_read', Nat.eqb_neq; auto.
   rewrite plus_comm; simpl; apply gt_neq; auto. discriminate.
 }

@@ -5,7 +5,8 @@ Local Open Scope nat_scope.
 
 (** * The general type of MC choreographies
   This type is parameterized over sets of process identifiers,
-  values, expressions and recursion variables. *)
+  values, expressions and recursion variables. A lot of stuff
+  is common with SP, and was defined already in [Common.*)
 
 Module MCBase (P X V E B R: DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
@@ -26,6 +27,17 @@ Definition RecVar_dec := Rdec.eqb.
 
 Definition eval := Ev.eval.
 Definition beval := BEv.eval.
+
+Module EvSt := EvalState P E X V V Ev.
+Module BEvSt := EvalState P B X V Bool BEv.
+
+Definition eval_on_state := EvSt.eval_on_state.
+Definition beval_on_state := BEvSt.eval_on_state.
+
+Definition eval_eq := EvSt.eval_eq.
+Definition eval_neq := EvSt.eval_neq.
+Definition beval_eq := BEvSt.eval_eq.
+Definition beval_neq := BEvSt.eval_neq.
 
 Definition Store := CSt.State.
 
@@ -598,50 +610,6 @@ End Syntactic_Properties.
 
 Section Semantics_Definitions.
 
-(** Expression evaluation on the state of a process *)
-
-Definition eval_on_state (e:Expr) (s:State) (p:Pid) : Value := eval e (s p).
-Definition beval_on_state (b:BExpr) (s:State) (p:Pid) : bool := beval b (s p).
-
-(** Consistency with state equivalence. *)
-Lemma eval_eq : forall e s s' p, eq_state_ext s s' ->
-  eval_on_state e s p = eval_on_state e s' p.
-Proof.
-intros; unfold eval_on_state; simpl.
-apply Ev.eval_wd.
-apply H.
-Qed.
-
-Lemma eval_neq : forall e s p q x v, p <> q ->
-  eval_on_state e s p = eval_on_state e (update s q x v) p.
-Proof.
-intros; unfold eval_on_state; simpl.
-replace (s p) with (update s q x v p); auto.
-unfold update.
-case_eq (Pid_dec q p); auto.
-intro; elim H.
-apply Pdec.eqb_eq in H0; auto.
-Qed.
-
-Lemma beval_eq : forall b s s' p, eq_state_ext s s' ->
-  beval_on_state b s p = beval_on_state b s' p.
-Proof.
-intros; unfold beval_on_state; simpl.
-apply BEv.eval_wd.
-apply H.
-Qed.
-
-Lemma beval_neq : forall b s p q x v, p <> q ->
-  beval_on_state b s p = beval_on_state b (update s q x v) p.
-Proof.
-intros; unfold beval_on_state; simpl.
-replace (s p) with (update s q x v p); auto.
-unfold update.
-case_eq (Pid_dec q p); auto.
-intro; elim H.
-apply Pdec.eqb_eq in H0; auto.
-Qed.
-
 (** The next definition and lemmas extend some lemmas in module
   [Transitions] to communication actions, which are specific to
   MC. *)
@@ -934,9 +902,9 @@ Proof.
 intros.
 induction H0; try (constructor; auto; try ESEc; auto; fail).
 + inversion_clear H.
-  unfold v0. rewrite (eval_neq e s p0 p x v); auto.
+  unfold v0. unfold eval_on_state. rewrite (eval_neq e s p0 p x v); auto.
   apply C_Com.
-  rewrite <- (eval_neq e s p0 p x v); auto.
+  unfold eval_on_state. rewrite <- (eval_neq e s p0 p x v); auto.
   fold v0.
   ESEt (update (update s q x0 v0) p x v). ESEc; auto.
   apply update_independent; auto.

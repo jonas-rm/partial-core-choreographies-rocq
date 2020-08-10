@@ -5,6 +5,8 @@ Local Open Scope nat_scope.
 
 Module SPBase (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
+(** Preamble: a lot of things just as in MC. *)
+
 Module Export PSt := LState V X.
 Module Export CSt := GState P V X.
 Module Export TL := Transitions P V X R.
@@ -23,51 +25,16 @@ Definition RecVar_dec := Rdec.eqb.
 Definition eval := Ev.eval.
 Definition beval := BEv.eval.
 
-(** ** These things should be somehow shared with MC. *)
+Module EvSt := EvalState P E X V V Ev.
+Module BEvSt := EvalState P B X V Bool BEv.
 
-(** Expression evaluation on the state of a process *)
+Definition eval_on_state := EvSt.eval_on_state.
+Definition beval_on_state := BEvSt.eval_on_state.
 
-Definition eval_on_state (e:Expr) (s:State) (p:Pid) : Value := eval e (s p).
-Definition beval_on_state (b:BExpr) (s:State) (p:Pid) : bool := beval b (s p).
-
-(** Consistency with state equivalence. *)
-Lemma eval_eq : forall e s s' p, eq_state_ext s s' ->
-  eval_on_state e s p = eval_on_state e s' p.
-Proof.
-intros; unfold eval_on_state; simpl.
-apply Ev.eval_wd.
-apply H.
-Qed.
-
-Lemma eval_neq : forall e s p q x v, p <> q ->
-  eval_on_state e s p = eval_on_state e (update s q x v) p.
-Proof.
-intros; unfold eval_on_state; simpl.
-replace (s p) with (update s q x v p); auto.
-unfold update.
-case_eq (Pid_dec q p); auto.
-intro; elim H.
-apply Pdec.eqb_eq in H0; auto.
-Qed.
-
-Lemma beval_eq : forall b s s' p, eq_state_ext s s' ->
-  beval_on_state b s p = beval_on_state b s' p.
-Proof.
-intros; unfold beval_on_state; simpl.
-apply BEv.eval_wd.
-apply H.
-Qed.
-
-Lemma beval_neq : forall b s p q x v, p <> q ->
-  beval_on_state b s p = beval_on_state b (update s q x v) p.
-Proof.
-intros; unfold beval_on_state; simpl.
-replace (s p) with (update s q x v p); auto.
-unfold update.
-case_eq (Pid_dec q p); auto.
-intro; elim H.
-apply Pdec.eqb_eq in H0; auto.
-Qed.
+Definition eval_eq := EvSt.eval_eq.
+Definition eval_neq := EvSt.eval_neq.
+Definition beval_eq := BEvSt.eval_eq.
+Definition beval_neq := BEvSt.eval_neq.
 
 (** * Syntax of processes *)
 

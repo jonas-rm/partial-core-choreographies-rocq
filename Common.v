@@ -522,6 +522,41 @@ Parameter eval_wd : forall f f', (forall x, f x = f' x) ->
 
 End Eval.
 
+(** In both MC and SP, there are two modules of expressions - one
+  for values, one for Boolean expressions. Their shared properties
+  that depend on the state are proven in this module. *)
+
+Module EvalState (Pid Expression Vars Input Output : DecType)
+  (Ev:Eval Expression Vars Input Output).
+
+Module Export CSt := GState Pid Input Vars.
+
+(** Expression evaluation on the state of a process *)
+
+Definition eval_on_state (e:Expression.t) (s:State) (p:Pid.t) : Output.t := Ev.eval e (s p).
+
+(** Consistency with state equivalence. *)
+Lemma eval_eq : forall e s s' p, eq_state_ext s s' ->
+  eval_on_state e s p = eval_on_state e s' p.
+Proof.
+intros; unfold eval_on_state; simpl.
+apply Ev.eval_wd.
+apply H.
+Qed.
+
+Lemma eval_neq : forall e s p q x v, p <> q ->
+  eval_on_state e s p = eval_on_state e (update s q x v) p.
+Proof.
+intros; unfold eval_on_state; simpl.
+replace (s p) with (update s q x v p); auto.
+unfold update.
+case_eq (Pid_dec q p); auto.
+intro; elim H.
+apply Pdec.eqb_eq in H0; auto.
+Qed.
+
+End EvalState.
+
 Module Transitions (P V X R:DecType).
 
 Module Export PSt := LState V X.
@@ -583,6 +618,10 @@ Proof. auto. Qed.
 Lemma forget_Call : forall X p, forget (R_Call X p) = L_Tau p.
 Proof. auto. Qed.
 
+(** Disjointness between a process/list of processes and a label
+  - used for a lot of properties of the semantics, these lemmas
+  are useful for reasoning about it. *)
+
 Definition disjoint_p_rl (p:Pid) (t:RichLabel) : Prop :=
 match t with
 | R_Com r _ s _ => p <> r /\ p <> s
@@ -636,7 +675,7 @@ apply IHps; auto.
 Qed.
 
 Lemma disjoint_ps_Call : forall p ps X,
-  disjoint_ps_rl ps (R_Call X p) -> ~In  p ps.
+  disjoint_ps_rl ps (R_Call X p) -> ~In p ps.
 Proof.
 induction ps; intros; simpl; auto.
 intro. inversion_clear H. simpl in H1.
