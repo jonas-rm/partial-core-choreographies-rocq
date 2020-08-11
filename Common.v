@@ -52,30 +52,6 @@ Parameter eq_dec : forall x y:t, {x = y} + {x <> y}.
 
 End DecType.
 
-(** Cartesian product of two decidable types. *)
-
-Module DecProd (A B:DecType) <: DecType.
-
-Definition t : Type := A.t * B.t.
-
-Lemma eq_dec : forall (p1 p2:t), {p1 = p2} + {p1 <> p2}.
-Proof.
-intros. case p1 as [X p]. case p2 as [Y q].
-case (B.eq_dec p q); case (A.eq_dec X Y); intros;
-  try (right; intro; inversion H; auto; fail).
-rewrite e, e0; auto.
-Qed.
-
-End DecProd.
-
-(** * Booleans as a decidable type *)
-Module Bool <: DecType.
-
-Definition t := bool.
-Definition eq_dec := bool_dec.
-
-End Bool.
-
 Module DecidableType (Import M:DecType).
 
 Definition eqb (x y:t) := if (eq_dec x y) then true else false.
@@ -108,6 +84,30 @@ intros. case_eq (x =? y); intro; symmetry.
 Qed.
 
 End DecidableType.
+
+(** ** Cartesian product of two decidable types. *)
+
+Module DecProd (A B:DecType) <: DecType.
+
+Definition t : Type := A.t * B.t.
+
+Lemma eq_dec : forall (p1 p2:t), {p1 = p2} + {p1 <> p2}.
+Proof.
+intros. case p1 as [X p]. case p2 as [Y q].
+case (B.eq_dec p q); case (A.eq_dec X Y); intros;
+  try (right; intro; inversion H; auto; fail).
+rewrite e, e0; auto.
+Qed.
+
+End DecProd.
+
+(** ** Booleans as a decidable type *)
+Module Bool <: DecType.
+
+Definition t := bool.
+Definition eq_dec := bool_dec.
+
+End Bool.
 
 (** * Local states
     This is the state of a particular process. It maps the values in the

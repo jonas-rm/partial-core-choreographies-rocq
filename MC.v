@@ -98,7 +98,9 @@ Bind Scope MC_scope with Eta.
 Notation "p # e --> q $ x" := (Com p e q x) (at level 50, e at level 9) : MC_scope.
 Notation "p --> q [ l ]" := (Sel p q l) (at level 50) : MC_scope.
 Notation "eta ';;' C" := (Interaction eta C) (at level 60, right associativity) : MC_scope.
-Notation "'If' p '?' b 'Then' C1 'Else' C2" := (Cond p b C1 C2) (at level 60).
+Notation "'If' p '?' b 'Then' C1 'Else' C2" := (Cond p b C1 C2) (at level 60) : MC_scope.
+
+Open Scope MC_scope.
 
 Section Syntactic_Properties.
 
@@ -616,8 +618,8 @@ Section Semantics_Definitions.
 
 Definition disjoint_eta_rl (eta:Eta) (t:RichLabel) : Prop :=
 match eta with
-| (p # _ --> q $ _)%MC => disjoint_p_rl p t /\ disjoint_p_rl q t
-| (p --> q [_])%MC     => disjoint_p_rl p t /\ disjoint_p_rl q t
+| p # _ --> q $ _ => disjoint_p_rl p t /\ disjoint_p_rl q t
+| p --> q [_]     => disjoint_p_rl p t /\ disjoint_p_rl q t
 end.
 
 Lemma disjoint_Sel_Sel : forall p q l p' q' l',
@@ -769,8 +771,8 @@ End Semantics_Definitions.
 
 (** Notations for precongruence and reductions. *)
 
-Notation "c --[ tl ]--> c'" := (MCP_To c tl c') (at level 50, left associativity).
-Notation "c --[ ts ]-->* c'" := (MCP_ToStar c ts c') (at level 50, left associativity).
+Notation "c --[ tl ]--> c'" := (MCP_To c tl c') (at level 50, left associativity) : MC_scope.
+Notation "c --[ ts ]-->* c'" := (MCP_ToStar c ts c') (at level 50, left associativity) : MC_scope.
 
 Section Sanity_Checks.
 
@@ -1006,9 +1008,9 @@ Qed.
 
 Lemma MCC_To_eta_reduction : forall eta C s1 s2 tl,
   MCC_To Defs (eta;;C) s1 tl C s2 ->
-  (forall p e q x, eta = (p # e --> q $ x)%MC -> tl = R_Com p (eval_on_state e s1 p) q x)
+  (forall p e q x, eta = (p # e --> q $ x) -> tl = R_Com p (eval_on_state e s1 p) q x)
   /\
-  (forall p q l, eta = (p --> q[l])%MC -> tl = R_Sel p q l).
+  (forall p q l, eta = (p --> q[l]) -> tl = R_Sel p q l).
 Proof.
 induction C; intros; inversion H; split; intros;
   try (unfold v); try (inversion H6; auto; fail).
@@ -1081,14 +1083,14 @@ Qed.
 Fixpoint C_size (C:Choreography) :=
 match C with
 | RT_Call _ _ C' => S (C_size C')
-| (Eta;; C')%MC  => S (C_size C')
+| Eta;; C'       => S (C_size C')
 | Cond _ _ C1 C2 => S (C_size C1 + C_size C2)
 | _              => 0
 end.
 
 Fixpoint subterm (C1 C2:Choreography) : Prop :=
 match C2 with
-| (Eta;;C')%MC     => C1 = C' \/ subterm C1 C'
+| Eta;;C'          => C1 = C' \/ subterm C1 C'
 | Cond _ _ C1' C2' => C1 = C1' \/ C1 = C2' \/ subterm C1 C1' \/ subterm C1 C2'
 | RT_Call _ _ C'   => C1 = C' \/ subterm C1 C'
 | _                => False

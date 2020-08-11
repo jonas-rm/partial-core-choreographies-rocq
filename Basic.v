@@ -127,6 +127,22 @@ induction l; simpl; intros n Hnil; split; intros H; intuition.
     * intros Heq; inversion Heq.
 Qed.
 
+Lemma le_list_max : forall l n x, In x l ->
+  n <= x -> n <= list_max l.
+Proof.
+induction l; simpl; intros; inversion_clear H.
+- rewrite H1. transitivity x; auto. apply Nat.le_max_l.
+- transitivity (list_max l); eauto. apply Nat.le_max_r.
+Qed.
+
+Lemma lt_list_max : forall l n x, In x l ->
+  n < x -> n < list_max l.
+Proof.
+induction l; simpl; intros; inversion_clear H.
+- rewrite H1. apply lt_le_trans with x; auto. apply Nat.le_max_l.
+- apply lt_le_trans with (list_max l); eauto. apply Nat.le_max_r.
+Qed.
+
 (** ** A result about permutations *)
 
 Lemma Permutation_NoDup : forall P Q: list T, Permutation P Q -> NoDup P -> NoDup Q.
