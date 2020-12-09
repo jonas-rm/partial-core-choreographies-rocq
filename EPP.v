@@ -15,6 +15,86 @@ Module Export PSt := LState V X.
 Module Export CSt := GState P V X.
 *)
 
+Print Behaviour.
+
+(*
+Problems:
+- The lists are not enough, because of merging of a send with a receive (for example).
+- Adding an undefined behaviour does not allow us to distinguish things that could not
+  be merged from branches that were not defined (this is in case of nested selections).
+- Having option Behaviour in merge_beh complicates its definition because we cannot use
+  option Behaviour as continuations in Behaviour.
+
+Solution:
+- We go back to the map Label -> option Behaviour for Branching.
+- We add a new type ExtendedBehaviour that is a copy-paste of Behaviour *plus* a new
+  Undefined term.
+- ExtendedBehaviour is used only in merging (and possibly amendment).
+- merge_beh now becomes much nicer because we can use merge_beh recursively directly as
+  continuation in terms.
+- Put this stuff in a new file Merge.v.
+*)
+
+Fixpoint merge_beh (B1:Behaviour) (B2:Behaviour) : Behaviour :=
+match B1, B2 with
+| End, End => End
+| Send p e B, Send p' e' B' =>
+  if Pid_dec p p' && Expr_dec e e' then
+    match merge_beh B B' with
+    | Some Bm => Some( Send p e Bm )
+    | _ => None
+    end
+  else None
+| Recv p x B, Recv p' x' B' =>
+  if Pid_dec p p' && Var_dec x x' then
+    match merge_beh B B' with
+    | Some Bm => Some( Recv p x Bm )
+    | _ => None
+    end
+  else None
+| Sel p l B, Sel p' l' B' =>
+  if Pid_dec p p' && eqb_label l l' then
+    match (merge_beh B B') with
+    | Some Bm => Some( Sel p l Bm )
+    | _ => None
+    end
+  else None
+| Branching p f, Branching p' f' =>
+  if Pid_dec p p' then
+    match
+      (* inl Some B = merging of a branching failed
+         inl None = there were no branches to merge for that label in the first place, so all OK
+         inr tt = merging error
+      *)
+      match f left, f' left with
+      | Some B, Some B' => match merge_beh B B' with Some B'' => inl (Some B'') | None => inr tt end
+      | Some B, None => inl (Some B)
+      | None, Some B' => inl (Some B')
+      | None, None => inl None
+      end,
+      match f right, f' right with
+      | Some B, Some B' => match (merge_beh B B') with Some B'' => inl (Some B'') | None => inr tt end
+      | Some B, None => inl (Some B)
+      | None, Some B' => inl (Some B')
+      | None, None => inl None
+      end
+    with
+    | inl bl, inl br => Some (Branching p (fun l => match l with left => bl | right => br end))
+    | _, _ => None
+    end
+ else None
+| Cond e B1 B2, Cond e' B1' B2' =>
+  if BExpr_dec e e' then
+    match (merge_beh B1 B1') with
+    | Some B1m => match (merge_beh B2 B2') with | Some B2m => Some( Cond e B1m B2m ) | _ => None end
+    | _ => None
+    end
+  else None
+| Call X, Call Y => if RecVar_dec X Y then Some (Call X) else None
+| _, _ => None
+end.
+
+
 Section MaybeMove.
 
 (* Definition SPDefs_eq (Defs Defs':RecVar -> Behaviour) : Prop := forall X, Defs X = Defs' X. *)
@@ -216,65 +296,6 @@ Qed.
 End MaybeMove.
 
 Section EPP.
-
-Fixpoint merge_beh (B1:Behaviour) (B2:Behaviour) : option Behaviour :=
-match B1, B2 with
- | Send p e B, Send p' e' B' =>
-    if Pid_dec p p' && Expr_dec e e' then
-      match merge_beh B B' with
-       | Some Bm => Some( Send p e Bm )
-       | _ => None
-      end
-    else None
- | Recv p x B, Recv p' x' B' =>
-    if Pid_dec p p' && Var_dec x x' then
-      match merge_beh B B' with
-       | Some Bm => Some( Recv p x Bm )
-       | _ => None
-      end
-    else None
- | Sel p l B, Sel p' l' B' =>
-    if Pid_dec p p' && eqb_label l l' then
-      match (merge_beh B B') with
-       | Some Bm => Some( Sel p l Bm )
-       | _ => None
-      end
-    else None
- | Branching p f, Branching p' f' =>
-    if Pid_dec p p' then
-      match
-        (* inl Some B = merging of a branching failed
-           inl None = there were no branches to merge for that label in the first place, so all OK
-           inr tt = merging error
-        *)
-        match f left, f' left with
-        | Some B, Some B' => match merge_beh B B' with Some B'' => inl (Some B'') | None => inr tt end
-        | Some B, None => inl (Some B)
-        | None, Some B' => inl (Some B')
-        | None, None => inl None
-        end,
-        match f right, f' right with
-        | Some B, Some B' => match (merge_beh B B') with Some B'' => inl (Some B'') | None => inr tt end
-        | Some B, None => inl (Some B)
-        | None, Some B' => inl (Some B')
-        | None, None => inl None
-        end
-      with
-        | inl bl, inl br => Some (Branching p (fun l => match l with left => bl | right => br end))
-        | _, _ => None
-      end
-    else None
- | Cond e B1 B2, Cond e' B1' B2' =>
-    if BExpr_dec e e' then
-      match (merge_beh B1 B1') with
-       | Some B1m => match (merge_beh B2 B2') with | Some B2m => Some( Cond e B1m B2m ) | _ => None end
-       | _ => None
-      end
-    else None
- | Call X, Call Y => if RecVar_dec X Y then Some (Call X) else None
- | End, End => Some End
- | _, _ => None
-end.
 
 Definition bproj_buildB (constructor:Behaviour -> Behaviour) (cont:option Behaviour) : option Behaviour :=
 match cont with
