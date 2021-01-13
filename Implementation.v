@@ -77,16 +77,16 @@ Local Open Scope MC_scope.
 
 Definition Send p e q : Eta := p#e --> q$xx.
 Definition IfEq p q C1 C2 : Choreography :=
-  q#this --> p$yy;; If p ? compare Then C1 Else C2.
+  q#this --> p$yy;; If p ?? compare Then C1 Else C2.
 
 (* Probably means something.
 Import St.
 *)
 
 Example sanity_check : forall P s,
-  (Build_Program P (3#this --> 2$yy;; Sel 0 1 left;; If 2 ? compare Then (4#succ_this --> 3$xx;; End) Else (3#zero --> 2$xx;; End)),s)
+  (Build_Program P (3#this --> 2$yy;; Sel 0 1 left;; If 2 ?? compare Then (4#succ_this --> 3$xx;; End) Else (3#zero --> 2$xx;; End)),s)
   --[ L_Sel 0 1 left ]-->
-  (Build_Program P (3#this --> 2$yy;; If 2 ? compare Then (4#succ_this --> 3$xx;; End) Else (3#zero --> 2$xx;; End)), s).
+  (Build_Program P (3#this --> 2$yy;; If 2 ?? compare Then (4#succ_this --> 3$xx;; End) Else (3#zero --> 2$xx;; End)), s).
 Proof.
 intros.
 rewrite <- forget_Sel.
@@ -214,7 +214,7 @@ Fixpoint Implementation_Choreography (m n:nat) (C:Choreography) :=
   | Call X => m <= X <= n
   | RT_Call X _ C' => m <= X <= n /\ Implementation_Choreography m n C'
   | Eta;; C' => Implementation_Choreography m n C'
-  | If p ? b Then C1 Else C2 => Implementation_Choreography m n C1 /\ Implementation_Choreography m n C2
+  | If p ?? b Then C1 Else C2 => Implementation_Choreography m n C1 /\ Implementation_Choreography m n C2
 end.
 
 Definition Implementation_Program (P:Program) (m n:nat) :=
@@ -718,7 +718,7 @@ Lemma Recursion_reduce_1_true : forall m Defs X Y n (ps:t Pid (S m)) q s,
     /\ s' q xx = s n xx /\ forall p, p <> q -> s' p xx = s p xx.
 Proof.
 intros. unfold IfEq.
-generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S n) yy (If S n ? compare Then Send n this q;; Call X Else Call Y) s)).
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S n) yy (If S n ?? compare Then Send n this q;; Call X Else Call Y) s)).
 simpl; intro.
 assert (beval_on_state compare (update s (S n) yy (s (hd ps) xx)) (S n) = true).
 1: { unfold beval_on_state, beval, BEvSt.eval_on_state, MC_BEval.eval. rewrite update_read, update_read'', Nat.eqb_eq; auto. discriminate. }
@@ -737,7 +737,7 @@ Lemma Recursion_reduce_1_false : forall m Defs X Y n (ps:t Pid (S m)) q s,
   exists t, (Build_Program Defs (IfEq (S n) (hd ps) (Send n this q;; Call X) (Call Y)),s) --[t]-->* (Build_Program Defs (Call Y), update s (S n) yy (s (hd ps) xx)).
 Proof.
 intros. unfold IfEq.
-generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S n) yy (If S n ? compare Then Send n this q;; Call X Else Call Y) s)).
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (hd ps) this (S n) yy (If S n ?? compare Then Send n this q;; Call X Else Call Y) s)).
 simpl; intro.
 assert (beval_on_state compare (update s (S n) yy (s (hd ps) xx)) (S n) = false).
 1: { unfold beval_on_state, beval, BEvSt.eval_on_state, MC_BEval.eval. rewrite update_read, update_read'', Nat.eqb_neq; auto. discriminate. }
@@ -777,9 +777,9 @@ Lemma Minimization_reduce_1_true : forall Defs X Y n s q,
   /\ (forall p, p < n -> p <> q -> s' p xx = s p xx) /\ s' q xx = s (n+1) xx  /\ s' n xx = s n xx /\ s' (n+1) xx = s (n+1) xx /\ s' (n+2) xx = 0.
 Proof.
 intros. unfold IfEq.
-generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n+1) zero (n+2) xx (n # this --> n + 2 $ yy;; If n + 2 ? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s)).
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n+1) zero (n+2) xx (n # this --> n + 2 $ yy;; If n + 2 ?? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s)).
 simpl. set (s1 := update s (n+2) xx 0); intro.
-generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs n this (n+2) yy (If n + 2 ? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s1)).
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs n this (n+2) yy (If n + 2 ?? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s1)).
 simpl. set (s2 := update s1 (n+2) yy (s1 n xx)); intro.
 assert (beval_on_state compare s2 (n+2) = true).
 1: {
@@ -810,9 +810,9 @@ Lemma Minimization_reduce_1_false : forall Defs X Y n s q,
   /\ (forall p, p < n -> s' p xx = s p xx) /\ s' n xx = s n xx /\ s' (n+1) xx = S (s (n+1) xx) /\ s' (n+2) xx = s (n+1) xx.
 Proof.
 intros. unfold IfEq.
-generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n+1) zero (n+2) xx (n # this --> n + 2 $ yy;; If n + 2 ? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s)).
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs (n+1) zero (n+2) xx (n # this --> n + 2 $ yy;; If n + 2 ?? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s)).
 simpl. set (s1 := update s (n+2) xx 0); intro.
-generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs n this (n+2) yy (If n + 2 ? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s1)).
+generalize (MCP_To_intro _ _ _ _ _ _ (C_Com' Defs n this (n+2) yy (If n + 2 ?? compare Then Send (n + 1) this q;; Call X Else (Send (n + 1) this (n + 2);; Send (n + 2) succ_this (n + 1);; Call Y)) s1)).
 simpl. set (s2 := update s1 (n+2) yy (s1 n xx)); intro.
 assert (beval_on_state compare s2 (n+2) = false).
 1: {

@@ -98,7 +98,7 @@ Bind Scope MC_scope with Eta.
 Notation "p # e --> q $ x" := (Com p e q x) (at level 50, e at level 9) : MC_scope.
 Notation "p --> q [ l ]" := (Sel p q l) (at level 50) : MC_scope.
 Notation "eta ';;' C" := (Interaction eta C) (at level 60, right associativity) : MC_scope.
-Notation "'If' p '?' b 'Then' C1 'Else' C2" := (Cond p b C1 C2) (at level 60) : MC_scope.
+Notation "'If' p '??' b 'Then' C1 'Else' C2" := (Cond p b C1 C2) (at level 60) : MC_scope.
 
 Open Scope MC_scope.
 
@@ -179,7 +179,7 @@ intros. apply H.
 Qed.
 
 Lemma X_Free_Cond : forall X p b C1 C2,
-  X_Free X (If p ? b Then C1 Else C2) -> {X_Free X C1} + {X_Free X C2}.
+  X_Free X (If p ?? b Then C1 Else C2) -> {X_Free X C1} + {X_Free X C2}.
 Proof.
 intros. red in H. simpl in H.
 elim (set_union_elim _ _ _ _ H); auto.
@@ -192,13 +192,13 @@ intros. intro. apply H. red. simpl. auto.
 Qed.
 
 Lemma Not_X_Free_Then : forall X p b C1 C2,
-  ~X_Free X (If p ? b Then C1 Else C2) -> ~X_Free X C1.
+  ~X_Free X (If p ?? b Then C1 Else C2) -> ~X_Free X C1.
 Proof.
 intros. intro. apply H. red. simpl. apply set_union_intro1. auto.
 Qed.
 
 Lemma Not_X_Free_Else : forall X p b C1 C2,
-  ~X_Free X (If p ? b Then C1 Else C2) -> ~X_Free X C2.
+  ~X_Free X (If p ?? b Then C1 Else C2) -> ~X_Free X C2.
 Proof.
 intros. intro. apply H. red. simpl. apply set_union_intro2. auto.
 Qed.
@@ -344,14 +344,14 @@ inversion_clear H0; auto.
 Qed.
 
 Lemma Choreography_WF_Then : forall p b C1 C2,
-  Choreography_WF (If p ? b Then C1 Else C2) -> Choreography_WF C1.
+  Choreography_WF (If p ?? b Then C1 Else C2) -> Choreography_WF C1.
 Proof.
 intros.
 destroy H; destroy H0; split; auto.
 Qed.
 
 Lemma Choreography_WF_Else : forall p b C1 C2,
-  Choreography_WF (If p ? b Then C1 Else C2) -> Choreography_WF C2.
+  Choreography_WF (If p ?? b Then C1 Else C2) -> Choreography_WF C2.
 Proof.
 intros.
 destroy H; destroy H0; split; auto.
@@ -519,7 +519,7 @@ apply (Program_WF_Main_within_Xs _ _ H).
 Qed.
 
 Lemma Program_WF_Then : forall Xs Defs p b C1 C2,
-  Program_WF Xs (Build_Program Defs (If p ? b Then C1 Else C2)) -> Program_WF Xs (Build_Program Defs C1).
+  Program_WF Xs (Build_Program Defs (If p ?? b Then C1 Else C2)) -> Program_WF Xs (Build_Program Defs C1).
 Proof.
 intros.
 elim (Program_WF_Main _ _ H); simpl; intros.
@@ -530,7 +530,7 @@ apply (Program_WF_Main_within_Xs _ _ H).
 Qed.
 
 Lemma Program_WF_Else : forall Xs Defs p b C1 C2,
-  Program_WF Xs (Build_Program Defs (If p ? b Then C1 Else C2)) -> Program_WF Xs (Build_Program Defs C2).
+  Program_WF Xs (Build_Program Defs (If p ?? b Then C1 Else C2)) -> Program_WF Xs (Build_Program Defs C2).
 Proof.
 intros.
 elim (Program_WF_Main _ _ H); simpl; intros.
@@ -583,7 +583,7 @@ exists x; split; auto. eapply Program_WF_eta; eauto.
 Qed.
 
 Lemma MCP_WF_Then : forall Defs p b C1 C2,
-  MCP_WF (Build_Program Defs (If p ? b Then C1 Else C2)) -> MCP_WF (Build_Program Defs C1).
+  MCP_WF (Build_Program Defs (If p ?? b Then C1 Else C2)) -> MCP_WF (Build_Program Defs C1).
 Proof.
 intros.
 inversion_clear H; inversion_clear H0.
@@ -591,7 +591,7 @@ exists x; split; auto. eapply Program_WF_Then; eauto.
 Qed.
 
 Lemma MCP_WF_Else : forall Defs p b C1 C2,
-  MCP_WF (Build_Program Defs (If p ? b Then C1 Else C2)) -> MCP_WF (Build_Program Defs C2).
+  MCP_WF (Build_Program Defs (If p ?? b Then C1 Else C2)) -> MCP_WF (Build_Program Defs C2).
 Proof.
 intros.
 inversion_clear H; inversion_clear H0.
@@ -662,17 +662,17 @@ Inductive MCC_To (Defs : DefSet) :
         MCC_To Defs (p --> q [l];; C) s (R_Sel p q l) C s'
  | C_Then p b C1 C2 s s':
         eq_state_ext s s' -> (beval_on_state b s p = true) ->
-        MCC_To Defs (If p ? b Then C1 Else C2) s (R_Cond p) C1 s'
+        MCC_To Defs (If p ?? b Then C1 Else C2) s (R_Cond p) C1 s'
  | C_Else p b C1 C2 s s':
         eq_state_ext s s' -> (beval_on_state b s p = false) ->
-        MCC_To Defs (If p ? b Then C1 Else C2) s (R_Cond p) C2 s'
+        MCC_To Defs (If p ?? b Then C1 Else C2) s (R_Cond p) C2 s'
  | C_Delay_Eta eta C C' s s' t: disjoint_eta_rl eta t -> 
         MCC_To Defs C s t C' s' ->
         MCC_To Defs (eta;; C) s t (eta;; C') s'
  | C_Delay_Cond p b C1 C2 C1' C2' s s' t: disjoint_p_rl p t -> 
         MCC_To Defs C1 s t C1' s' ->
         MCC_To Defs C2 s t C2' s' ->
-        MCC_To Defs (If p ? b Then C1 Else C2) s t (If p ? b Then C1' Else C2') s'
+        MCC_To Defs (If p ?? b Then C1 Else C2) s t (If p ?? b Then C1' Else C2') s'
  | C_Delay_Call ps X C C' s s' t:
         disjoint_ps_rl ps t -> MCC_To Defs C s t C' s' ->
         MCC_To Defs (RT_Call X ps C) s t (RT_Call X ps C') s'
@@ -711,12 +711,12 @@ Proof. intros. apply C_Sel. ESEr. Qed.
 
 Lemma C_Then' : forall Defs p b C1 C2 s,
         beval_on_state b s p = true ->
-        MCC_To Defs (If p ? b Then C1 Else C2) s (R_Cond p) C1 s.
+        MCC_To Defs (If p ?? b Then C1 Else C2) s (R_Cond p) C1 s.
 Proof. intros. apply C_Then. ESEr. auto. Qed.
 
 Lemma C_Else' : forall Defs p b C1 C2 s,
         beval_on_state b s p = false ->
-        MCC_To Defs (If p ? b Then C1 Else C2) s (R_Cond p) C2 s.
+        MCC_To Defs (If p ?? b Then C1 Else C2) s (R_Cond p) C2 s.
 Proof. intros. apply C_Else. ESEr. auto. Qed.
 
 Lemma C_Call_Local' : forall Defs p X s,
@@ -1025,7 +1025,7 @@ induction C; intros; inversion H; split; intros;
 Qed.
 
 Lemma MCC_To_Then_reduction : forall p b C1 C2 s1 s2 tl,
-  MCC_To Defs (If p ? b Then C1 Else C2) s1 tl C1 s2 ->
+  MCC_To Defs (If p ?? b Then C1 Else C2) s1 tl C1 s2 ->
   tl = R_Cond p.
 Proof.
 induction C1; intros; inversion H; auto.
@@ -1034,7 +1034,7 @@ apply (IHC1_1 _ _ _ _ H12).
 Qed.
 
 Lemma MCC_To_Else_reduction : forall p b C1 C2 s1 s2 tl,
-  MCC_To Defs (If p ? b Then C1 Else C2) s1 tl C2 s2 ->
+  MCC_To Defs (If p ?? b Then C1 Else C2) s1 tl C2 s2 ->
   tl = R_Cond p.
 Proof.
 intros p b C1 C2; revert C1.
@@ -1746,7 +1746,7 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     elim H0; clear H0; intros s2 Hs2; inversion_clear Hs2.
     pose (MCC_To_rl_implies_state _ _ _ _ _ _ _ _ _ H H0) as Hrl.
     clearbody Hrl.
-    exists (If p ? b Then C1' Else C2'), s1; split; apply C_Delay_Cond; auto.
+    exists (If p ?? b Then C1' Else C2'), s1; split; apply C_Delay_Cond; auto.
     * apply MCC_To_eq with s' s2; auto. ESEr. ESEs.
     * apply MCC_To_eq with s'' s2; auto. ESEr. ESEs.
 Qed.

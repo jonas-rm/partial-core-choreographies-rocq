@@ -35,9 +35,10 @@ intros; unfold eqb; elim (eq_label_dec l l'); intros; split; auto.
 Qed.
 
 Lemma label_eqb_refl : forall l, eqb_label l l = true.
-Proof.
-intro. rewrite label_eqb_eq. auto.
-Qed.
+Proof. intro. rewrite label_eqb_eq. auto. Qed.
+
+Lemma label_eqb_sym : forall l l0, eqb_label l l0 = eqb_label l0 l.
+Proof. intros. case l; case l0; auto. Qed.
 
 End Labels.
 
