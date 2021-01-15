@@ -1,5 +1,5 @@
-Require Import MC.
-Require Import SP.
+Require Export MC.
+Require Export SP.
 
 Local Open Scope nat_scope.
 
@@ -10,94 +10,7 @@ Module PR := DecProd R P.
 Module Import MCBase := MCBase P X V E B R Ev BEv.
 Module Import SP_EPP := SPBase P X V E B PR Ev BEv.
 
-(*
-Module Export PSt := LState V X.
-Module Export CSt := GState P V X.
-*)
-
-Print Behaviour.
-
-(*
-Problems:
-- The lists are not enough, because of merging of a send with a receive (for example).
-- Adding an undefined behaviour does not allow us to distinguish things that could not
-  be merged from branches that were not defined (this is in case of nested selections).
-- Having option Behaviour in merge_beh complicates its definition because we cannot use
-  option Behaviour as continuations in Behaviour.
-
-Solution:
-- We go back to the map Label -> option Behaviour for Branching.
-- We add a new type ExtendedBehaviour that is a copy-paste of Behaviour *plus* a new
-  Undefined term.
-- ExtendedBehaviour is used only in merging (and possibly amendment).
-- merge_beh now becomes much nicer because we can use merge_beh recursively directly as
-  continuation in terms.
-- Put this stuff in a new file Merge.v.
-*)
-
-Fixpoint merge_beh (B1:Behaviour) (B2:Behaviour) : Behaviour :=
-match B1, B2 with
-| End, End => End
-| Send p e B, Send p' e' B' =>
-  if Pid_dec p p' && Expr_dec e e' then
-    match merge_beh B B' with
-    | Some Bm => Some( Send p e Bm )
-    | _ => None
-    end
-  else None
-| Recv p x B, Recv p' x' B' =>
-  if Pid_dec p p' && Var_dec x x' then
-    match merge_beh B B' with
-    | Some Bm => Some( Recv p x Bm )
-    | _ => None
-    end
-  else None
-| Sel p l B, Sel p' l' B' =>
-  if Pid_dec p p' && eqb_label l l' then
-    match (merge_beh B B') with
-    | Some Bm => Some( Sel p l Bm )
-    | _ => None
-    end
-  else None
-| Branching p f, Branching p' f' =>
-  if Pid_dec p p' then
-    match
-      (* inl Some B = merging of a branching failed
-         inl None = there were no branches to merge for that label in the first place, so all OK
-         inr tt = merging error
-      *)
-      match f left, f' left with
-      | Some B, Some B' => match merge_beh B B' with Some B'' => inl (Some B'') | None => inr tt end
-      | Some B, None => inl (Some B)
-      | None, Some B' => inl (Some B')
-      | None, None => inl None
-      end,
-      match f right, f' right with
-      | Some B, Some B' => match (merge_beh B B') with Some B'' => inl (Some B'') | None => inr tt end
-      | Some B, None => inl (Some B)
-      | None, Some B' => inl (Some B')
-      | None, None => inl None
-      end
-    with
-    | inl bl, inl br => Some (Branching p (fun l => match l with left => bl | right => br end))
-    | _, _ => None
-    end
- else None
-| Cond e B1 B2, Cond e' B1' B2' =>
-  if BExpr_dec e e' then
-    match (merge_beh B1 B1') with
-    | Some B1m => match (merge_beh B2 B2') with | Some B2m => Some( Cond e B1m B2m ) | _ => None end
-    | _ => None
-    end
-  else None
-| Call X, Call Y => if RecVar_dec X Y then Some (Call X) else None
-| _, _ => None
-end.
-
-
-Section MaybeMove.
-
-(* Definition SPDefs_eq (Defs Defs':RecVar -> Behaviour) : Prop := forall X, Defs X = Defs' X. *)
+Section Tactics.
 
 Ltac Pid_dec_rewrite p q Hpq :=
   try rewrite Pdec.eqb_refl;
@@ -119,897 +32,516 @@ Ltac NotIn_from_neq_2 x y z H H' :=
 Ltac assert_NotIn_from_neq_2 x y z H H' :=
   assert (~ In x (y :: z :: nil)); [NotIn_from_neq_2 x y z H H' | ].
 
-Lemma Network_eq_corr :
-  forall N1 N1' N2 SPDefs s s' t,
-    Network_eq N1 N2 ->
-    SP_To SPDefs N1 s t N1' s' ->
-    exists N2', SP_To SPDefs N2 s t N2' s' /\ Network_eq N1' N2'.
-Proof.
-intros.
-inversion H1.
-+ exists (Network_rm (Network_rm N2 p) q | p [(N1' p)] | q [(N1' q)])%SP.
-(* exists (fun r => if Pid_dec p r then (N1' p) else (if Pid_dec q r then (N1' q) else N2 r)). *)
-  split.
-  - apply S_Com with B B'.
-    * rewrite <- (H p); assumption.
-    * rewrite <- (H q); assumption.
-    * 
-    * Pid_dec_rewrite p q Hpq.
-    * Pid_dec_rewrite p q Hpq.
-    * red. intros p0 Hin.
-      Pid_dec_rewrite p p0 Hpp0; Pid_dec_rewrite q p0 Hqp0; intros;
-      try (elim Hin; constructor; auto; fail).
-      elim Hin. apply in_cons. rewrite Hqp0. constructor. auto.
-  - red. intro.
-    Pid_dec_rewrite p p0 Hpp0.
-    Pid_dec_rewrite q p0 Hqp0.
-    red in H6. specialize (H6 p0).
-    assert_NotIn_from_neq_2 p0 p q H' H''.
-    rewrite (H6 H12); auto.
-+ exists (fun r => if Pid_dec p r then (N1' p) else (if Pid_dec q r then (N1' q) else N2 r)).
-  split.
-  - apply (S_Sel _ _ _ _ _ _ _ B f B').
-    * rewrite <- (H p); assumption.
-    * rewrite <- (H q); assumption.
-    * auto.
-    * Pid_dec_rewrite p q Hpq.
-    * Pid_dec_rewrite p q Hpq.
-    * red. intros p0 Hin.
-      Pid_dec_rewrite p p0 Hpp0; Pid_dec_rewrite q p0 Hqp0; intros;
-      try (elim Hin; constructor; auto; fail).
-      elim Hin. apply in_cons. rewrite Hqp0. constructor. auto.
-  - red. intro.
-    Pid_dec_rewrite p p0 Hpp0.
-    Pid_dec_rewrite q p0 Hqp0.
-    red in H7. specialize (H7 p0).
-    assert_NotIn_from_neq_2 p0 p q H' H''.
-    rewrite (H7 H13); auto.
-+ exists (fun r => if Pid_dec p r then (N1' p) else N2 r).
-  split.
-  - apply (S_Then _ _ _ _ _ b B1 B2); auto.
-    * rewrite <- (H p); assumption.
-    * rewrite Pdec.eqb_refl; auto.
-    * red. intros p0 Hin.
-      Pid_dec_rewrite p p0 Hpp0; intros;
-      elim Hin; constructor; auto.
-  - red. intro.
-    Pid_dec_rewrite p p0 Hpp0.
-    red in H5. specialize (H5 p0).
-    assert_NotIn_from_neq_1 p0 p H'.
-    rewrite (H5 H11); auto.
-+ exists (fun r => if Pid_dec p r then (N1' p) else N2 r).
-  split.
-  - apply (S_Else _ _ _ _ _ b B1 B2); auto.
-    * rewrite <- (H p); assumption.
-    * rewrite Pdec.eqb_refl; auto.
-    * red. intros p0 Hin.
-      Pid_dec_rewrite p p0 Hpp0; intros;
-      elim Hin; constructor; auto.
-  - red. intro.
-    Pid_dec_rewrite p p0 Hpp0.
-    red in H5. specialize (H5 p0).
-    assert_NotIn_from_neq_1 p0 p H'.
-    rewrite (H5 H11); auto.
-+ exists (fun r => if Pid_dec p r then (N1' p) else N2 r).
-  split.
-  - apply (S_Call _ _ _ _ _ X).
-    * rewrite <- (H p); assumption.
-    * rewrite Pdec.eqb_refl.
-      rewrite <- (H0 X); assumption.
-    * red. intros p0 Hin.
-      Pid_dec_rewrite p p0 Hpp0; intros;
-      elim Hin; constructor; auto.
-  - red. intro.
-    Pid_dec_rewrite p p0 Hpp0.
-    red in H4. specialize (H4 p0).
-    assert_NotIn_from_neq_1 p0 p H'.
-    rewrite (H4 H10); auto.
-Qed.
-
-(* Dumber
-+ set (N2' := fun r => if Pid_dec p r then (N1' p) else (if Pid_dec q r then (N1' q) else N2 r)).
-  exists N2'.
-  split.
-  - apply (S_Com _ _ _ _ _ _ _ _ B B').
-    * rewrite <- (H p); assumption.
-    * rewrite <- (H q); assumption.
-    * unfold N2'. rewrite Pdec.eqb_refl. assumption.
-    * unfold N2'. rewrite Pdec.eqb_refl.
-      case_eq (Pid_dec p q); auto.
-      intro. rewrite Pdec.eqb_eq in H12. rewrite H12. assumption.
-    * unfold N2'. red. intros.
-      case_eq (Pid_dec p p0); case_eq (Pid_dec q p0); auto.
-      ** intros.
-         rewrite Pdec.eqb_eq in H14.
-         rewrite H14 in H12.
-         elim H12. constructor. reflexivity.
-      ** intros.
-         rewrite Pdec.eqb_eq in H14.
-         rewrite H14 in H12.
-         elim H12. constructor. reflexivity.
-      ** intros.
-         rewrite Pdec.eqb_eq in H13.
-         rewrite H13 in H12.
-         elim H12.
-         apply in_cons. constructor. reflexivity.
-  - red. intro.
-    case_eq (Pid_dec p p0).
-    * intro H'. unfold N2'. rewrite H'.
-      rewrite Pdec.eqb_eq in H'. rewrite <- H'. reflexivity.
-    * intro H'. unfold N2'. rewrite H'.
-      case_eq (Pid_dec q p0).
-      ** intro H''. rewrite Pdec.eqb_eq in H''. rewrite <- H''. reflexivity.
-      ** intro H''.
-         red in H6.
-         specialize (H6 p0).
-         rewrite Pdec.eqb_neq in H', H''.
-         assert (~ In p0 (p :: q :: nil)).
-         *** simpl. red. intros. inversion H12; inversion H13; auto.
-         *** rewrite (H6 H12); auto.
-*)
-(* Dumbest
-+ set (N2' := fun r => if Pid_dec p r then B else (if Pid_dec q r then B' else N2 r)).
-  exists N2'.
-  split.
-  - apply (S_Com _ _ _ _ _ _ _ _ B B').
-    * pose (H p) as H'. rewrite <- H'. assumption.
-    * pose (H q) as H'. rewrite <- H'. assumption.
-    * unfold N2'. rewrite Pdec.eqb_refl. reflexivity.
-    * unfold N2'. rewrite Pdec.eqb_refl.
-      case_eq (Pid_dec p q); auto.
-      intro. rewrite Pdec.eqb_eq in H12.
-      rewrite H12 in H4.
-      rewrite <- H4. rewrite <- H5. reflexivity.
-    * unfold N2'.
-      red. intros.
-      case_eq (Pid_dec p p0); case_eq (Pid_dec q p0); auto.
-      ** intros.
-         rewrite Pdec.eqb_eq in H14.
-         rewrite H14 in H12.
-         elim H12. constructor. reflexivity.
-      ** intros.
-         rewrite Pdec.eqb_eq in H14.
-         rewrite H14 in H12.
-         elim H12. constructor. reflexivity.
-      ** intros.
-         rewrite Pdec.eqb_eq in H13.
-         rewrite H13 in H12.
-         elim H12.
-         apply in_cons. constructor. reflexivity.
-  - red. intro.
-    case_eq (Pid_dec p p0).
-    * intro H'. unfold N2'. rewrite H'.
-      rewrite Pdec.eqb_eq in H'. rewrite <- H'.
-      assumption.
-    * intro H'. unfold N2'. rewrite H'.
-      case_eq (Pid_dec q p0).
-      ** intro H''. rewrite Pdec.eqb_eq in H''. rewrite <- H''. assumption.
-      ** intro H''.
-         red in H6.
-         specialize (H6 p0).
-         rewrite Pdec.eqb_neq in H', H''.
-         assert (~ In p0 (p :: q :: nil)).
-         *** simpl. red. intros. inversion H12; inversion H13; auto.
-         *** rewrite (H6 H12); auto.
-*)
-
-End MaybeMove.
+End Tactics.
 
 Section EPP.
 
-Definition bproj_buildB (constructor:Behaviour -> Behaviour) (cont:option Behaviour) : option Behaviour :=
-match cont with
-| Some B => Some(constructor B)
-| _ => None
-end.
-
-Definition bproj_buildbiB (biconstructor:Behaviour -> Behaviour -> Behaviour) (cont1:option Behaviour) (cont2:option Behaviour): option Behaviour :=
-match cont1 with
-| Some B1 => bproj_buildB (biconstructor B1) (cont2)
-| _ => None
-end.
-
-
-(* DefSet is overkill, we might wanna just get RecVar -> list Pid *)
-Fixpoint bproj (Defs:DefSet) (C:Choreography) (r:Pid) : option Behaviour :=
+(** First step: returns an XBehaviour, possibly with XUndefined subcomponents. *)
+Fixpoint bproj (Defs:DefSet) (C:Choreography) (r:Pid) : XBehaviour :=
 match C with
-| MCBase.End => Some End
-| (eta;;C')%MC => match eta with
-            | (p # e --> q $ x)%MC => if (Pid_dec p r)
-                                      then bproj_buildB (Send q e) (bproj Defs C' r)
-                                      else (bproj_buildB (Recv p x) (bproj Defs C' r))
-            | (p --> q [ l ])%MC => if (Pid_dec p r)
-                                    then bproj_buildB (Sel q l) (bproj Defs C' r)
-                                    else if (Pid_dec q r)
-                                         then match (bproj Defs C' r) with
-                                           | Some BC => Some (Branching p
-                                                               (fun l' => match l, l' with
-                                                                          | left,left => Some BC
-                                                                          | right,right => Some BC
-                                                                          | _,_ => None end))
-                                           | None => None
-                                           end
-                                         else (bproj Defs C' r)
-            end
-| MCBase.Cond p b C1 C2 => if (Pid_dec p r)
-                              then bproj_buildbiB (Cond b) (bproj Defs C1 r) (bproj Defs C2 r)
-                              else match (bproj Defs C1 r), (bproj Defs C2 r) with
-                                    | Some B1, Some B2 => (merge_beh B1 B2)
-                                    | _, _ => None
-                                   end
-| MCBase.Call X => if In_dec P.eq_dec r (fst (Defs X)) then Some (Call (X, r)) else Some End
-| MCBase.RT_Call X ps C' => if In_dec P.eq_dec r ps then Some (Call (X, r)) else bproj Defs C' r
+| MCBase.End                => XEnd
+| p#e --> q$x;; C'          => if Pid_dec p r
+                               then XSend q e (bproj Defs C' r)
+                               else if Pid_dec q r
+                                    then XRecv p x (bproj Defs C' r)
+                                    else bproj Defs C' r
+| p --> q[left];; C'        => if Pid_dec p r
+                               then XSel q left (bproj Defs C' r)
+                               else if Pid_dec q r
+                                    then XBranching p (Some (bproj Defs C' r)) None
+                                    else bproj Defs C' r
+| p --> q[right];; C'       => if Pid_dec p r
+                               then XSel q right (bproj Defs C' r)
+                               else if Pid_dec q r
+                                    then XBranching p None (Some (bproj Defs C' r))
+                                    else bproj Defs C' r
+| If p ?? b Then C1 Else C2 => if Pid_dec p r
+                               then XCond b (bproj Defs C1 r) (bproj Defs C2 r)
+                               else Xmerge (bproj Defs C1 r) (bproj Defs C2 r)
+| MCBase.Call X             => if In_dec P.eq_dec r (fst (Defs X))
+                               then XCall (X,r)
+                               else XEnd
+| RT_Call X ps C'           => if In_dec P.eq_dec r ps
+                               then XCall (X,r)
+                               else bproj Defs C' r
 end.
 
-Definition epp_list (Defs:DefSet) (C:Choreography) (ps:list Pid) : list (Pid * option Behaviour) :=
-  map (fun p => (p, bproj Defs C p)) ps.
+Definition epp_list (Defs:DefSet) (C:Choreography) (ps:list Pid) : list (Pid * XBehaviour) :=
+  map (fun p => (p, collapse (bproj Defs C p))) ps.
 
-Definition projectable Defs C ps := all_defined (map snd (epp_list Defs C ps)).
+Definition projectable_C Defs C ps :=
+  Forall (fun X => snd X <> XUndefined) (epp_list Defs C ps).
 
-Definition projectable_Defs (Defs:DefSet) (Xs:list MCBase.RecVar) :=
-  Forall (fun X => projectable Defs (snd (Defs X)) (fst (Defs X))) Xs.
+Definition projectable_D Defs Xs :=
+  Forall (fun X => projectable_C Defs (snd (Defs X)) (fst (Defs X))) Xs.
 
-Fixpoint epp_net (Defs:DefSet) (C:Choreography) (ps:list Pid) :
-  projectable Defs C ps -> Network.
+Definition projectable P Xs ps :=
+  projectable_C (Procedures P) (Main P) ps /\
+  projectable_D (Procedures P) Xs.
+
+Definition epp_C Defs C ps : projectable_C Defs C ps -> Network.
 Proof.
-unfold projectable.
-induction ps.
-+ intro. apply EmptyNet.
-+ simpl. case_eq (bproj Defs C a); intros.
-  - intro p. apply (if (P.eq_dec a p) then b else (epp_net _ _ _ H0 p)).
-  - inversion H0.
+intros; intro p.
+elim (In_dec P.eq_dec p ps); intro Hp.
+2: apply End.
+elim (collapse_char' (bproj Defs C p)); intro.
+1: inversion_clear a. apply x.
+exfalso.
+red in H. rewrite Forall_forall in H.
+apply (H (p,collapse (bproj Defs C p))); auto.
+unfold epp_list.
+apply in_map_iff. exists p; auto.
 Defined.
 
-(*
-Lemma projectable_Defs_weaken :
-  forall Defs X Xs,
-  (forall Y, In Y (X::Xs) -> projectable Defs (snd (Defs X)) (fst (Defs X))) ->
-  (forall Y, In Y Xs -> projectable Defs (snd (Defs X)) (fst (Defs X))).
+Definition epp_D Defs Xs : projectable_D Defs Xs -> DefSetB.
 Proof.
-*)
-
-Fixpoint epp (Defs:DefSet) (Xs: list MCBase.RecVar) (C:Choreography) (ps:list Pid) :
-  projectable_Defs Defs Xs ->
-  projectable Defs C ps ->
-  (RecVar -> Behaviour) * Network.
-Proof.
-(*
-intro projDefs.
-intro projMain.
-split.
-+ intro PX.
-  destruct PX as [X p].
-  induction Xs as [| Y Ys].
-  - apply bnil%SP.
-  - red in projDefs. rewrite Forall_forall in projDefs.
-    specialize (projDefs X).
-  induction projXs.
-  - 
-  case (in_dec R.eq_dec X Xs).
-  - intro InX.
-    pose (projX := projXs X InX).
-    unfold projectable in projX.
-    case (in_dec P.eq_dec p (fst (Defs X))).
-    2: intro; apply bnil%SP.
-    
-    destruct (fst (Defs X)).
-    unfold projectable in projX.
-    case_eq (bproj Defs (snd (Defs X)) p).
-    * intros. apply b.
-    * intros.
-    revert dependent X.
-    
-    apply (epp_net Defs (snd (Defs X)) (fst (Defs X)) (projXs X InH)).
-    
-
-fun projXs => fun projMain =>
-(
-  fun X =>
-    match in_dec PR.eq_dec X Xs with
-     | (In X Xs) as InH => epp_net Defs (snd (Defs X)) (fst (Defs X)) (projXs InH)
-     | _ => bnil%SP
-    end
-  ,
-  epp_net Defs C ps projMain
-).
-
-*)
-(*
-Proof.
-intros projXs projMain.
-split.
-+ induction Xs as [| X].
-  * apply (fun X => bnil%SP).
-  * assert (In X (X :: Xs)). constructor; auto.
-    apply (fun X => bnil%SP).
-+ apply (epp_net Defs C ps projMain).
+intros; intro.
+case_eq X; intros R p HX.
+elim (In_dec R.eq_dec R Xs).
+2: intros; apply End.
+elim (In_dec P.eq_dec p (fst (Defs R))).
+2: intros; apply End.
+elim (collapse_char' (bproj Defs (snd (Defs R)) p)); intros.
+induction a. apply x.
+exfalso.
+red in H. rewrite Forall_forall in H.
+generalize (H _ a0); clear H; intro.
+red in H. rewrite Forall_forall in H.
+apply (H (p, collapse (bproj Defs (snd (Defs R)) p))); auto.
+apply in_map_iff. exists p; auto.
 Defined.
-*)
-(*
-fun projXs => fun projMain =>
-(
-  fun X =>
-    
-    if false then bnil%SP else bnil%SP
-  ,
-  epp_net Defs C ps projMain
-).
-*)
 
-(*
-Fixpoint epp_Program (P:MCBase.Program) (ps:list Pid) :
-  projectable (MCBase.Procedures P) (Main P) ps -> SPBase.Program :=
-fun x =>
-  Build_Program
-    (fun X => End)
-    (EmptyNet)
-.
-*)
-Abort.
+Definition epp P Xs ps : projectable P Xs ps -> Program.
+Proof.
+intro H; inversion_clear H.
+constructor.
+apply (epp_D _ _ H1).
+apply (epp_C _ _ _ H0).
+Defined.
+
+Lemma epp_C_wd : forall Defs C ps H H',
+  Network_eq (epp_C Defs C ps H) (epp_C Defs C ps H').
+Proof.
+intros; intro. unfold epp_C.
+elim In_dec; auto.
+intros. elim collapse_char'; auto.
+intros. exfalso.
+red in H. rewrite Forall_forall in H.
+apply (H (p, collapse (bproj Defs C p))); auto.
+apply in_map_iff. exists p; auto.
+Qed.
+
+Lemma epp_D_wd : forall Defs Xs H H' X, epp_D Defs Xs H X = epp_D Defs Xs H' X.
+Proof.
+intros; unfold epp_D.
+induction X as (R,p).
+elim In_dec; auto.
+intros. elim In_dec; auto.
+intros. elim collapse_char'; auto.
+intros. exfalso.
+red in H. rewrite Forall_forall in H.
+generalize (H _ a0); clear H; intro.
+red in H. rewrite Forall_forall in H.
+apply (H (p, collapse (bproj Defs (snd (Defs R)) p))); auto.
+apply in_map_iff. exists p; auto.
+Qed.
 
 End EPP.
 
-Section EPP_Properties.
+Section MoreBranches.
 
-Fixpoint more_branches_beh_direct (B1 B2:Behaviour) : Prop :=
-match B1, B2 with
- | Send p e B, Send p' e' B' =>
-    if (Pid_dec p p') && (Expr_dec e e') then more_branches_beh_direct B B' else False
- | Recv p x B, Recv p' x' B' =>
-    if (Pid_dec p p') && (Var_dec x x') then more_branches_beh_direct B B' else False
- | Sel p l B, Sel p' l' B' =>
-    if (Pid_dec p p') && (eqb_label l l') then more_branches_beh_direct B B' else False
- | Branching p f, Branching p' f' =>
-    if (Pid_dec p p') then
-      match f left, f' left with
-       | Some B, Some B' => more_branches_beh_direct B B'
-       | Some B, None => True
-       | None, Some B' => False
-       | None, None => True
-      end
-      /\
-      match f right, f' right with
-       | Some B, Some B' => more_branches_beh_direct B B'
-       | Some B, None => True
-       | None, Some B' => False
-       | None, None => True
-      end
-    else False
- | Cond e B1 B2, Cond e' B1' B2' =>
-    if (BExpr_dec e e') then more_branches_beh_direct B1 B1' /\ more_branches_beh_direct B2 B2' else False
- | Call X, Call Y => if (RecVar_dec X Y) then True else False
- | End, End => True
- | _, _ => False
-end.
+Inductive more_branches : Behaviour -> Behaviour -> Prop :=
+| MB_End : more_branches End End
+| MB_Send p e B B': more_branches B B' -> more_branches (p ! e; B) (p ! e; B')
+| MB_Recv p x B B': more_branches B B' -> more_branches (p ? x; B) (p ? x; B')
+| MB_Sel p l B B': more_branches B B' -> more_branches (p (+) l; B) (p (+) l; B')
+| MB_Branching_None_None p mBl mBr : more_branches (p & mBl // mBr) (p & None // None)
+| MB_Branching_None_Some p mBl Br Br' : more_branches Br Br' ->
+    more_branches (p & mBl // Some Br) (p & None // Some Br')
+| MB_Branching_Some_None p Bl Bl' mBr : more_branches Bl Bl' ->
+    more_branches (p & Some Bl // mBr) (p & Some Bl' // None)
+| MB_Branching_Some_Some p Bl Bl' Br Br' : more_branches Bl Bl' -> more_branches Br Br' ->
+    more_branches (p & Some Bl // Some Br) (p & Some Bl' // Some Br')
+| MB_Cond b B1 B1' B2 B2' : more_branches B1 B1' -> more_branches B2 B2' ->
+    more_branches (If b Then B1 Else B2) (If b Then B1' Else B2')
+| MB_Call X : more_branches (Call X) (Call X)
+.
+
+Lemma more_branches_char_1 : forall B1 B2,
+  more_branches B1 B2 -> merge B1 B2 = inject B1.
+Proof.
+unfold merge; intros.
+induction H; simpl; auto;
+  try case mBl; try case mBr; simpl; intros;
+  try rewrite Pdec.eqb_refl;
+  try rewrite Edec.eqb_refl;
+  try rewrite Vdec.eqb_refl;
+  try rewrite Xdec.eqb_refl;
+  try rewrite label_eqb_refl;
+  try rewrite Bdec.eqb_refl;
+  try rewrite Rdec.eqb_refl;
+  try rewrite IHmore_branches;
+  repeat rewrite inject_match;
+  simpl; auto.
++ rewrite IHmore_branches1, IHmore_branches2, inject_match, inject_match. auto.
++ rewrite IHmore_branches1, IHmore_branches2.
+  case_eq (inject B1); case_eq (inject B2); simpl; auto; intros;
+    try elim (inject_not_undefined _ H1);
+    elim (inject_not_undefined _ H2).
+Qed.
+
+Lemma more_branches_char_2 : forall B1 B2,
+  merge B1 B2 = inject B1 -> more_branches B1 B2.
+Proof.
+unfold merge.
+induction B1 using Behaviour_ind'; induction B2 using Behaviour_ind'; simpl;
+  try case_eq mB; try case_eq mB'; try case mB0; try case mB'0; simpl;
+  intros; try constructor;
+  try (inversion H; fail); try (inversion H3; fail).
+10,13,16,17,18: exfalso; revert H5;
+  case_eq (Pid_dec p p0); intro Hp; simpl; [idtac | intro H'; inversion H'];
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp;
+  repeat rewrite inject_match; intro; inversion H5.
+7,10,13,14:  revert H5;
+  case_eq (Pid_dec p p0); intro Hp; simpl; [idtac | intro H'; inversion H'];
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp;
+  intros; constructor.
++ revert H.
+  case_eq (Pid_dec p p0); intro Hp; simpl. 2: intro H'; inversion H'.
+  case_eq (Expr_dec e e0); intro He; simpl. 2: intro H'; inversion H'.
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp.
+  unfold Expr_dec in He; rewrite Edec.eqb_eq in He; rewrite He.
+  intros; constructor.
+  apply IHB1.
+  elim (XUndefined_dec (Xmerge (inject B1) (inject B2))); intro.
+  1: rewrite a in H; inversion H.
+  rewrite Xmatch_elim in H; auto.
+  inversion H. rewrite H1; auto.
++ revert H.
+  case_eq (Pid_dec p p0); intro Hp; simpl. 2: intro H'; inversion H'.
+  case_eq (Var_dec v v0); intro Hv; simpl. 2: intro H'; inversion H'.
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp.
+  unfold Var_dec in Hv; rewrite Xdec.eqb_eq in Hv. rewrite Hv.
+  intros; constructor.
+  apply IHB1.
+  elim (XUndefined_dec (Xmerge (inject B1) (inject B2))); intro.
+  1: rewrite a in H; inversion H.
+  rewrite Xmatch_elim in H; auto.
+  inversion H. rewrite H1; auto.
++ revert H.
+  case_eq (Pid_dec p p0); intro Hp; simpl. 2: intro H'; inversion H'.
+  case_eq (eqb_label l l0); intro Hl; simpl. 2: intro H'; inversion H'.
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp.
+  rewrite label_eqb_eq in Hl; rewrite Hl.
+  intros; constructor.
+  apply IHB1.
+  elim (XUndefined_dec (Xmerge (inject B1) (inject B2))); intro.
+  1: rewrite a in H; inversion H.
+  rewrite Xmatch_elim in H; auto.
+  inversion H. rewrite H1; auto.
++ revert H5.
+  case_eq (Pid_dec p p0); intro Hp; simpl. 2: intro H'; inversion H'.
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp.
+  intros.
+  assert (Xmerge (inject b1) (inject b) = inject b1 /\ Xmerge (inject b2) (inject b0) = inject b2).
+  1: {
+    elim (XUndefined_dec (Xmerge (inject b2) (inject b0))); intro.
+    1: rewrite a in H5; inversion H5. 
+    rewrite Xmatch_elim in H5; auto.
+    elim (XUndefined_dec (Xmerge (inject b1) (inject b))); intro.
+    1: rewrite a in H5; inversion H5.
+    rewrite Xmatch_elim in H5; auto.
+    inversion H5. rewrite H7, H8; auto.
+  }
+  inversion_clear H6.
+  constructor; auto.
++ revert H5.
+  case_eq (Pid_dec p p0); intro Hp; simpl. 2: intro H'; inversion H'.
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp.
+  intros; constructor.
+  apply H; auto.
+  elim (XUndefined_dec (Xmerge (inject b1) (inject b))); intro.
+  rewrite a in H5; inversion H5.
+  rewrite Xmatch_elim, inject_match in H5; auto.
+  inversion H5. rewrite H7; auto.
++ revert H5.
+  case_eq (Pid_dec p p0); intro Hp; simpl. 2: intro H'; inversion H'.
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp.
+  intros; constructor.
+  apply H0; auto. rewrite inject_match in H5.
+  elim (XUndefined_dec (Xmerge (inject b0) (inject b))); intro.
+  rewrite a in H5; inversion H5.
+  rewrite Xmatch_elim in H5; auto.
+  inversion H5. rewrite H7; auto.
++ exfalso. revert H5.
+  case_eq (Pid_dec p p0); intro Hp; simpl. 2: intro H'; inversion H'.
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp.
+  rewrite inject_match.
+  elim (XUndefined_dec (Xmerge (inject b1) (inject b0))); intro.
+  rewrite a; intro; inversion H5.
+  rewrite Xmatch_elim; auto. intro; inversion H5.
++ revert H5.
+  case_eq (Pid_dec p p0); intro Hp; simpl. 2: intro H'; inversion H'.
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp.
+  intros; constructor.
+  apply H; auto.
+  elim (XUndefined_dec (Xmerge (inject b0) (inject b))); intro.
+  rewrite a in H5; inversion H5.
+  rewrite Xmatch_elim in H5; auto.
+  inversion H5. rewrite H7; auto.
++ exfalso. revert H5.
+  case_eq (Pid_dec p p0); intro Hp; simpl. 2: intro H'; inversion H'.
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp.
+  rewrite inject_match.
+  elim (XUndefined_dec (Xmerge (inject b1) (inject b))); intro.
+  rewrite a; intro; inversion H5.
+  rewrite Xmatch_elim; auto. intro; inversion H5.
++ revert H5.
+  case_eq (Pid_dec p p0); intro Hp; simpl. 2: intro H'; inversion H'.
+  unfold Pid_dec in Hp; rewrite Pdec.eqb_eq in Hp; rewrite Hp.
+  intros; constructor.
+  apply H0; auto.
+  elim (XUndefined_dec (Xmerge (inject b0) (inject b))); intro.
+  rewrite a in H5; inversion H5.
+  rewrite Xmatch_elim in H5; auto.
+  inversion H5. rewrite H7; auto.
++ revert H.
+  case_eq (BExpr_dec b b0); intro Hb; simpl. 2: intro H'; inversion H'.
+  unfold BExpr_dec in Hb; rewrite Bdec.eqb_eq in Hb; rewrite Hb.
+  rename B1_1 into Bt, B1_2 into Be, B2_1 into Bt', B2_2 into Be'.
+  intro.
+  assert (Xmerge (inject Bt) (inject Bt') = inject Bt /\ Xmerge (inject Be) (inject Be') = inject Be).
+  1: {
+    elim (XUndefined_dec (Xmerge (inject Bt) (inject Bt'))); intro.
+    1: rewrite a in H; inversion H. 
+    elim (XUndefined_dec (Xmerge (inject Be) (inject Be'))); intro.
+    1: rewrite a, Xmatch_elim in H; auto; inversion H.
+    revert H.
+    case (Xmerge (inject Bt) (inject Bt')); case (Xmerge (inject Be) (inject Be'));
+      intros; try inversion H; auto.
+  }
+  inversion_clear H0. constructor; auto.
++ revert H.
+  case_eq (RecVar_dec X X0); intro HX; simpl. 2: intro H'; inversion H'.
+  unfold RecVar_dec in HX; rewrite Rdec.eqb_eq in HX; rewrite HX.
+  constructor.
+Qed.
+
+Lemma more_branches_char : forall B1 B2,
+  more_branches B1 B2 <-> merge B1 B2 = inject B1.
+Proof.
+split.
++ apply more_branches_char_1.
++ apply more_branches_char_2.
+Qed.
+
+Lemma merge_more_branches : forall B1 B2 B,
+  merge B1 B2 = inject B -> more_branches B B1.
+Proof.
+unfold merge; intros.
+rename H into Hinj; revert B1 B2 Hinj.
+induction B using Behaviour_ind'; simpl; intros.
++ elim (merge_inv_End _ _ Hinj); intros.
+  rewrite H; constructor.
++ elim (merge_inv_Send _ _ _ _ _ Hinj); intros.
+  rename x into B1'; inversion_clear H.
+  rename x into B2'; inversion_clear H0.
+  inversion_clear H1.
+  rewrite H; constructor; eauto.
++ elim (merge_inv_Recv _ _ _ _ _ Hinj); intros.
+  rename x into B1'; inversion_clear H.
+  rename x into B2'; inversion_clear H0.
+  inversion_clear H1.
+  rewrite H; constructor; eauto.
++ elim (merge_inv_Sel _ _ _ _ _ Hinj); intros.
+  rename x into B1'; inversion_clear H.
+  rename x into B2'; inversion_clear H0.
+  inversion_clear H1.
+  rewrite H; constructor; eauto.
++ revert Hinj. case_eq mB; case_eq mB'; intros;
+  elim (merge_inv_Branching _ _ _ _ _ Hinj); intros;
+  rename x into Bl'; inversion_clear H3;
+  rename x into Bl''; inversion_clear H4;
+  rename x into Br'; inversion_clear H3;
+  rename x into Br''; inversion_clear H4;
+  destroy H5; rewrite H3.
+  - elim (H8 (inject b0)); auto; intros; inversion_clear H10.
+    elim (H5 (inject b)); auto; intros; inversion_clear H13.
+    case_eq Bl'; case_eq Bl''; case_eq Br'; case_eq Br''; constructor.
+    3,5: apply (H _ H2 b3 b2); apply H12; auto.
+    2,6,11,13: apply (H0 _ H1 b2 b1); apply H15; auto.
+    2,6,9,10: apply (H0 _ H1 b1 b);
+      elim H14; auto; intros; destroy H19;
+      rewrite H16 in H20; inversion H20;
+      rewrite <- H19; apply merge_idempotent.
+    4,5: apply (H _ H2 b2 b0);
+      elim H11; auto; intros; destroy H19;
+      rewrite H18 in H20; inversion H20;
+      rewrite <- H19; apply merge_idempotent.
+    * apply (H _ H2 b4 b3). apply H12; auto.
+    * apply (H _ H2 b2 b1). apply H12; auto.
+    * apply (H _ H2 b3 b0).
+      elim H11; auto. intros. destroy H19.
+      rewrite H18 in H20; inversion H20.
+      rewrite <- H19. apply merge_idempotent.
+    * apply (H _ H2 b1 b0).
+      elim H11; auto. intros. destroy H19.
+      rewrite H18 in H20; inversion H20.
+      rewrite <- H19. apply merge_idempotent.
+  - elim (H8 (inject b)); auto; intros; inversion_clear H10.
+    elim H7; auto; intros. rewrite H10.
+    case_eq Bl'; case_eq Bl''; constructor.
+    * apply (H _ H2 b1 b0). apply H12; auto.
+    * apply (H _ H2 b0 b).
+      elim H11; auto; intros. destroy H16.
+      rewrite H15 in H17; inversion H17.
+      rewrite <- H16; apply merge_idempotent.
+  - elim (H5 (inject b)); auto; intros; inversion_clear H10.
+    elim H6; auto; intros. rewrite H10.
+    case_eq Br'; case_eq Br''; constructor.
+    * apply (H0 _ H1 b1 b0). apply H12; auto.
+    * apply (H0 _ H1 b0 b).
+      elim H11; auto; intros. destroy H16.
+      rewrite H15 in H17; inversion H17.
+      rewrite <- H16; apply merge_idempotent.
+  - elim H6; auto; intros. rewrite H9.
+    elim H7; auto; intros. rewrite H11.
+    constructor.
++ elim (merge_inv_Cond _ _ _ _ _ Hinj); intros.
+  rename x into Be'; inversion_clear H.
+  rename x into Be''; inversion_clear H0.
+  rename x into Bt; inversion_clear H.
+  rename x into Bt''; destroy H0.
+  rewrite H; constructor; eauto.
++ elim (merge_inv_Call _ _ _ Hinj); intros.
+  rewrite H; constructor; eauto.
+Qed.
+
+Lemma merge_more_branches' : forall B1 B2 B,
+  merge B1 B2 = inject B -> more_branches B B2.
+Proof.
+intros.
+apply merge_more_branches with B1.
+rewrite merge_comm; auto.
+Qed.
+
+End MoreBranches.
+
+Lemma projectable_reduces : forall P Xs ps, projectable P Xs ps ->
+  forall s tl P' s', ((P,s) --[tl]--> (P',s'))%MC -> projectable P' Xs ps.
+Proof.
+intros.
+induction P as (Defs,C). induction P' as (Defs', C').
+generalize (MCP_To_Defs_stable Defs Defs' C C' tl s s' H0); intro.
+rewrite <- H1 in H0; rewrite <- H1; clear Defs' H1.
+inversion_clear H.
+split; auto.
+
+(* Start of proof for old version.
+induction H0.
++ intro; apply (H (p,XUndefined)); auto.
+  unfold epp_list in H1; rewrite in_map_iff in H1.
+  unfold epp_list; rewrite in_map_iff.
+  destroy H1. inversion H3.
+  rewrite H5 in H1. simpl in H2. clear x0 H5 H3.
+  exists p; simpl. split; auto.
+  case Pid_dec; [idtac | case Pid_dec]; simpl; rewrite H6, H2; auto.
++ intro; apply (H (p,XUndefined)); auto.
+  unfold epp_list in H1; rewrite in_map_iff in H1.
+  unfold epp_list; rewrite in_map_iff.
+  destroy H1. inversion H3.
+  rewrite H5 in H1. simpl in H2.
+  exists p; simpl. split; auto.
+  case l; (case Pid_dec; [idtac | case Pid_dec]); simpl; rewrite H6, H2; auto.
++ intro; apply (H (p,XUndefined)); auto.
+  unfold epp_list in H1; rewrite in_map_iff in H1.
+  unfold epp_list; rewrite in_map_iff.
+  destroy H1. inversion H4.
+  rewrite H6 in H1. simpl in H3.
+  exists p; simpl. split; auto.
+  case Pid_dec; simpl. rewrite H7, H3; auto.
+  rewrite H3 in H7. rewrite (collapse_merge _ _ H7); auto.
++ intro; apply (H (p,XUndefined)); auto.
+  unfold epp_list in H1; rewrite in_map_iff in H1.
+  unfold epp_list; rewrite in_map_iff.
+  destroy H1. inversion H4.
+  rewrite H6 in H1. simpl in H3.
+  exists p; simpl. split; auto.
+  case Pid_dec; simpl. rewrite H7, H3; auto.
+  case (collapse (bproj Defs C1 p)); auto.
+  rewrite H3 in H7. rewrite (collapse_merge' _ _ H7); auto.
++ rename p into p'; rename B into B'.
+  unfold epp_list in H1; rewrite in_map_iff in H1.  
+  destroy H1.
+  assert (x = p' /\ collapse (bproj Defs (eta;;C') x) = B').
+  1: inversion H3; auto.
+  inversion_clear H4. rewrite H5 in H6, H1. clear H5 x H3.
+  simpl. rewrite <- H6; clear H6.
+  assert (collapse (bproj Defs C' p') <> XUndefined).
+  - change (snd (p',collapse (bproj Defs C' p')) <> XUndefined).
+    apply IHMCC_To; auto.
+
+  - case eta; intros; simpl;
+    case Pid_dec; [idtac | case Pid_dec | case l | case l; case Pid_dec ];
+    simpl; try rewrite Xmatch_elim; auto; discriminate.
+  - apply IHMCC_To.
+    intros; induction x as (p, B).
+    simpl; intro.
+  - apply (H (p',collapse (bproj Defs (eta;;C) p'))); auto.
+    unfold epp_list in H3; rewrite in_map_iff in H3.
+    unfold epp_list; rewrite in_map_iff.
+    destroy H3. inversion H5.
+    rewrite H7 in H3.
+    exists p'; split; auto.
+    assert (collapse (bproj Defs C p') = XUndefined).
+    2: simpl; case eta; (intros; case Pid_dec; [idtac | case Pid_dec]; try case l; simpl); rewrite H5; auto.
+    rewrite H7, H2; auto
+
+
+
+(* *)
+[idtac | case Pid_dec]; simpl; rewrite H7, H3; auto.
++ 
+
+  clear p0 e0 x0 H3 H5 H v H0; simpl in H2.
+  exists p; simpl. split; auto.
+  unfold Pid_dec; rewrite Pdec.eqb_refl.
+  simpl. rewrite H6, H2; auto.
+  - unfold epp_list in H1; rewrite in_map_iff in H1.
+    unfold epp_list; rewrite in_map_iff.
+    destroy H1. inversion H3.
+    rewrite H5 in H1; rewrite <- e0.
+    clear p0 e0 x0 H3 H5 H v H0; simpl in H2.
+    exists p; simpl. split; auto.
+    unfold Pid_dec; rewrite Pdec.eqb_refl.
+    simpl. rewrite H6, H2; auto.
+*)
+Abort.
+
+(*
+Theorem EPP_Complete : forall P s P' s' tl, projectable P ->
+  ((P,s) --[tl]--> (P',s'))%MC ->
+  exists N', ...
+Proof.
+induction P.
+*)
+
+(*
+
+Projectable must say more - the "ps" and the "Xs" have some conditions
+More branches is behavioural equivalence.
+
+*)
+
 
 Definition more_branches_beh (B1 B2:Behaviour) := (merge_beh B1 B2) = Some B1.
 
-Lemma more_branches_beh_char_1 : forall (B1 B2:Behaviour), more_branches_beh B1 B2 -> more_branches_beh_direct B1 B2.
-induction B1 using Behaviour_ind_b; induction B2 using Behaviour_ind_b; try easy.
-+ intro. inversion H. simpl.
-  case_eq (Pid_dec p p0); case_eq (Expr_dec e e0); intros; rewrite H0 in H1; rewrite H2 in H1; simpl in H1; simpl; inversion H1.
-  specialize (IHB1 B2).
-  unfold more_branches_beh in IHB1.
-  destruct (merge_beh B1 B2).
-  - inversion H4.
-    rewrite H5 in IHB1.
-    auto.
-  - inversion H4.
-+ intro. inversion H. simpl.
-  case_eq (Pid_dec p p0); case_eq (Var_dec v v0); intros; rewrite H0 in H1; rewrite H2 in H1; simpl in H1; simpl; inversion H1.
-  specialize (IHB1 B2).
-  unfold more_branches_beh in IHB1.
-  destruct (merge_beh B1 B2).
-  - inversion H4.
-    rewrite H5 in IHB1.
-    auto.
-  - inversion H4.
-+ intro. inversion H. simpl.
-  case_eq (Pid_dec p p0); case_eq (eqb_label l l0); intros; rewrite H0 in H1; rewrite H2 in H1; simpl in H1; simpl; inversion H1.
-  specialize (IHB1 B2).
-  unfold more_branches_beh in IHB1.
-  destruct (merge_beh B1 B2).
-  - inversion H4.
-    rewrite H5 in IHB1.
-    auto.
-  - inversion H4.
-+ intro.
-  red in H3. simpl in H3.
-  case_eq (Pid_dec p p0).
-  - intro.
-    rewrite H4 in H3.
-    case_eq (o left); case_eq (o0 left); case_eq (o right); case_eq (o0 right); intros; try easy.
-    all: rewrite H5, H6, H7, H8 in H3.
-    all: simpl; rewrite H4.
-    all: try rewrite H5; try rewrite H6; try rewrite H7; try rewrite H8; split; auto.
-    * assert (more_branches_beh b2 b1).
-      2: apply (H _ H8 _ H9).
-      red.
-      case_eq (merge_beh b2 b1); case_eq (merge_beh b0 b); intros.
-      all: try rewrite H9 in H3.
-      all: try rewrite H10 in H3.
-      all: try easy.
-      inversion H3.
-      assert (o left = Some b4). 2: { rewrite <- H11. apply H8. }
-      rewrite <- H12; auto.
-    * assert (more_branches_beh b0 b).
-      2: apply (H0 _ H6 _ H9).
-      red.
-      case_eq (merge_beh b2 b1); case_eq (merge_beh b0 b); intros.
-      all: try rewrite H9 in H3.
-      all: try rewrite H10 in H3.
-      all: try easy.
-      inversion H3.
-      assert (o right = Some b3). 2: { rewrite <- H11. apply H6. }
-      rewrite <- H12; auto.
-    * assert (more_branches_beh b1 b0).
-      2: apply (H _ H8 _ H9).
-      red.
-      case_eq (merge_beh b1 b0); intros.
-      all: try rewrite H9 in H3.
-      all: try easy.
-      inversion H3.
-      assert (o left = Some b2). 2: { rewrite <- H10. apply H8. }
-      rewrite <- H11; auto.
-    * assert (more_branches_beh b1 b0).
-      2: apply (H _ H8 _ H9).
-      red.
-      case_eq (merge_beh b1 b0); intros.
-      all: try rewrite H9 in H3.
-      all: try easy.
-      inversion H3.
-      assert (o left = Some b2). 2: { rewrite <- H10. apply H8. }
-      rewrite <- H11; auto.
-    * case_eq (merge_beh b1 b0); intros.
-      ** rewrite H9 in H3.
-         assert (o = (fun l : Label => match l with
-                            | left => Some b1
-                            | right => None
-                            end)).
-         2: {
-           rewrite H10 in H3.
-           inversion H3.
-           assert (Some b = None).
-           2: inversion H11.
-           set (f := (fun l : Label => match l with
-                        | left => Some b2
-                        | right => Some b
-                        end)) in H12.
-           set (g := (fun l : Label => match l with
-                        | left => Some b2
-                        | right => None
-                        end)) in H12.
-           change ((f right) = (g right)).
-           rewrite H12; auto.
-         }
-         apply functional_extensionality.
-         intro.
-         case x; auto.
-      ** rewrite H9 in H3.
-         inversion H3.
-    * case_eq (merge_beh b0 b); intros.
-      ** rewrite H9 in H3.
-         assert (o = (fun l : Label => match l with
-                            | left => Some b0
-                            | right => None
-                            end)).
-         1: apply functional_extensionality; intro; case x; auto.
-         rewrite H10 in H3.
-         inversion H3. clear H3.
-         set (f := (fun l : Label => match l with
-                      | left => Some b1
-                      | right => None
-                      end)) in H12.
-         set (g := (fun l : Label => match l with
-                      | left => Some b0
-                      | right => None
-                      end)) in H12.
-         assert (Some b0 = Some b1).
-         1: { change ((g left) = (f left)). rewrite H12; auto. }
-         inversion H3.
-         rewrite <- H13.
-         rewrite <- H13 in H9.
-         assert (more_branches_beh b0 b).
-         1: apply H9.
-         apply (H _ H8 _ H11).
-      ** rewrite H9 in H3.
-         inversion H3.
-    * case_eq (merge_beh b0 b); intros; rewrite H9 in H3.
-      ** assert (o = (fun l : Label => match l with
-                            | left => Some b1
-                            | right => Some b0
-                            end)).
-         1: apply functional_extensionality; intro; case x; auto.
-         rewrite H10 in H3.
-         inversion H3. clear H3.
-         set (f := (fun l : Label => match l with
-                      | left => Some b1
-                      | right => Some b2
-                      end)) in H12.
-         set (g := (fun l : Label => match l with
-                      | left => Some b1
-                      | right => Some b0
-                      end)) in H12.
-         assert (Some b2 = Some b0).
-         1: { change ((f right) = (g right)). rewrite H12; auto. }
-         inversion H3.
-         rewrite <- H13 in H9.
-         assert (more_branches_beh b2 b).
-         1: apply H9.
-         pose (Hright := H0 b2).
-         rewrite <- H13.
-         rewrite <- H13 in H6.
-         apply (H0 _ H6 _ H11).
-      ** inversion H3.
-    * assert (o = (fun l : Label => match l with
-                            | left => Some b0
-                            | right => None
-                            end)).
-      1: apply functional_extensionality; intro; case x; auto.
-      rewrite H9 in H3.
-      set (f := (fun l : Label => match l with
-                   | left => Some b0
-                   | right => Some b
-                   end)) in H3.
-      set (g := (fun l : Label => match l with
-                   | left => Some b0
-                   | right => None
-                   end)) in H3.
-      assert (Some b = None).
-      2: inversion H10.
-      change ((f right) = (g right)).
-      inversion H3; auto.
-    * case_eq (merge_beh b0 b); intros; rewrite H9 in H3.
-      2: inversion H3.
-      assert (o = (fun l : Label => match l with
-                          | left => None
-                          | right => Some b0
-                          end)).
-      1: apply functional_extensionality; intro; case x; auto.
-      rewrite H10 in H3.
-      set (f := (fun l : Label => match l with
-                   | left => Some b1
-                   | right => Some b2
-                   end)) in H3.
-      set (g := (fun l : Label => match l with
-                   | left => None
-                   | right => Some b0
-                   end)) in H3.
-      inversion H3.
-      assert (Some b1 = None).
-      2: inversion H11.
-      change ((f left) = (g left)).
-      inversion H3; auto.
-    * case_eq (merge_beh b0 b); intros; rewrite H9 in H3.
-      2: inversion H3.
-      assert (o = (fun l : Label => match l with
-                          | left => None
-                          | right => Some b0
-                          end)).
-      1: apply functional_extensionality; intro; case x; auto.
-      rewrite H10 in H3.
-      set (f := (fun l : Label => match l with
-                   | left => Some b1
-                   | right => Some b2
-                   end)) in H3.
-      set (g := (fun l : Label => match l with
-                   | left => None
-                   | right => Some b0
-                   end)) in H3.
-      inversion H3.
-      assert (Some b1 = None).
-      2: inversion H11.
-      change ((f left) = (g left)).
-      inversion H3; auto.
-    * assert (o = (fun l : Label => match l with
-                          | left => None
-                          | right => Some b
-                          end)).
-      1: apply functional_extensionality; intro; case x; auto.
-      rewrite H9 in H3.
-      set (f := (fun l : Label => match l with
-                   | left => Some b0
-                   | right => Some b
-                   end)) in H3.
-      set (g := (fun l : Label => match l with
-                   | left => None
-                   | right => Some b
-                   end)) in H3.
-      inversion H3.
-      assert (Some b0 = None).
-      2: inversion H10.
-      change ((f left) = (g left)).
-      inversion H3; auto.
-    * assert (o = (fun l : Label => match l with
-                        | left => None
-                        | right => None
-                        end)).
-      1: apply functional_extensionality; intro; case x; auto.
-      rewrite H9 in H3.
-      set (f := (fun l : Label => match l with
-                   | left => Some b0
-                   | right => Some b
-                   end)) in H3.
-      set (g := (fun l : Label => match l with
-                   | left => None
-                   | right => None
-                   end)) in H3.
-      inversion H3.
-      assert (Some b0 = None).
-      2: inversion H10.
-      change ((f left) = (g left)).
-      inversion H3; auto.
-    * assert (o = (fun l : Label => match l with
-                        | left => None
-                        | right => None
-                        end)).
-      1: apply functional_extensionality; intro; case x; auto.
-      rewrite H9 in H3.
-      set (f := (fun l : Label => match l with
-                   | left => Some b0
-                   | right => Some b
-                   end)) in H3.
-      set (g := (fun l : Label => match l with
-                   | left => None
-                   | right => None
-                   end)) in H3.
-      inversion H3.
-      assert (Some b0 = None).
-      2: inversion H10.
-      change ((f left) = (g left)).
-      inversion H3; auto.
-    * assert (o = (fun l : Label => match l with
-                        | left => None
-                        | right => None
-                        end)).
-      1: apply functional_extensionality; intro; case x; auto.
-      rewrite H9 in H3.
-      set (f := (fun l : Label => match l with
-                   | left => Some b
-                   | right => None
-                   end)) in H3.
-      set (g := (fun l : Label => match l with
-                   | left => None
-                   | right => None
-                   end)) in H3.
-      inversion H3.
-      assert (Some b = None).
-      2: inversion H10.
-      change ((f left) = (g left)).
-      inversion H3; auto.
-    * case_eq (merge_beh b0 b); intros; rewrite H9 in H3.
-      2: inversion H3.
-      assert (o = (fun l : Label => match l with
-                          | left => None
-                          | right => Some b0
-                          end)).
-      1: apply functional_extensionality; intro; case x; auto.
-      rewrite H10 in H3.
-      set (f := (fun l : Label => match l with
-                   | left => None
-                   | right => Some b1
-                   end)) in H3.
-      set (g := (fun l : Label => match l with
-                   | left => None
-                   | right => Some b0
-                   end)) in H3.
-      inversion H3.
-      assert (Some b1 = Some b0).
-      1: { change ((f right) = (g right)). rewrite H12; auto. }
-      inversion H11.
-      rewrite H14 in H9.
-      assert (more_branches_beh b0 b).
-      1: apply H9.
-      rewrite <- H14.
-      rewrite <- H14 in H6.
-      apply (H0 _ H6).
-      rewrite H14; trivial.
-    * assert (o = (fun l : Label => match l with
-                        | left => None
-                        | right => None
-                        end)).
-      1: apply functional_extensionality; intro; case x; auto.
-      rewrite H9 in H3.
-      set (f := (fun l : Label => match l with
-                   | left => None
-                   | right => Some b
-                   end)) in H3.
-      set (g := (fun l : Label => match l with
-                   | left => None
-                   | right => None
-                   end)) in H3.
-      inversion H3.
-      assert (Some b = None).
-      2: inversion H10.
-      change ((f right) = (g right)).
-      inversion H3; auto.
-  - intro.
-    rewrite H4 in H3.
-    inversion H3.
-+ intros.
-  simpl.
-  red in H.
-  simpl in H.
-  case_eq (BExpr_dec b b0); intros.
-  1: split.
-  - rewrite H0 in H.
-    apply IHB1_1.
-    red.
-    case_eq (merge_beh B1_1 B2_1); intros; rewrite H1 in H.
-    2: inversion H.
-    case_eq (merge_beh B1_2 B2_2); intros; rewrite H2 in H.
-    2: inversion H.
-    inversion H; auto.
-  - rewrite H0 in H.
-    apply IHB1_2.
-    red.
-    case_eq (merge_beh B1_1 B2_1); intros; rewrite H1 in H.
-    2: inversion H.
-    case_eq (merge_beh B1_2 B2_2); intros; rewrite H2 in H.
-    2: inversion H.
-    inversion H; auto.
-  - rewrite H0 in H.
-    inversion H.
-+ intros.
-  inversion H.
-  simpl.
-  case_eq (RecVar_dec r r0); intros; auto.
-  rewrite H0 in H1.
-  inversion H1.
-Qed.
-
-Lemma more_branches_beh_char_2 : forall (B1 B2:Behaviour), more_branches_beh_direct B1 B2 -> more_branches_beh B1 B2.
-induction B1 using Behaviour_ind_b; induction B2 using Behaviour_ind_b; try easy.
-+ intro. red. simpl. simpl in H.
-  case_eq (Pid_dec p p0); case_eq (Expr_dec e e0);
-  simpl;
-  intros; rewrite H0, H1 in H; simpl in H; try easy.
-  pose (Hm := IHB1 B2 H).
-  inversion Hm.
-  rewrite H3; auto.
-+ intro. red. simpl. simpl in H.
-  case_eq (Pid_dec p p0); case_eq (Var_dec v v0);
-  simpl;
-  intros; rewrite H0, H1 in H; simpl in H; try easy.
-  pose (Hm := IHB1 B2 H).
-  inversion Hm.
-  rewrite H3; auto.
-+ intro. red. simpl. simpl in H.
-  case_eq (Pid_dec p p0); case_eq (eqb_label l l0);
-  simpl;
-  intros; rewrite H0, H1 in H; simpl in H; try easy.
-  pose (Hm := IHB1 B2 H).
-  inversion Hm.
-  rewrite H3; auto.
-+ intro. red. simpl. simpl in H3.
-  case_eq (Pid_dec p p0).
-  - intro.
-    rewrite H4 in H3.
-    inversion_clear H3.
-    case_eq (o left); case_eq (o0 left); case_eq (o right); case_eq (o0 right); intros.
-    all: rewrite H9, H8 in H5.
-    all: rewrite H7, H3 in H6.
-    all: try easy.
-    * pose (Hleft := H _ H9 _ H5).
-      inversion Hleft.
-      rewrite H11.
-      pose (Hright := H0 _ H7 b H6).
-      inversion Hright.
-      rewrite H12.
-      assert (o = (fun l : Label => match l with
-                            | left => Some b2
-                            | right => Some b0
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hleft := H _ H9 _ H5).
-      inversion Hleft.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
-                            | left => Some b1
-                            | right => Some b
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hleft := H _ H9 _ H5).
-      inversion Hleft.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
-                            | left => Some b0
-                            | right => None
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hright := H0 _ H7 b H6).
-      inversion Hright.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
-                            | left => Some b1
-                            | right => Some b0
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * assert (o = (fun l : Label => match l with
-                            | left => Some b0
-                            | right => Some b
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * assert (o = (fun l : Label => match l with
-                            | left => Some b
-                            | right => None
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * pose (Hright := H0 _ H7 b H6).
-      inversion Hright.
-      rewrite H11.
-      assert (o = (fun l : Label => match l with
-                            | left => None
-                            | right => Some b0
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * assert (o = (fun l : Label => match l with
-                            | left => None
-                            | right => Some b
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-    * assert (o = (fun l : Label => match l with
-                            | left => None
-                            | right => None
-                            end)).
-      2: rewrite H10; auto. apply functional_extensionality. intro. case x; auto.
-  - intro.
-    rewrite H4 in H3.
-    exfalso; auto.
-+ intro. red. simpl. simpl in H.
-  case_eq (BExpr_dec b b0).
-  - intro.
-    rewrite H0 in H. inversion_clear H.
-    pose (Hm := IHB1_1 B2_1 H1).
-    inversion Hm.
-    rewrite H3.
-    pose (Hm2 := IHB1_2 B2_2 H2).
-    inversion Hm2.
-    rewrite H4; auto.
-  - intro.
-    rewrite H0 in H.
-    exfalso; auto.
-+ intro. red. simpl. simpl in H.
-  case_eq (RecVar_dec r r0);
-  simpl;
-  intros; rewrite H0 in H; simpl in H; easy.
-Qed.
-
-Lemma more_branches_beh_char : forall (B1 B2:Behaviour), more_branches_beh B1 B2 <-> more_branches_beh_direct B1 B2.
-Proof.
-intros; split.
-+ apply more_branches_beh_char_1.
-+ apply more_branches_beh_char_2.
-Qed.
 
 Definition more_branches_net (N N':Network) (ps:list Pid) :=
   forall p, In p ps -> more_branches_beh (N p) (N' p).
 
 Definition more_branches_defs (SPDefs SPDefs' : RecVar -> Behaviour) :=
   forall X, more_branches_beh (SPDefs X) (SPDefs' X).
-
-Inductive MoreBranches : Behaviour -> Behaviour -> Prop :=
-| MB_Send p e B B' :
-  MoreBranches B B' ->
-  MoreBranches (p ! e ; B)%SP (p ! e ; B')%SP
-| MB_Recv p x B B' :
-  MoreBranches B B' ->
-  MoreBranches (p ? x ; B)%SP (p ? x ; B')%SP
-| MB_Sel p l B B' :
-  MoreBranches B B' ->
-  MoreBranches (p (+) l; B)%SP (p (+) l; B')%SP
-| MB_Branching p o o' :
-  (forall Bleft', o' left = Some Bleft' -> exists Bleft, o left = Some Bleft /\
-    MoreBranches Bleft Bleft') ->
-  (forall Bright', o' right = Some Bright' -> exists Bright, o right = Some Bright /\
-    MoreBranches Bright Bright') ->
-  MoreBranches (p & o) (p & o')
-| MB_Cond b B1 B2 B1' B2' :
-  MoreBranches B1 B1' -> MoreBranches B2 B2' ->
-  MoreBranches
-    (If b Then B1 Else B2)%SP (If b Then B1' Else B2')%SP
-| MB_Call X : MoreBranches (Call X)%SP (Call X)%SP
-| MB_End : MoreBranches bnil%SP bnil%SP.
 
 Inductive MoreBranches_net : Network -> Network -> list Pid -> Prop :=
 | MBN_nil N N' : MoreBranches_net N N' nil
