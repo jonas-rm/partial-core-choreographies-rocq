@@ -532,6 +532,26 @@ inversion H2. inversion H4. inversion H6.
 apply set_remove'_3; auto.
 Qed.
 
+Lemma set_size_incl_le : forall (X Y:set T),
+  set_incl T_dec X Y -> set_size X <= set_size Y.
+Proof.
+intros X Y; revert X.
+induction Y.
++ unfold set_incl; simpl; intros.
+  case_eq X; auto.
+  intros. elim (H t); rewrite H0; simpl; auto.
++ unfold set_incl; simpl. intros.
+  case in_dec; intros.
+  - apply IHY. red; intros. elim (H z); auto.
+    intro. rewrite <- H1; auto.
+  - etransitivity. apply (set_size_remove'_lt a).
+    apply le_n_S, IHY.
+    red; intros.
+    elim (H z); auto.
+    intro; exfalso. rewrite H1 in H0. apply (set_remove'_2 _ H0); auto.
+    apply set_remove'_1 in H0; auto.
+Qed.
+
 End Lists.
 
 Require Import Vector.
