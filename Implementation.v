@@ -2206,26 +2206,26 @@ Proof.
 induction n; simpl; intros; inversion_clear H; auto; inversion H0; auto.
 Qed.
 
-Lemma all_pids_incl : forall m n, m <= n -> set_incl_Pid (all_pids m) (all_pids n).
+Lemma all_pids_incl : forall m n, m <= n -> set_incl_pid (all_pids m) (all_pids n).
 red; red; intros.
 apply all_pids_In. transitivity m; auto. apply In_all_pids; auto.
 Qed.
 
 Lemma MCC_pn_all_pids_incl : forall C m n, m <= n ->
-  (set_incl_Pid (MCC_pn C (fun _ => all_pids m)) (all_pids m))
-  -> (set_incl_Pid (MCC_pn C (fun _ => all_pids n)) (all_pids n)).
+  (set_incl_pid (MCC_pn C (fun _ => all_pids m)) (all_pids m))
+  -> (set_incl_pid (MCC_pn C (fun _ => all_pids n)) (all_pids n)).
 Proof.
-induction C; simpl; unfold set_incl_Pid, set_incl; intros; auto.
+induction C; simpl; unfold set_incl_pid, set_incl; intros; auto.
 - inversion H1.
-- unfold set_incl_Pid, set_incl in IHC.
+- unfold set_incl_pid, set_incl in IHC.
   elim (set_union_elim _ _ _ _ H1); intros.
   apply (all_pids_incl m); auto. apply H0. apply set_union_iff; auto.
   apply IHC with m; auto. intros; apply H0. apply set_union_iff; auto.
-- unfold set_incl_Pid, set_incl in IHC.
+- unfold set_incl_pid, set_incl in IHC.
   elim (set_union_elim _ _ _ _ H1); intros.
   apply (all_pids_incl m); auto. apply H0. apply set_union_iff; auto.
   apply IHC with m; auto. intros; apply H0. apply set_union_iff; auto.
-- unfold set_incl_Pid, set_incl in IHC1, IHC2.
+- unfold set_incl_pid, set_incl in IHC1, IHC2.
   elim (set_union_elim _ _ _ _ H1); intros. elim (set_union_elim _ _ _ _ a); intros.
   apply (all_pids_incl m); auto. apply H0. apply set_union_iff; left. apply set_union_iff; auto.
   apply IHC1 with m; auto. intros; apply H0. apply set_union_iff; left. apply set_union_iff; auto.
@@ -2405,6 +2405,7 @@ intros.
 exists (RecVarList (0+Gamma f)); split.
 + split. apply Implementation_Main_WF.
   split. apply Implementation_Main_within_Xs; apply RecVarList_In; auto with arith.
+  split. simpl; auto.
   split.
   1: { apply Implementation_aux_WF; intros; auto; apply le_n_S.
     2: apply Nat.le_max_l.

@@ -228,12 +228,12 @@ match C with
 | Cond p _ C1 C2     => (set_union_pid (set_union_pid (p::nil) (MCC_pn C1 Pids)) (MCC_pn C2 Pids))
 end.
 
-Definition set_incl_Pid := set_incl P.eq_dec.
+Definition set_incl_pid := set_incl P.eq_dec.
 
 (** A program is well-annotated if every process used by a procedure is in its annotation. *)
 
 Definition well_ann (P:Program) : Prop :=
-  forall X, set_incl_Pid (MCC_pn (Procs P X) (Vars P)) (Vars P X).
+  forall X, set_incl_pid (MCC_pn (Procs P X) (Vars P)) (Vars P X).
 
 Lemma well_ann_Main_change : forall Defs C C',
   well_ann (Build_Program Defs C) -> well_ann (Build_Program Defs C').
@@ -415,10 +415,34 @@ induction C; simpl; auto.
 + intros. inversion_clear H0. split; eauto.
 Qed.
 
+Fixpoint consistent (Xs:RecVar -> list Pid) (C:Choreography) : Prop :=
+match C with
+| End              => True
+| Call X           => True
+| RT_Call X l C'   => set_incl_pid l (Xs X) /\ consistent Xs C'
+| Interaction _ C' => consistent Xs C'
+| Cond _ _ C1 C2   => consistent Xs C1 /\ consistent Xs C2
+end.
+
+Lemma consistent_dec : forall Xs C, {consistent Xs C} + {~consistent Xs C}.
+Proof.
+induction C; simpl; auto.
++ elim IHC. 2: right; tauto.
+  elim (set_incl_dec P.eq_dec l (Xs r)); tauto.
++ elim IHC1. 2: right; tauto.
+  elim IHC2; tauto.
+Qed.
+
+Lemma initial_consistent : forall C, initial C -> forall Xs, consistent Xs C.
+Proof.
+induction C; auto; simpl; intros; inversion H.
+split; auto.
+Qed.
+
 (** We need to consider the list of used process variables. *)
 
 Definition Program_WF (Xs:list RecVar) (P:Program) : Prop :=
-  Choreography_WF (Main P) /\ within_Xs Xs (Main P) /\
+  Choreography_WF (Main P) /\ within_Xs Xs (Main P) /\ consistent (Vars P) (Main P) /\
   forall X, In X Xs -> Choreography_WF (Procs P X) /\ initial (Procs P X) /\
             (Vars P X) <> nil /\ within_Xs Xs (Procs P X).
 
@@ -429,6 +453,8 @@ elim (Choreography_WF_dec (Main P)); intros.
 2: right; intro; destroy H; auto.
 elim (within_Xs_dec Xs (Main P)); intros.
 2: right; intro; destroy H; auto.
+elim (consistent_dec (Vars P) (Main P)); intros.
+2: right; intro; destroy H; auto.
 assert (forall (Ys:list RecVar), {forall X, In X Ys -> Choreography_WF (Procs P X) /\ initial (Procs P X) /\
             (Vars P X) <> nil /\ within_Xs Xs (Procs P X)} +
         {~forall X, In X Ys -> Choreography_WF (Procs P X) /\ initial (Procs P X) /\
@@ -437,7 +463,7 @@ assert (forall (Ys:list RecVar), {forall X, In X Ys -> Choreography_WF (Procs P 
   left; repeat (split; auto).
   right; intro. destroy H; auto.
 }
-clear a a0.
+clear a a0 a1.
 induction Ys; simpl; intros.
 + left. intros; inversion H.
 + elim IHYs; intros.
@@ -464,9 +490,13 @@ Proof. intros. destroy H. elim (H X); auto. Qed.
 Lemma Program_WF_Main : forall P Xs, Program_WF Xs P -> Choreography_WF (Main P).
 Proof. intros. destroy H; auto. Qed.
 
+Lemma Program_WF_consistent : forall P Xs, Program_WF Xs P ->
+  consistent (Vars P) (Main P).
+Proof. intros. destroy H; auto. Qed.
+
 Lemma Program_WF_initial_Proc : forall P Xs, Program_WF Xs P ->
   forall X, In X Xs -> initial (Procs P X).
-Proof. intros. destroy H. elim (H X); auto. intros. destroy H4; auto. Qed.
+Proof. intros. destroy H. elim (H X); auto. intros. destroy H5; auto. Qed.
 
 Lemma Program_WF_Main_within_Xs : forall P Xs, Program_WF Xs P ->
   within_Xs Xs (Main P).
@@ -483,28 +513,28 @@ simpl in H0, H2. clear H1.
 induction C; auto.
 + inversion H0.
 + inversion H0. rewrite H in H2; simpl in H2; auto. inversion H.
-+ inversion_clear H2. red in H0. simpl in H0.
++ inversion_clear H3. inversion_clear H2. red in H0. simpl in H0.
   elim (set_union_elim _ _ _ _ H0); intros; auto.
-  inversion_clear a. rewrite H2 in H; auto. inversion H2.
-+ inversion_clear H2.
+  inversion_clear a. rewrite H2 in H3; auto. inversion H2.
++ inversion_clear H2. inversion_clear H3.
   elim (set_union_elim _ _ _ _ H0); auto.
 Qed.
 
 Lemma Program_WF_Vars : forall P Xs, Program_WF Xs P ->
   forall X, In X Xs -> Vars P X <> nil.
-Proof. intros. destroy H. elim (H X); auto. intros. destroy H4; auto. Qed.
+Proof. intros. destroy H. elim (H X); auto. intros. destroy H5; auto. Qed.
 
 Lemma Program_WF_within_Xs : forall P Xs, Program_WF Xs P ->
   forall X, In X Xs -> within_Xs Xs (Procs P X).
-Proof. intros. destroy H. elim (H X); auto. intros. destroy H4; auto. Qed.
+Proof. intros. destroy H. elim (H X); auto. intros. destroy H5; auto. Qed.
 
 (** Inversion results. *)
 Lemma Program_WF_Main_change : forall Xs Defs C C',
-  Choreography_WF C' -> within_Xs Xs C' ->
+  Choreography_WF C' -> within_Xs Xs C' -> consistent (fun X => fst (Defs X)) C' ->
   Program_WF Xs (Build_Program Defs C) -> Program_WF Xs (Build_Program Defs C').
 Proof.
 intros.
-destroy H1; repeat (split; auto).
+destroy H2; repeat (split; auto).
 Qed.
 
 Lemma Program_WF_eta : forall Xs Defs C eta,
@@ -516,6 +546,7 @@ inversion_clear H0.
 eapply Program_WF_Main_change; eauto.
 eapply Choreography_WF_eta; repeat split; eauto.
 apply (Program_WF_Main_within_Xs _ _ H).
+destroy H; auto.
 Qed.
 
 Lemma Program_WF_Then : forall Xs Defs p b C1 C2,
@@ -527,6 +558,7 @@ inversion_clear H0; inversion_clear H1.
 eapply Program_WF_Main_change; eauto.
 apply Choreography_WF_Then with p b C2; repeat split; auto.
 apply (Program_WF_Main_within_Xs _ _ H).
+destroy H. inversion_clear H6; auto.
 Qed.
 
 Lemma Program_WF_Else : forall Xs Defs p b C1 C2,
@@ -538,6 +570,7 @@ inversion_clear H0; inversion_clear H1.
 eapply Program_WF_Main_change; eauto.
 apply Choreography_WF_Else with p b C1; repeat split; auto.
 apply (Program_WF_Main_within_Xs _ _ H).
+destroy H. inversion_clear H6; auto.
 Qed.
 
 Lemma Program_WF_Call : forall Xs Defs X ps C,
@@ -549,6 +582,7 @@ inversion_clear H1.
 eapply Program_WF_Main_change; eauto.
 split; auto.
 apply (Program_WF_Main_within_Xs _ _ H).
+destroy H. inversion_clear H5; auto.
 Qed.
 
 (** This one is not decidable. *)
@@ -1429,16 +1463,42 @@ induction H; auto.
 + inversion_clear H2; auto.
 Qed.
 
+Lemma MCC_To_consistent : forall P s l P' s' Xs,
+  Program_WF Xs P -> (P,s) --[l]--> (P',s') ->
+  consistent (Vars P') (Main P').
+Proof.
+intros.
+revert H.
+inversion_clear H0.
+simpl; intros.
+generalize (Program_WF_consistent _ _ H0); intros.
+unfold Vars in H1; simpl in H1.
+unfold Vars; simpl.
+generalize (Program_WF_initial_Proc _ _ H0); intros.
+generalize (Program_WF_Main_within_Xs _ _ H0); simpl; intros.
+unfold Procs in H2; simpl in H2.
+clear H0.
+induction H; auto; inversion_clear H1; auto.
+1,2: inversion_clear H3; split; auto.
++ apply initial_consistent; auto.
++ split. unfold set_incl_pid, set_remove_pid. intro; apply set_remove'_1.
+  apply initial_consistent; auto.
++ split; auto.
+  unfold set_incl_pid, set_remove_pid; red; intros.
+  apply set_remove'_1 in H1; auto.
+Qed.
+
 Lemma MCC_To_Program_WF : forall P s l P' s' Xs,
   Program_WF Xs P -> (P,s) --[l]--> (P',s') -> Program_WF Xs P'.
 Proof.
 intros.
 generalize (MCC_To_within_Xs _ _ _ _ _ Xs H H0); intro HXs.
 inversion H0; auto.
-rewrite <- H1 in H; rewrite <- H5 in HXs.
+generalize (MCC_To_consistent _ _ _ _ _ Xs H H0); intro HXs'.
+rewrite <- H1 in H; rewrite <- H5 in HXs, HXs'.
 clear s'0 H6 s0 H3 H5 H0 P' H1 P H2 l.
 apply Program_WF_Main_change with C; auto.
-clear HXs.
+clear HXs HXs'.
 generalize (Program_WF_Main _ _ H); simpl; intro HC.
 induction H4.
 + eapply Choreography_WF_eta; eauto.
@@ -1461,10 +1521,12 @@ induction H4.
   1: { inversion_clear HC. simpl in H1; inversion_clear H2; split; auto. }
   assert (within_Xs Xs C).
   1: { elim (Program_WF_Main_within_Xs _ _ H); auto. }
-  generalize (Program_WF_Main_change _ _ _ _ H1 H2 H); intro.
+  assert (consistent (fun X => fst (Defs X)) C).
+  1: { elim (Program_WF_consistent _ _ H); auto. }
+  generalize (Program_WF_Main_change _ _ _ _ H1 H2 H3 H); intro.
   assert (Choreography_WF C'); auto; clear IHMCC_To.
-  inversion_clear H5. repeat split; simpl; auto.
-  inversion_clear HC. inversion_clear H8; auto.
+  inversion_clear H6. repeat split; simpl; auto.
+  inversion_clear HC. inversion_clear H9; auto.
 + change (Choreography_WF (Procs (Build_Program Defs (Call X)) X)).
   apply Program_WF_Proc with Xs; auto.
   apply (Program_WF_Vars_In _ _ H). red; simpl; auto.
@@ -1494,8 +1556,7 @@ induction H4.
   rewrite (set_size_remove' P.eq_dec) with ps p in H1; auto.
   unfold set_remove_pid; intro. rewrite H6 in H1.
   elim (lt_irrefl _ H1).
-+ elim HC; intros.
-  inversion_clear H4; red; auto.
++ destroy HC. repeat split; auto.
 Qed.
 
 Lemma MCC_To_MCP_WF : forall P s l P' s',
