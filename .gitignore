@@ -32,3 +32,9 @@ nra.cache
 *.css
 *.vok
 *.vos
+ITP2021/article.aux
+*.bbl
+*.blg
+ITP2021/article.log
+ITP2021/article.out
+ITP2021/article.vtc
