@@ -120,89 +120,6 @@ exists s'', (eval_on_state e s1 p); split.
   apply CSt.update_update_ext.
 Qed.
 
-(*
-Section Implementation.
-
-(* The type of partial functions and the notion of a choreography implementing one.
-    We can only represent computable functions, but this is not a problem. *)
-
-Definition PFunction (n:nat) := t nat n -> option nat.
-
-Definition implements (P:Program) {n} (f:PFunction n) (ps:t Pid n) (q:Pid) :=
-  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
-  (forall y, f xs = Some y -> exists s' ts P', (P,s) --[ts]-->* (P',s') /\ s' q xx = y /\ Main P' = End) /\
-  (f xs = None -> forall s' ts P', (P,s) --[ts]-->* (P',s') -> Main P' <> End).
-
-(** For convenience. *)
-Lemma implements_None : forall P {n} f ps q, implements P f ps q -> 
-  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
-  f xs = None -> forall s' ts P', (P,s) --[ts]-->* (P',s') -> Main P' <> End.
-Proof.
-unfold implements; intros.
-elim (H _ _ H0); eauto.
-Qed.
-
-Lemma implements_Some : forall P {n} f ps q, implements P f ps q -> 
-  forall (xs:t nat n) (s:State), (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
-  forall y, f xs = Some y -> exists s' ts P', (P,s) --[ts]-->* (P',s') /\ s' q xx = y /\ Main P' = End.
-Proof.
-unfold implements; intros.
-elim (H _ _ H0); auto.
-Qed.
-
-(** Currying for simple cases. *)
-Definition make_pf_1 (f:nat -> nat) : PFunction 1
-  := fun xs => Some (f (hd xs)).
-
-Definition make_pf_2 (f:nat -> nat -> nat) : PFunction 2
-  := fun xs => Some (f (hd xs) (hd (tl xs))).
-
-Definition make_pf_3 (f:nat -> nat -> nat -> nat) : PFunction 3
-  := fun xs => Some (f (hd xs) (hd (tl xs)) (hd (tl (tl xs)))).
-
-(* We recover the examples from the paper. *)
-Definition C_Inc (p t:Pid) : Choreography :=
-  Send p this t;; Send t succ_this p;; End.
-
-Definition P_Inc ps p t := Pack0 ps (C_Inc p t).
-
-Lemma P_Inc_char : forall ps p t s,
-  let s1 := update s t xx (s p xx) in
-  let tl := (List.cons (L_Com p (s p xx) t) (List.cons (L_Com t (S (s p xx)) p) List.nil)) in
-  (P_Inc ps p t, s) --[ tl ]-->* (Pack0 ps End, (update s1 p xx (S (s p xx)))).
-Proof.
-intros; eapply MCT_Step.
-1: { constructor. apply C_Com. }
-assert (S (s p xx) = eval_on_state succ_this s1 t).
-1: { unfold s1; simpl. rewrite update_read; auto. }
-eapply MCT_Step.
-- constructor. simpl. rewrite H. apply C_Com.
-- rewrite H. apply MCT_Refl.
-Qed.
-
-Lemma P_Inc_correct : forall ps p t, implements (P_Inc ps p t) (make_pf_1 (fun n => S n)) [p] p.
-Proof.
-unfold make_pf_1; split; intros; inversion H0.
-generalize (P_Inc_char ps p t s).
-set (s1 := update s t xx (s p xx)).
-set (s2 := update s1 p xx (S (s p xx))).
-set (tl1 := L_Com p (s p xx) t).
-set (tl2 := L_Com t (S (s p xx)) p).
-set (tls := List.cons tl1 (List.cons tl2 List.nil)).
-simpl; intros.
-exists s2, tls, (Pack0 ps End).
-repeat split; auto.
-unfold s2, s1; simpl.
-rewrite update_read.
-replace xs with [s p xx]; auto.
-apply eq_nth_iff; intros.
-rewrite <- H.
-repeat rewrite nth_hd'; auto.
-Qed.
-
-End Implementation.
-*)
-
 (** * Extensions of MC
     We require some additional operators on MC for our encoding. *)
 
@@ -337,7 +254,7 @@ Defined.
     - init is the label l
     - k is the first free recursion variable
 *)
-Fixpoint Implementation_aux {m} (f:PRFunction m) d (Hd:depth f<d)
+Fixpoint Encoding_rec {m} (f:PRFunction m) d (Hd:depth f<d)
   (ps:t Pid m) (q:Pid) (init:nat) (X:RecVar) {struct d}: RecVar -> Choreography.
 Proof.
 induction d.
@@ -358,8 +275,8 @@ induction d.
     pose (max_lt_l _ _ _ Hd') as Hdf.
     pose (max_lt_r _ _ _ Hd') as Hdfs.
     pose (vmax_lt_map _ _ Hdfs) as H.
-    pose (seq_compose fs _ H ps init (init+m) X (fun m f => Implementation_aux m f d)) as Pfs.
-    pose (Implementation_aux _ f _ Hdf (seq_labels init fs) q (init + m) (X + (vsum (map Gamma fs)))) as Pf.
+    pose (seq_compose fs _ H ps init (init+m) X (fun m f => Encoding_rec m f d)) as Pfs.
+    pose (Encoding_rec _ f _ Hdf (seq_labels init fs) q (init + m) (X + (vsum (map Gamma fs)))) as Pf.
     apply (fun Y => if Y <? X + vsum (map Gamma fs) then Pfs Y else Pf Y).
 
   (* Recursion *)
@@ -367,8 +284,8 @@ induction d.
     simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
     pose (max_lt_l _ _ _ Hd') as Hg.
     pose (max_lt_r _ _ _ Hd') as Hh.
-    pose (Implementation_aux _ g _ Hg (tl ps) init (init+3) X) as Pg.
-    pose (Implementation_aux _ h _ Hh (S init :: init :: tl ps) (init+2) (init+3 + Pi g) (X + Gamma g + 2)) as Ph.
+    pose (Encoding_rec _ g _ Hg (tl ps) init (init+3) X) as Pg.
+    pose (Encoding_rec _ h _ Hh (S init :: init :: tl ps) (init+2) (init+3 + Pi g) (X + Gamma g + 2)) as Ph.
     apply (fun Y =>
       if (Y <? X + Gamma g) then Pg Y
       else if (RecVar_dec Y (X + Gamma g)) then
@@ -381,7 +298,7 @@ induction d.
 
   (* Minimization *)
   - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
-    pose (Implementation_aux _ f _ Hf (shiftin (init+1) ps) init (init+3) (X + 1)) as Pf.
+    pose (Encoding_rec _ f _ Hf (shiftin (init+1) ps) init (init+3) (X + 1)) as Pf.
     apply (fun Y =>
       if (RecVar_dec Y X) then
          Send (init+2) zero (init+1);; Call (X + 1)
@@ -394,29 +311,29 @@ Defined.
 
 (** The definition in the paper uses auxiliary process names distinct from the ps and q,
     numbered from 0. We model this by using auxiliary processes higher than the ps and q. *)
-Definition Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Program :=
+Definition Encoding {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Program :=
   Build_Program
     (fun X => (all_pids ((max q (vmax ps)) + Pi f),
-               Implementation_aux f _ (lt_n_Sn (depth f)) ps q (S (max q (vmax ps))) 0 X))
+               Encoding_rec f _ (lt_n_Sn (depth f)) ps q (S (max q (vmax ps))) 0 X))
     (Call 0).
 
 (** By default, we take process 0 for q and 1..m for the ps. *)
-Definition Implementation' {m} (f:PRFunction m) : Program :=
-  Implementation f (vec_1_to_n m) 0.
+Definition Encoding' {m} (f:PRFunction m) : Program :=
+  Encoding f (vec_1_to_n m) 0.
 
 (* Sanity checks.
-Eval compute in (Main (Implementation' (Composition Successor [Zero]))).
-Eval compute in (map snd (map (Procedures (Implementation' (Composition Successor [Zero]))) [0;1;2])).
+Eval compute in (Main (Encoding' (Composition Successor [Zero]))).
+Eval compute in (map snd (map (Procedures (Encoding' (Composition Successor [Zero]))) [0;1;2])).
 
-Eval compute in (Main (Implementation' (Composition Zero [Projection aux13]))).
-Eval compute in (map snd (map (Procedures (Implementation' (Composition Zero [Projection aux13]))) [0;1;2])).
+Eval compute in (Main (Encoding' (Composition Zero [Projection aux13]))).
+Eval compute in (map snd (map (Procedures (Encoding' (Composition Zero [Projection aux13]))) [0;1;2])).
 
-Eval compute in (Main (Implementation' (Composition (Projection aux22) (Zero :: [Successor])))).
-Eval compute in (map snd (map (Procedures (Implementation' (Composition (Projection aux22) (Zero :: [Successor])))) [0;1;2;3])).
+Eval compute in (Main (Encoding' (Composition (Projection aux22) (Zero :: [Successor])))).
+Eval compute in (map snd (map (Procedures (Encoding' (Composition (Projection aux22) (Zero :: [Successor])))) [0;1;2;3])).
 
-Eval compute in (Main (Implementation' PR_add)).
-Eval compute in (map snd (map (Procedures (Implementation' PR_add)) [0;1;2;3;4;5;6])).
-Eval compute in (map snd (map (Procedures (Implementation' (Composition Successor [Projection aux23]))) [0;1;2])).
+Eval compute in (Main (Encoding' PR_add)).
+Eval compute in (map snd (map (Procedures (Encoding' PR_add)) [0;1;2;3;4;5;6])).
+Eval compute in (map snd (map (Procedures (Encoding' (Composition Successor [Projection aux23]))) [0;1;2])).
 *)
 
 End Definitions.
@@ -425,7 +342,7 @@ Section Soundness.
 
 (** Again - since the definitions are interactive, we prove that they behave as expected. *)
 Lemma Zero_Procs : forall d Hd ps q n X,
-  Implementation_aux Zero d Hd ps q n X X = Send (hd ps) zero q;; Call (S X).
+  Encoding_rec Zero d Hd ps q n X X = Send (hd ps) zero q;; Call (S X).
 Proof.
 intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
@@ -435,7 +352,7 @@ rewrite H; auto.
 Qed.
 
 Lemma Successor_Procs : forall d Hd ps q n X,
-  Implementation_aux Successor d Hd ps q n X X = Send (hd ps) succ_this q;; Call (S X).
+  Encoding_rec Successor d Hd ps q n X X = Send (hd ps) succ_this q;; Call (S X).
 Proof.
 intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
@@ -445,7 +362,7 @@ rewrite H; auto.
 Qed.
 
 Lemma Projection_Procs : forall k m (Hp:k<m) d Hd ps q n X,
-  Implementation_aux (Projection Hp) d Hd ps q n X X = Send ps[@Fin.of_nat_lt Hp] this q;; Call (S X).
+  Encoding_rec (Projection Hp) d Hd ps q n X X = Send ps[@Fin.of_nat_lt Hp] this q;; Call (S X).
 Proof.
 intros; induction d. inversion Hd.
 simpl. unfold Pack1; simpl.
@@ -478,8 +395,8 @@ Lemma Composition_Procs_fs : forall k m (fs:t (PRFunction k) m) g d (Hd:depth (C
   X <= Y < X + (vsum (map Gamma fs)) ->
   let Hd' := (lt_S_n (Nat.max (depth g) (vmax (map depth fs))) d Hd) in
   let Hf := (vmax_lt_map _ _ (max_lt_r _ _ _ Hd')) in
-  Implementation_aux (Composition g fs) _ Hd ps q n X Y =
-    seq_compose fs _ Hf ps n (n+m) X (fun m f => Implementation_aux f d) Y.
+  Encoding_rec (Composition g fs) _ Hd ps q n X Y =
+    seq_compose fs _ Hf ps n (n+m) X (fun m f => Encoding_rec f d) Y.
 Proof.
 intros; simpl.
 inversion_clear H.
@@ -490,8 +407,8 @@ Lemma Composition_Procs_g : forall k m (fs:t (PRFunction k) m) g d (Hd:depth (Co
   X + (vsum (map Gamma fs)) <= Y < X + Gamma (Composition g fs) ->
   let Hd' := (lt_S_n (Nat.max (depth g) (vmax (map depth fs))) d Hd) in
   let Hg := (max_lt_l _ _ _ Hd') in
-  Implementation_aux (Composition g fs) _ Hd ps q n X Y =
-    Implementation_aux g _ Hg (seq_labels n fs) q (n + m) (X + (vsum (map Gamma fs))) Y.
+  Encoding_rec (Composition g fs) _ Hd ps q n X Y =
+    Encoding_rec g _ Hg (seq_labels n fs) q (n + m) (X + (vsum (map Gamma fs))) Y.
 Proof.
 intros; simpl.
 inversion_clear H.
@@ -502,8 +419,8 @@ Lemma Recursion_Procs_g : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h
   X <= Y < X + Gamma g ->
   let Hd' := (lt_S_n (Nat.max (depth g) (depth h)) d Hd) in
   let Hg := (max_lt_l _ _ _ Hd') in
-  Implementation_aux (Recursion g h) _ Hd ps q n X Y =
-    Implementation_aux _ _ Hg (tl ps) n (n+3) X Y.
+  Encoding_rec (Recursion g h) _ Hd ps q n X Y =
+    Encoding_rec _ _ Hg (tl ps) n (n+3) X Y.
 Proof.
 intros; simpl.
 inversion_clear H.
@@ -511,7 +428,7 @@ rewrite <- Nat.ltb_lt in H1. rewrite H1; auto.
 Qed.
 
 Lemma Recursion_Procs_0 : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h) < S d) ps q n X,
-  Implementation_aux (Recursion g h) _ Hd ps q n X (X + Gamma g) =
+  Encoding_rec (Recursion g h) _ Hd ps q n X (X + Gamma g) =
     Send (n + 2) zero (S n);; Call (X + Gamma g + 1).
 Proof.
 intros; simpl.
@@ -522,7 +439,7 @@ apply Rdec.eqb_eq in H0. rewrite H0; auto.
 Qed.
 
 Lemma Recursion_Procs_1 : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h) < S d) ps q n X,
-  Implementation_aux (Recursion g h) _ Hd ps q n X (X + Gamma g + 1) =
+  Encoding_rec (Recursion g h) _ Hd ps q n X (X + Gamma g + 1) =
     IfEq (S n) (hd ps) (Send n this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2)).
 Proof.
 intros; simpl.
@@ -542,8 +459,8 @@ Lemma Recursion_Procs_h : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h
   X + Gamma g + 2 <= Y < X + Gamma g + Gamma h + 2 ->
   let Hd' := (lt_S_n (Nat.max (depth g) (depth h)) d Hd) in
   let Hh := (max_lt_r _ _ _ Hd') in
-  Implementation_aux (Recursion g h) _ Hd ps q n X Y =
-    Implementation_aux _ _ Hh (S n :: n :: tl ps) (n+2) (n+3 + Pi g) (X + Gamma g + 2) Y.
+  Encoding_rec (Recursion g h) _ Hd ps q n X Y =
+    Encoding_rec _ _ Hh (S n :: n :: tl ps) (n+2) (n+3 + Pi g) (X + Gamma g + 2) Y.
 Proof.
 intros; simpl.
 inversion_clear H.
@@ -570,7 +487,7 @@ assert (~ Y < X+Gamma g); intros.
 Qed.
 
 Lemma Recursion_Procs_2 : forall k (g:PRFunction k) h d (Hd:depth (Recursion g h) < S d) ps q n X,
-  Implementation_aux (Recursion g h) _ Hd ps q n X (X + Gamma g + Gamma h + 2) =
+  Encoding_rec (Recursion g h) _ Hd ps q n X (X + Gamma g + Gamma h + 2) =
     Send (n+2) this n;; Send (S n) this (n+2);; Send (n+2) succ_this (S n);; Call (X + Gamma g + 1).
 Proof.
 intros; simpl.
@@ -597,7 +514,7 @@ assert (~ X + Gamma g + Gamma h + 2 < X+Gamma g); intros.
 Qed.
 
 Lemma Minimization_Procs_0 : forall k (h:PRFunction (S k)) d (Hd:depth (Minimization h) < S d) ps q n X,
-  Implementation_aux (Minimization h) _ Hd ps q n X X =
+  Encoding_rec (Minimization h) _ Hd ps q n X X =
     Send (n+2) zero (n+1);; Call (X + 1).
 Proof.
 intros; simpl.
@@ -609,8 +526,8 @@ Qed.
 Lemma Minimization_Procs_h : forall k (h:PRFunction (S k)) d (Hd:depth (Minimization h) < S d) ps q n X Y,
   (X + 1) <= Y < X + Gamma h + 1 ->
   let Hh := (lt_S_n (depth h) d Hd) in
-  Implementation_aux (Minimization h) _ Hd ps q n X Y =
-    Implementation_aux h _ Hh (shiftin (n+1) ps) n (n+3) (X + 1) Y.
+  Encoding_rec (Minimization h) _ Hd ps q n X Y =
+    Encoding_rec h _ Hh (shiftin (n+1) ps) n (n+3) (X + 1) Y.
 Proof.
 intros; simpl.
 inversion_clear H.
@@ -622,7 +539,7 @@ apply Rdec.eqb_neq in H2. rewrite H2; auto.
 Qed.
 
 Lemma Minimization_Procs_1 : forall k (h:PRFunction (S k)) d (Hd:depth (Minimization h) < S d) ps q n X,
-  Implementation_aux (Minimization h) _ Hd ps q n X (X + Gamma h + 1) =
+  Encoding_rec (Minimization h) _ Hd ps q n X (X + Gamma h + 1) =
     Send (n+1) zero (n+2);; IfEq (n+2) n
             (Send (n+1) this q;; Call (X + Gamma h + 2))
             (Send (n+1) this (n+2);; Send (n+2) succ_this (n+1);; Call (X + 1)).
@@ -635,8 +552,8 @@ generalize (eq_refl (X + Gamma h + 1)); intro.
 apply Rdec.eqb_eq in H0. rewrite H0; auto.
 Qed.
 
-Lemma Implementation_aux_ge : forall {n} (f:PRFunction n) d Hd ps q i X Y,
-  Y >= X + Gamma f -> Implementation_aux f d Hd ps q i X Y = End.
+Lemma Encoding_rec_ge : forall {n} (f:PRFunction n) d Hd ps q i X Y,
+  Y >= X + Gamma f -> Encoding_rec f d Hd ps q i X Y = End.
 Proof.
 intros n f d; revert n f. induction d. inversion Hd.
 intros n f. case f; intros.
@@ -887,14 +804,14 @@ Qed.
 
 (*
 Lemma implements_WF : forall {n} (f:PRFunction n) ps q,
-  MCP_WF (Implementation f ps q).
+  MCP_WF (Encoding f ps q).
 Proof.
 *)
 
-Lemma Implementation_aux_converges : forall {n} (f:PRFunction n) d Hd ps q i X Defs ns y,
+Lemma Encoding_rec_converges : forall {n} (f:PRFunction n) d Hd ps q i X Defs ns y,
   ~In q ps -> (forall p, In p ps -> p < i) -> q < i ->
   (forall Y, X <= Y < X + Gamma f -> fst (Defs Y) <> List.nil) ->
-  (forall Y, X <= Y < X + Gamma f -> snd (Defs Y) = Implementation_aux f d Hd ps q i X Y) ->
+  (forall Y, X <= Y < X + Gamma f -> snd (Defs Y) = Encoding_rec f d Hd ps q i X Y) ->
   converges f ns y -> 
   forall (s:State), (forall H, s ps[@H] xx = ns[@H]) ->
   exists tl s', (Build_Program Defs (Call X),s) --[tl]-->* (Build_Program Defs (Call (X + Gamma f)),s')
@@ -963,7 +880,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
     generalize (fun Y HY => HDefs Y (H Y HY)).
     clear HDefs; intro HDefs.
     assert (exists k, forall Y, X <= Y < X + vsum (map Gamma fs) ->
-      snd (Defs Y) = seq_compose fs _ Hfs ps i (i+m+k) X (fun m f => Implementation_aux f d) Y).
+      snd (Defs Y) = seq_compose fs _ Hfs ps i (i+m+k) X (fun m f => Encoding_rec f d) Y).
     1: { exists 0; intros. rewrite HDefs'; auto. rewrite Composition_Procs_fs, plus_0_r; auto. }
     clearbody Hd' Hfs.
     clear g H'g H Hd Hd' Hg HDefs'; rename H0 into HDefs'.
@@ -1064,7 +981,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
     rewrite <- (plus_comm 3); simpl; auto.
   }
   assert (forall Y, X <= Y < X + Gamma g -> fst (Defs Y) <> List.nil) as HgDefs. eauto.
-  assert (forall Y, X <= Y < X + Gamma g -> snd (Defs Y) = Implementation_aux g _ Hg (tl ps) i (i+3) X Y) as HgDefs'.
+  assert (forall Y, X <= Y < X + Gamma g -> snd (Defs Y) = Encoding_rec g _ Hg (tl ps) i (i+3) X Y) as HgDefs'.
   1: {
     intros. elim H; intros. generalize (HDefs' _ (H' _ H)).
     rewrite Recursion_Procs_g; auto.
@@ -1167,7 +1084,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
         repeat apply plus_lt_compat_l; auto with arith.
       }
       assert (forall Y, X + Gamma g + 2 <= Y < X + Gamma g + 2 + Gamma h -> fst (Defs Y) <> List.nil) as HhDefs; auto.
-      assert (forall Y, X + Gamma g + 2 <= Y < X + Gamma g + 2 + Gamma h -> snd (Defs Y) = Implementation_aux h d Hh (S i :: i :: tl ps) (i + 2) (i + 3 + Pi g) (X + Gamma g + 2) Y) as HhDefs'; auto.
+      assert (forall Y, X + Gamma g + 2 <= Y < X + Gamma g + 2 + Gamma h -> snd (Defs Y) = Encoding_rec h d Hh (S i :: i :: tl ps) (i + 2) (i + 3 + Pi g) (X + Gamma g + 2) Y) as HhDefs'; auto.
       1: {
         intros. unfold Hh, Hd'; rewrite <- Recursion_Procs_h with (q:=q); auto.
         replace (X + Gamma g + Gamma h + 2) with (X + Gamma g + 2 + Gamma h); auto.
@@ -1269,7 +1186,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
     auto with arith.
   }
   assert (forall Y, X + 1 <= Y < X + 1 + Gamma h -> fst (Defs Y) <> List.nil) as HhDefs. eauto.
-  assert (forall Y, X + 1 <= Y < X + 1 + Gamma h -> snd (Defs Y) = Implementation_aux h _ Hd' (shiftin (i+1) ps) i (i+3) (X+1) Y) as HhDefs'.
+  assert (forall Y, X + 1 <= Y < X + 1 + Gamma h -> snd (Defs Y) = Encoding_rec h _ Hd' (shiftin (i+1) ps) i (i+3) (X+1) Y) as HhDefs'.
   1: {
     intros. elim H1; intros. generalize (HDefs' _ (H' _ H1)).
     rewrite Minimization_Procs_h; auto.
@@ -1391,33 +1308,33 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
       unfold s0. apply update_read'. apply gt_neq; auto with arith.
 Qed.
 
-Theorem Implementation_converges : forall {n} (f:PRFunction n) ps q ns y,
+Theorem Encoding_converges : forall {n} (f:PRFunction n) ps q ns y,
   ~In q ps -> converges f ns y -> 
   forall (s:State), (forall H, s ps[@H] xx = ns[@H]) ->
-  exists c' tl, (Implementation f ps q, s) --[tl]-->* c' /\ Main (fst c') = End /\ snd c' q xx = y.
+  exists c' tl, (Encoding f ps q, s) --[tl]-->* c' /\ Main (fst c') = End /\ snd c' q xx = y.
 Proof.
 intros.
 set (Hd := Nat.lt_succ_diag_r (depth f)).
 set (i := (S (max q (vmax ps)))).
-elim (Implementation_aux_converges f _ Hd ps q i 0 (Procedures (Implementation f ps q)) ns y H) with s; intros; auto.
+elim (Encoding_rec_converges f _ Hd ps q i 0 (Procedures (Encoding f ps q)) ns y H) with s; intros; auto.
 + destroy H2. rename x0 into s', x into tl.
   simpl (0 + Gamma f) in H2.
-  elim (Call_reduce (Procedures (Implementation f ps q)) (Gamma f) s'); intros.
+  elim (Call_reduce (Procedures (Encoding f ps q)) (Gamma f) s'); intros.
   2: apply all_pids_not_nil.
   rename x into tl'.
   eexists. exists (tl++tl')%list; repeat split.
   * eapply MCT_Trans; eauto.
-  * change (snd (Procedures (Implementation f ps q) (Gamma f)) = End).
-    apply Implementation_aux_ge; auto with arith.
+  * change (snd (Procedures (Encoding f ps q) (Gamma f)) = End).
+    apply Encoding_rec_ge; auto with arith.
   * auto.
 + apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
 + apply le_n_S. apply Nat.le_max_l.
 + apply all_pids_not_nil.
 Qed.
 
-Lemma Implementation_aux_End : forall {n} (f:PRFunction n) d Hd ps q i X Defs,
+Lemma Encoding_rec_End : forall {n} (f:PRFunction n) d Hd ps q i X Defs,
   (forall Y, X <= Y < X + Gamma f -> fst (Defs Y) <> List.nil) ->
-  (forall Y, X <= Y < X + Gamma f -> snd (Defs Y) = Implementation_aux f d Hd ps q i X Y) ->
+  (forall Y, X <= Y < X + Gamma f -> snd (Defs Y) = Encoding_rec f d Hd ps q i X Y) ->
   (forall p, In p ps -> p < i) -> q < i -> ~In q ps ->
   forall ns s, (forall H, s ps[@H] xx = ns[@H]) ->
   forall t s', (Build_Program Defs (Call X),s) --[t]-->* (Build_Program Defs End,s')
@@ -1488,7 +1405,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
     generalize (fun Y HY => HDefs Y (H Y HY)).
     clear HDefs; intro HDefs.
     assert (exists k, forall Y, X <= Y < X + vsum (map Gamma fs) ->
-      snd (Defs Y) = seq_compose fs _ Hfs ps i (i+m+k) X (fun m f => Implementation_aux f d) Y).
+      snd (Defs Y) = seq_compose fs _ Hfs ps i (i+m+k) X (fun m f => Encoding_rec f d) Y).
     1: { exists 0; intros. rewrite HDefs'; auto. rewrite Composition_Procs_fs, plus_0_r; auto. }
     clearbody Hd' Hfs.
     clear g H Hd Hd' Hg HDefs'; rename H0 into HDefs'.
@@ -1585,7 +1502,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
     rewrite <- (plus_comm 3); simpl; auto.
   }
   assert (forall Y, X <= Y < X + Gamma g -> fst (Defs Y) <> List.nil) as HgDefs. eauto.
-  assert (forall Y, X <= Y < X + Gamma g -> snd (Defs Y) = Implementation_aux g _ Hg (tl ps) i (i+3) X Y) as HgDefs'.
+  assert (forall Y, X <= Y < X + Gamma g -> snd (Defs Y) = Encoding_rec g _ Hg (tl ps) i (i+3) X Y) as HgDefs'.
   1: {
     intros. elim H; intros. generalize (HDefs' _ (H' _ H)).
     rewrite Recursion_Procs_g; auto.
@@ -1648,7 +1565,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
         repeat apply plus_lt_compat_l; auto with arith.
       }
       assert (forall Y, X + Gamma g + 2 <= Y < X + Gamma g + 2 + Gamma h -> fst (Defs Y) <> List.nil) as HhDefs; auto.
-      assert (forall Y, X + Gamma g + 2 <= Y < X + Gamma g + 2 + Gamma h -> snd (Defs Y) = Implementation_aux h d Hh (S i :: i :: tl ps) (i + 2) (i + 3 + Pi g) (X + Gamma g + 2) Y) as HhDefs'; auto.
+      assert (forall Y, X + Gamma g + 2 <= Y < X + Gamma g + 2 + Gamma h -> snd (Defs Y) = Encoding_rec h d Hh (S i :: i :: tl ps) (i + 2) (i + 3 + Pi g) (X + Gamma g + 2) Y) as HhDefs'; auto.
       1: {
         intros. unfold Hh, Hd'; rewrite <- Recursion_Procs_h with (q:=q); auto.
         replace (X + Gamma g + Gamma h + 2) with (X + Gamma g + 2 + Gamma h); auto.
@@ -1765,7 +1682,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
     auto with arith.
   }
   assert (forall Y, X + 1 <= Y < X + 1 + Gamma h -> fst (Defs Y) <> List.nil) as HhDefs. eauto.
-  assert (forall Y, X + 1 <= Y < X + 1 + Gamma h -> snd (Defs Y) = Implementation_aux h _ Hd' (shiftin (i+1) ps) i (i+3) (X+1) Y) as HhDefs'.
+  assert (forall Y, X + 1 <= Y < X + 1 + Gamma h -> snd (Defs Y) = Encoding_rec h _ Hd' (shiftin (i+1) ps) i (i+3) (X+1) Y) as HhDefs'.
   1: {
     intros. elim H1; intros. generalize (HDefs' _ (H' _ H1)).
     rewrite Minimization_Procs_h; auto.
@@ -1889,36 +1806,36 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
          exists x1; auto.
 Qed.
 
-Theorem Implementation_converges' : forall {n} (f:PRFunction n) ps q ns y,
+Theorem Encoding_converges' : forall {n} (f:PRFunction n) ps q ns y,
   ~In q ps -> forall (s:State), (forall H, s ps[@H] xx = ns[@H]) ->
-  (exists c' tl, (Implementation f ps q, s) --[tl]-->* c' /\ Main (fst c') = End /\ snd c' q xx = y)
+  (exists c' tl, (Encoding f ps q, s) --[tl]-->* c' /\ Main (fst c') = End /\ snd c' q xx = y)
   -> converges f ns y.
 Proof.
 intros. destroy H1. induction x; induction a.
 simpl in H1, H3. rewrite H3 in H2; clear H3 Main0. rename x0 into tl, b into s'.
 set (Hd := Nat.lt_succ_diag_r (depth f)).
 set (i := (S (max q (vmax ps)))).
-elim (Implementation_aux_End f _ Hd ps q i 0 (Procedures (Implementation f ps q))) with ns s tl s'; intros; auto.
+elim (Encoding_rec_End f _ Hd ps q i 0 (Procedures (Encoding f ps q))) with ns s tl s'; intros; auto.
 + destroy H3. rewrite <- H1. exists x1; auto.
-  elim (Call_reduce (Procedures (Implementation f ps q)) (0 + Gamma f) x0).
+  elim (Call_reduce (Procedures (Encoding f ps q)) (0 + Gamma f) x0).
   2: apply all_pids_not_nil.
   intros.
-  replace (snd (Procedures (Implementation f ps q) (0 + Gamma f))) with (Implementation_aux f _ Hd ps q i 0 (0 + Gamma f)) in H6.
+  replace (snd (Procedures (Encoding f ps q) (0 + Gamma f))) with (Encoding_rec f _ Hd ps q i 0 (0 + Gamma f)) in H6.
   2: reflexivity. 
-  rewrite (Implementation_aux_ge f _ Hd ps q i 0 (0 + Gamma f)) in H6; auto.
+  rewrite (Encoding_rec_ge f _ Hd ps q i 0 (0 + Gamma f)) in H6; auto.
   elim (diamond_5 _ _ _ _ _ _ _ _ H2 (MCT_Trans _ _ _ _ _ H4 H6)); auto. intros.
   destroy H7. elim (MCP_ToStar_End _ _ _ H8); auto; intros. inversion H10. clear H12.
   rewrite H7; auto.
 + apply all_pids_not_nil.
 + apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
 + apply le_n_S. apply Nat.le_max_l.
-+ unfold Implementation in H2. rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H2) in H2; auto.
++ unfold Encoding in H2. rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H2) in H2; auto.
 Qed.
 
-Theorem Implementation_diverges : forall {n} (f:PRFunction n) ps q ns,
+Theorem Encoding_diverges : forall {n} (f:PRFunction n) ps q ns,
   ~In q ps -> diverges f ns -> 
   forall (s:State), (forall H, s ps[@H] xx = ns[@H]) ->
-  forall c tl, (Implementation f ps q, s) --[tl]-->* c -> Main (fst c) <> End.
+  forall c tl, (Encoding f ps q, s) --[tl]-->* c -> Main (fst c) <> End.
 Proof.
 intros.
 red; intro.
@@ -1926,12 +1843,12 @@ set (Hd := Nat.lt_succ_diag_r (depth f)).
 set (i := (S (max q (vmax ps)))).
 induction c; induction a.
 simpl in H3; rewrite H3 in H2; clear Main0 H3. rename b into s'.
-elim (Implementation_aux_End f _ Hd ps q i 0 (Procedures (Implementation f ps q))) with ns s tl s'; intros; auto.
+elim (Encoding_rec_End f _ Hd ps q i 0 (Procedures (Encoding f ps q))) with ns s tl s'; intros; auto.
 + destroy H3. rewrite H0 in H3. inversion H3.
 + apply all_pids_not_nil.
 + apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
 + apply le_n_S. apply Nat.le_max_l.
-+ unfold Implementation in H2. rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H2) in H2; auto.
++ unfold Encoding in H2. rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H2) in H2; auto.
 Qed.
 
 Lemma vec_k_to_n_vmax : forall n k, 0 < n -> vmax (vec_k_to_n n k) = n + k - 1.
@@ -1943,16 +1860,16 @@ induction n; intros; inversion H.
 Qed.
 
 Theorem encoding_sound : forall n (f:PRFunction n),
-  implements (Implementation' f) f (vec_1_to_n n) 0.
+  implements (Encoding' f) f (vec_1_to_n n) 0.
 Proof.
 intros. apply implements_char.
 split; intros.
-+ elim (Implementation_converges f (vec_1_to_n n) 0 xs y) with s; intros; auto.
++ elim (Encoding_converges f (vec_1_to_n n) 0 xs y) with s; intros; auto.
   2: { intro. elim (in_vec_k_to_n _ H1); intros. inversion H2. }
   destroy H1. induction x. simpl in H1, H3.
   rename a into P, b into s', x0 into tl. exists s', tl, P.
   repeat split; auto.
-+ apply (Implementation_converges' f (vec_1_to_n n) 0 xs y) with s; auto.
++ apply (Encoding_converges' f (vec_1_to_n n) 0 xs y) with s; auto.
   intro. elim (in_vec_k_to_n _ H1); intros. inversion H2.
   destroy H0. exists (x1,x), x0; repeat split; auto.
 Qed.
@@ -1996,12 +1913,12 @@ apply In_RecVarList; auto.
 Qed.
 
 (** Choreography implementations are well-formed. *)
-Lemma Implementation_Main_WF : forall {n} (f:PRFunction n) ps q,
-  Choreography_WF (Main (Implementation f ps q)).
+Lemma Encoding_Main_WF : forall {n} (f:PRFunction n) ps q,
+  Choreography_WF (Main (Encoding f ps q)).
 Proof. intros. simpl. split; simpl; auto. Qed.
 
-Lemma Implementation_Main_within_Xs : forall {n} (f:PRFunction n) ps q Xs,
-  List.In 0 Xs -> within_Xs Xs (Main (Implementation f ps q)).
+Lemma Encoding_Main_within_Xs : forall {n} (f:PRFunction n) ps q Xs,
+  List.In 0 Xs -> within_Xs Xs (Main (Encoding f ps q)).
 Proof. auto. Qed.
 
 Lemma seq_compose_WF : forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
@@ -2021,9 +1938,9 @@ induction k; intro.
     rewrite plus_Snm_nSm. transitivity q; auto with arith.
 Qed.
 
-Lemma Implementation_aux_WF : forall m (f:PRFunction m) d Hd ps q n X Y,
+Lemma Encoding_rec_WF : forall m (f:PRFunction m) d Hd ps q n X Y,
   ~In q ps -> (forall p, In p ps -> p < n) -> q < n ->
-  Choreography_WF (Implementation_aux f d Hd ps q n X Y).
+  Choreography_WF (Encoding_rec f d Hd ps q n X Y).
 Proof.
 intros m f d; revert m f.
 induction d. inversion Hd.
@@ -2100,8 +2017,8 @@ induction k; intro.
   elim Nat.ltb; auto.
 Qed.
 
-Lemma Implementation_aux_initial : forall m (f:PRFunction m) d Hd ps q n X Y,
-  initial (Implementation_aux f d Hd ps q n X Y).
+Lemma Encoding_rec_initial : forall m (f:PRFunction m) d Hd ps q n X Y,
+  initial (Encoding_rec f d Hd ps q n X Y).
 Proof.
 intros m f d; revert m f.
 induction d. inversion Hd.
@@ -2111,8 +2028,8 @@ do 2 intro; case f; intros; simpl;
   repeat (elim RecVar_dec; simpl; auto).
 Qed.
 
-Lemma Implementation_Procs_Vars_not_nil : forall {n} (f:PRFunction n) ps q X,
-  Vars (Implementation f ps q) X <> List.nil.
+Lemma Encoding_Procs_Vars_not_nil : forall {n} (f:PRFunction n) ps q X,
+  Vars (Encoding f ps q) X <> List.nil.
 Proof.
 intros. unfold Vars; simpl.
 apply all_pids_not_nil.
@@ -2135,8 +2052,8 @@ induction k; intro.
     rewrite plus_assoc; auto with arith.
 Qed.
 
-Lemma Implementation_aux_within_Xs : forall m (f:PRFunction m) d Hd ps q n X,
-  forall Y, within_Xs (RecVarList (X+Gamma f)) (Implementation_aux f d Hd ps q n X Y).
+Lemma Encoding_rec_within_Xs : forall m (f:PRFunction m) d Hd ps q n X,
+  forall Y, within_Xs (RecVarList (X+Gamma f)) (Encoding_rec f d Hd ps q n X Y).
 Proof.
 intros m f d; revert m f.
 induction d. inversion Hd.
@@ -2268,9 +2185,9 @@ intros. revert init target H H0 H1 X Y p H2 H3. revert dependent m. induction m.
       apply H2 with Hd' q X' Y'; auto.
 Qed.
 
-Lemma Implements_aux_well_ann : forall {m} (f:PRFunction m) d Hd ps q i X Y,
+Lemma Encoding_rec_well_ann : forall {m} (f:PRFunction m) d Hd ps q i X Y,
   (forall p, In p ps -> p <= i) -> q <= i -> forall p,
-  List.In p (MCC_pn (Implementation_aux f d Hd ps q (S i) X Y) (fun _ => all_pids (i + Pi f))) -> p <= i + Pi f.
+  List.In p (MCC_pn (Encoding_rec f d Hd ps q (S i) X Y) (fun _ => all_pids (i + Pi f))) -> p <= i + Pi f.
 Proof.
 intros m f d; revert m f.
 induction d. inversion Hd.
@@ -2398,35 +2315,35 @@ do 2 intro; case f; simpl; intros; revert H1.
   * rewrite (plus_comm (Pi h)), plus_assoc; auto.
 Qed.
 
-Lemma Implements_WF : forall {n} (f:PRFunction n) ps q,
-  ~In q ps -> MCP_WF (Implementation f ps q).
+Lemma Encoding_WF : forall {n} (f:PRFunction n) ps q,
+  ~In q ps -> MCP_WF (Encoding f ps q).
 Proof.
 intros.
 exists (RecVarList (0+Gamma f)); split.
-+ split. apply Implementation_Main_WF.
-  split. apply Implementation_Main_within_Xs; apply RecVarList_In; auto with arith.
++ split. apply Encoding_Main_WF.
+  split. apply Encoding_Main_within_Xs; apply RecVarList_In; auto with arith.
   split. simpl; auto.
   split.
-  1: { apply Implementation_aux_WF; intros; auto; apply le_n_S.
+  1: { apply Encoding_rec_WF; intros; auto; apply le_n_S.
     2: apply Nat.le_max_l.
     transitivity (vmax ps). 2: apply Nat.le_max_r. apply vmax_In; auto.
   }
-  split. apply Implementation_aux_initial.
-  split. apply Implementation_Procs_Vars_not_nil.
-  apply Implementation_aux_within_Xs; simpl; auto.
+  split. apply Encoding_rec_initial.
+  split. apply Encoding_Procs_Vars_not_nil.
+  apply Encoding_rec_within_Xs; simpl; auto.
 + red; intro. unfold Vars; simpl.
   do 2 red; intros.
-  unfold Procs, Implementation, Procedures in H0.
-  apply Implements_aux_well_ann in H0.
+  unfold Procs, Encoding, Procedures in H0.
+  apply Encoding_rec_well_ann in H0.
   - apply all_pids_In; auto.
   - intros. apply Nat.max_le_iff. right; apply vmax_In; auto.
   - apply Nat.le_max_l.
 Qed.
 
-Lemma Implements'_WF : forall {n} (f:PRFunction n),
-  MCP_WF (Implementation' f).
+Lemma Encoding'_WF : forall {n} (f:PRFunction n),
+  MCP_WF (Encoding' f).
 Proof.
-intros; apply Implements_WF.
+intros; apply Encoding_WF.
 intro. elim (in_vec_k_to_n _ H); intros.
 inversion H0.
 Qed.
