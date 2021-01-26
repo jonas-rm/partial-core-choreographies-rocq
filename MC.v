@@ -602,13 +602,12 @@ Qed.
 
 (** This one is not decidable. *)
 
-Definition MCP_WF (P:Program) := exists Xs, Program_WF Xs P /\ well_ann P.
+Definition MCP_WF (P:Program) := well_ann P /\ exists Xs, Program_WF Xs P.
 
 Lemma MCP_WF_Main : forall P, MCP_WF P -> Choreography_WF (Main P).
 Proof.
 intros.
-inversion_clear H.
-inversion_clear H0.
+inversion_clear H; inversion_clear H1.
 apply Program_WF_Main with x; auto.
 Qed.
 
@@ -616,9 +615,8 @@ Lemma MCP_WF_Vars : forall P, MCP_WF P ->
   forall X, X_Free X (Main P) -> Vars P X <> nil.
 Proof.
 intros.
-inversion_clear H.
-rename x into Xs; inversion_clear H1.
-clear H2.
+inversion_clear H; inversion_clear H2.
+rename x into Xs.
 apply Program_WF_Vars with Xs; auto.
 apply Program_WF_Vars_In with P; auto.
 Qed.
@@ -627,32 +625,32 @@ Lemma MCP_WF_eta : forall Defs C eta,
   MCP_WF (Build_Program Defs (eta;;C)) -> MCP_WF (Build_Program Defs C).
 Proof.
 intros.
-inversion_clear H; inversion_clear H0.
-exists x; split; auto. eapply Program_WF_eta; eauto.
+inversion_clear H; inversion_clear H1.
+split; auto. exists x; auto. eapply Program_WF_eta; eauto.
 Qed.
 
 Lemma MCP_WF_Then : forall Defs p b C1 C2,
   MCP_WF (Build_Program Defs (If p ?? b Then C1 Else C2)) -> MCP_WF (Build_Program Defs C1).
 Proof.
 intros.
-inversion_clear H; inversion_clear H0.
-exists x; split; auto. eapply Program_WF_Then; eauto.
+inversion_clear H; inversion_clear H1.
+split; auto. exists x; auto. eapply Program_WF_Then; eauto.
 Qed.
 
 Lemma MCP_WF_Else : forall Defs p b C1 C2,
   MCP_WF (Build_Program Defs (If p ?? b Then C1 Else C2)) -> MCP_WF (Build_Program Defs C2).
 Proof.
 intros.
-inversion_clear H; inversion_clear H0.
-exists x; split; auto. eapply Program_WF_Else; eauto.
+inversion_clear H; inversion_clear H1.
+split; auto. exists x; auto. eapply Program_WF_Else; eauto.
 Qed.
 
 Lemma MCP_WF_Call : forall Defs X ps C,
   MCP_WF (Build_Program Defs (RT_Call X ps C)) -> MCP_WF (Build_Program Defs C).
 Proof.
 intros.
-inversion_clear H; inversion_clear H0.
-exists x; split; auto. eapply Program_WF_Call; eauto.
+inversion_clear H; inversion_clear H1.
+split; auto. exists x; auto. eapply Program_WF_Call; eauto.
 Qed.
 
 End Syntactic_Properties.
@@ -1592,14 +1590,13 @@ Lemma MCC_To_MCP_WF : forall P s l P' s',
   MCP_WF P -> (P,s) --[l]--> (P',s') -> MCP_WF P'.
 Proof.
 intros.
-inversion H0.
-inversion_clear H.
-rename x into Xs; exists Xs; inversion_clear H7.
-simpl; split.
-rewrite H5.
-apply (MCC_To_Program_WF _ _ _ _ _ _ H H0).
-rewrite <- H1 in H8.
-apply well_ann_Main_change with C; auto.
+inversion H0. inversion_clear H.
+inversion_clear H8. rename x into Xs.
+split.
++ rewrite <- H1 in H7.
+  apply well_ann_Main_change with C; auto.
++ exists Xs. rewrite H5.
+  apply (MCC_To_Program_WF _ _ _ _ _ _ H H0).
 Qed.
 
 Section BigStepSemantics.

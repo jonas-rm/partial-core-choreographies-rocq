@@ -2326,9 +2326,16 @@ Qed.
 Lemma Encoding_WF : forall {n} (f:PRFunction n) ps q,
   ~In q ps -> MCP_WF (Encoding f ps q).
 Proof.
-intros.
-exists (RecVarList (0+Gamma f)); split.
-+ split. apply Encoding_Main_WF.
+split.
++ red; intro. unfold Vars; simpl.
+  do 2 red; intros.
+  unfold Procs, Encoding, Procedures in H0.
+  apply Encoding_rec_well_ann in H0.
+  - apply all_pids_In; auto.
+  - intros. apply Nat.max_le_iff. right; apply vmax_In; auto.
+  - apply Nat.le_max_l.
++ exists (RecVarList (0+Gamma f)).
+  split. apply Encoding_Main_WF.
   split. apply Encoding_Main_within_Xs; apply RecVarList_In; auto with arith.
   split. simpl; auto.
   split.
@@ -2339,13 +2346,6 @@ exists (RecVarList (0+Gamma f)); split.
   split. apply Encoding_rec_initial.
   split. apply Encoding_Procs_Vars_not_nil.
   apply Encoding_rec_within_Xs; simpl; auto.
-+ red; intro. unfold Vars; simpl.
-  do 2 red; intros.
-  unfold Procs, Encoding, Procedures in H0.
-  apply Encoding_rec_well_ann in H0.
-  - apply all_pids_In; auto.
-  - intros. apply Nat.max_le_iff. right; apply vmax_In; auto.
-  - apply Nat.le_max_l.
 Qed.
 
 Lemma Encoding'_WF : forall {n} (f:PRFunction n),
