@@ -2133,34 +2133,42 @@ Lemma MCC_pn_all_pids_incl : forall C m n, m <= n ->
   -> (set_incl_pid (MCC_pn C (fun _ => all_pids n)) (all_pids n)).
 Proof.
 induction C; simpl; unfold set_incl_pid, set_incl; intros; auto.
-- inversion H1.
-- unfold set_incl_pid, set_incl in IHC.
+- (* Eta *)
+  unfold set_incl_pid, set_incl in IHC.
   elim (set_union_elim _ _ _ _ H1); intros.
   apply (all_pids_incl m); auto. apply H0. apply set_union_iff; auto.
   apply IHC with m; auto. intros; apply H0. apply set_union_iff; auto.
-- unfold set_incl_pid, set_incl in IHC.
-  elim (set_union_elim _ _ _ _ H1); intros.
-  apply (all_pids_incl m); auto. apply H0. apply set_union_iff; auto.
-  apply IHC with m; auto. intros; apply H0. apply set_union_iff; auto.
-- unfold set_incl_pid, set_incl in IHC1, IHC2.
+- (* Cond *)
+  unfold set_incl_pid, set_incl in IHC1, IHC2.
   elim (set_union_elim _ _ _ _ H1); intros. elim (set_union_elim _ _ _ _ a); intros.
   apply (all_pids_incl m); auto. apply H0. apply set_union_iff; left. apply set_union_iff; auto.
   apply IHC1 with m; auto. intros; apply H0. apply set_union_iff; left. apply set_union_iff; auto.
   apply IHC2 with m; auto. intros; apply H0. apply set_union_iff; auto.
+- (* RT_Call *)
+  unfold set_incl_pid, set_incl in IHC.
+  elim (set_union_elim _ _ _ _ H1); intros.
+  apply (all_pids_incl m); auto. apply H0. apply set_union_iff; auto.
+  apply IHC with m; auto. intros; apply H0. apply set_union_iff; auto.
+- (* End *)
+  inversion H1.
 Qed.
 
 Lemma MCC_pn_eta : forall p f f' C, (forall X, f X = f' X) -> List.In p (MCC_pn C f) -> List.In p (MCC_pn C f').
 Proof.
 induction C; simpl; auto; intros.
-+ rewrite <- H; auto.
-+ apply set_union_intro; elim (set_union_elim _ _ _ _ H0); auto.
++ (* Eta *)
+  apply set_union_intro; elim (set_union_elim _ _ _ _ H0); auto.
   right; apply IHC; auto.
-+ apply set_union_intro; elim (set_union_elim _ _ _ _ H0); auto.
-  right; apply IHC; auto.
-+ apply set_union_intro; elim (set_union_elim _ _ _ _ H0); auto.
++ (* Cond *)
+  apply set_union_intro; elim (set_union_elim _ _ _ _ H0); auto.
   2: right; apply IHC2; auto.
   left. apply set_union_intro; elim (set_union_elim _ _ _ _ a); auto.
   right; apply IHC1; auto.
++ (* Call *)
+  rewrite <- H; auto.
++ (* RT_Call *)
+  apply set_union_intro; elim (set_union_elim _ _ _ _ H0); auto.
+  right; apply IHC; auto.
 Qed.
 
 Lemma seq_compose_well_ann : forall {k m} (fs:t (PRFunction k) m) d Hd ps target init X Impl Y,
