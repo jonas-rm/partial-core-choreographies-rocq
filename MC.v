@@ -206,13 +206,7 @@ Proof.
 intros. intro. apply H. red. simpl. apply set_union_intro2. auto.
 Qed.
 
-(** A choreography is well-formed if:
-    - it does not contain self-communications;
-    - annotations are correct;
-    - annotations of runtime terms are not empty.
-*)
-
-(** We start with the set of process names in a choreography. *)
+(** The set of process names in a choreography. *)
 
 Definition set_union_pid := set_union P.eq_dec.
 
@@ -233,19 +227,10 @@ end.
 
 Definition set_incl_pid := set_incl P.eq_dec.
 
-(** A program is well-annotated if every process used by a procedure is in its annotation. *)
-
-Definition well_ann (P:Program) : Prop :=
-  forall X, set_incl_pid (MCC_pn (Procs P X) (Vars P)) (Vars P X).
-
-Lemma well_ann_Main_change : forall Defs C C',
-  well_ann (Build_Program Defs C) -> well_ann (Build_Program Defs C').
-Proof.
-intros.
-intro.
-unfold Procs, Vars; simpl.
-apply H.
-Qed.
+(** A choreography is well-formed if:
+    - it does not contain self-communications;
+    - annotations of runtime terms are not empty.
+*)
 
 (** No process attempts to communicate with itself. *)
 
@@ -387,8 +372,9 @@ Qed.
 
 (** A program is well-formed if there is a finite set of procedures Xs such that:
     - main and all procedures in Xs are well-formed
+    - all procedures in Xs are initial
     - main and all procedures in Xs only call procedures in Xs
-    - annotations are consistent
+    - annotations in main are consistent
 *)
 
 Fixpoint within_Xs (Xs:list RecVar) (C:Choreography) : Prop :=
@@ -598,6 +584,20 @@ eapply Program_WF_Main_change; eauto.
 split; auto.
 apply (Program_WF_Main_within_Xs _ _ H).
 destroy H. inversion_clear H5; auto.
+Qed.
+
+(** A program is well-annotated if every process used by a procedure is in its annotation. *)
+
+Definition well_ann (P:Program) : Prop :=
+  forall X, set_incl_pid (MCC_pn (Procs P X) (Vars P)) (Vars P X).
+
+Lemma well_ann_Main_change : forall Defs C C',
+  well_ann (Build_Program Defs C) -> well_ann (Build_Program Defs C').
+Proof.
+intros.
+intro.
+unfold Procs, Vars; simpl.
+apply H.
 Qed.
 
 (** This one is not decidable. *)
