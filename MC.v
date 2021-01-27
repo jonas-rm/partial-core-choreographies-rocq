@@ -833,6 +833,290 @@ Proof. intros. rewrite <- forget_Sel. constructor. apply C_Sel'. Qed.
 
 End Sanity_Checks.
 
+Section Properties.
+
+(** ** Main properties of the semantics
+  Deadlock-freedom by design *)
+
+Theorem progress : forall P, Main P <> End -> MCP_WF P ->
+  forall s, exists tl c', (P,s) --[tl]--> c'.
+Proof.
+induction P.
+rename Procedures0 into Ps, Main0 into C.
+induction C; intros.
++ (* Eta *)
+  case_eq e; do 2 eexists; do 2 constructor; ESEr.
++ (* Cond *)
+  case_eq (beval_on_state b s p).
+  - do 2 eexists; constructor; apply C_Then'; auto.
+  - do 2 eexists; constructor; apply C_Else'; auto.
++ (* Call *)
+  rename r into X; set (ps := fst (Ps X)).
+  simpl in H.
+  case_eq (set_size_pid ps); [idtac | intros; case_eq n].
+  - intro. exfalso.
+    unfold ps in H1.
+    generalize (MCP_WF_Vars _ H0 X); intros.
+    simpl in H2.
+    unfold Vars in H2; simpl in H2.
+    rewrite (set_size_0 _ _ H1) in H2.
+    apply H2; auto.
+    red. simpl. auto.
+  - intros.
+    rewrite H2 in H1; clear H2 n.
+    case_eq ps; intros.
+    1: { rewrite H2 in H1; inversion H1. }
+    unfold ps in H1, H2; clear ps.
+    assert (In p (fst (Ps X))). rewrite H2; left; auto.
+    do 2 eexists.
+    constructor; apply (C_Call_Local' Ps p X); auto.
+  - intros.
+    rewrite H2 in H1; clear n H2.
+    case_eq ps; intros.
+    1: { rewrite H2 in H1; inversion H1. }
+    unfold ps in H1, H2; clear ps.
+    assert (set_size_pid (fst (Ps X)) > 1).
+    1: { rewrite H1; auto with arith. }
+    assert (In p (fst (Ps X))).
+    1: { rewrite H2; left; auto. }
+    do 2 eexists.
+    constructor; apply (C_Call_Start' Ps p); auto.
++ (* RT_Call *)
+  case_eq (set_size_pid l); intros; [idtac | case_eq n].
+  - clear H IHC; exfalso.
+    generalize (MCP_WF_Main _ H0).
+    simpl; intros.
+    inversion_clear H.
+    inversion_clear H3.
+    elim H; eapply set_size_0; apply H1.
+  - intros.
+    rewrite H2 in H1; clear n H2.
+    case_eq l; intro.
+    1: { rewrite H2 in H1; inversion H1. }
+    do 2 eexists; constructor.
+    apply C_Call_Finish'.
+    1: { rewrite <- H2; auto. }
+    left; eauto.
+  - intros.
+    rewrite H2 in H1; clear n H2.
+    case_eq l; intro.
+    1: { rewrite H2 in H1; inversion H1. }
+    do 2 eexists; constructor. apply C_Call_Enter'.
+    1: { rewrite <- H2; rewrite H1; auto with arith. }
+    left; eauto.
++ (* End *)
+  simpl in H. elim H; auto.
+Qed.
+
+(** Reductions preserve well-formedness. *)
+
+Lemma MCC_To_within_Xs : forall P s l P' s' Xs,
+  Program_WF Xs P -> (P,s) --[l]--> (P',s') -> within_Xs Xs (Main P').
+Proof.
+intros.
+revert H.
+inversion_clear H0.
+simpl; intros.
+generalize (Program_WF_within_Xs _ _ H0); intros.
+unfold Procs in H1; simpl in H1.
+generalize (Program_WF_Main_within_Xs _ _ H0); simpl; intros.
+clear H0.
+induction H; simpl; try (inversion_clear H2); auto.
+Qed.
+
+Lemma MCC_To_consistent : forall P s l P' s' Xs,
+  Program_WF Xs P -> (P,s) --[l]--> (P',s') ->
+  consistent (Vars P') (Main P').
+Proof.
+intros.
+revert H.
+inversion_clear H0.
+simpl; intros.
+generalize (Program_WF_consistent _ _ H0); intros.
+unfold Vars in H1; simpl in H1.
+unfold Vars; simpl.
+generalize (Program_WF_initial_Proc _ _ H0); intros.
+generalize (Program_WF_Main_within_Xs _ _ H0); simpl; intros.
+unfold Procs in H2; simpl in H2.
+clear H0.
+induction H; auto; inversion_clear H1; auto.
+1,2: inversion_clear H3; split; auto.
++ apply initial_consistent; auto.
++ split. unfold set_incl_pid, set_remove_pid. intro; apply set_remove'_1.
+  apply initial_consistent; auto.
++ split; auto.
+  unfold set_incl_pid, set_remove_pid; red; intros.
+  apply set_remove'_1 in H1; auto.
+Qed.
+
+Lemma MCC_To_Program_WF : forall P s l P' s' Xs,
+  Program_WF Xs P -> (P,s) --[l]--> (P',s') -> Program_WF Xs P'.
+Proof.
+intros.
+generalize (MCC_To_within_Xs _ _ _ _ _ Xs H H0); intro HXs.
+inversion H0; auto.
+generalize (MCC_To_consistent _ _ _ _ _ Xs H H0); intro HXs'.
+rewrite <- H1 in H; rewrite <- H5 in HXs, HXs'.
+clear s'0 H6 s0 H3 H5 H0 P' H1 P H2 l.
+apply Program_WF_Main_change with C; auto.
+clear HXs HXs'.
+generalize (Program_WF_Main _ _ H); simpl; intro HC.
+induction H4.
++ eapply Choreography_WF_eta; eauto.
++ eapply Choreography_WF_eta; eauto.
++ eapply Choreography_WF_Then; eauto.
++ eapply Choreography_WF_Else; eauto.
++ inversion_clear HC.
+  inversion_clear H1; simpl in H2.
+  destroy H.
+  elim IHMCC_To; repeat (split; auto).
++ inversion_clear HC.
+  inversion_clear H1; inversion_clear H2.
+  assert (Choreography_WF C1). split; auto.
+  assert (Choreography_WF C2). split; auto.
+  generalize (Program_WF_Then _ _ _ _ _ _ H); intro.
+  generalize (Program_WF_Else _ _ _ _ _ _ H); intro.
+  elim IHMCC_To1; auto; elim IHMCC_To2; auto; intros.
+  split; split; auto.
++ assert (Choreography_WF C).
+  1: { inversion_clear HC. simpl in H1; inversion_clear H2; split; auto. }
+  assert (within_Xs Xs C).
+  1: { elim (Program_WF_Main_within_Xs _ _ H); auto. }
+  assert (consistent (fun X => fst (Defs X)) C).
+  1: { elim (Program_WF_consistent _ _ H); auto. }
+  generalize (Program_WF_Main_change _ _ _ _ H1 H2 H3 H); intro.
+  assert (Choreography_WF C'); auto; clear IHMCC_To.
+  inversion_clear H6. repeat split; simpl; auto.
+  inversion_clear HC. inversion_clear H9; auto.
++ change (Choreography_WF (Procs (Build_Program Defs (Call X)) X)).
+  apply Program_WF_Proc with Xs; auto.
+  apply (Program_WF_Vars_In _ _ H). red; simpl; auto.
++ elim (Program_WF_Proc _ _ H X); intros.
+  2: apply (Program_WF_Vars_In _ _ H); red; simpl; auto.
+  split; simpl; auto.
+  split; auto.
+  revert H1; case (fst (Defs X)); intros.
+  1: exfalso; inversion H1.
+  intro.
+  unfold set_size_pid in H1.
+  rewrite (set_size_remove' P.eq_dec) with (p0::l) p in H1; auto.
+  - unfold set_remove_pid in H5; rewrite H5 in H1.
+    elim (lt_irrefl _ H1).
+  - revert H5; simpl. elim P.eq_dec; auto.
+    intros. inversion H5.
++ elim (Program_WF_Proc _ _ H X); intros.
+  2: {
+    apply (Program_WF_Vars_In _ _ H); red; simpl.
+    apply set_union_intro1; simpl; auto.
+  }
+  inversion_clear HC.
+  simpl in H4, H5.
+  split; simpl; auto.
+  inversion_clear H6; split; auto.
+  unfold set_size_pid in H1.
+  rewrite (set_size_remove' P.eq_dec) with ps p in H1; auto.
+  unfold set_remove_pid; intro. rewrite H6 in H1.
+  elim (lt_irrefl _ H1).
++ destroy HC. repeat split; auto.
+Qed.
+
+Lemma MCC_To_MCP_WF : forall P s l P' s',
+  MCP_WF P -> (P,s) --[l]--> (P',s') -> MCP_WF P'.
+Proof.
+intros.
+inversion H0. inversion_clear H.
+inversion_clear H8. rename x into Xs.
+split.
++ rewrite <- H1 in H7.
+  apply well_ann_Main_change with C; auto.
++ exists Xs. rewrite H5.
+  apply (MCC_To_Program_WF _ _ _ _ _ _ H H0).
+Qed.
+
+End Properties.
+
+Section BigStepSemantics.
+
+Lemma RT_Call_reduce : forall Defs X ps C s, (ps <> List.nil) ->
+  exists tl, (Build_Program Defs (RT_Call X ps C),s) --[tl]-->* (Build_Program Defs C,s).
+Proof.
+intros.
+set (n := set_size_pid ps).
+assert (n = set_size_pid ps); auto.
+clearbody n; revert ps H H0.
+induction n; intros.
++ symmetry in H0; apply set_size_0 in H0. exfalso; auto.
++ case_eq n; intros.
+  - rewrite H1 in H0; clear IHn H1 n.
+    case_eq ps; intros. rewrite H1 in H; elim H; auto.
+    exists (L_Tau p::List.nil)%list.
+    econstructor. 2: constructor.
+    replace (L_Tau p) with (forget (R_Call X p)); auto.
+    constructor. apply C_Call_Finish'; [rewrite <- H1 | simpl]; auto.
+  - case_eq ps; intros. rewrite H2 in H; elim H; auto.
+    rewrite H1 in H0, IHn; clear n H1; rename n0 into n.
+    assert (S n = set_size_pid (set_remove_pid p ps)).
+    1: {
+      unfold set_size_pid in H0.
+      rewrite (set_size_remove' P.eq_dec ps p) in H0; auto.
+      rewrite H2; simpl; auto.
+    }
+    elim (IHn (set_remove_pid p ps)); intros; auto.
+    2: { intro. rewrite H3 in H1. simpl in H1; inversion H1. }
+    rename x into tls.
+    exists (L_Tau p :: tls)%list.
+    eapply MCT_Step with (Build_Program Defs (RT_Call X (set_remove_pid p ps) C),s); auto.
+    replace (L_Tau p) with (forget (R_Call X p)); auto.
+    constructor. rewrite H2; apply C_Call_Enter'.
+    rewrite <- H2, <- H0; auto with arith.
+    simpl; auto.
+Qed.
+
+Lemma Call_reduce : forall (Defs:DefSet) X s, (fst (Defs X) <> List.nil) ->
+  exists tl, (Build_Program Defs (Call X),s) --[tl]-->* (Build_Program Defs (snd (Defs X)),s).
+Proof.
+intros.
+case_eq (set_size_pid (fst (Defs X))); intros; [idtac | case_eq n]; intros.
++ exfalso; apply set_size_0 in H0; auto.
++ rewrite H1 in H0; clear n H1.
+  case_eq (fst (Defs X)); intros. exfalso; auto.
+  exists (L_Tau p::List.nil)%list.
+  econstructor. 2: constructor.
+  replace (L_Tau p) with (forget (R_Call X p)); auto.
+  change (fst (A:=set P.t) (Defs X) = p::l)%list in H1.
+  constructor. apply C_Call_Local'; auto. rewrite H1; simpl; auto.
++ rewrite H1 in H0; clear n H1. rename n0 into n.
+  case_eq (fst (Defs X)); intros. exfalso; auto.
+  assert (set_remove_pid p (fst (Defs X)) <> List.nil).
+  1: {
+    intro. unfold set_size_pid, set_remove_pid in H0, H2.
+    rewrite (set_size_remove' P.eq_dec (fst (Defs X)) p) in H0.
+    2: rewrite H1; simpl; auto.
+    rewrite H2 in H0. inversion H0.
+  }
+  elim (RT_Call_reduce Defs X (set_remove_pid p (fst (Defs X))) (snd (Defs X)) s); auto.
+  intros.
+  exists (L_Tau p :: x)%list.
+  eapply MCT_Step; eauto.
+  replace (L_Tau p) with (forget (R_Call X p)); auto.
+  constructor. apply C_Call_Start'.
+  - change (set_size_pid (fst (A:=set P.t) (Defs X)) = S (S n)) in H0.
+    rewrite H0; auto with arith.
+  - change (fst (A:=set P.t) (Defs X) = p::l)%list in H1.
+    rewrite H1; simpl; auto.
+Qed.
+
+Lemma MCT_Trans : forall c tl c' tl' c'',
+  c --[tl]-->* c' -> c' --[tl']-->* c'' -> c --[tl++tl']-->* c''.
+Proof.
+intros c tl; revert c.
+induction tl; simpl; intros; inversion H; auto.
+simpl. apply MCT_Step with c2; auto.
+apply IHtl with c'; auto.
+Qed.
+
+End BigStepSemantics.
+
 Section Uniqueness.
 
 (** ** Results on determinism of the semantics. *)
@@ -1403,283 +1687,6 @@ apply (R_Sel_reduce_neq _ _ _ _ _ _ _ _ _ _ _ _ _ H2 H9); auto.
 Qed.
 
 End Uniqueness.
-
-(** * Deadlock-freedom by design *)
-
-Theorem progress : forall P, Main P <> End -> MCP_WF P ->
-  forall s, exists tl c', (P,s) --[tl]--> c'.
-Proof.
-induction P.
-rename Procedures0 into Ps, Main0 into C.
-induction C; intros.
-+ (* Eta *)
-  case_eq e; do 2 eexists; do 2 constructor; ESEr.
-+ (* Cond *)
-  case_eq (beval_on_state b s p).
-  - do 2 eexists; constructor; apply C_Then'; auto.
-  - do 2 eexists; constructor; apply C_Else'; auto.
-+ (* Call *)
-  rename r into X; set (ps := fst (Ps X)).
-  simpl in H.
-  case_eq (set_size_pid ps); [idtac | intros; case_eq n].
-  - intro. exfalso.
-    unfold ps in H1.
-    generalize (MCP_WF_Vars _ H0 X); intros.
-    simpl in H2.
-    unfold Vars in H2; simpl in H2.
-    rewrite (set_size_0 _ _ H1) in H2.
-    apply H2; auto.
-    red. simpl. auto.
-  - intros.
-    rewrite H2 in H1; clear H2 n.
-    case_eq ps; intros.
-    1: { rewrite H2 in H1; inversion H1. }
-    unfold ps in H1, H2; clear ps.
-    assert (In p (fst (Ps X))). rewrite H2; left; auto.
-    do 2 eexists.
-    constructor; apply (C_Call_Local' Ps p X); auto.
-  - intros.
-    rewrite H2 in H1; clear n H2.
-    case_eq ps; intros.
-    1: { rewrite H2 in H1; inversion H1. }
-    unfold ps in H1, H2; clear ps.
-    assert (set_size_pid (fst (Ps X)) > 1).
-    1: { rewrite H1; auto with arith. }
-    assert (In p (fst (Ps X))).
-    1: { rewrite H2; left; auto. }
-    do 2 eexists.
-    constructor; apply (C_Call_Start' Ps p); auto.
-+ (* RT_Call *)
-  case_eq (set_size_pid l); intros; [idtac | case_eq n].
-  - clear H IHC; exfalso.
-    generalize (MCP_WF_Main _ H0).
-    simpl; intros.
-    inversion_clear H.
-    inversion_clear H3.
-    elim H; eapply set_size_0; apply H1.
-  - intros.
-    rewrite H2 in H1; clear n H2.
-    case_eq l; intro.
-    1: { rewrite H2 in H1; inversion H1. }
-    do 2 eexists; constructor.
-    apply C_Call_Finish'.
-    1: { rewrite <- H2; auto. }
-    left; eauto.
-  - intros.
-    rewrite H2 in H1; clear n H2.
-    case_eq l; intro.
-    1: { rewrite H2 in H1; inversion H1. }
-    do 2 eexists; constructor. apply C_Call_Enter'.
-    1: { rewrite <- H2; rewrite H1; auto with arith. }
-    left; eauto.
-+ (* End *)
-  simpl in H. elim H; auto.
-Qed.
-
-Lemma MCC_To_within_Xs : forall P s l P' s' Xs,
-  Program_WF Xs P -> (P,s) --[l]--> (P',s') -> within_Xs Xs (Main P').
-Proof.
-intros.
-revert H.
-inversion_clear H0.
-simpl; intros.
-generalize (Program_WF_within_Xs _ _ H0); intros.
-unfold Procs in H1; simpl in H1.
-generalize (Program_WF_Main_within_Xs _ _ H0); simpl; intros.
-clear H0.
-induction H; simpl; try (inversion_clear H2); auto.
-Qed.
-
-Lemma MCC_To_consistent : forall P s l P' s' Xs,
-  Program_WF Xs P -> (P,s) --[l]--> (P',s') ->
-  consistent (Vars P') (Main P').
-Proof.
-intros.
-revert H.
-inversion_clear H0.
-simpl; intros.
-generalize (Program_WF_consistent _ _ H0); intros.
-unfold Vars in H1; simpl in H1.
-unfold Vars; simpl.
-generalize (Program_WF_initial_Proc _ _ H0); intros.
-generalize (Program_WF_Main_within_Xs _ _ H0); simpl; intros.
-unfold Procs in H2; simpl in H2.
-clear H0.
-induction H; auto; inversion_clear H1; auto.
-1,2: inversion_clear H3; split; auto.
-+ apply initial_consistent; auto.
-+ split. unfold set_incl_pid, set_remove_pid. intro; apply set_remove'_1.
-  apply initial_consistent; auto.
-+ split; auto.
-  unfold set_incl_pid, set_remove_pid; red; intros.
-  apply set_remove'_1 in H1; auto.
-Qed.
-
-Lemma MCC_To_Program_WF : forall P s l P' s' Xs,
-  Program_WF Xs P -> (P,s) --[l]--> (P',s') -> Program_WF Xs P'.
-Proof.
-intros.
-generalize (MCC_To_within_Xs _ _ _ _ _ Xs H H0); intro HXs.
-inversion H0; auto.
-generalize (MCC_To_consistent _ _ _ _ _ Xs H H0); intro HXs'.
-rewrite <- H1 in H; rewrite <- H5 in HXs, HXs'.
-clear s'0 H6 s0 H3 H5 H0 P' H1 P H2 l.
-apply Program_WF_Main_change with C; auto.
-clear HXs HXs'.
-generalize (Program_WF_Main _ _ H); simpl; intro HC.
-induction H4.
-+ eapply Choreography_WF_eta; eauto.
-+ eapply Choreography_WF_eta; eauto.
-+ eapply Choreography_WF_Then; eauto.
-+ eapply Choreography_WF_Else; eauto.
-+ inversion_clear HC.
-  inversion_clear H1; simpl in H2.
-  destroy H.
-  elim IHMCC_To; repeat (split; auto).
-+ inversion_clear HC.
-  inversion_clear H1; inversion_clear H2.
-  assert (Choreography_WF C1). split; auto.
-  assert (Choreography_WF C2). split; auto.
-  generalize (Program_WF_Then _ _ _ _ _ _ H); intro.
-  generalize (Program_WF_Else _ _ _ _ _ _ H); intro.
-  elim IHMCC_To1; auto; elim IHMCC_To2; auto; intros.
-  split; split; auto.
-+ assert (Choreography_WF C).
-  1: { inversion_clear HC. simpl in H1; inversion_clear H2; split; auto. }
-  assert (within_Xs Xs C).
-  1: { elim (Program_WF_Main_within_Xs _ _ H); auto. }
-  assert (consistent (fun X => fst (Defs X)) C).
-  1: { elim (Program_WF_consistent _ _ H); auto. }
-  generalize (Program_WF_Main_change _ _ _ _ H1 H2 H3 H); intro.
-  assert (Choreography_WF C'); auto; clear IHMCC_To.
-  inversion_clear H6. repeat split; simpl; auto.
-  inversion_clear HC. inversion_clear H9; auto.
-+ change (Choreography_WF (Procs (Build_Program Defs (Call X)) X)).
-  apply Program_WF_Proc with Xs; auto.
-  apply (Program_WF_Vars_In _ _ H). red; simpl; auto.
-+ elim (Program_WF_Proc _ _ H X); intros.
-  2: apply (Program_WF_Vars_In _ _ H); red; simpl; auto.
-  split; simpl; auto.
-  split; auto.
-  revert H1; case (fst (Defs X)); intros.
-  1: exfalso; inversion H1.
-  intro.
-  unfold set_size_pid in H1.
-  rewrite (set_size_remove' P.eq_dec) with (p0::l) p in H1; auto.
-  - unfold set_remove_pid in H5; rewrite H5 in H1.
-    elim (lt_irrefl _ H1).
-  - revert H5; simpl. elim P.eq_dec; auto.
-    intros. inversion H5.
-+ elim (Program_WF_Proc _ _ H X); intros.
-  2: {
-    apply (Program_WF_Vars_In _ _ H); red; simpl.
-    apply set_union_intro1; simpl; auto.
-  }
-  inversion_clear HC.
-  simpl in H4, H5.
-  split; simpl; auto.
-  inversion_clear H6; split; auto.
-  unfold set_size_pid in H1.
-  rewrite (set_size_remove' P.eq_dec) with ps p in H1; auto.
-  unfold set_remove_pid; intro. rewrite H6 in H1.
-  elim (lt_irrefl _ H1).
-+ destroy HC. repeat split; auto.
-Qed.
-
-Lemma MCC_To_MCP_WF : forall P s l P' s',
-  MCP_WF P -> (P,s) --[l]--> (P',s') -> MCP_WF P'.
-Proof.
-intros.
-inversion H0. inversion_clear H.
-inversion_clear H8. rename x into Xs.
-split.
-+ rewrite <- H1 in H7.
-  apply well_ann_Main_change with C; auto.
-+ exists Xs. rewrite H5.
-  apply (MCC_To_Program_WF _ _ _ _ _ _ H H0).
-Qed.
-
-Section BigStepSemantics.
-
-Lemma RT_Call_reduce : forall Defs X ps C s, (ps <> List.nil) ->
-  exists tl, (Build_Program Defs (RT_Call X ps C),s) --[tl]-->* (Build_Program Defs C,s).
-Proof.
-intros.
-set (n := set_size_pid ps).
-assert (n = set_size_pid ps); auto.
-clearbody n; revert ps H H0.
-induction n; intros.
-+ symmetry in H0; apply set_size_0 in H0. exfalso; auto.
-+ case_eq n; intros.
-  - rewrite H1 in H0; clear IHn H1 n.
-    case_eq ps; intros. rewrite H1 in H; elim H; auto.
-    exists (L_Tau p::List.nil)%list.
-    econstructor. 2: constructor.
-    replace (L_Tau p) with (forget (R_Call X p)); auto.
-    constructor. apply C_Call_Finish'; [rewrite <- H1 | simpl]; auto.
-  - case_eq ps; intros. rewrite H2 in H; elim H; auto.
-    rewrite H1 in H0, IHn; clear n H1; rename n0 into n.
-    assert (S n = set_size_pid (set_remove_pid p ps)).
-    1: {
-      unfold set_size_pid in H0.
-      rewrite (set_size_remove' P.eq_dec ps p) in H0; auto.
-      rewrite H2; simpl; auto.
-    }
-    elim (IHn (set_remove_pid p ps)); intros; auto.
-    2: { intro. rewrite H3 in H1. simpl in H1; inversion H1. }
-    rename x into tls.
-    exists (L_Tau p :: tls)%list.
-    eapply MCT_Step with (Build_Program Defs (RT_Call X (set_remove_pid p ps) C),s); auto.
-    replace (L_Tau p) with (forget (R_Call X p)); auto.
-    constructor. rewrite H2; apply C_Call_Enter'.
-    rewrite <- H2, <- H0; auto with arith.
-    simpl; auto.
-Qed.
-
-Lemma Call_reduce : forall (Defs:DefSet) X s, (fst (Defs X) <> List.nil) ->
-  exists tl, (Build_Program Defs (Call X),s) --[tl]-->* (Build_Program Defs (snd (Defs X)),s).
-Proof.
-intros.
-case_eq (set_size_pid (fst (Defs X))); intros; [idtac | case_eq n]; intros.
-+ exfalso; apply set_size_0 in H0; auto.
-+ rewrite H1 in H0; clear n H1.
-  case_eq (fst (Defs X)); intros. exfalso; auto.
-  exists (L_Tau p::List.nil)%list.
-  econstructor. 2: constructor.
-  replace (L_Tau p) with (forget (R_Call X p)); auto.
-  change (fst (A:=set P.t) (Defs X) = p::l)%list in H1.
-  constructor. apply C_Call_Local'; auto. rewrite H1; simpl; auto.
-+ rewrite H1 in H0; clear n H1. rename n0 into n.
-  case_eq (fst (Defs X)); intros. exfalso; auto.
-  assert (set_remove_pid p (fst (Defs X)) <> List.nil).
-  1: {
-    intro. unfold set_size_pid, set_remove_pid in H0, H2.
-    rewrite (set_size_remove' P.eq_dec (fst (Defs X)) p) in H0.
-    2: rewrite H1; simpl; auto.
-    rewrite H2 in H0. inversion H0.
-  }
-  elim (RT_Call_reduce Defs X (set_remove_pid p (fst (Defs X))) (snd (Defs X)) s); auto.
-  intros.
-  exists (L_Tau p :: x)%list.
-  eapply MCT_Step; eauto.
-  replace (L_Tau p) with (forget (R_Call X p)); auto.
-  constructor. apply C_Call_Start'.
-  - change (set_size_pid (fst (A:=set P.t) (Defs X)) = S (S n)) in H0.
-    rewrite H0; auto with arith.
-  - change (fst (A:=set P.t) (Defs X) = p::l)%list in H1.
-    rewrite H1; simpl; auto.
-Qed.
-
-Lemma MCT_Trans : forall c tl c' tl' c'',
-  c --[tl]-->* c' -> c' --[tl']-->* c'' -> c --[tl++tl']-->* c''.
-Proof.
-intros c tl; revert c.
-induction tl; simpl; intros; inversion H; auto.
-simpl. apply MCT_Step with c2; auto.
-apply IHtl with c'; auto.
-Qed.
-
-End BigStepSemantics.
 
 Section Confluence.
 
