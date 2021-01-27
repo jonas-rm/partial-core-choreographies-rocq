@@ -314,14 +314,14 @@ Lemma strongly_projectable_C : forall Defs C r,
   strongly_projectable Defs C r -> collapse (bproj Defs C r) <> XUndefined.
 Proof.
 induction C; simpl.
-+ discriminate.
-+ intro; elim in_dec; discriminate.
-+ intro; elim in_dec; auto. discriminate.
-  intros. inversion_clear H; auto.
 + intro; induction e; elim Pid_dec;
   [idtac | elim Pid_dec | elim l | elim l; elim Pid_dec];
     auto; simpl; intros; try (rewrite Xmatch_elim; auto; discriminate).
 + intro; elim Pid_dec; tauto.
++ intro; elim in_dec; discriminate.
++ intro; elim in_dec; auto. discriminate.
+  intros. inversion_clear H; auto.
++ discriminate.
 Qed.
 
 Lemma strongly_projectable_C' : forall Defs C ps,
@@ -339,7 +339,6 @@ Lemma initial_strongly_projectable : forall C, initial C ->
   forall r, In r ps -> strongly_projectable Defs C r.
 Proof.
 induction C; auto; simpl; intros.
-+ inversion H.
 + induction e.
   - apply projectable_inv_Com in H0; eauto.
   - apply projectable_inv_Sel in H0; eauto.
@@ -350,9 +349,8 @@ induction C; auto; simpl; intros.
     generalize (H0 (r,collapse (bproj Defs (If p ?? b Then C1 Else C2) r))); intros.
     simpl in H; apply H.
     apply in_map_iff. exists r; auto.
++ inversion H.
 Qed.
-
-(** TODO: prove that all implementations are strongly projectable. *)
 
 Ltac Peq := unfold Pid_dec; rewrite Pdec.eqb_refl; simpl.
 Ltac Eeq := unfold Expr_dec; rewrite Edec.eqb_refl; simpl.
@@ -374,10 +372,6 @@ Lemma bproj_not_In : forall Defs r C,
   ~In r (MCC_pn C (fun X => fst (Defs X))) -> bproj Defs C r = XEnd.
 Proof.
 induction C; simpl; auto; intros.
-+ elim in_dec; auto. intro; elim H; auto.
-+ elim in_dec; intros.
-  - elim H; sup.
-  - apply IHC. intro; apply H; sup.
 + assert (bproj Defs C r = XEnd).
   1: apply IHC; intro; apply H; sup.
   induction e.
@@ -397,6 +391,10 @@ induction C; simpl; auto; intros.
   2: rewrite H0, H1; auto.
   intros; unfold Pid_dec in H2; rewrite Pdec.eqb_eq in H2.
   elim H; rewrite H2; simpl; sup. left; sup. left; left; auto.
++ elim in_dec; auto. intro; elim H; auto.
++ elim in_dec; intros.
+  - elim H; sup.
+  - apply IHC. intro; apply H; sup.
 Qed.
 
 Lemma merge_Cond_reduce : forall Defs Xs r C1 C2 s t C1' C2' s',
