@@ -397,6 +397,128 @@ induction C; simpl; auto; intros.
   - apply IHC. intro; apply H; sup.
 Qed.
 
+Lemma bproj_disjoint : forall Defs e C p, ~In p (eta_pn e) ->
+  bproj Defs (e;; C) p = bproj Defs C p.
+Proof.
+induction e; intros.
++ simpl in H. assert (p <> p1 /\ p0 <> p1). tauto.
+  inversion_clear H0.
+  rewrite <- Pdec.eqb_neq in H1, H2.
+  simpl. unfold Pid_dec; rewrite H1, H2; auto.
++ simpl in H. assert (p <> p1 /\ p0 <> p1). tauto.
+  inversion_clear H0.
+  rewrite <- Pdec.eqb_neq in H1, H2.
+  simpl. unfold Pid_dec; rewrite H1, H2; case l; auto.
+Qed.
+
+Lemma merge_Cond_reduce_1 : forall Defs C1 C2 s p v q x C1' C2' s',
+  let t := MCBase.TL.R_Com p v q x in
+  MCC_To Defs C1 s t C1' s' -> MCC_To Defs C2 s t C2' s' -> p <> q ->
+  collapse (Xmerge (bproj Defs C1 p) (bproj Defs C2 p)) <> XUndefined ->
+  exists e, collapse (Xmerge (bproj Defs C1 p) (bproj Defs C2 p))
+  = XSend q e (Xmerge (bproj Defs C1' p) (bproj Defs C2' p)).
+Proof.
+intros. rename H2 into HC1C2.
+revert C1 C1' s s' H C2 C2' H H0 H1 HC1C2.
+induction C1.
+(* End *) 5: intros; inversion H.
++ do 4 intro. inversion H; clear H.
+  - clear s'0 H8 C1 H3 x0 H7 q0 H6 p0 H4 s0 H1 C H2 IHC1 e H0.
+    rewrite H5 in H9; clear v1 H5. rename e0 into e.
+    induction C2; intros; inversion H0; revert HC1C2.
+    * rewrite <- H2; clear e0 H0 H2.
+      rewrite H6, H8, H10.
+      simpl. Peq. Peq. case_eq (Expr_dec e e1).
+      2: intros; elim HC1C2; auto.
+      exists e; simpl. revert HC1C2. rewrite H5.
+      case_eq (Xmerge (bproj Defs C1' p) (bproj Defs C2' p)); simpl; auto.
+      1,2,3: do 3 intro; case (collapse x1); auto; intros; elim HC1C2; auto.
+      3: intros; elim HC1C2; auto.
+      2: do 3 intro; case (collapse x1); case (collapse x2); auto; intros; elim HC1C2; auto.
+      do 3 intro. case o; case o0; auto.
+      2,3: intro; case (collapse x1); auto; intros; elim HC1C2; auto.
+      do 2 intro; case (collapse x1); case (collapse x2); auto; intros; elim HC1C2; auto.
+    * assert (~In p (eta_pn e0)).
+      red; intro. unfold t in H4.
+      induction e0; destroy H4; destroy H12; simpl in H11; tauto.
+      rewrite (bproj_disjoint Defs e0 C' p); auto.
+      rewrite (bproj_disjoint Defs e0 C2 p); auto.
+    * elim (IHC2_1 C1'0); auto.
+      elim (IHC2_2 C2'0); auto.
+      intros.
+      rename x0 into e', x1 into e'', p0 into p'.
+      revert H14 H15. simpl. Peq.
+      unfold t in H11; inversion_clear H11.
+      rewrite <- Pdec.eqb_neq in H14; rewrite H14.
+      case_eq (bproj Defs C2_2 p); simpl; intros; try (inversion H16; fail).
+      revert H16 H17.
+      case_eq (bproj Defs C2_1 p); simpl; intros; try (inversion H18; fail).
+      revert H17 H18.
+      case_eq (Pid_dec q p0); simpl. case_eq (Expr_dec e e0); simpl.
+      2: intros H'' H''' H'; inversion H'.
+      2: intros H'' H'; inversion H'.
+      elim (XUndefined_dec (Xmerge (bproj Defs C1' p) x0)); intro.
+      1: rewrite a; intros. inversion H19.
+      rewrite Xmatch_elim; auto. do 3 intro.
+      case_eq (Pid_dec q p2); simpl. case_eq (Expr_dec e e1); simpl.
+      2: intros H'' H''' H'; inversion H'.
+      2: intros H'' H'; inversion H'.
+      elim (XUndefined_dec (Xmerge (bproj Defs C1' p) x1)); intro.
+      1: rewrite a; intros. inversion H22.
+      rewrite Xmatch_elim; auto. do 3 intro.
+      unfold Pid_dec in H18, H21; rewrite Pdec.eqb_eq in H18, H21.
+      unfold Expr_dec in H17, H20; rewrite Edec.eqb_eq in H17, H20.
+      rewrite <- H17, <- H18, <- H20, <- H21. Peq. Eeq.
+      rewrite <- H17, <- H18 in H11; rewrite <- H20, <- H21 in H16.
+      clear p0 p2 e1 e0 H21 H20 H18 H17 s'0 H10 t0 H7 s0 H5 b0 H3 p1 H2 IHC2_1 IHC2_2.
+      assert (e' = e).
+      1: { revert H19. simpl. case_eq (collapse (Xmerge (bproj Defs C1' p) x0));
+        intros; inversion H19; auto. }
+      assert (e'' = e).
+      1: { revert H22. simpl. case_eq (collapse (Xmerge (bproj Defs C1' p) x1));
+        intros; inversion H22; auto. }
+      rewrite H2 in H19; rewrite H3 in H22; clear H2 H3 e' e''.
+      exists e.
+      elim (XUndefined_dec (Xmerge x1 x0)); intro.
+      1: { exfalso. revert HC1C2. simpl. Peq. rewrite H14, H11, H16.
+        simpl. Peq. Eeq. rewrite a. intro. elim HC1C2; auto. }
+      rewrite Xmatch_elim; auto. Peq. Eeq.
+      elim (XUndefined_dec (Xmerge (bproj Defs C1' p) (Xmerge x1 x0))); intro.
+      simpl in H19, H22.
+      rewrite a.
+
+merge B B1
+
+
+, C2; intros.
+(* C1 is End *) 21,22,23,24,25: inversion H.
+(* C2 is End *) 5,10,15,20: inversion H0.
+all: revert HC1C2.
++ (* Eta / Eta *)
+  inversion H; inversion H0.
+  - simpl. Peq. Peq. case_eq (Expr_dec e1 e2); simpl.
+    2: intros HE H'; elim H'; auto.
+    exists e1. revert HC1C2.
+    case_eq (Xmerge (bproj Defs C1' p) (bproj Defs C2' p)); simpl; auto.
+    1,2,3: do 3 intro; case (collapse x2); auto; intros; elim HC1C2; auto.
+    3: intros; elim HC1C2; auto.
+    * do 3 intro. case o; case o0; auto.
+      2,3: intro; case (collapse x2); auto; intros; elim HC1C2; auto.
+      do 2 intro; case (collapse x2); case (collapse x3); auto; intros; elim HC1C2; auto.
+    * do 3 intro; case (collapse x2); case (collapse x3); auto; intros; elim HC1C2; auto.
+  - apply IHC1.
+Peq. induction e0; unfold t in H14; destroy H14; destroy H20.
+    2: case l.
+    all: rewrite <- Pdec.eqb_neq in H22; rewrite H22.
+    all: rewrite <- Pdec.eqb_neq in H21; rewrite H21.
+    all: case (bproj Defs C2 p); simpl; try (intros; elim HC1C2; auto; fail).
+    all: do 3 intro; elim Pid_dec; elim Expr_dec; simpl; try (intros; elim HC1C2; auto; fail).
+    all: exists e1; case_eq (Xmerge (bproj Defs C1' p) x1); simpl; auto.
+
+
+
+
+
 Lemma merge_Cond_reduce : forall Defs Xs r C1 C2 s t C1' C2' s',
   projectable_D Xs Defs ->
   (forall X, set_incl_pid (MCC_pn (snd (Defs X)) (fun X => fst (Defs X))) (fst (Defs X))) ->
@@ -414,8 +536,57 @@ assert (B = Xmerge (bproj Defs C1 r) (bproj Defs C2 r)) as HB. auto.
 clearbody B.
 revert C1 C2 s t C1' C2' HC1 HC2 HC1' HC2' HC1'' HC2'' B HB HC1C2.
 double induction C1 C2; intros.
-(* C1 is End *) 1,2,3,4,5: inversion HC1'.
-(* C2 is End *) 1,6,11,16: inversion HC2'.
+(* C1 is End *) 21,22,23,24,25: inversion HC1'.
+(* C2 is End *) 5,10,15,20: inversion HC2'.
+all: revert HC1C2; rewrite HB; clear B HB.
++ (* Eta / Eta *)
+  simpl in HC1'', HC2''. clear HC1 HC2.
+  inversion HC1'; inversion HC2'; clear HC1' HC2'.
+  - clear H H0.
+    clear s'1 H13 s1 H9 C0 H10 s'0 H6 s0 H2 C H3 e H8 e0 H1.
+    rewrite H12 in HC2''; clear c H12.
+    rewrite H5 in HC1''; clear c0 H5.
+    rewrite <- H11 in H4; clear H11; inversion H4; clear H4.
+    clear H14.
+    rewrite <- H0, <- H2, <- H3. clear v0 H1 x0 H3 q0 H2 p0 H0.
+    simpl. case_eq (Pid_dec p r); simpl; [case_eq (Expr_dec e1 e2) | case_eq (Pid_dec q r)]; simpl; auto.
+    * Peq. intros. intro. apply HC1C2.
+      elim (XUndefined_dec (Xmerge (bproj Defs C1' r) (bproj Defs C2' r))); intros.
+      1: rewrite a; auto.
+      rewrite Xmatch_elim; auto.
+      simpl. rewrite H1; auto.
+    * Peq. intros; elim HC1C2; auto.
+    * Peq. Veq. intros. intro. apply HC1C2.
+      elim (XUndefined_dec (Xmerge (bproj Defs C1' r) (bproj Defs C2' r))); intros.
+      1: rewrite a; auto.
+      rewrite Xmatch_elim; auto.
+      simpl. rewrite H1; auto.
+  - rewrite <- H4 in H11; inversion H11.
+  - clear s'1 H14 t0 H12 s1 H11 C0 H9 eta H8 C2' H13 s'0 H6 s0 H2 C H3 e0 H1.
+    rewrite H5 in HC1'', H0; clear c0 H5.
+    induction e. all: rewrite <- H4 in H10; destroy H10; destroy H1.
+    2: case l.
+    all: simpl; case_eq (Pid_dec p r); case_eq (Pid_dec p0 r); simpl.
+    1,5: intros; elim H3; unfold Pid_dec in H5, H6;
+      rewrite Pdec.eqb_eq in H5, H6;rewrite H5, H6; auto.
+    1,3,4,6,8,10: case_eq (Pid_dec p1 r); simpl.
+    1,5,9,15: intros; elim HC1C2; auto.
+    2,3,5,6,8,9,10,11,12: case_eq (Pid_dec q r); simpl.
+    all: try (intros; elim HC1C2; auto; fail).
+    2: intros; elim H10; unfold Pid_dec in H5, H6;
+      rewrite Pdec.eqb_eq in H5, H6;rewrite H5, H6; auto.
+    1,3,6,9,14,15: case_eq (bproj Defs c r); try (intros; elim HC1C2; auto; fail); do 3 intro.
+    1,5,6: case_eq (Pid_dec q p2); simpl.
+    case_eq (Expr_dec e1 e0); simpl.
+    4,6: case_eq (Expr_dec e1 e); simpl.
+    10,11,12: case_eq (Pid_dec p p2); simpl.
+    all: try (intros; elim HC1C2; auto; fail).
+    
+
+
+
+
+
 + revert HC1C2. rewrite HB; clear B HB.
   simpl; case in_dec; case in_dec; auto.
   - simpl. case_eq (RecVar_dec (r1,r) (r0,r)); auto.
