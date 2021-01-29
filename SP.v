@@ -1,11 +1,11 @@
 Require Export Common.
-Require Import MC.
+Require Import CC.
 
 Local Open Scope nat_scope.
 
 Module SPBase (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
-(** Preamble: a lot of things just as in MC. *)
+(** Preamble: a lot of things just as in CC. *)
 
 Module Export PSt := LState V X.
 Module Export CSt := GState P V X.
@@ -242,7 +242,7 @@ elim (In_dec P.eq_dec p ps); intros.
 + rewrite H0; auto.
 Qed.
 
-(** Programs in SP are pairs, like choreography programs in MC. *)
+(** Programs in SP are pairs, like choreography programs in CC. *)
 
 Definition DefSetB := RecVar -> Behaviour.
 
@@ -708,7 +708,7 @@ Definition Network_eq_upTo (N:Network) ps N' : Prop :=
   forall p, ~In p ps -> N' p = N p.
 *)
 
-(** Same strategy as for MC. *)
+(** Same strategy as for CC. *)
 
 Inductive SP_To (Defs : DefSetB) :
   Network -> State -> RichLabel -> Network -> State -> Prop :=
@@ -801,7 +801,7 @@ Notation "C --[ ls ]-->* C'" := (SPP_ToStar C ls C') (at level 50, left associat
 Section Determinism.
 
 (** ** Results on determinism of the semantics.
-  These results are named consistently with MC. *)
+  These results are named consistently with CC. *)
 
 (** Reductions are preserved by state equivalence... *)
 
@@ -3224,7 +3224,7 @@ End Merge.
 
 End SPBase.
 
-(* The remaining is stuff from MC that it would be interesting to adapt.
+(* The remaining is stuff from CC that it would be interesting to adapt.
 
 
 (** Currently not used, but might prove useful. *)

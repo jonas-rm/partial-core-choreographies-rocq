@@ -803,17 +803,6 @@ Inductive CCP_ToStar : Configuration -> list TransitionLabel -> Configuration ->
  | CCT_Step c1 t c2 l c3 : CCP_To c1 t c2 -> CCP_ToStar c2 l c3 -> CCP_ToStar c1 (t::l) c3
 .
 
-(*
-(** A well-formed program is terminated if its main choreography is either 0 or a call to a terminated procedure. *)
-
-Definition terminated (P:Program) : Prop :=
-match Main P with
-| End    => True
-| Call X => (Vars P X) = nil
-| _      => False
-end.
-*)
-
 End Semantics_Definitions.
 
 (** Notations for reductions. *)

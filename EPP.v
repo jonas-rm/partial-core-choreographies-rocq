@@ -1,4 +1,4 @@
-Require Export MC.
+Require Export CC.
 Require Export SP.
 
 Local Open Scope nat_scope.
@@ -7,7 +7,7 @@ Module EPPBase (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
 Module PR := DecProd R P.
 
-Module Import MCBase := MCBase P X V E B R Ev BEv.
+Module Import CCBase := CCBase P X V E B R Ev BEv.
 Module Import SP_EPP := SPBase P X V E B PR Ev BEv.
 
 (*
@@ -41,7 +41,7 @@ Section EPP.
 (** First step: returns an XBehaviour, possibly with XUndefined subcomponents. *)
 Fixpoint bproj (Defs:DefSet) (C:Choreography) (r:Pid) : XBehaviour :=
 match C with
-| MCBase.End                => XEnd
+| CCBase.End                => XEnd
 | p#e --> q$x;; C'          => if Pid_dec p r
                                then XSend q e (bproj Defs C' r)
                                else if Pid_dec q r
@@ -60,7 +60,7 @@ match C with
 | If p ?? b Then C1 Else C2 => if Pid_dec p r
                                then XCond b (bproj Defs C1 r) (bproj Defs C2 r)
                                else Xmerge (bproj Defs C1 r) (bproj Defs C2 r)
-| MCBase.Call X             => if In_dec P.eq_dec r (fst (Defs X))
+| CCBase.Call X             => if In_dec P.eq_dec r (fst (Defs X))
                                then XCall (X,r)
                                else XEnd
 | RT_Call X ps C'           => if In_dec P.eq_dec r ps
@@ -82,9 +82,9 @@ Definition projectable_D Xs Defs :=
 Definition projectable Xs ps P :=
   projectable_C (Procedures P) ps (Main P) /\
   projectable_D Xs (Procedures P) /\
-  (forall p, In p (MCC_pn (Main P) (fun _ => nil)) -> In p ps) /\
+  (forall p, In p (CCC_pn (Main P) (fun _ => nil)) -> In p ps) /\
   (forall p X, In X Xs -> In p (fst (Procedures P X)) -> In p ps) /\
-  (forall p X, In X Xs -> In p (MCC_pn (snd (Procedures P X)) (fun _ => nil)) -> In p ps).
+  (forall p X, In X Xs -> In p (CCC_pn (snd (Procedures P X)) (fun _ => nil)) -> In p ps).
 
 (** Not decidable, but in practice easy to compute. 
   Maybe we want to compute ps from Xs? *)
@@ -212,8 +212,8 @@ elim (projectable_C_dec (Procedures P) ps (Main P)); intro HC.
 elim (projectable_D_dec Xs (Procedures P)); intro HD.
 2: right; intro; destroy H; auto.
 generalize (fun p => In_dec P.eq_dec p ps); intro.
-elim (Forall_dec (fun p => In p ps)) with (MCC_pn (Main P) (fun _ => nil)); auto; intro Hps.
-1: elim (Forall_dec (fun X => forall p, In p (MCC_pn (snd (Procedures P X)) (fun _ => nil)) -> In p ps)) with Xs; intro HXs1.
+elim (Forall_dec (fun p => In p ps)) with (CCC_pn (Main P) (fun _ => nil)); auto; intro Hps.
+1: elim (Forall_dec (fun X => forall p, In p (CCC_pn (snd (Procedures P X)) (fun _ => nil)) -> In p ps)) with Xs; intro HXs1.
 1: elim (Forall_dec (fun X => forall p, In p (fst (Procedures P X)) -> In p ps)) with Xs; intro HXs2.
 + left. rewrite Forall_forall in Hps, HXs1, HXs2.
   repeat split; eauto.
@@ -224,7 +224,7 @@ elim (Forall_dec (fun p => In p ps)) with (MCC_pn (Main P) (fun _ => nil)); auto
   - right; intro. apply b; rewrite Forall_forall; auto.
 + right; intro; apply HXs1.
   destroy H. rewrite Forall_forall; eauto.
-+ elim (Forall_dec (fun p => In p ps)) with (MCC_pn (snd (Procedures P HXs1)) (fun _ => nil)); auto.
++ elim (Forall_dec (fun p => In p ps)) with (CCC_pn (snd (Procedures P HXs1)) (fun _ => nil)); auto.
   - left. rewrite Forall_forall in a; eauto.
   - right; intro. apply b; rewrite Forall_forall; eauto.
 + right; intro; apply Hps.
@@ -369,7 +369,7 @@ Qed.
 Ltac sup := unfold set_union_pid; rewrite set_union_iff; auto.
 
 Lemma bproj_not_In : forall Defs r C,
-  ~In r (MCC_pn C (fun X => fst (Defs X))) -> bproj Defs C r = XEnd.
+  ~In r (CCC_pn C (fun X => fst (Defs X))) -> bproj Defs C r = XEnd.
 Proof.
 induction C; simpl; auto; intros.
 + assert (bproj Defs C r = XEnd).
@@ -411,9 +411,11 @@ induction e; intros.
   simpl. unfold Pid_dec; rewrite H1, H2; case l; auto.
 Qed.
 
+(* USE INVERSION RESULTS ON MERGE! *)
+
 Lemma merge_Cond_reduce_1 : forall Defs C1 C2 s p v q x C1' C2' s',
-  let t := MCBase.TL.R_Com p v q x in
-  MCC_To Defs C1 s t C1' s' -> MCC_To Defs C2 s t C2' s' -> p <> q ->
+  let t := CCBase.TL.R_Com p v q x in
+  CCC_To Defs C1 s t C1' s' -> CCC_To Defs C2 s t C2' s' -> p <> q ->
   collapse (Xmerge (bproj Defs C1 p) (bproj Defs C2 p)) <> XUndefined ->
   exists e, collapse (Xmerge (bproj Defs C1 p) (bproj Defs C2 p))
   = XSend q e (Xmerge (bproj Defs C1' p) (bproj Defs C2' p)).
@@ -521,7 +523,7 @@ Peq. induction e0; unfold t in H14; destroy H14; destroy H20.
 
 Lemma merge_Cond_reduce : forall Defs Xs r C1 C2 s t C1' C2' s',
   projectable_D Xs Defs ->
-  (forall X, set_incl_pid (MCC_pn (snd (Defs X)) (fun X => fst (Defs X))) (fst (Defs X))) ->
+  (forall X, set_incl_pid (CCC_pn (snd (Defs X)) (fun X => fst (Defs X))) (fst (Defs X))) ->
   (forall X ps C', (C1 = MCBase.Call X \/ C1 = RT_Call X ps C') -> In X Xs) ->
   (forall X ps C', (C2 = MCBase.Call X \/ C2 = RT_Call X ps C') -> In X Xs) ->
   consistent (fun X => fst (Defs X)) C1 -> consistent (fun X => fst (Defs X)) C2 -> 
@@ -767,7 +769,7 @@ destroy H0; intros. repeat split; auto.
       unfold set_union_pid; repeat rewrite set_union_iff; auto.
   - elim (set_union_elim _ _ _ _ H8); intro.
     1: apply H5, set_union_iff; auto.
-    fold MCC_pn in b.
+    fold CCC_pn in b.
     apply IHHt; auto.
     simpl.
     clear dependent p.
