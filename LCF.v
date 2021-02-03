@@ -1,10 +1,179 @@
-Require Import Arith.
-Require Export Basic.
-Require Export Common.
-Require Export MC.
-Require Export Implementation.
+Require Import SP.
 
-Module Export MC_Nat := Implementation.MC_Nat.
+Module Blah (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
+
+Module Import SP_LCF := SPBase P X V E B R Ev BEv.
+
+Local Ltac solve B B' H := try (elim (XUndefined_dec (Xmerge B B')); intro H;
+  [rewrite H| rewrite Xmatch_elim]; auto; fail).
+
+Lemma Xmerge_assoc : forall B B' B'',
+  Xmerge (Xmerge B B') B'' = Xmerge B (Xmerge B' B'').
+Proof.
+induction B, B', B''; simpl; auto.
+(* 84 cases *)
+(* Call *)
+6,19,32,45,58,71,77,78,79,80,81,82,83,84: case_eq (RecVar_dec r r0); intro Hrr0; auto; simpl.
+6,7: case_eq (RecVar_dec r0 r1); intro Hr0r1; auto; simpl.
+6,7: case_eq (RecVar_dec r r1); intro Hrr1; auto; simpl.
+6,7,9: rewrite Hrr0; auto.
+6,7: unfold RecVar_dec in Hrr0, Hr0r1, Hrr1.
+6: { rewrite Rdec.eqb_eq in Hrr0, Hr0r1. rewrite Rdec.eqb_neq in Hrr1.
+  rewrite Hrr0, Hr0r1 in Hrr1; elim Hrr1; auto. }
+6: { rewrite Rdec.eqb_eq in Hrr0, Hrr1. rewrite Rdec.eqb_neq in Hr0r1.
+  rewrite <- Hrr0, Hrr1 in Hr0r1; elim Hr0r1; auto. }
+(* 70 cases left *)
+(* Pid *)
+1,2,3,4,6,7,8,9,10,11,12,13,19,20,21,22,23,24,25,26,32,33,34,35,36,37,38,39,45,46,47,48,49,50,51,52,54,55,56,57,66,67,68,69:
+  case_eq (Pid_dec p p0); intro Hpp0; auto; simpl.
+6,7,17,27,36,37,50,51,52,54,55,56,58,59,60,62,63,64:
+  case_eq (Pid_dec p0 p1); intro Hp0p1; auto; simpl.
+1,5,6,7,17,20,23,26,27,28,29,30,31,55,59:
+  case_eq (Expr_dec e e0); intro Hee0; auto; simpl.
+17,26,31,33,35,36,37,38,39,40,41,42,58,61:
+  case_eq (Var_dec v v0); intro Hvv0; auto; simpl.
+32,40,42,45,46,47,48,49,50,51,52,53,61,63:
+  case_eq (eqb_label l l0); intro Hll0; auto; simpl.
+all: solve B B' HBB'. (* 21 cases *)
+4: { elim (XUndefined_dec (Xmerge B B')); intro. rewrite a; auto.
+  rewrite Xmatch_elim; auto.
+  simpl. case_eq (Pid_dec p p1); simpl; auto.
+  case_eq (Expr_dec e e1); simpl; auto.
+  intros; exfalso. unfold Pid_dec in Hpp0, Hp0p1, H0.
+  rewrite Pdec.eqb_eq in Hpp0, H0. rewrite Pdec.eqb_neq in Hp0p1.
+  elim Hp0p1. rewrite <- Hpp0; auto. }
+all: solve B' B'' HBB'. (* 18 cases *)
+1,2,8:
+  case_eq (Expr_dec e0 e1); intro He0e1; auto; simpl.
+5,6,7,8:
+  case_eq (Pid_dec p0 p1); intro Hp0p1; auto; simpl.
+5,7,12:
+  case_eq (Var_dec v0 v1); intro Hv0v1; auto; simpl.
+10,12,14:
+  case_eq (eqb_label l0 l1); intro Hl0l1; auto; simpl.
+(* 44 cases left *)
+1: { elim (XUndefined_dec (Xmerge B B')); intro HBB';
+  [rewrite HBB' | rewrite Xmatch_elim; auto].
+  all: elim (XUndefined_dec (Xmerge B' B'')); intro HB'B'';
+    [rewrite HB'B'' | rewrite Xmatch_elim; auto]; simpl; auto.
+  - rewrite Hpp0, Hee0, <- IHB, HBB'; auto.
+  - unfold Pid_dec; rewrite (Pdec.eqb_trans _ _ _ Hpp0 Hp0p1).
+    unfold Expr_dec; rewrite (Edec.eqb_trans _ _ _ Hee0 He0e1).
+    rewrite IHB, HB'B'', Xmerge_comm; simpl; auto.
+  - rewrite Hpp0, Hee0.
+    unfold Pid_dec; rewrite (Pdec.eqb_trans _ _ _ Hpp0 Hp0p1).
+    unfold Expr_dec; rewrite (Edec.eqb_trans _ _ _ Hee0 He0e1).
+    rewrite IHB; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B B')); intro HBB';
+  [rewrite HBB' | rewrite Xmatch_elim; auto]; simpl; auto.
+  unfold Pid_dec; rewrite (Pdec.eqb_trans _ _ _ Hpp0 Hp0p1).
+  unfold Expr_dec; rewrite (Edec.eqb_ntrans _ _ _ Hee0 He0e1).
+  simpl; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B' B'')); intro HB'B'';
+  [rewrite HB'B'' | rewrite Xmatch_elim; auto]; simpl; auto.
+  rewrite Hpp0, Hee0; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B' B'')); intro HB'B'';
+  [rewrite HB'B'' | rewrite Xmatch_elim; auto]; simpl; auto.
+  rewrite Hpp0; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B B')); intro HBB';
+  [rewrite HBB' | rewrite Xmatch_elim; auto].
+  all: elim (XUndefined_dec (Xmerge B' B'')); intro HB'B'';
+    [rewrite HB'B'' | rewrite Xmatch_elim; auto]; simpl; auto.
+  - rewrite Hpp0, Hvv0, <- IHB, HBB'; auto.
+  - unfold Pid_dec; rewrite (Pdec.eqb_trans _ _ _ Hpp0 Hp0p1).
+    unfold Var_dec; rewrite (Xdec.eqb_trans _ _ _ Hvv0 Hv0v1).
+    rewrite IHB, HB'B'', Xmerge_comm; simpl; auto.
+  - rewrite Hpp0, Hvv0.
+    unfold Pid_dec; rewrite (Pdec.eqb_trans _ _ _ Hpp0 Hp0p1).
+    unfold Var_dec; rewrite (Xdec.eqb_trans _ _ _ Hvv0 Hv0v1).
+    rewrite IHB; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B B')); intro HBB';
+  [rewrite HBB' | rewrite Xmatch_elim; auto]; simpl; auto.
+  unfold Pid_dec; rewrite (Pdec.eqb_trans _ _ _ Hpp0 Hp0p1).
+  unfold Var_dec; rewrite (Xdec.eqb_ntrans _ _ _ Hvv0 Hv0v1).
+  simpl; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B' B'')); intro HB'B'';
+  [rewrite HB'B'' | rewrite Xmatch_elim; auto]; simpl; auto.
+  rewrite Hpp0, Hvv0; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B' B'')); intro HB'B'';
+  [rewrite HB'B'' | rewrite Xmatch_elim; auto]; simpl; auto.
+  rewrite Hpp0; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B B')); intro HBB';
+  [rewrite HBB' | rewrite Xmatch_elim; auto]; simpl; auto.
+  unfold Pid_dec; rewrite (Pdec.eqb_ntrans _ _ _ Hpp0 Hp0p1); auto.
+}
+1: { elim (XUndefined_dec (Xmerge B B')); intro HBB';
+  [rewrite HBB' | rewrite Xmatch_elim; auto].
+  all: elim (XUndefined_dec (Xmerge B' B'')); intro HB'B'';
+    [rewrite HB'B'' | rewrite Xmatch_elim; auto]; simpl; auto.
+  - rewrite Hpp0, Hll0, <- IHB, HBB'; auto.
+  - unfold Pid_dec; rewrite (Pdec.eqb_trans _ _ _ Hpp0 Hp0p1).
+    rewrite (label_eqb_trans _ _ _ Hll0 Hl0l1).
+    rewrite IHB, HB'B'', Xmerge_comm; simpl; auto.
+  - rewrite Hpp0, Hll0.
+    unfold Pid_dec; rewrite (Pdec.eqb_trans _ _ _ Hpp0 Hp0p1).
+    rewrite (label_eqb_trans _ _ _ Hll0 Hl0l1).
+    rewrite IHB; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B B')); intro HBB';
+  [rewrite HBB' | rewrite Xmatch_elim; auto]; simpl; auto.
+  unfold Pid_dec; rewrite (Pdec.eqb_trans _ _ _ Hpp0 Hp0p1).
+  rewrite (label_eqb_ntrans _ _ _ Hll0 Hl0l1).
+  simpl; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B' B'')); intro HB'B'';
+  [rewrite HB'B'' | rewrite Xmatch_elim; auto]; simpl; auto.
+  rewrite Hpp0, Hll0; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B' B'')); intro HB'B'';
+  [rewrite HB'B'' | rewrite Xmatch_elim; auto]; simpl; auto.
+  rewrite Hpp0; auto.
+}
+1: { elim (XUndefined_dec (Xmerge B B')); intro HBB';
+  [rewrite HBB' | rewrite Xmatch_elim; auto]; simpl; auto.
+  unfold Pid_dec; rewrite (Pdec.eqb_ntrans _ _ _ Hpp0 Hp0p1); auto.
+}
+(* 30 cases left *)
+(* Cond *)
+17,18,19,20,21,30:
+  case_eq (BExpr_dec b b0); intro Hbb0; auto; simpl;
+  case (Xmerge B'1 B''1); case (Xmerge B'2 B''2); auto.
+17,18,19,20,21,23,24:
+  case_eq (BExpr_dec b b0); intro Hbb0; auto; simpl;
+  case (Xmerge B1 B'1); case (Xmerge B2 B'2); auto.
+17: {
+  case_eq (BExpr_dec b b0); intro Hbb0; auto.
+  all: case_eq (BExpr_dec b0 b1); intro Hb0b1; auto.
+  2: case (Xmerge B1 B'1); case (Xmerge B2 B'2); simpl;
+     unfold BExpr_dec; try rewrite (Bdec.eqb_ntrans _ _ _ Hbb0 Hb0b1); auto.
+  2: case (Xmerge B'1 B''1); case (Xmerge B'2 B''2); simpl;
+     try rewrite Hbb0; auto.
+  generalize (IHB1 B'1); clear IHB1.
+  generalize (IHB2 B'2); clear IHB2.
+  case B'1, B'2; simpl.
+  
+
+  case (Xmerge B1 B'1); case (Xmerge B2 B'2); simpl;
+  unfold BExpr_dec; try rewrite (Bdec.eqb_trans _ _ _ Hbb0 Hb0b1); auto.
+
+
+
+
+
+
+
+
+
+
+
 
 Open Scope MC_scope.
 

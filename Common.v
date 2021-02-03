@@ -34,11 +34,37 @@ intros; unfold eqb; elim (eq_label_dec l l'); intros; split; auto.
 + generalize b. case l; case l'; try easy.
 Qed.
 
+Lemma label_eqb_neq : forall (l l':Label), (eqb_label l l') = false <-> l <> l'.
+Proof.
+split; intros.
+- red. rewrite <- label_eqb_eq, H. intro; inversion H0.
+- red in H; rewrite <- label_eqb_eq in H.
+  case_eq (eqb_label l l'); auto. tauto.
+Qed.
+
 Lemma label_eqb_refl : forall l, eqb_label l l = true.
 Proof. intro. rewrite label_eqb_eq. auto. Qed.
 
 Lemma label_eqb_sym : forall l l0, eqb_label l l0 = eqb_label l0 l.
 Proof. intros. case l; case l0; auto. Qed.
+
+Lemma label_eqb_trans : forall l l0 l1,
+  eqb_label l l0 = true -> eqb_label l0 l1 = true -> eqb_label l l1 = true.
+Proof.
+intros.
+apply label_eqb_eq.
+transitivity l0; apply label_eqb_eq; auto.
+Qed.
+
+Lemma label_eqb_ntrans : forall l l0 l1,
+  eqb_label l l0 = true -> eqb_label l0 l1 = false -> eqb_label l l1 = false.
+Proof.
+intros.
+apply label_eqb_neq.
+apply label_eqb_eq in H.
+apply label_eqb_neq in H0.
+intro; apply H0. transitivity l; auto.
+Qed.
 
 End Labels.
 
@@ -82,6 +108,36 @@ Proof.
 intros. case_eq (x =? y); intro; symmetry.
 + rewrite eqb_eq. symmetry. rewrite <- eqb_eq. auto.
 + rewrite eqb_neq. rewrite eqb_neq in H. auto.
+Qed.
+
+Lemma eqb_trans : forall x y z,
+  (x =? y) = true -> (y =? z) = true -> (x =? z) = true.
+Proof.
+intros.
+rewrite eqb_eq in H, H0; rewrite eqb_eq.
+transitivity y; auto.
+Qed.
+
+Lemma eqb_ntrans : forall x y z,
+  (x =? y) = true -> (y =? z) = false -> (x =? z) = false.
+Proof.
+intros.
+rewrite eqb_eq in H.
+rewrite eqb_neq in H0.
+rewrite eqb_neq.
+intro; apply H0.
+transitivity x; auto.
+Qed.
+
+Lemma eqb_ntrans' : forall x y z,
+  (x =? y) = false -> (y =? z) = true -> (x =? z) = false.
+Proof.
+intros.
+rewrite eqb_eq in H0.
+rewrite eqb_neq in H.
+rewrite eqb_neq.
+intro; apply H.
+transitivity z; auto.
 Qed.
 
 End DecidableType.
