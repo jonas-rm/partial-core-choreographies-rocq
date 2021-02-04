@@ -2000,6 +2000,20 @@ Lemma inject_match : forall B T (X1 X2:T),
   match inject B with XUndefined => X1 | _ => X2 end = X2.
 Proof. induction B; try case o, o0; auto. Qed.
 
+Lemma inject_inj : forall B B', inject B = inject B' -> B = B'.
+Proof.
+induction B using Behaviour_ind'; induction B' using Behaviour_ind';
+  intros; auto; try inversion H;
+  try (induction mB, mB'; inversion H1; fail);
+  try (rewrite (IHB _ H3); auto).
++ induction mB, mB', mB0, mB'0; inversion H3; auto.
+  rewrite H with a b0; auto. rewrite H0 with b b1; auto.
+  rewrite H with a b; auto.
+  rewrite H0 with b b0; auto.
++ rewrite (IHB1 _ H2), (IHB2 _ H3); auto.
++ inversion H1; auto.
+Qed.
+
 Fixpoint Xmerge (B1 B2:XBehaviour) : XBehaviour :=
 match B1, B2 with
 | XEnd,                   XEnd           => XEnd
@@ -2106,6 +2120,14 @@ induction B1 using Behaviour_rec'; induction B2 using Behaviour_rec'; auto;
     exists (If b Then x Else x0); case x, x0; intros; try case o, o0; try case o1, o2; simpl; auto.
 + elim RecVar_dec; auto.
   right. exists (Call X); auto.
+Qed.
+
+Lemma merge_not_undefined : forall B B', merge B B' <> XUndefined ->
+  exists B'', merge B B' = inject B''.
+Proof.
+intros.
+elim (merge_undefined_or_behaviour B B'); auto.
+tauto.
 Qed.
 
 Lemma merge_idempotent : forall B, merge B B = inject B.

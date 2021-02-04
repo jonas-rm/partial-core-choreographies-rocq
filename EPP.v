@@ -480,6 +480,239 @@ induction B using Behaviour_ind'; intros;
 + inversion H. rewrite <- H1 in H0; inversion H0; constructor.
 Qed.
 
+Local Ltac lelim X B H H':=
+  elim (XUndefined_dec X); intro H;
+  [ rewrite H in H'; elim (inject_not_undefined B); auto
+  | rewrite Xmatch_elim in H'; auto ].
+
+Local Ltac lelim2 X Y B H H' H'' := lelim X B H H''; lelim Y B H' H''.
+
+Local Ltac mbsolve B B' := apply more_branches_trans with B;
+  [apply merge_more_branches with B' | idtac]; auto.
+
+Local Ltac mbsolve'' B B' := apply more_branches_trans with B;
+  [apply merge_more_branches' with B' | idtac]; auto.
+
+Local Ltac mbsolve' H := apply inject_inj in H; rewrite <- H; auto.
+
+Lemma more_branches_merge_extend : forall B1 B2 B1' B2' B,
+  more_branches B1 B1' -> more_branches B2 B2' -> merge B1 B2 = inject B ->
+  exists B', merge B1' B2' = inject B' /\ more_branches B B'.
+Proof.
+induction B1 using Behaviour_ind'.
+1,2,3,4,6,7: intros; inversion H; revert H0 H1.
++ unfold merge; simpl; case_eq B2; simpl; intros.
+  5: induction o, o0.
+  all: try (elim (inject_not_undefined B); auto; fail).
+  inversion H1. simpl. exists End; repeat split.
+  revert H2; case_eq B; intros; inversion H4.
+  constructor. induction o, o0; inversion H7.
++ unfold merge; simpl; case_eq B2; simpl; intros.
+  5: induction o, o0.
+  all: try (elim (inject_not_undefined B); auto; fail).
+  inversion H1. simpl.
+  clear B3 H11 e2 H10 p2 H8 H1 B2' H9 B2 H0 B1' H3 H B0 H5 e0 H4 p0 H2.
+  revert H7. elim Pid_dec. elim Expr_dec. all: simpl; intros.
+  2,3: elim (inject_not_undefined B); auto.
+  lelim (Xmerge (inject B1) (inject b)) B H' H7.
+  revert H7. case_eq B; intros; try inversion H7.
+  2: induction o, o0; inversion H7.
+  rewrite <- H2, <- H1; rewrite <- H2, <- H1 in H7, H; clear e0 p0 H2 H1 B H.
+  elim IHB1 with b B' B'0 b0; auto. intros.
+  rename x into B; destroy H.
+  unfold merge in H0; rewrite H0.
+  exists (p!e;B); split.
+  rewrite Xmatch_elim; auto. apply inject_not_undefined.
+  constructor; auto.
++ unfold merge; simpl; case_eq B2; simpl; intros.
+  5: induction o, o0.
+  all: try (elim (inject_not_undefined B); auto; fail).
+  inversion H1. simpl.
+  clear B3 H11 x0 H10 p2 H8 H1 B2' H9 B2 H0 B1' H3 H B0 H5 x H4 p0 H2.
+  revert H7. elim Pid_dec. elim Var_dec. all: simpl; intros.
+  2,3: elim (inject_not_undefined B); auto.
+  lelim (Xmerge (inject B1) (inject b)) B H' H7.
+  revert H7. case_eq B; intros; try inversion H7.
+  2: induction o, o0; inversion H7.
+  rewrite <- H2, <- H1; rewrite <- H2, <- H1 in H7, H; clear v1 p0 H2 H1 B H.
+  elim IHB1 with b B' B'0 b0; auto. intros.
+  rename x into B; destroy H.
+  unfold merge in H0; rewrite H0.
+  exists (p ? v;B); split.
+  rewrite Xmatch_elim; auto. apply inject_not_undefined.
+  constructor; auto.
++ unfold merge; simpl; case_eq B2; simpl; intros.
+  5: induction o, o0.
+  all: try (elim (inject_not_undefined B); auto; fail).
+  inversion H1. simpl.
+  clear B3 H11 l2 H10 p2 H8 H1 B2' H9 B2 H0 B1' H3 H B0 H5 l0 H4 p0 H2.
+  revert H7. elim Pid_dec. elim eqb_label. all: simpl; intros.
+  2,3: elim (inject_not_undefined B); auto.
+  lelim (Xmerge (inject B1) (inject b)) B H' H7.
+  revert H7. case_eq B; intros; try inversion H7.
+  2: induction o, o0; inversion H7.
+  rewrite <- H2, <- H1; rewrite <- H2, <- H1 in H7, H; clear l0 p0 H2 H1 B H.
+  elim IHB1 with b B' B'0 b0; auto. intros.
+  rename x into B; destroy H.
+  unfold merge in H0; rewrite H0.
+  exists (p(+)l;B); split.
+  rewrite Xmatch_elim; auto. apply inject_not_undefined.
+  constructor; auto.
++ clear B1' H4 B0 H5 B1 H3 b0 H2 H.
+  rename B1_1 into Bt, B1_2 into Be, B1'0 into Bt', B2'0 into Be'.
+  intro. unfold merge. case_eq B2; intros.
+  5: induction o, o0.
+  all: try (simpl in H1; elim (inject_not_undefined B); auto; fail).
+  rewrite H in H0; clear B2 H; inversion H0.
+  clear B2 H4 B1 H2 b3 H B2' H3 H0.
+  assert (b = b0).
+  1: {
+    revert H1; simpl. case_eq (BExpr_dec b b0); intros.
+    unfold BExpr_dec in H; rewrite Bdec.eqb_eq in H; auto.
+    elim (inject_not_undefined B); auto.
+  }
+  rewrite <- H in H1; rewrite <- H; clear H.
+  change (Xmerge (XCond b (inject Bt) (inject Be)) (XCond b (inject b1) (inject b2)) = inject B) in H1.
+  rewrite Xmerge_Cond_inv in H1; auto.
+  revert H1. case_eq B; intros; inversion H1.
+  revert H2. induction o, o0; intro; inversion H2.
+  clear B H. rewrite <- H2; clear b3 H2 H1.
+  elim IHB1_1 with b1 Bt' B1' b4; auto.
+  elim IHB1_2 with b2 Be' B2'0 b5; auto.
+  intros. destroy H; destroy H0. exists (Cond b x0 x); split.
+  - simpl. Beq. unfold merge in H2, H1; rewrite H1, H2; simpl.
+    case_eq (inject x0); case_eq (inject x); auto; intros;
+      eelim inject_not_undefined; eauto.
+  - constructor; auto.
+  - intro. revert H1; simpl; rewrite H. Beq.
+    intro. apply (inject_not_undefined B); auto.
+  - intro. revert H1; simpl; rewrite H. Beq.
+    case (Xmerge (inject Bt) (inject b1)); intros; apply (inject_not_undefined B); auto.
++ unfold merge; simpl. case_eq B2; simpl; intros.
+  5: induction o, o0.
+  all: try (elim (inject_not_undefined B); auto; fail).
+  inversion H1. simpl.
+  revert H4. elim RecVar_dec. all: simpl; intros.
+  exists B; split; auto. apply more_branches_refl.
+  elim (inject_not_undefined B); auto.
++ intros.
+  revert H3. unfold merge; case_eq B2; simpl; intros.
+  all: induction mB, mB'; try (elim (inject_not_undefined B); auto; fail).
+  all: rewrite H3 in H2; clear B2 H3.
+  all: inversion H2.
+  all: induction o, o0; try (elim (inject_not_undefined B); auto; fail).
+  all: elim (P.eq_dec p p0); intro Hpp0;
+  [ try rewrite <- Hpp0 in H2;
+    try rewrite <- Hpp0 in H3;
+    try rewrite <- Hpp0 in H4;
+    try rewrite <- Hpp0 in H5;
+    try rewrite <- Hpp0 in H6; rewrite <- Hpp0; clear p0 Hpp0
+  | rewrite <- Pdec.eqb_neq in Hpp0;
+    simpl in H4; unfold Pid_dec in H4; rewrite Hpp0 in H4;
+    elim (inject_not_undefined B); auto ].
+  all: revert H4; simpl; Peq; intro.
+  all: inversion H1; simpl; Peq.
+  all: try (inversion H7; fail).
+  all: try (inversion H6; fail).
+  all: try (inversion H5; fail).
+  (* 81 goals left *)
+  all: do 2 try (rewrite Xmatch_elim; [idtac | apply inject_not_undefined]).
+  all: try lelim (Xmerge (inject a) (inject a0)) B Ha H4.
+  all: try lelim (inject a) B Ha H4.
+  all: try lelim (Xmerge (inject b) (inject b0)) B Hb H4.
+  all: try lelim (inject b) B Hb H4.
+  1,5,9,13,37,39,41,43,55,57,59,61,73,74,75,76:
+    exists (p & None // None); split; auto.
+  1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16:
+    revert H4; case_eq B; intros; inversion H12;
+    replace p with p2; [constructor |
+      induction o, o0; inversion H12; auto].
+  (* 65 cases left *)
+  1,4,7,10,13,17,37,39,47,48,49,50,51,53,61,62:
+    exists (p & None // Some Br'); split; auto.
+  1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16:
+    revert H4; case_eq B; intros; inversion H13;
+    induction o, o0; inversion H13; constructor.
+  1,3,9,11: mbsolve b b0.
+  1,2,7: mbsolve' H18.
+  1,2,6,7: mbsolve'' Br b; inversion H7; auto.
+  1,2,4: mbsolve' H18; inversion H7; rewrite <- H19; auto.
+  1: mbsolve' H17.
+  1: mbsolve' H17; inversion H7; rewrite <- H18; auto.
+  (* 49 cases left *)
+  1,3,5,7,15,19,27,28,29,30,33,35,41,43,47,48:
+    exists (p & Some Bl' // None); split; auto;
+    revert H4; case_eq B; intros; inversion H13;
+    induction o, o0; inversion H13; constructor.
+  1,2,7,8: mbsolve a a0; fail.
+  1,2,5,6: mbsolve' H17.
+  1,2,3,4: mbsolve'' Bl a; inversion H6; auto.
+  1,2,3: mbsolve' H17; inversion H6; rewrite <- H19; auto.
+  1: mbsolve' H17; inversion H6; rewrite <- H18; auto.
+  (* 33 cases left *)
+  1,2,3,4,6,9,11,14,17,21,22,25,29,30,31,33:
+    exists (p & Some Bl' // Some Br'); split; auto;
+    revert H4; case_eq B; intros; inversion H14;
+    induction o, o0; inversion H14; constructor.
+  1,3,9,19: mbsolve a a0.
+  1,4,11,22: mbsolve b b0.
+  1,4,10,20: mbsolve' H19.
+  1,2,4,11: mbsolve' H18; fail.
+  1,2,6,14: mbsolve'' Br b; inversion H7; auto.
+  1,2: mbsolve'' Bl a; inversion H6; auto.
+  1,4: mbsolve'' Bl a; inversion H5; auto.
+  1,2,3,8: mbsolve' H19; inversion H7; rewrite <- H20; auto.
+  1,2: mbsolve' H18; inversion H6; rewrite <- H20; auto.
+  1,2: mbsolve' H18; inversion H5; rewrite <- H20; auto.
+ (* 17 cases left *)
+  all: try (apply merge_not_undefined in Ha; destroy Ha;
+    elim H with a Bl Bl'0 Bl' x; auto;
+   [intros | try (inversion H6; auto; fail); inversion H5; auto]).
+  all: try (apply merge_not_undefined in Hb; destroy Hb;
+    elim H0 with b Br Br'0 Br' x; auto; [intros | inversion H7; auto; fail]).
+  11: apply merge_not_undefined in Hb; destroy Hb;
+    elim H0 with b Br Br'0 Br' x1; auto; [intros | inversion H7; auto; fail].
+  all: try (destroy H14; unfold merge in H15; rewrite H15).
+  all: try (destroy H15; unfold merge in H16; rewrite H16).
+  11: destroy H16; unfold merge in H18; rewrite H18.
+  11: destroy H17; unfold merge in H19; rewrite H19.
+  all: rewrite Xmatch_elim; [idtac | apply inject_not_undefined].
+  all: try (rewrite Xmatch_elim; [idtac | apply inject_not_undefined]).
+  1,3,15,16: exists (p & None // Some x0); split; auto;
+    revert H4; case_eq B; intros; inversion H16;
+    induction o, o0; inversion H16; constructor.
+  1,2,3: unfold merge in Hb; rewrite Hb in H21; mbsolve' H21.
+  1: unfold merge in Hb; rewrite Hb in H20; mbsolve' H20.
+  3,5,10,11: exists (p & Some x0 // None); split; auto;
+    revert H4; case_eq B; intros; inversion H16;
+    induction o, o0; inversion H16; constructor;
+    unfold merge in Ha; rewrite Ha in H20; mbsolve' H20.
+  1,2,5,9: exists (p & Some Bl' // Some x0); split; auto;
+    revert H4; case_eq B; intros; inversion H17;
+    induction o, o0; inversion H17; constructor;
+    [idtac | unfold merge in Hb; rewrite Hb in H22; mbsolve' H22].
+  1: mbsolve a a0.
+  1: mbsolve' H21.
+  1: mbsolve'' Bl a; inversion H5; auto.
+  1: mbsolve' H21; inversion H5; rewrite <- H23; auto.
+  1,2,3,5: exists (p & Some x0 // Some Br'); split; auto;
+    revert H4; case_eq B; intros; inversion H17;
+    induction o, o0; inversion H17; constructor;
+    [ unfold merge in Ha; rewrite Ha in H21; mbsolve' H21 | idtac].
+  1: mbsolve b b0.
+  1: mbsolve' H22.
+  1: mbsolve'' Br b; inversion H7; auto.
+  1: mbsolve' H22; inversion H7; rewrite <- H23; auto.
+  exists (p & Some x0 // Some x2); split; auto;
+  revert H4; case_eq B; intros. all: inversion H20.
+  induction o, o0; inversion H20. constructor.
+  unfold merge in Ha; rewrite Ha in H24. mbsolve' H24.
+  unfold merge in Hb; rewrite Hb in H25. mbsolve' H25.
+Qed.
+
+Definition Xmore_branches XB XB' := exists B B',
+  XB = inject B /\ XB' = inject B' /\ more_branches B B'.
+
 End MoreBranches.
 
 Section Projectability.
@@ -872,374 +1105,7 @@ induction C; intros; inversion H.
   - intros. elim in_dec; auto.
 Qed.
 
-(** MOVE ME! *)
-Definition Xmore_branches XB XB' := exists B B',
-  XB = inject B /\ XB' = inject B' /\ more_branches B B'.
-
-Local Ltac lelim X B H H':=
-  elim (XUndefined_dec X); intro H;
-  [ rewrite H in H'; elim (inject_not_undefined B); auto
-  | rewrite Xmatch_elim in H'; auto ].
-
-Local Ltac lelim2 X Y B H H' H'' := lelim X B H H''; lelim Y B H' H''.
-
-Local Ltac mbsolve B B' := apply more_branches_trans with B;
-  [apply merge_more_branches with B' | idtac]; auto.
-
-Local Ltac mbsolve'' B B' := apply more_branches_trans with B;
-  [apply merge_more_branches' with B' | idtac]; auto.
-
-Lemma inject_inj : forall B B', inject B = inject B' -> B = B'.
-Proof.
-induction B using Behaviour_ind'; induction B' using Behaviour_ind';
-  intros; auto; try inversion H;
-  try (induction mB, mB'; inversion H1; fail);
-  try (rewrite (IHB _ H3); auto).
-+ induction mB, mB', mB0, mB'0; inversion H3; auto.
-  rewrite H with a b0; auto. rewrite H0 with b b1; auto.
-  rewrite H with a b; auto.
-  rewrite H0 with b b0; auto.
-+ rewrite (IHB1 _ H2), (IHB2 _ H3); auto.
-+ inversion H1; auto.
-Qed.
-
-Local Ltac mbsolve' H := apply inject_inj in H; rewrite <- H; auto.
-
-Lemma merge_not_undefined : forall B B', merge B B' <> XUndefined ->
-  exists B'', merge B B' = inject B''.
-Proof.
-intros.
-elim (merge_undefined_or_behaviour B B'); auto.
-tauto.
-Qed.
-
-Lemma more_branches_merge_extend : forall B1 B2 B1' B2' B,
-  more_branches B1 B1' -> more_branches B2 B2' -> merge B1 B2 = inject B ->
-  exists B', merge B1' B2' = inject B' /\ more_branches B B'.
-Proof.
-induction B1 using Behaviour_ind'.
-1,2,3,4,6,7: intros; inversion H; revert H0 H1.
-+ unfold merge; simpl; case_eq B2; simpl; intros.
-  5: induction o, o0.
-  all: try (elim (inject_not_undefined B); auto; fail).
-  inversion H1. simpl. exists End; repeat split.
-  revert H2; case_eq B; intros; inversion H4.
-  constructor. induction o, o0; inversion H7.
-+ unfold merge; simpl; case_eq B2; simpl; intros.
-  5: induction o, o0.
-  all: try (elim (inject_not_undefined B); auto; fail).
-  inversion H1. simpl.
-  clear B3 H11 e2 H10 p2 H8 H1 B2' H9 B2 H0 B1' H3 H B0 H5 e0 H4 p0 H2.
-  revert H7. elim Pid_dec. elim Expr_dec. all: simpl; intros.
-  2,3: elim (inject_not_undefined B); auto.
-  lelim (Xmerge (inject B1) (inject b)) B H' H7.
-  revert H7. case_eq B; intros; try inversion H7.
-  2: induction o, o0; inversion H7.
-  rewrite <- H2, <- H1; rewrite <- H2, <- H1 in H7, H; clear e0 p0 H2 H1 B H.
-  elim IHB1 with b B' B'0 b0; auto. intros.
-  rename x into B; destroy H.
-  unfold merge in H0; rewrite H0.
-  exists (p!e;B); split.
-  rewrite Xmatch_elim; auto. apply inject_not_undefined.
-  constructor; auto.
-+ unfold merge; simpl; case_eq B2; simpl; intros.
-  5: induction o, o0.
-  all: try (elim (inject_not_undefined B); auto; fail).
-  inversion H1. simpl.
-  clear B3 H11 x0 H10 p2 H8 H1 B2' H9 B2 H0 B1' H3 H B0 H5 x H4 p0 H2.
-  revert H7. elim Pid_dec. elim Var_dec. all: simpl; intros.
-  2,3: elim (inject_not_undefined B); auto.
-  lelim (Xmerge (inject B1) (inject b)) B H' H7.
-  revert H7. case_eq B; intros; try inversion H7.
-  2: induction o, o0; inversion H7.
-  rewrite <- H2, <- H1; rewrite <- H2, <- H1 in H7, H; clear v1 p0 H2 H1 B H.
-  elim IHB1 with b B' B'0 b0; auto. intros.
-  rename x into B; destroy H.
-  unfold merge in H0; rewrite H0.
-  exists (p ? v;B); split.
-  rewrite Xmatch_elim; auto. apply inject_not_undefined.
-  constructor; auto.
-+ unfold merge; simpl; case_eq B2; simpl; intros.
-  5: induction o, o0.
-  all: try (elim (inject_not_undefined B); auto; fail).
-  inversion H1. simpl.
-  clear B3 H11 l2 H10 p2 H8 H1 B2' H9 B2 H0 B1' H3 H B0 H5 l0 H4 p0 H2.
-  revert H7. elim Pid_dec. elim eqb_label. all: simpl; intros.
-  2,3: elim (inject_not_undefined B); auto.
-  lelim (Xmerge (inject B1) (inject b)) B H' H7.
-  revert H7. case_eq B; intros; try inversion H7.
-  2: induction o, o0; inversion H7.
-  rewrite <- H2, <- H1; rewrite <- H2, <- H1 in H7, H; clear l0 p0 H2 H1 B H.
-  elim IHB1 with b B' B'0 b0; auto. intros.
-  rename x into B; destroy H.
-  unfold merge in H0; rewrite H0.
-  exists (p(+)l;B); split.
-  rewrite Xmatch_elim; auto. apply inject_not_undefined.
-  constructor; auto.
-+ clear B1' H4 B0 H5 B1 H3 b0 H2 H.
-  rename B1_1 into Bt, B1_2 into Be, B1'0 into Bt', B2'0 into Be'.
-  intro. unfold merge. case_eq B2; intros.
-  5: induction o, o0.
-  all: try (simpl in H1; elim (inject_not_undefined B); auto; fail).
-  rewrite H in H0; clear B2 H; inversion H0.
-  clear B2 H4 B1 H2 b3 H B2' H3 H0.
-  assert (b = b0).
-  1: {
-    revert H1; simpl. case_eq (BExpr_dec b b0); intros.
-    unfold BExpr_dec in H; rewrite Bdec.eqb_eq in H; auto.
-    elim (inject_not_undefined B); auto.
-  }
-  rewrite <- H in H1; rewrite <- H; clear H.
-  change (Xmerge (XCond b (inject Bt) (inject Be)) (XCond b (inject b1) (inject b2)) = inject B) in H1.
-  rewrite Xmerge_Cond_inv in H1; auto.
-  revert H1. case_eq B; intros; inversion H1.
-  revert H2. induction o, o0; intro; inversion H2.
-  clear B H. rewrite <- H2; clear b3 H2 H1.
-  elim IHB1_1 with b1 Bt' B1' b4; auto.
-  elim IHB1_2 with b2 Be' B2'0 b5; auto.
-  intros. destroy H; destroy H0. exists (Cond b x0 x); split.
-  - simpl. Beq. unfold merge in H2, H1; rewrite H1, H2; simpl.
-    case_eq (inject x0); case_eq (inject x); auto; intros;
-      eelim inject_not_undefined; eauto.
-  - constructor; auto.
-  - intro. revert H1; simpl; rewrite H. Beq.
-    intro. apply (inject_not_undefined B); auto.
-  - intro. revert H1; simpl; rewrite H. Beq.
-    case (Xmerge (inject Bt) (inject b1)); intros; apply (inject_not_undefined B); auto.
-+ unfold merge; simpl. case_eq B2; simpl; intros.
-  5: induction o, o0.
-  all: try (elim (inject_not_undefined B); auto; fail).
-  inversion H1. simpl.
-  revert H4. elim RecVar_dec. all: simpl; intros.
-  exists B; split; auto. apply more_branches_refl.
-  elim (inject_not_undefined B); auto.
-+ intros.
-  revert H3. unfold merge; case_eq B2; simpl; intros.
-  all: induction mB, mB'; try (elim (inject_not_undefined B); auto; fail).
-  all: rewrite H3 in H2; clear B2 H3.
-  all: inversion H2.
-  all: induction o, o0; try (elim (inject_not_undefined B); auto; fail).
-  all: elim (P.eq_dec p p0); intro Hpp0;
-  [ try rewrite <- Hpp0 in H2;
-    try rewrite <- Hpp0 in H3;
-    try rewrite <- Hpp0 in H4;
-    try rewrite <- Hpp0 in H5;
-    try rewrite <- Hpp0 in H6; rewrite <- Hpp0; clear p0 Hpp0
-  | rewrite <- Pdec.eqb_neq in Hpp0;
-    simpl in H4; unfold Pid_dec in H4; rewrite Hpp0 in H4;
-    elim (inject_not_undefined B); auto ].
-  all: revert H4; simpl; Peq; intro.
-  all: inversion H1; simpl; Peq.
-  all: try (inversion H7; fail).
-  all: try (inversion H6; fail).
-  all: do 2 try (rewrite Xmatch_elim; [idtac | apply inject_not_undefined]).
-  (* 90 goals left *)
-  - exists (p & None // None); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H12.
-    replace p with p2. constructor.
-    induction o, o0; inversion H12; auto.
-  - exists (p & None // Some Br'); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve b b0.
-  - exists (p & Some Bl' // None); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve a a0.
-  - exists (p & Some Bl' // Some Br'); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H14.
-    induction o, o0; inversion H14. constructor.
-    mbsolve a a0. mbsolve b b0.
-  - exists (p & None // None); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (inject b) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H12.
-    replace p with p2. constructor.
-    induction o, o0; inversion H12; auto.
-  - exists (p & None // Some Br'); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (inject b) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve' H18.
-  - exists (p & Some Bl' // None); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (inject b) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve a a0.
-  - exists (p & Some Bl' // Some Br'); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (inject b) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H14.
-    induction o, o0; inversion H14. constructor.
-    mbsolve a a0. mbsolve' H19.
-  - exists (p & None // None); split; auto.
-    lelim2 (inject a) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H12.
-    replace p with p2. constructor.
-    induction o, o0; inversion H12; auto.
-  - exists (p & None // Some Br'); split; auto.
-    lelim2 (inject a) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve b b0.
-  - exists (p & Some Bl' // None); split; auto.
-    lelim2 (inject a) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve' H17.
-  - exists (p & Some Bl' // Some Br'); split; auto.
-    lelim2 (inject a) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H14.
-    induction o, o0; inversion H14. constructor.
-    mbsolve' H18. mbsolve b b0.
-  - exists (p & None // None); split; auto.
-    lelim2 (inject a) (inject b) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H12.
-    replace p with p2. constructor.
-    induction o, o0; inversion H12; auto.
-  - exists (p & None // Some Br'); split; auto.
-    lelim2 (inject a) (inject b) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve' H18.
-  - exists (p & Some Bl' // None); split; auto.
-    lelim2 (inject a) (inject b) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve' H17.
-  - exists (p & Some Bl' // Some Br'); split; auto.
-    lelim2 (inject a) (inject b) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H14.
-    induction o, o0; inversion H14. constructor.
-    mbsolve' H18. mbsolve' H19.
-  - exists (p & None // Some Br'); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve'' Br b. inversion H7; auto.
-  - lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    apply merge_not_undefined in H''; destroy H''.
-    elim H0 with b Br Br'0 Br' x; auto. 2: inversion H7; auto.
-    intros. destroy H14. unfold merge in H15; rewrite H15.
-    rewrite Xmatch_elim. 2: apply inject_not_undefined.
-    exists (p & None // Some x0); split; auto.
-    revert H4; case_eq B; intros. all: inversion H16.
-    induction o, o0; inversion H16. constructor.
-    unfold merge in H''; rewrite H'' in H21.
-    mbsolve' H21.
-  - exists (p & Some Bl' // Some Br'); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H14.
-    induction o, o0; inversion H14. constructor.
-    mbsolve a a0. mbsolve'' Br b. inversion H7; auto.
-  - lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    apply merge_not_undefined in H''; destroy H''.
-    elim H0 with b Br Br'0 Br' x; auto. 2: inversion H7; auto.
-    intros. destroy H15. unfold merge in H16; rewrite H16.
-    rewrite Xmatch_elim. 2: apply inject_not_undefined.
-    exists (p & Some Bl' // Some x0); split; auto.
-    revert H4; case_eq B; intros. all: inversion H17.
-    induction o, o0; inversion H17. constructor.
-    mbsolve a a0.
-    unfold merge in H''; rewrite H'' in H22. mbsolve' H22.
-  - exists (p & None // Some Br'); split; auto.
-    lelim2 (inject a) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve'' Br b. inversion H7; auto.
-  - lelim2 (inject a) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    apply merge_not_undefined in H''; destroy H''.
-    elim H0 with b Br Br'0 Br' x; auto. 2: inversion H7; auto.
-    intros. destroy H14. unfold merge in H15; rewrite H15.
-    rewrite Xmatch_elim. 2: apply inject_not_undefined.
-    exists (p & None // Some x0); split; auto.
-    revert H4; case_eq B; intros. all: inversion H16.
-    induction o, o0; inversion H16. constructor.
-    unfold merge in H''; rewrite H'' in H21. mbsolve' H21.
-  - exists (p & Some Bl' // Some Br'); split; auto.
-    lelim2 (inject a) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H14.
-    induction o, o0; inversion H14. constructor.
-    mbsolve' H18. mbsolve'' Br b. inversion H7; auto.
-  - lelim2 (inject a) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    apply merge_not_undefined in H''; destroy H''.
-    elim H0 with b Br Br'0 Br' x; auto. 2: inversion H7; auto.
-    intros. destroy H15. unfold merge in H16; rewrite H16.
-    rewrite Xmatch_elim. 2: apply inject_not_undefined.
-    exists (p & Some Bl' // Some x0); split; auto.
-    revert H4; case_eq B; intros. all: inversion H17.
-    induction o, o0; inversion H17. constructor.
-    mbsolve' H21.
-    unfold merge in H''; rewrite H'' in H22. mbsolve' H22.
-  - exists (p & Some Bl' // None); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve'' Bl a. inversion H6; auto.
-  - exists (p & Some Bl' // Some Br'); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H14.
-    induction o, o0; inversion H14. constructor.
-    mbsolve'' Bl a. inversion H6; auto. mbsolve b b0.
-  - lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    apply merge_not_undefined in H'; destroy H'.
-    elim H with a Bl Bl'0 Bl' x; auto. 2: inversion H6; auto.
-    intros. destroy H14. unfold merge in H15; rewrite H15.
-    rewrite Xmatch_elim. 2: apply inject_not_undefined.
-    exists (p & Some x0 // None); split; auto.
-    revert H4; case_eq B; intros. all: inversion H16.
-    induction o, o0; inversion H16. constructor.
-    unfold merge in H'; rewrite H' in H20. mbsolve' H20.
-  - lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    apply merge_not_undefined in H'; destroy H'.
-    elim H with a Bl Bl'0 Bl' x; auto. 2: inversion H6; auto.
-    intros. destroy H15. unfold merge in H16; rewrite H16.
-    rewrite Xmatch_elim, Xmatch_elim. 2,3: apply inject_not_undefined.
-    exists (p & Some x0 // Some Br'); split; auto.
-    revert H4; case_eq B; intros. all: inversion H17.
-    induction o, o0; inversion H17. constructor.
-    unfold merge in H'; rewrite H' in H21. mbsolve' H21.
-    mbsolve b b0.
-  - exists (p & Some Bl' // None); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (inject b) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve'' Bl a. inversion H6; auto.
-  - exists (p & Some Bl' // Some Br'); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (inject b) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H14.
-    induction o, o0; inversion H14. constructor.
-    mbsolve'' Bl a. inversion H6; auto. mbsolve' H19.
-
-
-  - exists (p & None // None); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H12.
-    replace p with p2. constructor.
-    induction o, o0; inversion H12; auto.
-
-  - exists (p & None // Some Br'); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve b b0.
-
-  - exists (p & Some Bl' // None); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H13.
-    induction o, o0; inversion H13. constructor.
-    mbsolve a a0.
-
-  - exists (p & Some Bl' // Some Br'); split; auto.
-    lelim2 (Xmerge (inject a) (inject a0)) (Xmerge (inject b) (inject b0)) B H' H'' H4.
-    revert H4; case_eq B; intros. all: inversion H14.
-    induction o, o0; inversion H14. constructor.
-    mbsolve a a0. mbsolve b b0.
-
-
-Lemma bproj_reduce_Then : forall Defs C s C' s' p ps,
+Lemma bproj_reduce_Cond : forall Defs C s C' s' p ps,
   (forall r, In r ps -> strongly_projectable Defs C r) -> In p ps ->
   CCC_To Defs C s (CCBase.TL.R_Cond p) C' s' ->
   (exists b Bt Be, bproj Defs C p = XCond b Bt Be
@@ -1365,9 +1231,13 @@ induction C; intros; inversion H.
       simpl; unfold Pid_dec. Pneq H10.
       intro.
       elim (collapse_exists _ H11); intros; clear H11.
-
-(* Missing lemma. *)
-
+      elim (H0 r H7 H9); intros. destroy H11.
+      elim (H2 r H7 H9); intros. destroy H15.
+      rewrite H13, H16 in H12.
+      elim (more_branches_merge_extend _ _ _ _ _ H15 H11 H12).
+      intros. destroy H18.
+      exists x, x4; repeat split; auto.
+      rewrite H13, H16; auto. rewrite H14, H17; auto.
 + elim IHC with C'0; auto.
   2: apply HC.
   clear s'0 H6 C' H5 t H4 s0 H2 C0 H3 ps0 H1 X H0 H8 H IHC.
@@ -1380,6 +1250,8 @@ induction C; intros; inversion H.
   - intros. simpl. elim in_dec; intros; auto.
     exists (Call (X,r)), (Call (X,r)); repeat split. constructor.
 Qed.
+
+
 
 
 Lemma bproj_reduce : forall Defs C s tl C' s', CCC_To Defs C s tl C' s' ->
