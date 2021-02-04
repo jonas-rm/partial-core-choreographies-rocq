@@ -183,708 +183,6 @@ Qed.
 
 End EPP.
 
-Section Projectability.
-
-(** ** Properties of projectability
-  All variants of parameterized projectability are decidable. *)
-
-Lemma projectable_C_dec : forall Defs ps C,
-  { projectable_C Defs ps C } + { ~projectable_C Defs ps C }.
-Proof.
-intros. apply Forall_dec; intro.
-induction x as (p,B).
-simpl. elim (XUndefined_dec B); auto.
-Qed.
-
-Lemma projectable_D_dec : forall Xs Defs,
-  { projectable_D Xs Defs } + { ~projectable_D Xs Defs }.
-Proof.
-intros. apply Forall_dec; intro.
-apply projectable_C_dec.
-Qed.
-
-Lemma projectable_dec : forall Xs ps P,
-  { projectable Xs ps P } + { ~projectable Xs ps P }.
-Proof.
-intros.
-elim (projectable_C_dec (Procedures P) ps (Main P)); intro HC.
-2: right; intro; inversion_clear H; auto.
-elim (projectable_D_dec Xs (Procedures P)); intro HD.
-2: right; intro; destroy H; auto.
-generalize (fun p => In_dec P.eq_dec p ps); intro.
-elim (Forall_dec (fun p => In p ps)) with (CCC_pn (Main P) (fun _ => nil)); auto; intro Hps.
-1: elim (Forall_dec (fun X => forall p, In p (CCC_pn (snd (Procedures P X)) (fun _ => nil)) -> In p ps)) with Xs; intro HXs1.
-1: elim (Forall_dec (fun X => forall p, In p (fst (Procedures P X)) -> In p ps)) with Xs; intro HXs2.
-+ left. rewrite Forall_forall in Hps, HXs1, HXs2.
-  repeat split; eauto.
-+ right; intro; apply HXs2.
-  destroy H. rewrite Forall_forall; eauto.
-+ elim (Forall_dec (fun p => In p ps)) with (fst (Procedures P HXs2)); auto.
-  - left; rewrite Forall_forall in a; auto.
-  - right; intro. apply b; rewrite Forall_forall; auto.
-+ right; intro; apply HXs1.
-  destroy H. rewrite Forall_forall; eauto.
-+ elim (Forall_dec (fun p => In p ps)) with (CCC_pn (snd (Procedures P HXs1)) (fun _ => nil)); auto.
-  - left. rewrite Forall_forall in a; eauto.
-  - right; intro. apply b; rewrite Forall_forall; eauto.
-+ right; intro; apply Hps.
-  destroy H. rewrite Forall_forall; eauto.
-Qed.
-
-(** Inversion lemmas for projectability. *)
-Lemma projectable_inv_Com : forall Defs ps p e q x C,
-  projectable_C Defs ps (p#e --> q$x;; C) -> projectable_C Defs ps C.
-Proof.
-intros. red; red in H.
-rewrite Forall_forall; rewrite Forall_forall in H.
-intros. induction x0 as (r,B). intro.
-apply (H (r,XUndefined)); auto.
-unfold epp_list in H0; rewrite in_map_iff in H0.
-unfold epp_list; rewrite in_map_iff.
-destroy H0. inversion H2.
-rewrite H4 in H0. simpl in H1. clear x0 H4 H2.
-exists r; simpl. split; auto.
-case Pid_dec; [idtac | case Pid_dec]; simpl; rewrite H5, H1; auto.
-Qed.
-
-Lemma projectable_inv_Sel : forall Defs ps p q l C,
-  projectable_C Defs ps (p --> q[l];; C) -> projectable_C Defs ps C.
-Proof.
-intros. red; red in H.
-rewrite Forall_forall; rewrite Forall_forall in H.
-intros. induction x as (r,B). intro.
-apply (H (r,XUndefined)); auto.
-unfold epp_list in H0; rewrite in_map_iff in H0.
-unfold epp_list; rewrite in_map_iff.
-destroy H0. inversion H2.
-rewrite H4 in H0. simpl in H1. clear x H4 H2.
-exists r; simpl. split; auto.
-case l; (case Pid_dec; [idtac | case Pid_dec]); simpl; rewrite H5, H1; auto.
-Qed.
-
-Lemma projectable_inv_Cond : forall Defs ps p b C1 C2,
-  projectable_C Defs ps (If p ?? b Then C1 Else C2) -> projectable_C Defs ps C1.
-Proof.
-intros. red; red in H.
-rewrite Forall_forall; rewrite Forall_forall in H.
-intros. induction x as (r,B). intro.
-apply (H (r,XUndefined)); auto.
-unfold epp_list in H0; rewrite in_map_iff in H0.
-unfold epp_list; rewrite in_map_iff.
-destroy H0. inversion H2.
-rewrite H4 in H0. simpl in H1. clear x H4 H2.
-exists r; simpl. split; auto.
-case Pid_dec; simpl.
-+ rewrite H5, H1; auto.
-+ rewrite collapse_merge; auto. rewrite H5; auto.
-Qed.
-
-Lemma projectable_inv_Cond' : forall Defs ps p b C1 C2,
-  projectable_C Defs ps (If p ?? b Then C1 Else C2) -> projectable_C Defs ps C2.
-Proof.
-intros. red; red in H.
-rewrite Forall_forall; rewrite Forall_forall in H.
-intros. induction x as (r,B). intro.
-apply (H (r,XUndefined)); auto.
-unfold epp_list in H0; rewrite in_map_iff in H0.
-unfold epp_list; rewrite in_map_iff.
-destroy H0. inversion H2.
-rewrite H4 in H0. simpl in H1. clear x H4 H2.
-exists r; simpl. split; auto.
-case Pid_dec; simpl.
-+ rewrite H5, H1. case (collapse (bproj Defs C1 r)); auto.
-+ rewrite collapse_merge'; auto. rewrite H5; auto.
-Qed.
-
-(** The corresponding lemmas for RT_Call do not hold.
-  Therefore, projectability is not preserved by reductions,
-  so we need an auxiliary notion. *)
-Fixpoint strongly_projectable Defs (C:Choreography) (r:Pid) : Prop :=
-match C with
-| eta;; C'                  => strongly_projectable Defs C' r
-| If p ?? b Then C1 Else C2 => strongly_projectable Defs C1 r
-                               /\ strongly_projectable Defs C2 r
-                               /\ collapse (bproj Defs C r) <> XUndefined
-| RT_Call X ps C            => strongly_projectable Defs C r /\
-                               (forall p, In p ps -> bproj Defs C p = bproj Defs (snd (Defs X)) p)
-| _                         => True
-end.
-
-Lemma strongly_projectable_C : forall Defs C r,
-  strongly_projectable Defs C r -> collapse (bproj Defs C r) <> XUndefined.
-Proof.
-induction C; simpl.
-+ intro; induction e; elim Pid_dec;
-  [idtac | elim Pid_dec | elim l | elim l; elim Pid_dec];
-    auto; simpl; intros; try (rewrite Xmatch_elim; auto; discriminate).
-+ intro; elim Pid_dec; tauto.
-+ intro; elim in_dec; discriminate.
-+ intro; elim in_dec; auto. discriminate.
-  intros. inversion_clear H; auto.
-+ discriminate.
-Qed.
-
-Lemma strongly_projectable_C' : forall Defs C ps,
-  (forall r, In r ps -> strongly_projectable Defs C r) -> projectable_C Defs ps C.
-Proof.
-intros; red; rewrite Forall_forall.
-induction x as (p,B); simpl; intros.
-apply in_map_iff in H0; destroy H0. inversion H1.
-rewrite H3 in H0; clear H3 H1 x.
-apply strongly_projectable_C, H. auto.
-Qed.
-
-Lemma initial_strongly_projectable : forall C, initial C ->
-  forall Defs ps, projectable_C Defs ps C ->
-  forall r, In r ps -> strongly_projectable Defs C r.
-Proof.
-induction C; auto; simpl; intros.
-+ induction e.
-  - apply projectable_inv_Com in H0; eauto.
-  - apply projectable_inv_Sel in H0; eauto.
-+ inversion_clear H. repeat split.
-  - apply projectable_inv_Cond in H0; eauto.
-  - apply projectable_inv_Cond' in H0; eauto.
-  - red in H0. rewrite Forall_forall in H0.
-    generalize (H0 (r,collapse (bproj Defs (If p ?? b Then C1 Else C2) r))); intros.
-    simpl in H; apply H.
-    apply in_map_iff. exists r; auto.
-+ inversion H.
-Qed.
-
-Ltac Peq := unfold Pid_dec; rewrite Pdec.eqb_refl; simpl.
-Ltac Eeq := unfold Expr_dec; rewrite Edec.eqb_refl; simpl.
-Ltac Beq := unfold BExpr_dec; rewrite Bdec.eqb_refl; simpl.
-Ltac Veq := unfold Var_dec; rewrite Xdec.eqb_refl; simpl.
-Ltac Xeq := unfold RecVar_dec; rewrite Rdec.eqb_refl; simpl.
-
-Lemma Xmerge_idempotent : forall B, collapse B <> XUndefined ->
-  Xmerge B B = B.
-Proof.
-intros. elim (collapse_char' B). 2: tauto.
-intro. inversion_clear a. rewrite H0.
-fold (merge x x). apply merge_idempotent.
-Qed.
-
-Ltac sup := unfold set_union_pid; rewrite set_union_iff; auto.
-
-Lemma bproj_not_In : forall Defs r C,
-  ~In r (CCC_pn C (fun X => fst (Defs X))) -> bproj Defs C r = XEnd.
-Proof.
-induction C; simpl; auto; intros.
-+ assert (bproj Defs C r = XEnd).
-  1: apply IHC; intro; apply H; sup.
-  induction e.
-  - intros. case_eq (Pid_dec p r); [idtac | case_eq (Pid_dec p0 r)]; auto.
-    all: intros; unfold Pid_dec in H1; rewrite Pdec.eqb_eq in H1.
-    all: elim H; rewrite H1; simpl; sup; left.
-    left; auto. right; left; auto.
-  - case l; (case_eq (Pid_dec p r); [idtac | case_eq (Pid_dec p0 r)]); auto.
-    all: intros; unfold Pid_dec in H1; rewrite Pdec.eqb_eq in H1.
-    all: elim H; rewrite H1; simpl; sup; left.
-    1,3: left; auto. all: right; left; auto.
-+ assert (bproj Defs C1 r = XEnd).
-  1: apply IHC1; intro; apply H; sup. left; sup.
-  assert (bproj Defs C2 r = XEnd).
-  1: apply IHC2; intro; apply H; sup.
-  case_eq (Pid_dec p r).
-  2: rewrite H0, H1; auto.
-  intros; unfold Pid_dec in H2; rewrite Pdec.eqb_eq in H2.
-  elim H; rewrite H2; simpl; sup. left; sup. left; left; auto.
-+ elim in_dec; auto. intro; elim H; auto.
-+ elim in_dec; intros.
-  - elim H; sup.
-  - apply IHC. intro; apply H; sup.
-Qed.
-
-Lemma bproj_disjoint : forall Defs e C p, ~In p (eta_pn e) ->
-  bproj Defs (e;; C) p = bproj Defs C p.
-Proof.
-induction e; intros.
-+ simpl in H. assert (p <> p1 /\ p0 <> p1). tauto.
-  inversion_clear H0.
-  rewrite <- Pdec.eqb_neq in H1, H2.
-  simpl. unfold Pid_dec; rewrite H1, H2; auto.
-+ simpl in H. assert (p <> p1 /\ p0 <> p1). tauto.
-  inversion_clear H0.
-  rewrite <- Pdec.eqb_neq in H1, H2.
-  simpl. unfold Pid_dec; rewrite H1, H2; case l; auto.
-Qed.
-
-(* USE INVERSION RESULTS ON MERGE! *)
-
-Lemma merge_Cond_reduce_1 : forall Defs C1 C2 s p v q x C1' C2' s',
-  let t := CCBase.TL.R_Com p v q x in
-  CCC_To Defs C1 s t C1' s' -> CCC_To Defs C2 s t C2' s' -> p <> q ->
-  collapse (Xmerge (bproj Defs C1 p) (bproj Defs C2 p)) <> XUndefined ->
-  exists e, collapse (Xmerge (bproj Defs C1 p) (bproj Defs C2 p))
-  = XSend q e (Xmerge (bproj Defs C1' p) (bproj Defs C2' p)).
-Proof.
-intros. rename H2 into HC1C2.
-revert C1 C1' s s' H C2 C2' H H0 H1 HC1C2.
-induction C1.
-(* End *) 5: intros; inversion H.
-+ do 4 intro. inversion H; clear H.
-  - clear s'0 H8 C1 H3 x0 H7 q0 H6 p0 H4 s0 H1 C H2 IHC1 e H0.
-    rewrite H5 in H9; clear v1 H5. rename e0 into e.
-    induction C2; intros; inversion H0; revert HC1C2.
-    * rewrite <- H2; clear e0 H0 H2.
-      rewrite H6, H8, H10.
-      simpl. Peq. Peq. case_eq (Expr_dec e e1).
-      2: intros; elim HC1C2; auto.
-      exists e; simpl. revert HC1C2. rewrite H5.
-      case_eq (Xmerge (bproj Defs C1' p) (bproj Defs C2' p)); simpl; auto.
-      1,2,3: do 3 intro; case (collapse x1); auto; intros; elim HC1C2; auto.
-      3: intros; elim HC1C2; auto.
-      2: do 3 intro; case (collapse x1); case (collapse x2); auto; intros; elim HC1C2; auto.
-      do 3 intro. case o; case o0; auto.
-      2,3: intro; case (collapse x1); auto; intros; elim HC1C2; auto.
-      do 2 intro; case (collapse x1); case (collapse x2); auto; intros; elim HC1C2; auto.
-    * assert (~In p (eta_pn e0)).
-      red; intro. unfold t in H4.
-      induction e0; destroy H4; destroy H12; simpl in H11; tauto.
-      rewrite (bproj_disjoint Defs e0 C' p); auto.
-      rewrite (bproj_disjoint Defs e0 C2 p); auto.
-    * elim (IHC2_1 C1'0); auto.
-      elim (IHC2_2 C2'0); auto.
-      intros.
-      rename x0 into e', x1 into e'', p0 into p'.
-      revert H14 H15. simpl. Peq.
-      unfold t in H11; inversion_clear H11.
-      rewrite <- Pdec.eqb_neq in H14; rewrite H14.
-      case_eq (bproj Defs C2_2 p); simpl; intros; try (inversion H16; fail).
-      revert H16 H17.
-      case_eq (bproj Defs C2_1 p); simpl; intros; try (inversion H18; fail).
-      revert H17 H18.
-      case_eq (Pid_dec q p0); simpl. case_eq (Expr_dec e e0); simpl.
-      2: intros H'' H''' H'; inversion H'.
-      2: intros H'' H'; inversion H'.
-      elim (XUndefined_dec (Xmerge (bproj Defs C1' p) x0)); intro.
-      1: rewrite a; intros. inversion H19.
-      rewrite Xmatch_elim; auto. do 3 intro.
-      case_eq (Pid_dec q p2); simpl. case_eq (Expr_dec e e1); simpl.
-      2: intros H'' H''' H'; inversion H'.
-      2: intros H'' H'; inversion H'.
-      elim (XUndefined_dec (Xmerge (bproj Defs C1' p) x1)); intro.
-      1: rewrite a; intros. inversion H22.
-      rewrite Xmatch_elim; auto. do 3 intro.
-      unfold Pid_dec in H18, H21; rewrite Pdec.eqb_eq in H18, H21.
-      unfold Expr_dec in H17, H20; rewrite Edec.eqb_eq in H17, H20.
-      rewrite <- H17, <- H18, <- H20, <- H21. Peq. Eeq.
-      rewrite <- H17, <- H18 in H11; rewrite <- H20, <- H21 in H16.
-      clear p0 p2 e1 e0 H21 H20 H18 H17 s'0 H10 t0 H7 s0 H5 b0 H3 p1 H2 IHC2_1 IHC2_2.
-      assert (e' = e).
-      1: { revert H19. simpl. case_eq (collapse (Xmerge (bproj Defs C1' p) x0));
-        intros; inversion H19; auto. }
-      assert (e'' = e).
-      1: { revert H22. simpl. case_eq (collapse (Xmerge (bproj Defs C1' p) x1));
-        intros; inversion H22; auto. }
-      rewrite H2 in H19; rewrite H3 in H22; clear H2 H3 e' e''.
-      exists e.
-      elim (XUndefined_dec (Xmerge x1 x0)); intro.
-      1: { exfalso. revert HC1C2. simpl. Peq. rewrite H14, H11, H16.
-        simpl. Peq. Eeq. rewrite a. intro. elim HC1C2; auto. }
-      rewrite Xmatch_elim; auto. Peq. Eeq.
-      elim (XUndefined_dec (Xmerge (bproj Defs C1' p) (Xmerge x1 x0))); intro.
-      simpl in H19, H22.
-      rewrite a.
-
-merge B B1
-
-
-, C2; intros.
-(* C1 is End *) 21,22,23,24,25: inversion H.
-(* C2 is End *) 5,10,15,20: inversion H0.
-all: revert HC1C2.
-+ (* Eta / Eta *)
-  inversion H; inversion H0.
-  - simpl. Peq. Peq. case_eq (Expr_dec e1 e2); simpl.
-    2: intros HE H'; elim H'; auto.
-    exists e1. revert HC1C2.
-    case_eq (Xmerge (bproj Defs C1' p) (bproj Defs C2' p)); simpl; auto.
-    1,2,3: do 3 intro; case (collapse x2); auto; intros; elim HC1C2; auto.
-    3: intros; elim HC1C2; auto.
-    * do 3 intro. case o; case o0; auto.
-      2,3: intro; case (collapse x2); auto; intros; elim HC1C2; auto.
-      do 2 intro; case (collapse x2); case (collapse x3); auto; intros; elim HC1C2; auto.
-    * do 3 intro; case (collapse x2); case (collapse x3); auto; intros; elim HC1C2; auto.
-  - apply IHC1.
-Peq. induction e0; unfold t in H14; destroy H14; destroy H20.
-    2: case l.
-    all: rewrite <- Pdec.eqb_neq in H22; rewrite H22.
-    all: rewrite <- Pdec.eqb_neq in H21; rewrite H21.
-    all: case (bproj Defs C2 p); simpl; try (intros; elim HC1C2; auto; fail).
-    all: do 3 intro; elim Pid_dec; elim Expr_dec; simpl; try (intros; elim HC1C2; auto; fail).
-    all: exists e1; case_eq (Xmerge (bproj Defs C1' p) x1); simpl; auto.
-
-
-
-
-
-Lemma merge_Cond_reduce : forall Defs Xs r C1 C2 s t C1' C2' s',
-  projectable_D Xs Defs ->
-  (forall X, set_incl_pid (CCC_pn (snd (Defs X)) (fun X => fst (Defs X))) (fst (Defs X))) ->
-  (forall X ps C', (C1 = MCBase.Call X \/ C1 = RT_Call X ps C') -> In X Xs) ->
-  (forall X ps C', (C2 = MCBase.Call X \/ C2 = RT_Call X ps C') -> In X Xs) ->
-  consistent (fun X => fst (Defs X)) C1 -> consistent (fun X => fst (Defs X)) C2 -> 
-  MCC_To Defs C1 s t C1' s' -> MCC_To Defs C2 s t C2' s' ->
-  collapse (Xmerge (bproj Defs C1 r) (bproj Defs C2 r)) <> XUndefined
-  -> collapse (Xmerge (bproj Defs C1' r) (bproj Defs C2' r)) <> XUndefined.
-Proof.
-intros. rename H into HD, H0 into HD', H1 into HC1, H2 into HC2.
-rename H3 into HC1'', H4 into HC2'', H5 into HC1', H6 into HC2', H7 into HC1C2.
-set (B := Xmerge (bproj Defs C1 r) (bproj Defs C2 r)). fold B in HC1C2.
-assert (B = Xmerge (bproj Defs C1 r) (bproj Defs C2 r)) as HB. auto.
-clearbody B.
-revert C1 C2 s t C1' C2' HC1 HC2 HC1' HC2' HC1'' HC2'' B HB HC1C2.
-double induction C1 C2; intros.
-(* C1 is End *) 21,22,23,24,25: inversion HC1'.
-(* C2 is End *) 5,10,15,20: inversion HC2'.
-all: revert HC1C2; rewrite HB; clear B HB.
-+ (* Eta / Eta *)
-  simpl in HC1'', HC2''. clear HC1 HC2.
-  inversion HC1'; inversion HC2'; clear HC1' HC2'.
-  - clear H H0.
-    clear s'1 H13 s1 H9 C0 H10 s'0 H6 s0 H2 C H3 e H8 e0 H1.
-    rewrite H12 in HC2''; clear c H12.
-    rewrite H5 in HC1''; clear c0 H5.
-    rewrite <- H11 in H4; clear H11; inversion H4; clear H4.
-    clear H14.
-    rewrite <- H0, <- H2, <- H3. clear v0 H1 x0 H3 q0 H2 p0 H0.
-    simpl. case_eq (Pid_dec p r); simpl; [case_eq (Expr_dec e1 e2) | case_eq (Pid_dec q r)]; simpl; auto.
-    * Peq. intros. intro. apply HC1C2.
-      elim (XUndefined_dec (Xmerge (bproj Defs C1' r) (bproj Defs C2' r))); intros.
-      1: rewrite a; auto.
-      rewrite Xmatch_elim; auto.
-      simpl. rewrite H1; auto.
-    * Peq. intros; elim HC1C2; auto.
-    * Peq. Veq. intros. intro. apply HC1C2.
-      elim (XUndefined_dec (Xmerge (bproj Defs C1' r) (bproj Defs C2' r))); intros.
-      1: rewrite a; auto.
-      rewrite Xmatch_elim; auto.
-      simpl. rewrite H1; auto.
-  - rewrite <- H4 in H11; inversion H11.
-  - clear s'1 H14 t0 H12 s1 H11 C0 H9 eta H8 C2' H13 s'0 H6 s0 H2 C H3 e0 H1.
-    rewrite H5 in HC1'', H0; clear c0 H5.
-    induction e. all: rewrite <- H4 in H10; destroy H10; destroy H1.
-    2: case l.
-    all: simpl; case_eq (Pid_dec p r); case_eq (Pid_dec p0 r); simpl.
-    1,5: intros; elim H3; unfold Pid_dec in H5, H6;
-      rewrite Pdec.eqb_eq in H5, H6;rewrite H5, H6; auto.
-    1,3,4,6,8,10: case_eq (Pid_dec p1 r); simpl.
-    1,5,9,15: intros; elim HC1C2; auto.
-    2,3,5,6,8,9,10,11,12: case_eq (Pid_dec q r); simpl.
-    all: try (intros; elim HC1C2; auto; fail).
-    2: intros; elim H10; unfold Pid_dec in H5, H6;
-      rewrite Pdec.eqb_eq in H5, H6;rewrite H5, H6; auto.
-    1,3,6,9,14,15: case_eq (bproj Defs c r); try (intros; elim HC1C2; auto; fail); do 3 intro.
-    1,5,6: case_eq (Pid_dec q p2); simpl.
-    case_eq (Expr_dec e1 e0); simpl.
-    4,6: case_eq (Expr_dec e1 e); simpl.
-    10,11,12: case_eq (Pid_dec p p2); simpl.
-    all: try (intros; elim HC1C2; auto; fail).
-    
-
-
-
-
-
-+ revert HC1C2. rewrite HB; clear B HB.
-  simpl; case in_dec; case in_dec; auto.
-  - simpl. case_eq (RecVar_dec (r1,r) (r0,r)); auto.
-    intros.
-    unfold RecVar_dec in H; rewrite Rdec.eqb_eq in H. inversion H.
-    rewrite H1 in HC1'.
-    rewrite (MCC_To_deterministic_1 _ _ _ _ _ _ _ _ HC1' HC2').
-    assert (In r0 Xs) as HX. apply HC2 with nil MCBase.End; auto.
-    clear r1 H1 i0 HC1 HC2 H HC1C2 HC1'' HC2''. rename r0 into X.
-    red in HD. rewrite Forall_forall in HD. generalize (HD _ HX); intro HC.
-    red in HC. rewrite Forall_forall in HC.
-    assert (collapse (bproj Defs (snd (Defs X)) r) <> XUndefined).
-    1: {
-      apply (HC (r,collapse (bproj Defs (snd (Defs X)) r))).
-      unfold epp_list; rewrite in_map_iff.
-      exists r; split; auto.
-    }
-    inversion HC1'; inversion HC2'.
-    * rewrite Xmerge_idempotent; auto.
-    * rewrite H2 in H10; inversion H10. inversion H17.
-    * rewrite H10 in H2; inversion H2; inversion H17.
-    * simpl. elim in_dec; simpl.
-      1: Xeq. discriminate.
-      rewrite Xmerge_idempotent; auto.
-  - simpl.
-    intros.
-    replace (bproj Defs C1' r) with XEnd.
-    replace (bproj Defs C2' r) with XEnd.
-    discriminate.
-    1: clear dependent r1; clear HC1C2; inversion HC2'.
-    3: clear dependent r0; clear HC1C2; inversion HC1'.
-    all: symmetry; apply bproj_not_In; intro.
-    * apply n, HD'; auto.
-    * simpl in H7. unfold set_union_pid in H7. elim (set_union_elim _ _ _ _ H7); intro.
-      apply set_remove'_1 in a; auto.
-      apply n, HD'; auto.
-    * apply n0, HD'; auto.
-    * simpl in H7. unfold set_union_pid in H7. elim (set_union_elim _ _ _ _ H7); intro.
-      apply set_remove'_1 in a; auto.
-      apply n0, HD'; auto.
-+ rename c into C, l into ps.
-  generalize HB; simpl. case in_dec; case in_dec; simpl.
-  1,2: case_eq (RecVar_dec (r1,r) (r0,r)); simpl.
-  all: intros; rewrite HB0 in HB, HC1C2; clear B HB0.
-  all: try (elim HC1C2; auto; fail).
-  - unfold RecVar_dec in H0; rewrite Rdec.eqb_eq in H0. inversion H0.
-    rewrite H2 in HC1', HC1'', HB.
-    assert (In r0 Xs) as HX. eauto.
-    clear r1 H2 i0 HC1 HC2 H0 HC1C2. rename r0 into X.
-    red in HD. rewrite Forall_forall in HD. generalize (HD _ HX); intro HC.
-    red in HC. rewrite Forall_forall in HC.
-    assert (collapse (bproj Defs (snd (Defs X)) r) <> XUndefined).
-    1: {
-      apply (HC (r,collapse (bproj Defs (snd (Defs X)) r))).
-      unfold epp_list; rewrite in_map_iff.
-      exists r; split; auto.
-      apply HC2''; auto.
-    }
-    inversion_clear HC2''; clear HC1''.
-    rename H1 into H', H2 into H''.
-    inversion HC1'; inversion HC2'; clear HC1' HC2'.
-    * clear s'1 H15 C2' H14 t0 H13 s1 H11 C0 H12 ps0 H10 X1 H9 s'0 H8 C1' H7 s0 H5 X0 H1.
-      simpl. elim in_dec; auto.
-      exfalso. rewrite <- H6 in H16. apply MCBase.TL.disjoint_ps_Call in H16.
-      apply H16. replace p with r; auto.
-      apply set_size_1 with P.eq_dec (fst (Defs X)); auto.
-    * clear s'1 H16 C2' H15 s1 H13 C0 H11 ps0 H10 X1 H9 s'0 H8 C1' H7 s0 H5 X0 H1.
-      rewrite <- H14 in H6; clear H14; inversion H6.
-      rewrite <- H5 in H18; rewrite <- H5; clear p0 H5 H6.
-      exfalso. generalize (set_size_incl_le (T_dec := P.eq_dec) H'); intro.
-      fold set_size_pid in H1; rewrite H3 in H1.
-      apply (Nat.lt_irrefl 1). apply lt_le_trans with (set_size_pid ps); auto.
-    * clear s'1 H16 s1 H13 C0 H11 ps0 H10 X1 H9 s'0 H8 C1' H7 s0 H5 X0 H1.
-      rewrite <- H15; clear C2' H15.
-      rewrite <- H14 in H6; inversion H6; clear H14 H6 t.
-      rewrite <- H5 in H18; clear p0 H5.
-      generalize (set_size_1 P.eq_dec _ H17 _ _ i H18); intro.
-      rewrite <- H1 in H4; clear H1 H18 p.
-      (* Somehow: projecting (RT_Call X ps C) for something in ps should give the same as projecting the corresponding definition for X *)
-Abort.
-
-
-
-
-
-
-(** Strong projectability of well-formed programs is preserved by reductions. *)
-Lemma strongly_projectable_reduces : forall P Xs ps,
-  Program_WF Xs P -> well_ann P -> projectable Xs ps P ->
-  (forall p, In p ps -> strongly_projectable (Procedures P) (Main P) p) ->
-  forall s tl P' s', ((P,s) --[tl]--> (P',s'))%MC -> projectable Xs ps P'.
-Proof.
-intros.
-induction P as (Defs,C). induction P' as (Defs', C').
-generalize (MCP_To_Defs_stable Defs Defs' C C' tl s s' H2); intro.
-rewrite <- H3 in H2; rewrite <- H3; clear Defs' H3.
-inversion H2. rewrite <- H4 in H2. clear s'0 H9 C'0 H8 tl H4 s0 H6 C0 H5 Defs0 H3.
-rename H7 into Ht.
-destroy H0; intros. repeat split; auto.
-+ apply strongly_projectable_C'.
-  destroy H.
-  clear H0 H6 H2 H3 H5 H7 H8.
-  induction Ht; auto; simpl; intros.
-  - elim (H1 r); auto.
-  - elim (H1 r); auto. intros H' H''; destroy H''; auto.
-  - auto.
-  - assert (strongly_projectable Defs C1' r).
-    1: apply IHHt1; auto; intros; elim (H1 p0); auto.
-    assert (strongly_projectable Defs C2' r).
-    1: {
-      apply IHHt2; auto; intros; elim (H1 p0); auto.
-      elim (H1 p0); auto. intros H' H''; destroy H''; auto.
-    }
-    repeat split; auto.
-    elim (H1 r); auto. simpl; intros H' H''; destroy H''; auto.
-    revert H''. case Pid_dec; simpl.
-    * repeat rewrite Xmatch_elim. intro; discriminate.
-      all: apply strongly_projectable_C; auto.
-    * intro. apply merge_Cond_reduce with s t C1 C2 s'; auto.
-
-(* *)
-
-2: {  destroy H. clear H H1 H2 H3 H4 H7.
-  induction Ht.
-  1,2,3,4: intros; apply H5; auto;
-    simpl; unfold set_union_pid; repeat rewrite set_union_iff; auto.
-  - intros; elim (set_union_elim _ _ _ _ H1); intro.
-    1: apply H5, set_union_iff; auto.
-    apply IHHt; auto.
-    intros; apply H5; simpl.
-    unfold set_union_pid; repeat rewrite set_union_iff; auto.
-  - intros; inversion_clear H8.
-    elim (set_union_elim _ _ _ _ H1); intro.
-    1: elim (set_union_elim _ _ _ _ a); intro.
-    1: apply H5, set_union_iff; left. apply set_union_iff; auto.
-    2: apply IHHt2; auto. 1: apply IHHt1; auto.
-    all: intros; apply H5; simpl;
-      unfold set_union_pid; repeat rewrite set_union_iff; auto.
-  - intros; inversion_clear H8.
-    elim (set_union_elim _ _ _ _ H1); intro.
-    1: apply H5, set_union_iff; auto.
-    apply IHHt; auto.
-    intros; apply H5, set_union_iff; auto.
-  - intros; apply H0 with X; auto.
-  - simpl; simpl in H0, H5, H8; intros.
-    elim (set_union_elim _ _ _ _ H3); clear H3; intro H3; eauto.
-    apply set_remove'_1 in H3; eauto.
-  - simpl; intros; apply H5; simpl.
-    apply set_union_iff; elim (set_union_elim _ _ _ _ H3); auto.
-    intro. apply set_remove'_1 in a; auto.
-  - simpl; intros; apply H5; simpl.
-    apply set_union_iff; auto.
-}
-
-  (* generalize (MCC_To_within_Xs _ _ _ _ _ _ H' H1); intros. *)
-  clear H2 H3. set (H3 := True).
-  (* set (H':=H). clearbody H'. *)
-  red in H; unfold MCBase.Procs, Vars in H; simpl in H.
-  destroy H. clear H2 H7. set (H2 := True). set (H7 := True).
-  intros. induction Ht.
-  1,2,3,4: apply H5; simpl;
-    unfold set_union_pid; repeat rewrite set_union_iff; auto.
-  - elim (set_union_elim _ _ _ _ H8); intro.
-    1: apply H5, set_union_iff; auto.
-    apply IHHt; auto.
-    intros. apply H5; simpl.
-    unfold set_union_pid; repeat rewrite set_union_iff; auto.
-  - elim (set_union_elim _ _ _ _ H8); intro.
-    1: elim (set_union_elim _ _ _ _ a); intro.
-    1: apply H5, set_union_iff; left. apply set_union_iff; auto.
-    2: apply IHHt2; auto. 1: apply IHHt1; auto.
-    * intros; simpl; elim (H1 p1); auto.
-    * intros. apply H5; simpl.
-      unfold set_union_pid; repeat rewrite set_union_iff; auto.
-    * intros; simpl; elim (H1 p1); auto; intros.
-      inversion H12; auto.
-    * intros. apply H5; simpl.
-      unfold set_union_pid; repeat rewrite set_union_iff; auto.
-  - elim (set_union_elim _ _ _ _ H8); intro.
-    1: apply H5, set_union_iff; auto.
-    fold CCC_pn in b.
-    apply IHHt; auto.
-    simpl.
-    clear dependent p.
-    simpl in H2.
-
-
-
-    auto.
- Search In set_union. apply set_union.
-
-  - rewrite <- H16 in H9; simpl in H9.
-    apply H0 with r; auto.
-  - rewrite <- H16 in H9; simpl in H9.
-    elim (set_union_elim _ _ _ _ H9); eauto.
-    intro; apply H5 with r; auto; simpl.
-    apply set_remove'_1 with P.eq_dec p0; auto.
-  - apply IHC; auto. 
-
-inversion H1; clear H1.
-rename H into HP, H2 into HC, H0 into HD, H7 into Ht.
-destroy HP. unfold MCBase.Procs, Vars in HP.
-simpl in H0, HC, HD, HP. rename H0 into HC'.
-revert C HC HC' C' s s' t Ht.
-induction C; intros; inversion Ht;
-  clear dependent s0; clear dependent s'0.
-+ red in HD. rewrite Forall_forall in HD.
-  simpl. 
-
-simpl in HC'.
-projectable_C Defs (fst (Defs X)) (snd (Defs X)) -> projectable_C Defs ps (snd (Defs X))
-
-(* Start of proof for old version.
-induction H0.
-+ intro; apply (H (p,XUndefined)); auto.
-  unfold epp_list in H1; rewrite in_map_iff in H1.
-  unfold epp_list; rewrite in_map_iff.
-  destroy H1. inversion H3.
-  rewrite H5 in H1. simpl in H2. clear x0 H5 H3.
-  exists p; simpl. split; auto.
-  case Pid_dec; [idtac | case Pid_dec]; simpl; rewrite H6, H2; auto.
-+ intro; apply (H (p,XUndefined)); auto.
-  unfold epp_list in H1; rewrite in_map_iff in H1.
-  unfold epp_list; rewrite in_map_iff.
-  destroy H1. inversion H3.
-  rewrite H5 in H1. simpl in H2.
-  exists p; simpl. split; auto.
-  case l; (case Pid_dec; [idtac | case Pid_dec]); simpl; rewrite H6, H2; auto.
-+ intro; apply (H (p,XUndefined)); auto.
-  unfold epp_list in H1; rewrite in_map_iff in H1.
-  unfold epp_list; rewrite in_map_iff.
-  destroy H1. inversion H4.
-  rewrite H6 in H1. simpl in H3.
-  exists p; simpl. split; auto.
-  case Pid_dec; simpl. rewrite H7, H3; auto.
-  rewrite H3 in H7. rewrite (collapse_merge _ _ H7); auto.
-+ intro; apply (H (p,XUndefined)); auto.
-  unfold epp_list in H1; rewrite in_map_iff in H1.
-  unfold epp_list; rewrite in_map_iff.
-  destroy H1. inversion H4.
-  rewrite H6 in H1. simpl in H3.
-  exists p; simpl. split; auto.
-  case Pid_dec; simpl. rewrite H7, H3; auto.
-  case (collapse (bproj Defs C1 p)); auto.
-  rewrite H3 in H7. rewrite (collapse_merge' _ _ H7); auto.
-+ rename p into p'; rename B into B'.
-  unfold epp_list in H1; rewrite in_map_iff in H1.  
-  destroy H1.
-  assert (x = p' /\ collapse (bproj Defs (eta;;C') x) = B').
-  1: inversion H3; auto.
-  inversion_clear H4. rewrite H5 in H6, H1. clear H5 x H3.
-  simpl. rewrite <- H6; clear H6.
-  assert (collapse (bproj Defs C' p') <> XUndefined).
-  - change (snd (p',collapse (bproj Defs C' p')) <> XUndefined).
-    apply IHMCC_To; auto.
-
-  - case eta; intros; simpl;
-    case Pid_dec; [idtac | case Pid_dec | case l | case l; case Pid_dec ];
-    simpl; try rewrite Xmatch_elim; auto; discriminate.
-  - apply IHMCC_To.
-    intros; induction x as (p, B).
-    simpl; intro.
-  - apply (H (p',collapse (bproj Defs (eta;;C) p'))); auto.
-    unfold epp_list in H3; rewrite in_map_iff in H3.
-    unfold epp_list; rewrite in_map_iff.
-    destroy H3. inversion H5.
-    rewrite H7 in H3.
-    exists p'; split; auto.
-    assert (collapse (bproj Defs C p') = XUndefined).
-    2: simpl; case eta; (intros; case Pid_dec; [idtac | case Pid_dec]; try case l; simpl); rewrite H5; auto.
-    rewrite H7, H2; auto
-
-*)
-
-(* *)
-[idtac | case Pid_dec]; simpl; rewrite H7, H3; auto.
-+ 
-
-  clear p0 e0 x0 H3 H5 H v H0; simpl in H2.
-  exists p; simpl. split; auto.
-  unfold Pid_dec; rewrite Pdec.eqb_refl.
-  simpl. rewrite H6, H2; auto.
-  - unfold epp_list in H1; rewrite in_map_iff in H1.
-    unfold epp_list; rewrite in_map_iff.
-    destroy H1. inversion H3.
-    rewrite H5 in H1; rewrite <- e0.
-    clear p0 e0 x0 H3 H5 H v H0; simpl in H2.
-    exists p; simpl. split; auto.
-    unfold Pid_dec; rewrite Pdec.eqb_refl.
-    simpl. rewrite H6, H2; auto.
-*)
-Abort.
-
-
-End Projectability.
-
 Section MoreBranches.
 
 Inductive more_branches : Behaviour -> Behaviour -> Prop :=
@@ -1162,7 +460,1411 @@ apply merge_more_branches with B1.
 rewrite merge_comm; auto.
 Qed.
 
+Lemma more_branches_refl : forall B, more_branches B B.
+Proof.
+induction B using Behaviour_ind'; try constructor; auto.
+induction mB, mB'; constructor; auto.
+Qed.
+
+Lemma more_branches_trans : forall B B' B'',
+  more_branches B B' -> more_branches B' B'' -> more_branches B B''.
+Proof.
+induction B using Behaviour_ind'; intros;
+  try (inversion H; rewrite <- H2 in H0; inversion H0; constructor; eauto).
++ inversion H1.
+  - rewrite <- H3 in H2. inversion H2. constructor.
+  - rewrite <- H4 in H2. inversion H2; constructor; eauto.
+  - rewrite <- H4 in H2. inversion H2; constructor; eauto.
+  - rewrite <- H5 in H2. inversion H2; constructor; eauto.
++ inversion H. rewrite <- H3 in H0; inversion H0; constructor; eauto.
++ inversion H. rewrite <- H1 in H0; inversion H0; constructor.
+Qed.
+
+Local Ltac lelim X B H H':=
+  elim (XUndefined_dec X); intro H;
+  [ rewrite H in H'; elim (inject_not_undefined B); auto
+  | rewrite Xmatch_elim in H'; auto ].
+
+Local Ltac lelim2 X Y B H H' H'' := lelim X B H H''; lelim Y B H' H''.
+
+Local Ltac mbsolve B B' := apply more_branches_trans with B;
+  [apply merge_more_branches with B' | idtac]; auto.
+
+Local Ltac mbsolve'' B B' := apply more_branches_trans with B;
+  [apply merge_more_branches' with B' | idtac]; auto.
+
+Local Ltac mbsolve' H := apply inject_inj in H; rewrite <- H; auto.
+
+Lemma more_branches_merge_extend : forall B1 B2 B1' B2' B,
+  more_branches B1 B1' -> more_branches B2 B2' -> merge B1 B2 = inject B ->
+  exists B', merge B1' B2' = inject B' /\ more_branches B B'.
+Proof.
+induction B1 using Behaviour_ind'.
+1,2,3,4,6,7: intros; inversion H; revert H0 H1.
++ unfold merge; simpl; case_eq B2; simpl; intros.
+  5: induction o, o0.
+  all: try (elim (inject_not_undefined B); auto; fail).
+  inversion H1. simpl. exists End; repeat split.
+  revert H2; case_eq B; intros; inversion H4.
+  constructor. induction o, o0; inversion H7.
++ unfold merge; simpl; case_eq B2; simpl; intros.
+  5: induction o, o0.
+  all: try (elim (inject_not_undefined B); auto; fail).
+  inversion H1. simpl.
+  clear B3 H11 e2 H10 p2 H8 H1 B2' H9 B2 H0 B1' H3 H B0 H5 e0 H4 p0 H2.
+  revert H7. elim Pid_dec. elim Expr_dec. all: simpl; intros.
+  2,3: elim (inject_not_undefined B); auto.
+  lelim (Xmerge (inject B1) (inject b)) B H' H7.
+  revert H7. case_eq B; intros; try inversion H7.
+  2: induction o, o0; inversion H7.
+  rewrite <- H2, <- H1; rewrite <- H2, <- H1 in H7, H; clear e0 p0 H2 H1 B H.
+  elim IHB1 with b B' B'0 b0; auto. intros.
+  rename x into B; destroy H.
+  unfold merge in H0; rewrite H0.
+  exists (p!e;B); split.
+  rewrite Xmatch_elim; auto. apply inject_not_undefined.
+  constructor; auto.
++ unfold merge; simpl; case_eq B2; simpl; intros.
+  5: induction o, o0.
+  all: try (elim (inject_not_undefined B); auto; fail).
+  inversion H1. simpl.
+  clear B3 H11 x0 H10 p2 H8 H1 B2' H9 B2 H0 B1' H3 H B0 H5 x H4 p0 H2.
+  revert H7. elim Pid_dec. elim Var_dec. all: simpl; intros.
+  2,3: elim (inject_not_undefined B); auto.
+  lelim (Xmerge (inject B1) (inject b)) B H' H7.
+  revert H7. case_eq B; intros; try inversion H7.
+  2: induction o, o0; inversion H7.
+  rewrite <- H2, <- H1; rewrite <- H2, <- H1 in H7, H; clear v1 p0 H2 H1 B H.
+  elim IHB1 with b B' B'0 b0; auto. intros.
+  rename x into B; destroy H.
+  unfold merge in H0; rewrite H0.
+  exists (p ? v;B); split.
+  rewrite Xmatch_elim; auto. apply inject_not_undefined.
+  constructor; auto.
++ unfold merge; simpl; case_eq B2; simpl; intros.
+  5: induction o, o0.
+  all: try (elim (inject_not_undefined B); auto; fail).
+  inversion H1. simpl.
+  clear B3 H11 l2 H10 p2 H8 H1 B2' H9 B2 H0 B1' H3 H B0 H5 l0 H4 p0 H2.
+  revert H7. elim Pid_dec. elim eqb_label. all: simpl; intros.
+  2,3: elim (inject_not_undefined B); auto.
+  lelim (Xmerge (inject B1) (inject b)) B H' H7.
+  revert H7. case_eq B; intros; try inversion H7.
+  2: induction o, o0; inversion H7.
+  rewrite <- H2, <- H1; rewrite <- H2, <- H1 in H7, H; clear l0 p0 H2 H1 B H.
+  elim IHB1 with b B' B'0 b0; auto. intros.
+  rename x into B; destroy H.
+  unfold merge in H0; rewrite H0.
+  exists (p(+)l;B); split.
+  rewrite Xmatch_elim; auto. apply inject_not_undefined.
+  constructor; auto.
++ clear B1' H4 B0 H5 B1 H3 b0 H2 H.
+  rename B1_1 into Bt, B1_2 into Be, B1'0 into Bt', B2'0 into Be'.
+  intro. unfold merge. case_eq B2; intros.
+  5: induction o, o0.
+  all: try (simpl in H1; elim (inject_not_undefined B); auto; fail).
+  rewrite H in H0; clear B2 H; inversion H0.
+  clear B2 H4 B1 H2 b3 H B2' H3 H0.
+  assert (b = b0).
+  1: {
+    revert H1; simpl. case_eq (BExpr_dec b b0); intros.
+    unfold BExpr_dec in H; rewrite Bdec.eqb_eq in H; auto.
+    elim (inject_not_undefined B); auto.
+  }
+  rewrite <- H in H1; rewrite <- H; clear H.
+  change (Xmerge (XCond b (inject Bt) (inject Be)) (XCond b (inject b1) (inject b2)) = inject B) in H1.
+  rewrite Xmerge_Cond_inv in H1; auto.
+  revert H1. case_eq B; intros; inversion H1.
+  revert H2. induction o, o0; intro; inversion H2.
+  clear B H. rewrite <- H2; clear b3 H2 H1.
+  elim IHB1_1 with b1 Bt' B1' b4; auto.
+  elim IHB1_2 with b2 Be' B2'0 b5; auto.
+  intros. destroy H; destroy H0. exists (Cond b x0 x); split.
+  - simpl. Beq. unfold merge in H2, H1; rewrite H1, H2; simpl.
+    case_eq (inject x0); case_eq (inject x); auto; intros;
+      eelim inject_not_undefined; eauto.
+  - constructor; auto.
+  - intro. revert H1; simpl; rewrite H. Beq.
+    intro. apply (inject_not_undefined B); auto.
+  - intro. revert H1; simpl; rewrite H. Beq.
+    case (Xmerge (inject Bt) (inject b1)); intros; apply (inject_not_undefined B); auto.
++ unfold merge; simpl. case_eq B2; simpl; intros.
+  5: induction o, o0.
+  all: try (elim (inject_not_undefined B); auto; fail).
+  inversion H1. simpl.
+  revert H4. elim RecVar_dec. all: simpl; intros.
+  exists B; split; auto. apply more_branches_refl.
+  elim (inject_not_undefined B); auto.
++ intros.
+  revert H3. unfold merge; case_eq B2; simpl; intros.
+  all: induction mB, mB'; try (elim (inject_not_undefined B); auto; fail).
+  all: rewrite H3 in H2; clear B2 H3.
+  all: inversion H2.
+  all: induction o, o0; try (elim (inject_not_undefined B); auto; fail).
+  all: elim (P.eq_dec p p0); intro Hpp0;
+  [ try rewrite <- Hpp0 in H2;
+    try rewrite <- Hpp0 in H3;
+    try rewrite <- Hpp0 in H4;
+    try rewrite <- Hpp0 in H5;
+    try rewrite <- Hpp0 in H6; rewrite <- Hpp0; clear p0 Hpp0
+  | rewrite <- Pdec.eqb_neq in Hpp0;
+    simpl in H4; unfold Pid_dec in H4; rewrite Hpp0 in H4;
+    elim (inject_not_undefined B); auto ].
+  all: revert H4; simpl; Peq; intro.
+  all: inversion H1; simpl; Peq.
+  all: try (inversion H7; fail).
+  all: try (inversion H6; fail).
+  all: try (inversion H5; fail).
+  (* 81 goals left *)
+  all: do 2 try (rewrite Xmatch_elim; [idtac | apply inject_not_undefined]).
+  all: try lelim (Xmerge (inject a) (inject a0)) B Ha H4.
+  all: try lelim (inject a) B Ha H4.
+  all: try lelim (Xmerge (inject b) (inject b0)) B Hb H4.
+  all: try lelim (inject b) B Hb H4.
+  1,5,9,13,37,39,41,43,55,57,59,61,73,74,75,76:
+    exists (p & None // None); split; auto.
+  1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16:
+    revert H4; case_eq B; intros; inversion H12;
+    replace p with p2; [constructor |
+      induction o, o0; inversion H12; auto].
+  (* 65 cases left *)
+  1,4,7,10,13,17,37,39,47,48,49,50,51,53,61,62:
+    exists (p & None // Some Br'); split; auto.
+  1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16:
+    revert H4; case_eq B; intros; inversion H13;
+    induction o, o0; inversion H13; constructor.
+  1,3,9,11: mbsolve b b0.
+  1,2,7: mbsolve' H18.
+  1,2,6,7: mbsolve'' Br b; inversion H7; auto.
+  1,2,4: mbsolve' H18; inversion H7; rewrite <- H19; auto.
+  1: mbsolve' H17.
+  1: mbsolve' H17; inversion H7; rewrite <- H18; auto.
+  (* 49 cases left *)
+  1,3,5,7,15,19,27,28,29,30,33,35,41,43,47,48:
+    exists (p & Some Bl' // None); split; auto;
+    revert H4; case_eq B; intros; inversion H13;
+    induction o, o0; inversion H13; constructor.
+  1,2,7,8: mbsolve a a0; fail.
+  1,2,5,6: mbsolve' H17.
+  1,2,3,4: mbsolve'' Bl a; inversion H6; auto.
+  1,2,3: mbsolve' H17; inversion H6; rewrite <- H19; auto.
+  1: mbsolve' H17; inversion H6; rewrite <- H18; auto.
+  (* 33 cases left *)
+  1,2,3,4,6,9,11,14,17,21,22,25,29,30,31,33:
+    exists (p & Some Bl' // Some Br'); split; auto;
+    revert H4; case_eq B; intros; inversion H14;
+    induction o, o0; inversion H14; constructor.
+  1,3,9,19: mbsolve a a0.
+  1,4,11,22: mbsolve b b0.
+  1,4,10,20: mbsolve' H19.
+  1,2,4,11: mbsolve' H18; fail.
+  1,2,6,14: mbsolve'' Br b; inversion H7; auto.
+  1,2: mbsolve'' Bl a; inversion H6; auto.
+  1,4: mbsolve'' Bl a; inversion H5; auto.
+  1,2,3,8: mbsolve' H19; inversion H7; rewrite <- H20; auto.
+  1,2: mbsolve' H18; inversion H6; rewrite <- H20; auto.
+  1,2: mbsolve' H18; inversion H5; rewrite <- H20; auto.
+ (* 17 cases left *)
+  all: try (apply merge_not_undefined in Ha; destroy Ha;
+    elim H with a Bl Bl'0 Bl' x; auto;
+   [intros | try (inversion H6; auto; fail); inversion H5; auto]).
+  all: try (apply merge_not_undefined in Hb; destroy Hb;
+    elim H0 with b Br Br'0 Br' x; auto; [intros | inversion H7; auto; fail]).
+  11: apply merge_not_undefined in Hb; destroy Hb;
+    elim H0 with b Br Br'0 Br' x1; auto; [intros | inversion H7; auto; fail].
+  all: try (destroy H14; unfold merge in H15; rewrite H15).
+  all: try (destroy H15; unfold merge in H16; rewrite H16).
+  11: destroy H16; unfold merge in H18; rewrite H18.
+  11: destroy H17; unfold merge in H19; rewrite H19.
+  all: rewrite Xmatch_elim; [idtac | apply inject_not_undefined].
+  all: try (rewrite Xmatch_elim; [idtac | apply inject_not_undefined]).
+  1,3,15,16: exists (p & None // Some x0); split; auto;
+    revert H4; case_eq B; intros; inversion H16;
+    induction o, o0; inversion H16; constructor.
+  1,2,3: unfold merge in Hb; rewrite Hb in H21; mbsolve' H21.
+  1: unfold merge in Hb; rewrite Hb in H20; mbsolve' H20.
+  3,5,10,11: exists (p & Some x0 // None); split; auto;
+    revert H4; case_eq B; intros; inversion H16;
+    induction o, o0; inversion H16; constructor;
+    unfold merge in Ha; rewrite Ha in H20; mbsolve' H20.
+  1,2,5,9: exists (p & Some Bl' // Some x0); split; auto;
+    revert H4; case_eq B; intros; inversion H17;
+    induction o, o0; inversion H17; constructor;
+    [idtac | unfold merge in Hb; rewrite Hb in H22; mbsolve' H22].
+  1: mbsolve a a0.
+  1: mbsolve' H21.
+  1: mbsolve'' Bl a; inversion H5; auto.
+  1: mbsolve' H21; inversion H5; rewrite <- H23; auto.
+  1,2,3,5: exists (p & Some x0 // Some Br'); split; auto;
+    revert H4; case_eq B; intros; inversion H17;
+    induction o, o0; inversion H17; constructor;
+    [ unfold merge in Ha; rewrite Ha in H21; mbsolve' H21 | idtac].
+  1: mbsolve b b0.
+  1: mbsolve' H22.
+  1: mbsolve'' Br b; inversion H7; auto.
+  1: mbsolve' H22; inversion H7; rewrite <- H23; auto.
+  exists (p & Some x0 // Some x2); split; auto;
+  revert H4; case_eq B; intros. all: inversion H20.
+  induction o, o0; inversion H20. constructor.
+  unfold merge in Ha; rewrite Ha in H24. mbsolve' H24.
+  unfold merge in Hb; rewrite Hb in H25. mbsolve' H25.
+Qed.
+
+Definition Xmore_branches XB XB' := exists B B',
+  XB = inject B /\ XB' = inject B' /\ more_branches B B'.
+
 End MoreBranches.
+
+Section Projectability.
+
+(** ** Properties of projectability
+  All variants of parameterized projectability are decidable. *)
+
+Lemma projectable_C_dec : forall Defs ps C,
+  { projectable_C Defs ps C } + { ~projectable_C Defs ps C }.
+Proof.
+intros. apply Forall_dec; intro.
+induction x as (p,B).
+simpl. elim (XUndefined_dec B); auto.
+Qed.
+
+Lemma projectable_D_dec : forall Xs Defs,
+  { projectable_D Xs Defs } + { ~projectable_D Xs Defs }.
+Proof.
+intros. apply Forall_dec; intro.
+apply projectable_C_dec.
+Qed.
+
+Lemma projectable_dec : forall Xs ps P,
+  { projectable Xs ps P } + { ~projectable Xs ps P }.
+Proof.
+intros.
+elim (projectable_C_dec (Procedures P) ps (Main P)); intro HC.
+2: right; intro; inversion_clear H; auto.
+elim (projectable_D_dec Xs (Procedures P)); intro HD.
+2: right; intro; destroy H; auto.
+generalize (fun p => In_dec P.eq_dec p ps); intro.
+elim (Forall_dec (fun p => In p ps)) with (CCC_pn (Main P) (fun _ => nil)); auto; intro Hps.
+1: elim (Forall_dec (fun X => forall p, In p (CCC_pn (snd (Procedures P X)) (fun _ => nil)) -> In p ps)) with Xs; intro HXs1.
+1: elim (Forall_dec (fun X => forall p, In p (fst (Procedures P X)) -> In p ps)) with Xs; intro HXs2.
++ left. rewrite Forall_forall in Hps, HXs1, HXs2.
+  repeat split; eauto.
++ right; intro; apply HXs2.
+  destroy H. rewrite Forall_forall; eauto.
++ elim (Forall_dec (fun p => In p ps)) with (fst (Procedures P HXs2)); auto.
+  - left; rewrite Forall_forall in a; auto.
+  - right; intro. apply b; rewrite Forall_forall; auto.
++ right; intro; apply HXs1.
+  destroy H. rewrite Forall_forall; eauto.
++ elim (Forall_dec (fun p => In p ps)) with (CCC_pn (snd (Procedures P HXs1)) (fun _ => nil)); auto.
+  - left. rewrite Forall_forall in a; eauto.
+  - right; intro. apply b; rewrite Forall_forall; eauto.
++ right; intro; apply Hps.
+  destroy H. rewrite Forall_forall; eauto.
+Qed.
+
+(** Inversion lemmas for projectability. *)
+Lemma projectable_inv_Com : forall Defs ps p e q x C,
+  projectable_C Defs ps (p#e --> q$x;; C) -> projectable_C Defs ps C.
+Proof.
+intros. red; red in H.
+rewrite Forall_forall; rewrite Forall_forall in H.
+intros. induction x0 as (r,B). intro.
+apply (H (r,XUndefined)); auto.
+unfold epp_list in H0; rewrite in_map_iff in H0.
+unfold epp_list; rewrite in_map_iff.
+destroy H0. inversion H2.
+rewrite H4 in H0. simpl in H1. clear x0 H4 H2.
+exists r; simpl. split; auto.
+case Pid_dec; [idtac | case Pid_dec]; simpl; rewrite H5, H1; auto.
+Qed.
+
+Lemma projectable_inv_Sel : forall Defs ps p q l C,
+  projectable_C Defs ps (p --> q[l];; C) -> projectable_C Defs ps C.
+Proof.
+intros. red; red in H.
+rewrite Forall_forall; rewrite Forall_forall in H.
+intros. induction x as (r,B). intro.
+apply (H (r,XUndefined)); auto.
+unfold epp_list in H0; rewrite in_map_iff in H0.
+unfold epp_list; rewrite in_map_iff.
+destroy H0. inversion H2.
+rewrite H4 in H0. simpl in H1. clear x H4 H2.
+exists r; simpl. split; auto.
+case l; (case Pid_dec; [idtac | case Pid_dec]); simpl; rewrite H5, H1; auto.
+Qed.
+
+Lemma projectable_inv_Eta : forall Defs ps eta C,
+  projectable_C Defs ps (eta;; C) -> projectable_C Defs ps C.
+Proof.
+intros; induction eta.
+eapply projectable_inv_Com; eauto.
+eapply projectable_inv_Sel; eauto.
+Qed.
+
+Lemma projectable_inv_Cond : forall Defs ps p b C1 C2,
+  projectable_C Defs ps (If p ?? b Then C1 Else C2) -> projectable_C Defs ps C1.
+Proof.
+intros. red; red in H.
+rewrite Forall_forall; rewrite Forall_forall in H.
+intros. induction x as (r,B). intro.
+apply (H (r,XUndefined)); auto.
+unfold epp_list in H0; rewrite in_map_iff in H0.
+unfold epp_list; rewrite in_map_iff.
+destroy H0. inversion H2.
+rewrite H4 in H0. simpl in H1. clear x H4 H2.
+exists r; simpl. split; auto.
+case Pid_dec; simpl.
++ rewrite H5, H1; auto.
++ rewrite collapse_merge; auto. rewrite H5; auto.
+Qed.
+
+Lemma projectable_inv_Cond' : forall Defs ps p b C1 C2,
+  projectable_C Defs ps (If p ?? b Then C1 Else C2) -> projectable_C Defs ps C2.
+Proof.
+intros. red; red in H.
+rewrite Forall_forall; rewrite Forall_forall in H.
+intros. induction x as (r,B). intro.
+apply (H (r,XUndefined)); auto.
+unfold epp_list in H0; rewrite in_map_iff in H0.
+unfold epp_list; rewrite in_map_iff.
+destroy H0. inversion H2.
+rewrite H4 in H0. simpl in H1. clear x H4 H2.
+exists r; simpl. split; auto.
+case Pid_dec; simpl.
++ rewrite H5, H1. case (collapse (bproj Defs C1 r)); auto.
++ rewrite collapse_merge'; auto. rewrite H5; auto.
+Qed.
+
+(** The corresponding lemmas for RT_Call do not hold.
+  Therefore, projectability is not preserved by reductions,
+  so we need an auxiliary notion. *)
+Fixpoint strongly_projectable Defs (C:Choreography) (r:Pid) : Prop :=
+match C with
+| eta;; C'                  => strongly_projectable Defs C' r
+| If p ?? b Then C1 Else C2 => strongly_projectable Defs C1 r
+                               /\ strongly_projectable Defs C2 r
+                               /\ collapse (bproj Defs C r) <> XUndefined
+| RT_Call X ps C            => strongly_projectable Defs C r /\
+                               (forall p, In p ps -> bproj Defs C p = bproj Defs (snd (Defs X)) p)
+| _                         => True
+end.
+
+Lemma strongly_projectable_C : forall Defs C r,
+  strongly_projectable Defs C r -> collapse (bproj Defs C r) <> XUndefined.
+Proof.
+induction C; simpl.
++ intro; induction e; elim Pid_dec;
+  [idtac | elim Pid_dec | elim l | elim l; elim Pid_dec];
+    auto; simpl; intros; try (rewrite Xmatch_elim; auto; discriminate).
++ intro; elim Pid_dec; tauto.
++ intro; elim in_dec; discriminate.
++ intro; elim in_dec; auto. discriminate.
+  intros. inversion_clear H; auto.
++ discriminate.
+Qed.
+
+Lemma strongly_projectable_C' : forall Defs C ps,
+  (forall r, In r ps -> strongly_projectable Defs C r) -> projectable_C Defs ps C.
+Proof.
+intros; red; rewrite Forall_forall.
+induction x as (p,B); simpl; intros.
+apply in_map_iff in H0; destroy H0. inversion H1.
+rewrite H3 in H0; clear H3 H1 x.
+apply strongly_projectable_C, H. auto.
+Qed.
+
+Lemma initial_strongly_projectable : forall C, initial C ->
+  forall Defs ps, projectable_C Defs ps C ->
+  forall r, In r ps -> strongly_projectable Defs C r.
+Proof.
+induction C; auto; simpl; intros.
++ induction e.
+  - apply projectable_inv_Com in H0; eauto.
+  - apply projectable_inv_Sel in H0; eauto.
++ inversion_clear H. repeat split.
+  - apply projectable_inv_Cond in H0; eauto.
+  - apply projectable_inv_Cond' in H0; eauto.
+  - red in H0. rewrite Forall_forall in H0.
+    generalize (H0 (r,collapse (bproj Defs (If p ?? b Then C1 Else C2) r))); intros.
+    simpl in H; apply H.
+    apply in_map_iff. exists r; auto.
++ inversion H.
+Qed.
+
+Ltac Peq := unfold Pid_dec; rewrite Pdec.eqb_refl; simpl.
+Ltac Eeq := unfold Expr_dec; rewrite Edec.eqb_refl; simpl.
+Ltac Beq := unfold BExpr_dec; rewrite Bdec.eqb_refl; simpl.
+Ltac Veq := unfold Var_dec; rewrite Xdec.eqb_refl; simpl.
+Ltac Xeq := unfold RecVar_dec; rewrite Rdec.eqb_refl; simpl.
+
+Ltac sup := unfold set_union_pid; rewrite set_union_iff; auto.
+
+Lemma bproj_not_In : forall Defs r C,
+  ~In r (CCC_pn C (fun X => fst (Defs X))) -> bproj Defs C r = XEnd.
+Proof.
+induction C; simpl; auto; intros.
++ assert (bproj Defs C r = XEnd).
+  1: apply IHC; intro; apply H; sup.
+  induction e.
+  - intros. case_eq (Pid_dec p r); [idtac | case_eq (Pid_dec p0 r)]; auto.
+    all: intros; unfold Pid_dec in H1; rewrite Pdec.eqb_eq in H1.
+    all: elim H; rewrite H1; simpl; sup; left.
+    left; auto. right; left; auto.
+  - case l; (case_eq (Pid_dec p r); [idtac | case_eq (Pid_dec p0 r)]); auto.
+    all: intros; unfold Pid_dec in H1; rewrite Pdec.eqb_eq in H1.
+    all: elim H; rewrite H1; simpl; sup; left.
+    1,3: left; auto. all: right; left; auto.
++ assert (bproj Defs C1 r = XEnd).
+  1: apply IHC1; intro; apply H; sup. left; sup.
+  assert (bproj Defs C2 r = XEnd).
+  1: apply IHC2; intro; apply H; sup.
+  case_eq (Pid_dec p r).
+  2: rewrite H0, H1; auto.
+  intros; unfold Pid_dec in H2; rewrite Pdec.eqb_eq in H2.
+  elim H; rewrite H2; simpl; sup. left; sup. left; left; auto.
++ elim in_dec; auto. intro; elim H; auto.
++ elim in_dec; intros.
+  - elim H; sup.
+  - apply IHC. intro; apply H; sup.
+Qed.
+
+Lemma bproj_disjoint : forall Defs e C p, ~In p (eta_pn e) ->
+  bproj Defs (e;; C) p = bproj Defs C p.
+Proof.
+induction e; intros.
++ simpl in H. assert (p <> p1 /\ p0 <> p1). tauto.
+  inversion_clear H0.
+  rewrite <- Pdec.eqb_neq in H1, H2.
+  simpl. unfold Pid_dec; rewrite H1, H2; auto.
++ simpl in H. assert (p <> p1 /\ p0 <> p1). tauto.
+  inversion_clear H0.
+  rewrite <- Pdec.eqb_neq in H1, H2.
+  simpl. unfold Pid_dec; rewrite H1, H2; case l; auto.
+Qed.
+
+Ltac Pneq H := rewrite <- Pdec.eqb_neq in H; rewrite H.
+
+Lemma projectable_C_use : forall Defs ps C, projectable_C Defs ps C ->
+  forall p, In p ps -> exists B, collapse (bproj Defs C p) = inject B.
+Proof.
+intros.
+red in H. rewrite Forall_forall in H.
+elim (collapse_char' (bproj Defs C p)); intros.
+inversion_clear a.
++ rewrite H1. rewrite collapse_inject. exists x; auto.
++ elim (H (p,collapse (bproj Defs C p))); auto.
+  unfold epp_list; rewrite in_map_iff.
+  exists p; auto.
+Qed.
+
+Lemma bproj_reduce_Com : forall Defs C s C' s' p q v x ps,
+  (forall r, In r ps -> strongly_projectable Defs C r) -> In p ps -> In q ps ->
+  CCC_To Defs C s (CCBase.TL.R_Com p v q x) C' s' -> p <> q ->
+  (exists e Bp, bproj Defs C p = XSend q e Bp /\ bproj Defs C' p = Bp)
+  /\ (exists Bq, bproj Defs C q = XRecv p x Bq /\ bproj Defs C' q = Bq)
+  /\ (forall r, In r ps -> p <> r -> q <> r -> bproj Defs C' r = bproj Defs C r).
+Proof.
+intros.
+rename H into HC, H0 into Hp, H1 into Hq, H3 into Hpq, H2 into H.
+revert C' H.
+induction C; intros; inversion H.
++ rewrite <- H3. rewrite H4, H6, H7 in H0. rename e0 into e'.
+  clear s'0 H8 C' H3 x0 H7 q0 H6 v1 H5 p0 H4 s0 H1 C0 H2 IHC H9 s' H.
+  simpl; repeat split; unfold Pid_dec.
+  - Peq. exists e', (bproj Defs C p); auto.
+  - Pneq Hpq. Peq. exists (bproj Defs C q); auto.
+  - intros. Pneq H1. Pneq H2. auto.
++ elim IHC with C'0; auto.
+  clear C' H5 s'0 H6 t H4 s0 H3 C0 H1 eta H0 H7 H.
+  rename C'0 into C'; intros.
+  destroy H0.
+  induction e; try (case l); destroy H2; destroy H3; simpl; repeat split; unfold Pid_dec.
+  1,4,7: Pneq H5; Pneq H4; auto.
+  1,3,5: Pneq H2; Pneq H3; auto.
+  all: intros; case_eq (Pdec.eqb p0 r); intros.
+  1,3,5: rewrite H0; auto.
+  all: case_eq (Pdec.eqb p1 r); auto.
+  all: rewrite H0; auto.
++ clear H s'0 H7 C' H6 s0 H3 C3 H4 C0 H2 b0 H1 p1 H0 t H5.
+  rename p into p', p0 into p. inversion_clear H8.
+  elim IHC1 with C1'; auto. 2: intros; elim (HC r); auto.
+  elim IHC2 with C2'; auto. 2: intros; elim (HC r); tauto.
+  clear IHC1 IHC2 H9 H10; intros.
+  destroy H2; destroy H4. destroy H1; destroy H3. destroy H5; destroy H6.
+  rename x0 into e, x1 into Bp2, x2 into e', x3 into Bp1, x4 into Bq2, x5 into Bq1.
+  simpl; unfold Pid_dec; repeat split.
+  - apply strongly_projectable_C with (r:=p') in HC; auto.
+    revert HC. simpl; unfold Pid_dec. Pneq H.
+    rewrite H3, H1, H8, H7; simpl. Peq.
+    case Expr_dec. 2: intros; elim HC; auto.
+    exists e', (Xmerge Bp1 Bp2); auto.
+    rewrite Xmatch_elim; auto.
+    intro. rewrite H11 in HC; auto.
+  - apply strongly_projectable_C with (r:=q) in HC; auto.
+    revert HC. simpl; unfold Pid_dec.
+    Pneq H0. rewrite H5, H6, H9, H10.
+    simpl. Peq. Veq.
+    exists (Xmerge Bq1 Bq2); split; auto.
+    rewrite Xmatch_elim; auto.
+    intro. rewrite H11 in HC; auto.
+  - intros. rewrite H2, H4; auto.
++ elim IHC with C'0; auto; intros.
+  2: apply HC; auto.
+  clear s'0 H6 C' H5 t H4 s0 H2 ps0 H1 X H0 H C0 H3 H8 IHC.
+  rename r into X, C'0 into C'.
+  apply CCBase.TL.disjoint_ps_Com in H7.
+  rename l into ps'. destroy H10.
+  simpl; repeat split.
+  - elim in_dec; intros; auto.
+    elim (disjoint_not_in_fst _ _ _ H7 p); simpl; auto.
+  - elim in_dec; intros; auto.
+    1: elim (disjoint_not_in_snd _ _ _ H7 q); simpl; auto.
+  - intros. elim in_dec; auto.
+Qed.
+
+Lemma bproj_reduce_Sel : forall Defs C s C' s' p q l ps,
+  (forall r, In r ps -> strongly_projectable Defs C r) -> In p ps -> In q ps ->
+  CCC_To Defs C s (CCBase.TL.R_Sel p q l) C' s' -> p <> q ->
+  (exists Bp, bproj Defs C p = XSel q l Bp /\ bproj Defs C' p = Bp)
+  /\ (l = left -> 
+       exists Bq, bproj Defs C q = XBranching p (Some Bq) None /\ bproj Defs C' q = Bq)
+  /\ (l = right -> 
+       exists Bq, bproj Defs C q = XBranching p None (Some Bq) /\ bproj Defs C' q = Bq)
+  /\ (forall r, In r ps -> p <> r -> q <> r -> bproj Defs C' r = bproj Defs C r).
+Proof.
+intros.
+rename H into HC, H0 into Hp, H1 into Hq, H3 into Hpq, H2 into H.
+revert C' H.
+induction C; intros; inversion H.
++ rewrite <- H3. rewrite H4, H5, H6 in H0.
+  clear s'0 H7 C' H3 l0 H6 q0 H5 p0 H4 s0 H1 C0 H2 IHC H8 s' H.
+  simpl; repeat split; unfold Pid_dec.
+  - Peq. exists (bproj Defs C p); case l; auto.
+  - intro. rewrite H. Pneq Hpq. Peq. exists (bproj Defs C q); auto.
+  - intro. rewrite H. Pneq Hpq. Peq. exists (bproj Defs C q); auto.
+  - intros. Pneq H1. Pneq H2. case l; auto.
++ elim IHC with C'0; auto.
+  clear C' H5 s'0 H6 t H4 s0 H3 C0 H1 eta H0 H7 H.
+  rename C'0 into C'; intros.
+  destroy H0.
+  induction e; try (case l0); destroy H2; destroy H4; simpl; repeat split; unfold Pid_dec.
+  1,5,9: Pneq H6; Pneq H5; auto.
+  1,2,4,5,7,8: Pneq H2; Pneq H4; auto.
+  all: intros; case_eq (Pdec.eqb p0 r); intros.
+  1,3,5: rewrite H0; auto.
+  all: case_eq (Pdec.eqb p1 r); auto.
+  all: rewrite H0; auto.
++ clear H s'0 H7 C' H6 s0 H3 C3 H4 C0 H2 b0 H1 p1 H0 t H5.
+  rename p into p', p0 into p. inversion_clear H8.
+  elim IHC1 with C1'; auto. 2: intros; elim (HC r); auto.
+  elim IHC2 with C2'; auto. 2: intros; elim (HC r); tauto.
+  clear IHC1 IHC2 H9 H10; intros.
+  destroy H2; destroy H4. destroy H1; destroy H3.
+  rename x into Bp2, x0 into Bp1.
+  simpl; unfold Pid_dec; repeat split.
+  - apply strongly_projectable_C with (r:=p') in HC; auto.
+    revert HC. simpl; unfold Pid_dec. Pneq H.
+    rewrite H9, H10, H1, H3; simpl. Peq.
+    rewrite label_eqb_refl.
+    exists (Xmerge Bp1 Bp2); auto.
+    rewrite Xmatch_elim; auto.
+    intro. rewrite H11 in HC; auto.
+  - intro Hl. elim (H5 Hl); auto. elim (H7 Hl); auto.
+    intros. rename x into Bq1, x0 into Bq2. destroy H11. destroy H12.
+    apply strongly_projectable_C with (r:=q) in HC; auto.
+    revert HC. simpl; unfold Pid_dec.
+    Pneq H0. rewrite H11, H12, H13, H14.
+    simpl. Peq.
+    exists (Xmerge Bq1 Bq2); split; auto.
+    rewrite Xmatch_elim; auto.
+    intro. rewrite H15 in HC; auto.
+  - intro Hl. elim (H6 Hl); auto. elim (H8 Hl); auto.
+    intros. rename x into Bq1, x0 into Bq2. destroy H11. destroy H12.
+    apply strongly_projectable_C with (r:=q) in HC; auto.
+    revert HC. simpl; unfold Pid_dec.
+    Pneq H0. rewrite H11, H12, H13, H14.
+    simpl. Peq.
+    exists (Xmerge Bq1 Bq2); split; auto.
+    rewrite Xmatch_elim; auto.
+    intro. rewrite H15 in HC; auto.
+  - intros. rewrite H2, H4; auto.
++ elim IHC with C'0; auto; intros.
+  2: apply HC; auto.
+  clear s'0 H6 C' H5 t H4 s0 H2 ps0 H1 X H0 H C0 H3 H8 IHC.
+  rename r into X, C'0 into C'.
+  apply CCBase.TL.disjoint_ps_Sel in H7.
+  rename l0 into ps'. destroy H10.
+  simpl; repeat split.
+  - elim in_dec; intros; auto.
+    elim (disjoint_not_in_fst _ _ _ H7 p); simpl; auto.
+  - elim in_dec; intros; auto.
+    1: elim (disjoint_not_in_snd _ _ _ H7 q); simpl; auto.
+  - elim in_dec; intros; auto.
+    1: elim (disjoint_not_in_snd _ _ _ H7 q); simpl; auto.
+  - intros. elim in_dec; auto.
+Qed.
+
+Lemma bproj_reduce_Cond : forall Defs C s C' s' p ps,
+  (forall r, In r ps -> strongly_projectable Defs C r) -> In p ps ->
+  CCC_To Defs C s (CCBase.TL.R_Cond p) C' s' ->
+  (exists b Bt Be, bproj Defs C p = XCond b Bt Be
+    /\ (CCBase.beval_on_state b s p = true -> bproj Defs C' p = Bt)
+    /\ (CCBase.beval_on_state b s p = false -> bproj Defs C' p = Be))
+  /\ (forall r, In r ps -> p <> r -> Xmore_branches (bproj Defs C r) (bproj Defs C' r)).
+Proof.
+intros.
+rename H into HC, H0 into Hp, H1 into H.
+revert C' H.
+induction C; intros; inversion H.
++ clear s'0 H6 C' H5 t H4 s0 H3 C0 H1 eta H0 H.
+  elim IHC with C'0; intros; auto.
+  2: apply HC; auto.
+  rename C'0 into C'; clear IHC H7.
+  destroy H. rename x into b, x0 into Bt, x1 into Be.
+  induction e; destroy H2; simpl in H2, H4; repeat split.
+  1,3: exists b, Bt, Be; repeat split.
+  all: simpl; unfold Pid_dec.
+  4,5,6,8: case l.
+  1,2,3,4,5,6,7,8,9: Pneq H4; Pneq H2; auto.
+  all: intros r Hr Hpr; intros.
+  all: elim Pdec.eqb; auto.
+  2,4,6: elim Pdec.eqb; auto.
+  all: elim (H0 r); auto; intros B HB; destroy HB; rename x into B'.
+  all: rewrite H5, H6; red.
+  - exists (p1(+)left;B), (p1(+)left;B'); repeat split; auto.
+    constructor; auto.
+  - exists (p0 & Some B // None), (p0 & Some B' // None); repeat split; auto.
+    constructor; auto.
+  - exists (p0 & None // Some B), (p0 & None // Some B'); repeat split; auto.
+    constructor; auto.
+  - exists (p0 ? v; B), (p0 ? v; B'); repeat split; auto.
+    constructor; auto.
+  - exists (p1(+)right;B), (p1(+)right;B'); repeat split; auto.
+    constructor; auto.
+  - exists (p1!e; B), (p1!e; B'); repeat split; auto.
+    constructor; auto.
++ rewrite H6 in HC. rewrite <- H5.
+  clear s'0 H7 C' H5 p0 H6 s0 H2 C3 H4 C0 H3 b0 H1 p1 H0 H IHC1 IHC2.
+  repeat split.
+  - generalize (strongly_projectable_C _ _ _ (HC p Hp)); clear HC.
+    simpl. Peq.
+    elim (collapse_char' (bproj Defs C1 p)); intro HC1.
+    2: rewrite HC1; intro HC; elim HC; auto.
+    inversion_clear HC1. rename x into B1.
+    rewrite Xmatch_elim. 2: rewrite H, collapse_inject; apply inject_not_undefined.
+    elim (collapse_char' (bproj Defs C2 p)); intro HC2.
+    2: rewrite HC2; intro HC; elim HC; auto.
+    inversion_clear HC2. rename x into B2.
+    rewrite Xmatch_elim. 2: rewrite H0, collapse_inject; apply inject_not_undefined.
+    intros.
+    exists b, (bproj Defs C1 p), (bproj Defs C2 p); repeat split; auto.
+    intro. rewrite H9 in H2; inversion H2.
+  - intros r Hr Hpr.
+    generalize (strongly_projectable_C _ _ _ (HC r Hr)); clear HC.
+    simpl. unfold Pid_dec; Pneq Hpr.
+    intro. apply collapse_exists in H. destroy H.
+    rename x into B.
+    elim (Xmerge_inv _ _ _ H); intros. destroy H0.
+    rename x into B1, x0 into B2.
+    rewrite H1, H2. exists B, B1.
+    repeat split. rewrite H1, H2 in H; auto.
+    apply merge_more_branches with B2; auto.
++ rewrite H6 in HC. rewrite <- H5.
+  clear s'0 H7 C' H5 p0 H6 s0 H2 C3 H4 C0 H3 b0 H1 p1 H0 H IHC1 IHC2.
+  repeat split.
+  - generalize (strongly_projectable_C _ _ _ (HC p Hp)); clear HC.
+    simpl. Peq.
+    elim (collapse_char' (bproj Defs C1 p)); intro HC1.
+    2: rewrite HC1; intro HC; elim HC; auto.
+    inversion_clear HC1. rename x into B1.
+    rewrite Xmatch_elim. 2: rewrite H, collapse_inject; apply inject_not_undefined.
+    elim (collapse_char' (bproj Defs C2 p)); intro HC2.
+    2: rewrite HC2; intro HC; elim HC; auto.
+    inversion_clear HC2. rename x into B2.
+    rewrite Xmatch_elim. 2: rewrite H0, collapse_inject; apply inject_not_undefined.
+    intros.
+    exists b, (bproj Defs C1 p), (bproj Defs C2 p); repeat split; auto.
+    intro. rewrite H9 in H2; inversion H2.
+  - intros r Hr Hpr.
+    generalize (strongly_projectable_C _ _ _ (HC r Hr)); clear HC.
+    simpl. unfold Pid_dec; Pneq Hpr.
+    intro. apply collapse_exists in H. destroy H.
+    rename x into B.
+    elim (Xmerge_inv _ _ _ H); intros. destroy H0.
+    rename x into B1, x0 into B2.
+    rewrite H1, H2. exists B, B2.
+    repeat split. rewrite H1, H2 in H; auto.
+    apply merge_more_branches' with B1; auto.
++ clear s'0 H7 C' H6 t H5 s0 H3 C3 H4 C0 H2 b0 H1 p1 H0 H.
+  elim IHC1 with C1'; auto. 2: apply HC.
+  elim IHC2 with C2'; auto. 2: apply HC.
+  clear IHC1 IHC2 H9 H10. intros.
+  destroy H; destroy H1. simpl in H8.
+  rename x into b2, x0 into Bt2, x1 into Be2.
+  rename x2 into b1, x3 into Bt1, x4 into Be1.
+  repeat split; auto.
+  - generalize (strongly_projectable_C _ _ _ (HC p Hp)); clear HC.
+    simpl; unfold Pid_dec. Pneq H8.
+    rewrite H3, H5.
+    intros.
+    elim (XUndefined_dec (Xmerge (XCond b1 Bt1 Be1) (XCond b2 Bt2 Be2))); intros.
+    1: rewrite a in H7; elim H7; auto.
+    revert H7; simpl. case_eq (BExpr_dec b1 b2). 2: intros; elim H9; auto.
+    intro. unfold BExpr_dec in H7; rewrite Bdec.eqb_eq in H7.
+    rename b1 into b'; rewrite <- H7 in H4, H, H3, b0; clear b2 H7.
+    intro; clear H7.
+    exists b', (Xmerge Bt1 Bt2), (Xmerge Be1 Be2); repeat split.
+    rewrite <- Xmerge_Cond_inv; simpl. Beq; auto.
+    1,2: intro; apply b0; simpl; rewrite H7; Beq; auto.
+    case (Xmerge Bt1 Bt2); auto.
+    intros. rewrite H4, H6; auto.
+    intros. rewrite H, H1; auto.
+  - intros. simpl. case_eq (Pid_dec p0 r).
+    * elim (H0 r); auto. elim (H2 r); auto.
+      intros. destroy H10; destroy H11.
+      exists (Cond b x x0), (Cond b x1 x2); simpl.
+      rewrite <- H13, H14, H15, H16; repeat split.
+      constructor; auto.
+    * intros. unfold Pid_dec in H10; rewrite Pdec.eqb_neq in H10.
+      generalize (strongly_projectable_C _ _ _ (HC r H7)); clear HC.
+      simpl; unfold Pid_dec. Pneq H10.
+      intro.
+      elim (collapse_exists _ H11); intros; clear H11.
+      elim (H0 r H7 H9); intros. destroy H11.
+      elim (H2 r H7 H9); intros. destroy H15.
+      rewrite H13, H16 in H12.
+      elim (more_branches_merge_extend _ _ _ _ _ H15 H11 H12).
+      intros. destroy H18.
+      exists x, x4; repeat split; auto.
+      rewrite H13, H16; auto. rewrite H14, H17; auto.
++ elim IHC with C'0; auto.
+  2: apply HC.
+  clear s'0 H6 C' H5 t H4 s0 H2 C0 H3 ps0 H1 X H0 H8 H IHC.
+  rename r into X, l into ps'.
+  intros. destroy H. rename x into b, x0 into Bt, x1 into Be.
+  apply CCBase.TL.disjoint_ps_Cond in H7.
+  repeat split.
+  - simpl. elim in_dec. intro; elim H7; auto.
+    exists b, Bt, Be; repeat split; auto.
+  - intros. simpl. elim in_dec; intros; auto.
+    exists (Call (X,r)), (Call (X,r)); repeat split. constructor.
+Qed.
+
+
+
+
+Lemma bproj_reduce : forall Defs C s tl C' s', CCC_To Defs C s tl C' s' ->
+  forall ps, projectable_C Defs ps C ->
+  forall p, CCBase.TL.disjoint_p_rl p tl -> In p ps ->
+  exists B B', bproj Defs C p = inject B /\ bproj Defs C' p = inject B'
+    /\ more_branches B B'.
+Proof.
+intros Defs C s tl C' s'; revert C C'.
+intros C C' Htl; induction Htl; intros; try rename p0 into r.
++ red in H0. rewrite Forall_forall in H0.
+  assert (~In r (eta_pn (p#e-->q$x))).
+  1: intro. destroy H1. inversion_clear H3; auto. inversion_clear H5; auto.
+  elim (collapse_char' (bproj Defs C r)); intro.
+  - inversion_clear a. rename x0 into B.
+    exists B, B; repeat split; auto.
+    rewrite bproj_disjoint; auto. apply more_branches_refl.
+  - elim (H0 (r,collapse (bproj Defs C r))); auto.
+    unfold epp_list; rewrite in_map_iff. exists r; split; auto.
+    rewrite bproj_disjoint; auto.
++ red in H0. rewrite Forall_forall in H0.
+  assert (~In r (eta_pn (p-->q[l]))).
+  1: intro. destroy H1. inversion_clear H3; auto. inversion_clear H5; auto.
+  elim (collapse_char' (bproj Defs C r)); intro.
+  - inversion_clear a. rename x into B.
+    exists B, B; repeat split; auto.
+    rewrite bproj_disjoint; auto. apply more_branches_refl.
+  - elim (H0 (r,collapse (bproj Defs C r))); auto.
+    unfold epp_list; rewrite in_map_iff. exists r; split; auto.
+    rewrite bproj_disjoint; auto.
++ red in H1. rewrite Forall_forall in H1.
+  simpl in H2.
+  assert (collapse (bproj Defs (If p ?? b Then C1 Else C2) r) <> XUndefined).
+  1: {
+    apply (H1 (r,collapse (bproj Defs (If p ?? b Then C1 Else C2) r))).
+    unfold epp_list; rewrite in_map_iff. exists r; auto.
+  }
+  elim (collapse_char' (bproj Defs C1 r)); intro.
+  - inversion_clear a. rename x into B.
+    apply collapse_exists in H4. inversion_clear H4. rename x into B'.
+    exists B', B. repeat split; auto.
+    simpl in H6. unfold Pid_dec in H6.
+    rewrite <- Pdec.eqb_neq, Pdec.eqb_sym in H2.
+    rewrite H2, H5 in H6.
+    elim (collapse_char' (bproj Defs C2 r)); intros.
+    1: { inversion_clear a. rename x into B''. rewrite H4 in H6.
+      apply merge_more_branches with B''; auto. }
+    apply (collapse_merge' (inject B)) in b0.
+    rewrite H6, collapse_inject in b0.
+    elim (inject_not_undefined B'); auto.
+  - elim H4; clear H4.
+    simpl. rewrite <- Pdec.eqb_neq, Pdec.eqb_sym in H2.
+    unfold Pid_dec; rewrite H2.
+    apply collapse_merge; auto.
++ red in H1. rewrite Forall_forall in H1.
+  simpl in H2.
+  assert (collapse (bproj Defs (If p ?? b Then C1 Else C2) r) <> XUndefined).
+  1: {
+    apply (H1 (r,collapse (bproj Defs (If p ?? b Then C1 Else C2) r))).
+    unfold epp_list; rewrite in_map_iff. exists r; auto.
+  }
+  elim (collapse_char' (bproj Defs C2 r)); intro.
+  - inversion_clear a. rename x into B.
+    apply collapse_exists in H4. inversion_clear H4. rename x into B'.
+    exists B', B. repeat split; auto.
+    simpl in H6. unfold Pid_dec in H6.
+    rewrite <- Pdec.eqb_neq, Pdec.eqb_sym in H2.
+    rewrite H2, H5 in H6.
+    elim (collapse_char' (bproj Defs C1 r)); intros.
+    1: { inversion_clear a. rename x into B''. rewrite H4 in H6.
+      apply merge_more_branches' with B''; auto. }
+    apply (collapse_merge' (inject B)) in b0.
+    rewrite Xmerge_comm, H6, collapse_inject in b0.
+    elim (inject_not_undefined B'); auto.
+  - elim H4; clear H4.
+    simpl. rewrite <- Pdec.eqb_neq, Pdec.eqb_sym in H2.
+    unfold Pid_dec; rewrite H2.
+    apply collapse_merge'; auto.
++ elim IHHtl with ps p; auto.
+  2: eapply projectable_inv_Eta; apply H0.
+  intros. destroy H3.
+  rename x into B, x0 into B'.
+  induction eta; simpl.
+  2: case l.
+  all: case_eq (Pid_dec p0 p); intro Hp0p.
+  2,4,6: case_eq (Pid_dec p1 p); intro Hp1p.
+  - exists (Send p1 e B), (Send p1 e B'); repeat split.
+    rewrite H4; auto. rewrite H5; auto. constructor; auto.
+  - exists (Recv p0 v B), (Recv p0 v B'); repeat split.
+    rewrite H4; auto. rewrite H5; auto. constructor; auto.
+  - eauto.
+  - exists (Branching p0 (Some B) None), (Branching p0 (Some B') None); repeat split.
+    rewrite H4; auto. rewrite H5; auto. constructor; auto.
+  - eauto.
+  - exists (Branching p0 None (Some B)), (Branching p0 None (Some B')); repeat split.
+    rewrite H4; auto. rewrite H5; auto. constructor; auto.
+  - eauto.
+  - exists (Sel p1 left B), (Sel p1 left B'); repeat split.
+    rewrite H4; auto. rewrite H5; auto. constructor; auto.
+  - exists (Sel p1 right B), (Sel p1 right B'); repeat split.
+    rewrite H4; auto. rewrite H5; auto. constructor; auto.
++ elim IHHtl1 with ps r; auto.
+  2: apply projectable_inv_Cond with p b C2; auto.
+  intros. destroy H3. rename x into B1, x0 into B2.
+  simpl. case_eq (Pid_dec p r); intros.
+  - red in H0. rewrite Forall_forall in H0.
+  assert (collapse (bproj Defs (If p ?? b Then C1 Else C2) r) <> XUndefined).
+  1: {
+    apply (H0 (r,collapse (bproj Defs (If p ?? b Then C1 Else C2) r))).
+    unfold epp_list; rewrite in_map_iff. exists r; auto.
+  }
+  apply collapse_exists in H7. inversion_clear H7. rename x into B.
+Abort.
+
+(* USE INVERSION RESULTS ON MERGE!
+
+if C reduces with tl then bproj = ... *)
+
+
+Lemma merge_Cond_reduce_1 : forall Defs C1 C2 s p v q x C1' C2' s',
+  let t := CCBase.TL.R_Com p v q x in
+  CCC_To Defs C1 s t C1' s' -> CCC_To Defs C2 s t C2' s' -> p <> q ->
+  collapse (Xmerge (bproj Defs C1 p) (bproj Defs C2 p)) <> XUndefined ->
+  exists e, collapse (Xmerge (bproj Defs C1 p) (bproj Defs C2 p))
+  = XSend q e (Xmerge (bproj Defs C1' p) (bproj Defs C2' p)).
+Proof.
+intros. rename H2 into HC1C2.
+elim (collapse_char' (bproj Defs C1 p)); intro.
+2: { elim HC1C2. apply collapse_merge; auto. }
+elim (collapse_char' (bproj Defs C2 p)); intro.
+2: { elim HC1C2. apply collapse_merge'; auto. }
+inversion_clear a; inversion_clear a0.
+rename x0 into B, x1 into B', H2 into HB, H3 into HB'.
+case_eq (Xmerge (bproj Defs C1 p) (bproj Defs C2 p)); intros.
+8: rewrite H2 in HC1C2; elim HC1C2; auto.
++ exfalso.
+  rewrite HB, HB' in H2; apply merge_inv_End in H2.
+  inversion_clear H2. rewrite H3 in HB; rewrite H4 in HB'.
+  simpl in HB, HB'.
+
+
+
+revert C1 C1' s s' H C2 C2' H H0 H1 HC1C2.
+induction C1.
+(* End *) 5: intros; inversion H.
++ do 4 intro. inversion H; clear H.
+  - clear s'0 H8 C1 H3 x0 H7 q0 H6 p0 H4 s0 H1 C H2 IHC1 e H0.
+    rewrite H5 in H9; clear v1 H5. rename e0 into e.
+    induction C2; intros; inversion H0; revert HC1C2.
+    * rewrite <- H2; clear e0 H0 H2.
+      rewrite H6, H8, H10.
+      simpl. Peq. Peq. case_eq (Expr_dec e e1).
+      2: intros; elim HC1C2; auto.
+      exists e; simpl. revert HC1C2. rewrite H5.
+      case_eq (Xmerge (bproj Defs C1' p) (bproj Defs C2' p)); simpl; auto.
+      1,2,3: do 3 intro; case (collapse x1); auto; intros; elim HC1C2; auto.
+      3: intros; elim HC1C2; auto.
+      2: do 3 intro; case (collapse x1); case (collapse x2); auto; intros; elim HC1C2; auto.
+      do 3 intro. case o; case o0; auto.
+      2,3: intro; case (collapse x1); auto; intros; elim HC1C2; auto.
+      do 2 intro; case (collapse x1); case (collapse x2); auto; intros; elim HC1C2; auto.
+    * assert (~In p (eta_pn e0)).
+      red; intro. unfold t in H4.
+      induction e0; destroy H4; destroy H12; simpl in H11; tauto.
+      rewrite (bproj_disjoint Defs e0 C' p); auto.
+      rewrite (bproj_disjoint Defs e0 C2 p); auto.
+    * elim (IHC2_1 C1'0); auto.
+      elim (IHC2_2 C2'0); auto.
+      intros.
+      rename x0 into e', x1 into e'', p0 into p'.
+      revert H14 H15. simpl. Peq.
+      unfold t in H11; inversion_clear H11.
+      rewrite <- Pdec.eqb_neq in H14; rewrite H14.
+      case_eq (bproj Defs C2_2 p); simpl; intros; try (inversion H16; fail).
+      revert H16 H17.
+      case_eq (bproj Defs C2_1 p); simpl; intros; try (inversion H18; fail).
+      revert H17 H18.
+      case_eq (Pid_dec q p0); simpl. case_eq (Expr_dec e e0); simpl.
+      2: intros H'' H''' H'; inversion H'.
+      2: intros H'' H'; inversion H'.
+      elim (XUndefined_dec (Xmerge (bproj Defs C1' p) x0)); intro.
+      1: rewrite a; intros. inversion H19.
+      rewrite Xmatch_elim; auto. do 3 intro.
+      case_eq (Pid_dec q p2); simpl. case_eq (Expr_dec e e1); simpl.
+      2: intros H'' H''' H'; inversion H'.
+      2: intros H'' H'; inversion H'.
+      elim (XUndefined_dec (Xmerge (bproj Defs C1' p) x1)); intro.
+      1: rewrite a; intros. inversion H22.
+      rewrite Xmatch_elim; auto. do 3 intro.
+      unfold Pid_dec in H18, H21; rewrite Pdec.eqb_eq in H18, H21.
+      unfold Expr_dec in H17, H20; rewrite Edec.eqb_eq in H17, H20.
+      rewrite <- H17, <- H18, <- H20, <- H21. Peq. Eeq.
+      rewrite <- H17, <- H18 in H11; rewrite <- H20, <- H21 in H16.
+      clear p0 p2 e1 e0 H21 H20 H18 H17 s'0 H10 t0 H7 s0 H5 b0 H3 p1 H2 IHC2_1 IHC2_2.
+      assert (e' = e).
+      1: { revert H19. simpl. case_eq (collapse (Xmerge (bproj Defs C1' p) x0));
+        intros; inversion H19; auto. }
+      assert (e'' = e).
+      1: { revert H22. simpl. case_eq (collapse (Xmerge (bproj Defs C1' p) x1));
+        intros; inversion H22; auto. }
+      rewrite H2 in H19; rewrite H3 in H22; clear H2 H3 e' e''.
+      exists e.
+      elim (XUndefined_dec (Xmerge x1 x0)); intro.
+      1: { exfalso. revert HC1C2. simpl. Peq. rewrite H14, H11, H16.
+        simpl. Peq. Eeq. rewrite a. intro. elim HC1C2; auto. }
+      rewrite Xmatch_elim; auto. Peq. Eeq.
+      elim (XUndefined_dec (Xmerge (bproj Defs C1' p) (Xmerge x1 x0))); intro.
+      simpl in H19, H22.
+      rewrite a.
+
+merge B B1
+
+
+, C2; intros.
+(* C1 is End *) 21,22,23,24,25: inversion H.
+(* C2 is End *) 5,10,15,20: inversion H0.
+all: revert HC1C2.
++ (* Eta / Eta *)
+  inversion H; inversion H0.
+  - simpl. Peq. Peq. case_eq (Expr_dec e1 e2); simpl.
+    2: intros HE H'; elim H'; auto.
+    exists e1. revert HC1C2.
+    case_eq (Xmerge (bproj Defs C1' p) (bproj Defs C2' p)); simpl; auto.
+    1,2,3: do 3 intro; case (collapse x2); auto; intros; elim HC1C2; auto.
+    3: intros; elim HC1C2; auto.
+    * do 3 intro. case o; case o0; auto.
+      2,3: intro; case (collapse x2); auto; intros; elim HC1C2; auto.
+      do 2 intro; case (collapse x2); case (collapse x3); auto; intros; elim HC1C2; auto.
+    * do 3 intro; case (collapse x2); case (collapse x3); auto; intros; elim HC1C2; auto.
+  - apply IHC1.
+Peq. induction e0; unfold t in H14; destroy H14; destroy H20.
+    2: case l.
+    all: rewrite <- Pdec.eqb_neq in H22; rewrite H22.
+    all: rewrite <- Pdec.eqb_neq in H21; rewrite H21.
+    all: case (bproj Defs C2 p); simpl; try (intros; elim HC1C2; auto; fail).
+    all: do 3 intro; elim Pid_dec; elim Expr_dec; simpl; try (intros; elim HC1C2; auto; fail).
+    all: exists e1; case_eq (Xmerge (bproj Defs C1' p) x1); simpl; auto.
+
+
+
+
+
+Lemma merge_Cond_reduce : forall Defs Xs r C1 C2 s t C1' C2' s',
+  projectable_D Xs Defs ->
+  (forall X, set_incl_pid (CCC_pn (snd (Defs X)) (fun X => fst (Defs X))) (fst (Defs X))) ->
+  (forall X ps C', (C1 = MCBase.Call X \/ C1 = RT_Call X ps C') -> In X Xs) ->
+  (forall X ps C', (C2 = MCBase.Call X \/ C2 = RT_Call X ps C') -> In X Xs) ->
+  consistent (fun X => fst (Defs X)) C1 -> consistent (fun X => fst (Defs X)) C2 -> 
+  MCC_To Defs C1 s t C1' s' -> MCC_To Defs C2 s t C2' s' ->
+  collapse (Xmerge (bproj Defs C1 r) (bproj Defs C2 r)) <> XUndefined
+  -> collapse (Xmerge (bproj Defs C1' r) (bproj Defs C2' r)) <> XUndefined.
+Proof.
+intros. rename H into HD, H0 into HD', H1 into HC1, H2 into HC2.
+rename H3 into HC1'', H4 into HC2'', H5 into HC1', H6 into HC2', H7 into HC1C2.
+set (B := Xmerge (bproj Defs C1 r) (bproj Defs C2 r)). fold B in HC1C2.
+assert (B = Xmerge (bproj Defs C1 r) (bproj Defs C2 r)) as HB. auto.
+clearbody B.
+revert C1 C2 s t C1' C2' HC1 HC2 HC1' HC2' HC1'' HC2'' B HB HC1C2.
+double induction C1 C2; intros.
+(* C1 is End *) 21,22,23,24,25: inversion HC1'.
+(* C2 is End *) 5,10,15,20: inversion HC2'.
+all: revert HC1C2; rewrite HB; clear B HB.
++ (* Eta / Eta *)
+  simpl in HC1'', HC2''. clear HC1 HC2.
+  inversion HC1'; inversion HC2'; clear HC1' HC2'.
+  - clear H H0.
+    clear s'1 H13 s1 H9 C0 H10 s'0 H6 s0 H2 C H3 e H8 e0 H1.
+    rewrite H12 in HC2''; clear c H12.
+    rewrite H5 in HC1''; clear c0 H5.
+    rewrite <- H11 in H4; clear H11; inversion H4; clear H4.
+    clear H14.
+    rewrite <- H0, <- H2, <- H3. clear v0 H1 x0 H3 q0 H2 p0 H0.
+    simpl. case_eq (Pid_dec p r); simpl; [case_eq (Expr_dec e1 e2) | case_eq (Pid_dec q r)]; simpl; auto.
+    * Peq. intros. intro. apply HC1C2.
+      elim (XUndefined_dec (Xmerge (bproj Defs C1' r) (bproj Defs C2' r))); intros.
+      1: rewrite a; auto.
+      rewrite Xmatch_elim; auto.
+      simpl. rewrite H1; auto.
+    * Peq. intros; elim HC1C2; auto.
+    * Peq. Veq. intros. intro. apply HC1C2.
+      elim (XUndefined_dec (Xmerge (bproj Defs C1' r) (bproj Defs C2' r))); intros.
+      1: rewrite a; auto.
+      rewrite Xmatch_elim; auto.
+      simpl. rewrite H1; auto.
+  - rewrite <- H4 in H11; inversion H11.
+  - clear s'1 H14 t0 H12 s1 H11 C0 H9 eta H8 C2' H13 s'0 H6 s0 H2 C H3 e0 H1.
+    rewrite H5 in HC1'', H0; clear c0 H5.
+    induction e. all: rewrite <- H4 in H10; destroy H10; destroy H1.
+    2: case l.
+    all: simpl; case_eq (Pid_dec p r); case_eq (Pid_dec p0 r); simpl.
+    1,5: intros; elim H3; unfold Pid_dec in H5, H6;
+      rewrite Pdec.eqb_eq in H5, H6;rewrite H5, H6; auto.
+    1,3,4,6,8,10: case_eq (Pid_dec p1 r); simpl.
+    1,5,9,15: intros; elim HC1C2; auto.
+    2,3,5,6,8,9,10,11,12: case_eq (Pid_dec q r); simpl.
+    all: try (intros; elim HC1C2; auto; fail).
+    2: intros; elim H10; unfold Pid_dec in H5, H6;
+      rewrite Pdec.eqb_eq in H5, H6;rewrite H5, H6; auto.
+    1,3,6,9,14,15: case_eq (bproj Defs c r); try (intros; elim HC1C2; auto; fail); do 3 intro.
+    1,5,6: case_eq (Pid_dec q p2); simpl.
+    case_eq (Expr_dec e1 e0); simpl.
+    4,6: case_eq (Expr_dec e1 e); simpl.
+    10,11,12: case_eq (Pid_dec p p2); simpl.
+    all: try (intros; elim HC1C2; auto; fail).
+    
+
+
+
+
+
++ revert HC1C2. rewrite HB; clear B HB.
+  simpl; case in_dec; case in_dec; auto.
+  - simpl. case_eq (RecVar_dec (r1,r) (r0,r)); auto.
+    intros.
+    unfold RecVar_dec in H; rewrite Rdec.eqb_eq in H. inversion H.
+    rewrite H1 in HC1'.
+    rewrite (MCC_To_deterministic_1 _ _ _ _ _ _ _ _ HC1' HC2').
+    assert (In r0 Xs) as HX. apply HC2 with nil MCBase.End; auto.
+    clear r1 H1 i0 HC1 HC2 H HC1C2 HC1'' HC2''. rename r0 into X.
+    red in HD. rewrite Forall_forall in HD. generalize (HD _ HX); intro HC.
+    red in HC. rewrite Forall_forall in HC.
+    assert (collapse (bproj Defs (snd (Defs X)) r) <> XUndefined).
+    1: {
+      apply (HC (r,collapse (bproj Defs (snd (Defs X)) r))).
+      unfold epp_list; rewrite in_map_iff.
+      exists r; split; auto.
+    }
+    inversion HC1'; inversion HC2'.
+    * rewrite Xmerge_idempotent; auto.
+    * rewrite H2 in H10; inversion H10. inversion H17.
+    * rewrite H10 in H2; inversion H2; inversion H17.
+    * simpl. elim in_dec; simpl.
+      1: Xeq. discriminate.
+      rewrite Xmerge_idempotent; auto.
+  - simpl.
+    intros.
+    replace (bproj Defs C1' r) with XEnd.
+    replace (bproj Defs C2' r) with XEnd.
+    discriminate.
+    1: clear dependent r1; clear HC1C2; inversion HC2'.
+    3: clear dependent r0; clear HC1C2; inversion HC1'.
+    all: symmetry; apply bproj_not_In; intro.
+    * apply n, HD'; auto.
+    * simpl in H7. unfold set_union_pid in H7. elim (set_union_elim _ _ _ _ H7); intro.
+      apply set_remove'_1 in a; auto.
+      apply n, HD'; auto.
+    * apply n0, HD'; auto.
+    * simpl in H7. unfold set_union_pid in H7. elim (set_union_elim _ _ _ _ H7); intro.
+      apply set_remove'_1 in a; auto.
+      apply n0, HD'; auto.
++ rename c into C, l into ps.
+  generalize HB; simpl. case in_dec; case in_dec; simpl.
+  1,2: case_eq (RecVar_dec (r1,r) (r0,r)); simpl.
+  all: intros; rewrite HB0 in HB, HC1C2; clear B HB0.
+  all: try (elim HC1C2; auto; fail).
+  - unfold RecVar_dec in H0; rewrite Rdec.eqb_eq in H0. inversion H0.
+    rewrite H2 in HC1', HC1'', HB.
+    assert (In r0 Xs) as HX. eauto.
+    clear r1 H2 i0 HC1 HC2 H0 HC1C2. rename r0 into X.
+    red in HD. rewrite Forall_forall in HD. generalize (HD _ HX); intro HC.
+    red in HC. rewrite Forall_forall in HC.
+    assert (collapse (bproj Defs (snd (Defs X)) r) <> XUndefined).
+    1: {
+      apply (HC (r,collapse (bproj Defs (snd (Defs X)) r))).
+      unfold epp_list; rewrite in_map_iff.
+      exists r; split; auto.
+      apply HC2''; auto.
+    }
+    inversion_clear HC2''; clear HC1''.
+    rename H1 into H', H2 into H''.
+    inversion HC1'; inversion HC2'; clear HC1' HC2'.
+    * clear s'1 H15 C2' H14 t0 H13 s1 H11 C0 H12 ps0 H10 X1 H9 s'0 H8 C1' H7 s0 H5 X0 H1.
+      simpl. elim in_dec; auto.
+      exfalso. rewrite <- H6 in H16. apply MCBase.TL.disjoint_ps_Call in H16.
+      apply H16. replace p with r; auto.
+      apply set_size_1 with P.eq_dec (fst (Defs X)); auto.
+    * clear s'1 H16 C2' H15 s1 H13 C0 H11 ps0 H10 X1 H9 s'0 H8 C1' H7 s0 H5 X0 H1.
+      rewrite <- H14 in H6; clear H14; inversion H6.
+      rewrite <- H5 in H18; rewrite <- H5; clear p0 H5 H6.
+      exfalso. generalize (set_size_incl_le (T_dec := P.eq_dec) H'); intro.
+      fold set_size_pid in H1; rewrite H3 in H1.
+      apply (Nat.lt_irrefl 1). apply lt_le_trans with (set_size_pid ps); auto.
+    * clear s'1 H16 s1 H13 C0 H11 ps0 H10 X1 H9 s'0 H8 C1' H7 s0 H5 X0 H1.
+      rewrite <- H15; clear C2' H15.
+      rewrite <- H14 in H6; inversion H6; clear H14 H6 t.
+      rewrite <- H5 in H18; clear p0 H5.
+      generalize (set_size_1 P.eq_dec _ H17 _ _ i H18); intro.
+      rewrite <- H1 in H4; clear H1 H18 p.
+      (* Somehow: projecting (RT_Call X ps C) for something in ps should give the same as projecting the corresponding definition for X *)
+Abort.
+
+
+
+
+*)
+
+(** Strong projectability of well-formed programs is preserved by reductions. *)
+Lemma strongly_projectable_reduces : forall P Xs ps,
+  Program_WF Xs P -> well_ann P -> projectable Xs ps P ->
+  (forall p, In p ps -> strongly_projectable (Procedures P) (Main P) p) ->
+  forall s tl P' s', ((P,s) --[tl]--> (P',s'))%CC -> projectable Xs ps P'.
+Proof.
+intros. rename H2 into HSP, H3 into H2.
+induction P as (Defs,C). induction P' as (Defs', C').
+generalize (CCP_To_Defs_stable Defs Defs' C C' tl s s' H2); intro.
+rewrite <- H3 in H2; rewrite <- H3; clear Defs' H3.
+inversion H2. rewrite <- H4 in H2. clear s'0 H9 C'0 H8 tl H4 s0 H6 C0 H5 Defs0 H3.
+rename H7 into Ht.
+destroy H0; intros. repeat split; auto.
++ apply strongly_projectable_C'.
+  destroy H.
+  clear H0 H1 H2 H3 H4.
+  induction Ht; auto; simpl; intros.
+  - elim (HSP r); auto.
+  - elim (HSP r); auto. intros H' H''; destroy H''; auto.
+  - auto.
+  - inversion_clear H5.
+    assert (strongly_projectable Defs C1' r).
+    1: apply IHHt1; auto. intros; elim (HSP p0); auto.
+    assert (strongly_projectable Defs C2' r).
+    1: apply IHHt2; auto. intros; elim (HSP p0); intros; tauto.
+    repeat split; auto.
+    clear IHHt1 IHHt2.
+    case_eq (Pid_dec p r); intro Hpr.
+    * apply strongly_projectable_C in H4; apply strongly_projectable_C in H5.
+      simpl. rewrite Xmatch_elim; auto. rewrite Xmatch_elim; auto.
+      discriminate.
+    * elim (HSP r); auto. simpl; intros H' H''; destroy H''; auto.
+      rewrite Hpr in H''.
+      admit.
+  - assert (strongly_projectable Defs C' r).
+    apply IHHt; auto. intros; apply (HSP p); auto. apply H5.
+    split; auto.
+    intros. elim (HSP p); intros.
+    simpl in H3, H4; auto.
+    rewrite <- H6; auto. admit.
+    
+
+(* *)
+
+2: {  destroy H. clear H H1 H2 H3 H4 H7.
+  induction Ht.
+  1,2,3,4: intros; apply H5; auto;
+    simpl; unfold set_union_pid; repeat rewrite set_union_iff; auto.
+  - intros; elim (set_union_elim _ _ _ _ H1); intro.
+    1: apply H5, set_union_iff; auto.
+    apply IHHt; auto.
+    intros; apply H5; simpl.
+    unfold set_union_pid; repeat rewrite set_union_iff; auto.
+  - intros; inversion_clear H8.
+    elim (set_union_elim _ _ _ _ H1); intro.
+    1: elim (set_union_elim _ _ _ _ a); intro.
+    1: apply H5, set_union_iff; left. apply set_union_iff; auto.
+    2: apply IHHt2; auto. 1: apply IHHt1; auto.
+    all: intros; apply H5; simpl;
+      unfold set_union_pid; repeat rewrite set_union_iff; auto.
+  - intros; inversion_clear H8.
+    elim (set_union_elim _ _ _ _ H1); intro.
+    1: apply H5, set_union_iff; auto.
+    apply IHHt; auto.
+    intros; apply H5, set_union_iff; auto.
+  - intros; apply H0 with X; auto.
+  - simpl; simpl in H0, H5, H8; intros.
+    elim (set_union_elim _ _ _ _ H3); clear H3; intro H3; eauto.
+    apply set_remove'_1 in H3; eauto.
+  - simpl; intros; apply H5; simpl.
+    apply set_union_iff; elim (set_union_elim _ _ _ _ H3); auto.
+    intro. apply set_remove'_1 in a; auto.
+  - simpl; intros; apply H5; simpl.
+    apply set_union_iff; auto.
+}
+
+  (* generalize (MCC_To_within_Xs _ _ _ _ _ _ H' H1); intros. *)
+  clear H2 H3. set (H3 := True).
+  (* set (H':=H). clearbody H'. *)
+  red in H; unfold MCBase.Procs, Vars in H; simpl in H.
+  destroy H. clear H2 H7. set (H2 := True). set (H7 := True).
+  intros. induction Ht.
+  1,2,3,4: apply H5; simpl;
+    unfold set_union_pid; repeat rewrite set_union_iff; auto.
+  - elim (set_union_elim _ _ _ _ H8); intro.
+    1: apply H5, set_union_iff; auto.
+    apply IHHt; auto.
+    intros. apply H5; simpl.
+    unfold set_union_pid; repeat rewrite set_union_iff; auto.
+  - elim (set_union_elim _ _ _ _ H8); intro.
+    1: elim (set_union_elim _ _ _ _ a); intro.
+    1: apply H5, set_union_iff; left. apply set_union_iff; auto.
+    2: apply IHHt2; auto. 1: apply IHHt1; auto.
+    * intros; simpl; elim (H1 p1); auto.
+    * intros. apply H5; simpl.
+      unfold set_union_pid; repeat rewrite set_union_iff; auto.
+    * intros; simpl; elim (H1 p1); auto; intros.
+      inversion H12; auto.
+    * intros. apply H5; simpl.
+      unfold set_union_pid; repeat rewrite set_union_iff; auto.
+  - elim (set_union_elim _ _ _ _ H8); intro.
+    1: apply H5, set_union_iff; auto.
+    fold CCC_pn in b.
+    apply IHHt; auto.
+    simpl.
+    clear dependent p.
+    simpl in H2.
+
+
+
+    auto.
+ Search In set_union. apply set_union.
+
+  - rewrite <- H16 in H9; simpl in H9.
+    apply H0 with r; auto.
+  - rewrite <- H16 in H9; simpl in H9.
+    elim (set_union_elim _ _ _ _ H9); eauto.
+    intro; apply H5 with r; auto; simpl.
+    apply set_remove'_1 with P.eq_dec p0; auto.
+  - apply IHC; auto. 
+
+inversion H1; clear H1.
+rename H into HP, H2 into HC, H0 into HD, H7 into Ht.
+destroy HP. unfold MCBase.Procs, Vars in HP.
+simpl in H0, HC, HD, HP. rename H0 into HC'.
+revert C HC HC' C' s s' t Ht.
+induction C; intros; inversion Ht;
+  clear dependent s0; clear dependent s'0.
++ red in HD. rewrite Forall_forall in HD.
+  simpl. 
+
+simpl in HC'.
+projectable_C Defs (fst (Defs X)) (snd (Defs X)) -> projectable_C Defs ps (snd (Defs X))
+
+(* Start of proof for old version.
+induction H0.
++ intro; apply (H (p,XUndefined)); auto.
+  unfold epp_list in H1; rewrite in_map_iff in H1.
+  unfold epp_list; rewrite in_map_iff.
+  destroy H1. inversion H3.
+  rewrite H5 in H1. simpl in H2. clear x0 H5 H3.
+  exists p; simpl. split; auto.
+  case Pid_dec; [idtac | case Pid_dec]; simpl; rewrite H6, H2; auto.
++ intro; apply (H (p,XUndefined)); auto.
+  unfold epp_list in H1; rewrite in_map_iff in H1.
+  unfold epp_list; rewrite in_map_iff.
+  destroy H1. inversion H3.
+  rewrite H5 in H1. simpl in H2.
+  exists p; simpl. split; auto.
+  case l; (case Pid_dec; [idtac | case Pid_dec]); simpl; rewrite H6, H2; auto.
++ intro; apply (H (p,XUndefined)); auto.
+  unfold epp_list in H1; rewrite in_map_iff in H1.
+  unfold epp_list; rewrite in_map_iff.
+  destroy H1. inversion H4.
+  rewrite H6 in H1. simpl in H3.
+  exists p; simpl. split; auto.
+  case Pid_dec; simpl. rewrite H7, H3; auto.
+  rewrite H3 in H7. rewrite (collapse_merge _ _ H7); auto.
++ intro; apply (H (p,XUndefined)); auto.
+  unfold epp_list in H1; rewrite in_map_iff in H1.
+  unfold epp_list; rewrite in_map_iff.
+  destroy H1. inversion H4.
+  rewrite H6 in H1. simpl in H3.
+  exists p; simpl. split; auto.
+  case Pid_dec; simpl. rewrite H7, H3; auto.
+  case (collapse (bproj Defs C1 p)); auto.
+  rewrite H3 in H7. rewrite (collapse_merge' _ _ H7); auto.
++ rename p into p'; rename B into B'.
+  unfold epp_list in H1; rewrite in_map_iff in H1.  
+  destroy H1.
+  assert (x = p' /\ collapse (bproj Defs (eta;;C') x) = B').
+  1: inversion H3; auto.
+  inversion_clear H4. rewrite H5 in H6, H1. clear H5 x H3.
+  simpl. rewrite <- H6; clear H6.
+  assert (collapse (bproj Defs C' p') <> XUndefined).
+  - change (snd (p',collapse (bproj Defs C' p')) <> XUndefined).
+    apply IHMCC_To; auto.
+
+  - case eta; intros; simpl;
+    case Pid_dec; [idtac | case Pid_dec | case l | case l; case Pid_dec ];
+    simpl; try rewrite Xmatch_elim; auto; discriminate.
+  - apply IHMCC_To.
+    intros; induction x as (p, B).
+    simpl; intro.
+  - apply (H (p',collapse (bproj Defs (eta;;C) p'))); auto.
+    unfold epp_list in H3; rewrite in_map_iff in H3.
+    unfold epp_list; rewrite in_map_iff.
+    destroy H3. inversion H5.
+    rewrite H7 in H3.
+    exists p'; split; auto.
+    assert (collapse (bproj Defs C p') = XUndefined).
+    2: simpl; case eta; (intros; case Pid_dec; [idtac | case Pid_dec]; try case l; simpl); rewrite H5; auto.
+    rewrite H7, H2; auto
+
+*)
+
+(* *)
+[idtac | case Pid_dec]; simpl; rewrite H7, H3; auto.
++ 
+
+  clear p0 e0 x0 H3 H5 H v H0; simpl in H2.
+  exists p; simpl. split; auto.
+  unfold Pid_dec; rewrite Pdec.eqb_refl.
+  simpl. rewrite H6, H2; auto.
+  - unfold epp_list in H1; rewrite in_map_iff in H1.
+    unfold epp_list; rewrite in_map_iff.
+    destroy H1. inversion H3.
+    rewrite H5 in H1; rewrite <- e0.
+    clear p0 e0 x0 H3 H5 H v H0; simpl in H2.
+    exists p; simpl. split; auto.
+    unfold Pid_dec; rewrite Pdec.eqb_refl.
+    simpl. rewrite H6, H2; auto.
+*)
+Abort.
+
+
+End Projectability.
 
 (** Needs: projectability preserved by reduction; characterization of EPP. *)
 
