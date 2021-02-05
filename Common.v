@@ -654,6 +654,14 @@ decide equality; try (apply P.eq_dec).
 + apply R.eq_dec.
 Qed.
 
+Definition tpn (t:RichLabel) : list Pid :=
+  match t with
+  | R_Com p v q _ => p::q::nil
+  | R_Sel p q l   => p::q::nil
+  | R_Cond p      => p::nil
+  | R_Call _ p    => p::nil
+end.
+
 Definition forget (t:RichLabel) : TransitionLabel :=
   match t with
   | R_Com p v q _ => L_Com p v q
