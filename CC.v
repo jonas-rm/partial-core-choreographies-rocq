@@ -225,6 +225,18 @@ match C with
 | End                => nil
 end.
 
+Ltac sup := unfold set_union_pid; rewrite set_union_iff; auto.
+
+Lemma CCC_pn_mon : forall X Y, (forall Z p, In p (X Z) -> In p (Y Z)) ->
+  forall C p, In p (CCC_pn C X) -> In p (CCC_pn C Y).
+Proof.
+induction C; simpl; auto.
++ intro. sup; sup. intro. elim H0; auto.
++ intro. sup; sup; sup; sup. intro. elim H0; auto.
+  intro. elim H1; auto.
++ intro. sup; sup. intro. elim H0; auto.
+Qed.
+
 Definition set_incl_pid := set_incl P.eq_dec.
 
 (** A choreography is well-formed if:
@@ -408,6 +420,18 @@ Lemma within_Xs_incl : forall C Xs Ys, (forall X, In X Xs -> In X Ys) ->
 Proof.
 induction C; simpl; auto;
   intros; inversion_clear H0; split; eauto.
+Qed.
+
+Lemma within_Xs_char : forall Xs C, within_Xs Xs C ->
+  forall X, X_Free X C -> In X Xs.
+Proof.
+unfold X_Free.
+induction C; auto; simpl; unfold set_union_rv; intros; destroy H.
+- rewrite set_union_iff in H0. inversion H0; auto.
+- inversion_clear H0; inversion H1. rewrite <- H1; auto.
+- rewrite set_union_iff in H0. inversion H0; auto.
+  inversion H2; inversion H3; auto. rewrite <- H3; auto.
+- inversion H0.
 Qed.
 
 Fixpoint consistent (Xs:RecVar -> list Pid) (C:Choreography) : Prop :=
@@ -654,6 +678,8 @@ split; auto. exists x; auto. eapply Program_WF_Call; eauto.
 Qed.
 
 End Syntactic_Properties.
+
+Ltac sup := unfold set_union_pid; rewrite set_union_iff; auto.
 
 (** ** Semantics of CC. *)
 
@@ -1042,6 +1068,102 @@ induction l; intros; inversion H0.
 + induction c2. rename a0 into P'', b into s''.
   apply (IHl P'' s'' P' s'); auto.
   eapply CCC_To_CCP_WF; eauto.
+Qed.
+
+Lemma CCC_To_pn : forall Defs C s tl C' s', CCC_To Defs C s tl C' s' ->
+  forall p, In p (CCBase.TL.tpn tl) -> In p (CCC_pn C (fun X => fst (Defs X))).
+Proof.
+induction C; simpl; intros; inversion H; simpl.
++ rewrite <- H4 in H0; simpl in H0. sup.
++ rewrite <- H4 in H0; simpl in H0. sup.
++ sup. right. eapply IHC; eauto.
++ rewrite <- H6 in H0; simpl in H0. sup. sup.
++ rewrite <- H6 in H0; simpl in H0. sup. sup.
++ sup. right. eapply IHC2; eauto.
++ rewrite <- H6 in H0; simpl in H0.
+  inversion_clear H0. rewrite <- H9; auto. inversion H9.
++ rewrite <- H6 in H0; simpl in H0.
+  inversion_clear H0. rewrite <- H9; auto. inversion H9.
++ sup. right. eapply IHC; eauto.
++ rewrite <- H6 in H0; simpl in H0. sup.
+  inversion_clear H0. rewrite <- H11; auto. inversion H11.
++ rewrite <- H6 in H0; simpl in H0. sup.
+  inversion_clear H0. rewrite <- H11; auto. inversion H11.
+Qed.
+
+Lemma CCC_To_pn' : forall Defs C s tl C' s', CCC_To Defs C s tl C' s' ->
+  forall p, In p (CCC_pn C' (fun X => fst (Defs X))) ->
+    In p (CCC_pn C (fun X => fst (Defs X)))
+     \/ exists X, (In p (CCC_pn (snd (Defs X)) (fun X => fst (Defs X))) /\ X_Free X C).
+Proof.
+induction C; intros; inversion H.
++ left. simpl. sup.
++ left. simpl. sup.
++ simpl. sup. rewrite <- H6 in H0; simpl in H0.
+  revert H0; sup; intro. inversion_clear H0; auto.
+  elim (IHC _ _ _ _ H8 p); auto.
++ left. simpl. sup; sup.
++ left. simpl. sup; sup.
++ simpl. sup; sup. rewrite <- H7 in H0; simpl in H0.
+  revert H0. sup; sup; intro. inversion_clear H0. inversion_clear H12; auto.
+  elim (IHC1 _ _ _ _ H10 p0); auto.
+    right. destroy H12; exists x; split; auto.
+    red; simpl; unfold set_union_rv. rewrite set_union_iff; auto.
+  elim (IHC2 _ _ _ _ H11 p0); auto.
+    right. destroy H0; exists x; split; auto.
+    red; simpl; unfold set_union_rv. rewrite set_union_iff; auto.
++ simpl. right; exists r; rewrite H7; split; auto.
+  red. simpl. auto.
++ simpl. rewrite <- H7 in H0; simpl in H0.
+  revert H0; sup; intro. inversion_clear H0; auto.
+  - left. eapply set_remove'_1; eauto.
+  - right. exists r; split; auto. red; simpl; auto.
++ simpl. sup. rewrite <- H6 in H0; simpl in H0.
+  revert H0; sup; intro. inversion_clear H0; auto.
+  elim (IHC _ _ _ _ H9 p); auto. intros. destroy H0.
+  right; exists x; split; auto. red; simpl. 
+  unfold set_union_rv; rewrite set_union_iff; auto.
++ simpl. sup. rewrite <- H7 in H0; simpl in H0.
+  revert H0; sup; intro. inversion_clear H0; auto.
+  left; left. eapply set_remove'_1; eauto.
++ simpl; sup.
+Qed.
+
+(** Some more specific properties. *)
+
+Lemma CCC_To_Com_neq : forall Defs C s p v q x C' s', Choreography_WF C ->
+  CCC_To Defs C s (CCBase.TL.R_Com p v q x) C' s' -> p <> q.
+Proof.
+induction C; intros; inversion H0.
++ rewrite <- H1 in H; destroy H.
+  simpl in H11. rewrite <- H5, <- H7; tauto.
++ eapply IHC; eauto. apply Choreography_WF_eta with e; auto.
++ eapply IHC1; eauto. apply Choreography_WF_Then with p b C2; auto.
++ eapply IHC; eauto. eapply Choreography_WF_Call_1; eauto.
+Qed.
+
+Lemma CCC_To_Sel_neq : forall Defs C s p q l C' s', Choreography_WF C ->
+  CCC_To Defs C s (CCBase.TL.R_Sel p q l) C' s' -> p <> q.
+Proof.
+induction C; intros; inversion H0.
++ rewrite <- H1 in H; destroy H.
+  simpl in H10. rewrite <- H5, <- H6; tauto.
++ eapply IHC; eauto. apply Choreography_WF_eta with e; auto.
++ eapply IHC1; eauto. apply Choreography_WF_Then with p b C2; auto.
++ eapply IHC; eauto. eapply Choreography_WF_Call_1; eauto.
+Qed.
+
+Lemma CCC_To_Xs : forall Defs C s p X C' s' Xs, within_Xs Xs C ->
+  CCC_To Defs C s (CCBase.TL.R_Call X p) C' s' -> In X Xs.
+Proof.
+induction C; intros; inversion H0.
++ eapply IHC; eauto.
++ eapply IHC1; eauto. inversion H; auto.
++ rewrite <- H2. auto.
++ rewrite <- H2; auto.
++ eapply IHC; eauto. inversion H; auto.
++ rewrite <- H4; inversion H; auto.
++ rewrite <- H4; inversion H; auto.
 Qed.
 
 (** Deadlock-freedom by design. *)

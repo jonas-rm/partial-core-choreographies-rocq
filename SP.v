@@ -2997,6 +2997,54 @@ inversion_clear a; eauto.
 elim H; auto.
 Qed.
 
+Lemma collapse_inv : forall B B', collapse B = inject B' -> B = inject B'.
+Proof.
+induction B using XBehaviour_ind'; auto; simpl; intros.
++ elim (collapse_char' B); intro.
+  2: rewrite b in H; elim (inject_not_undefined B'); auto.
+  inversion_clear a. rewrite H0 in H.
+  rewrite Xmatch_elim, <- H0 in H; auto.
+  rewrite collapse_inject; apply inject_not_undefined.
++ elim (collapse_char' B); intro.
+  2: rewrite b in H; elim (inject_not_undefined B'); auto.
+  inversion_clear a. rewrite H0 in H.
+  rewrite Xmatch_elim, <- H0 in H; auto.
+  rewrite collapse_inject; apply inject_not_undefined.
++ elim (collapse_char' B); intro.
+  2: rewrite b in H; elim (inject_not_undefined B'); auto.
+  inversion_clear a. rewrite H0 in H.
+  rewrite Xmatch_elim, <- H0 in H; auto.
+  rewrite collapse_inject; apply inject_not_undefined.
++ induction mB, mB'; auto.
+  - elim (collapse_char' a); intro.
+    2: rewrite b in H1; elim (inject_not_undefined B'); auto.
+    inversion_clear a0. rewrite H2 in H1.
+    rewrite Xmatch_elim, <- H2 in H1.
+    elim (collapse_char' x); intro.
+    2: rewrite b in H1; elim (inject_not_undefined B'); auto.
+    inversion_clear a0. rewrite H3 in H1.
+    rewrite Xmatch_elim, <- H3 in H1; auto.
+    all: rewrite collapse_inject; apply inject_not_undefined.
+  - elim (collapse_char' a); intro.
+    2: rewrite b in H1; elim (inject_not_undefined B'); auto.
+    inversion_clear a0. rewrite H2 in H1.
+    rewrite Xmatch_elim, <- H2 in H1; auto.
+    rewrite collapse_inject; apply inject_not_undefined.
+  - elim (collapse_char' x); intro.
+    2: rewrite b in H1; elim (inject_not_undefined B'); auto.
+    inversion_clear a. rewrite H2 in H1.
+    rewrite Xmatch_elim, <- H2 in H1; auto.
+    rewrite collapse_inject; apply inject_not_undefined.
++ elim (collapse_char' B1); intro.
+  2: rewrite b0 in H; elim (inject_not_undefined B'); auto.
+  inversion_clear a. rewrite H0 in H.
+  rewrite Xmatch_elim, <- H0 in H.
+  elim (collapse_char' B2); intro.
+  2: rewrite b0 in H; elim (inject_not_undefined B'); auto.
+  inversion_clear a. rewrite H1 in H.
+  rewrite Xmatch_elim, <- H1 in H; auto.
+  all: rewrite collapse_inject; apply inject_not_undefined.
+Qed.
 (** Relationship with merge. *)
 Local Ltac prove_this B HB := 
     elim (XUndefined_dec B); intro HB;
@@ -3148,16 +3196,6 @@ fold (merge x x). apply merge_idempotent.
 Qed.
 
 (** Inversion lemmas for Xmerge. *)
-Lemma Xmerge_Cond_inv : forall b Bt Bt' Be Be',
-  Xmerge Bt Bt' <> XUndefined -> Xmerge Be Be' <> XUndefined ->
-  Xmerge (XCond b Bt Be) (XCond b Bt' Be') = XCond b (Xmerge Bt Bt') (Xmerge Be Be').
-Proof.
-intros. revert H H0.
-simpl. unfold BExpr_dec; rewrite Bdec.eqb_refl.
-case_eq (Xmerge Bt Bt'); case_eq (Xmerge Be Be'); simpl; auto.
-all: intros; try (elim H1; auto; fail); try (elim H2; auto; fail).
-Qed.
-
 Lemma Xmerge_inv_Branching : forall B B' p Bl Br, Xmerge B B' = XBranching p Bl Br ->
   exists Bl' Bl'' Br' Br'', B = XBranching p Bl' Br' /\ B' = XBranching p Bl'' Br''
   /\ (Bl = None -> Bl' = None /\ Bl'' = None)
@@ -3312,6 +3350,16 @@ case B; case B'; intros; revert HBB';
   revert HM HM' H0.
   case (Xmerge x1 x); case (Xmerge x2 x0);
   intros; inversion H0.
+Qed.
+
+Lemma Xmerge_Cond_inv : forall b Bt Bt' Be Be',
+  Xmerge Bt Bt' <> XUndefined -> Xmerge Be Be' <> XUndefined ->
+  Xmerge (XCond b Bt Be) (XCond b Bt' Be') = XCond b (Xmerge Bt Bt') (Xmerge Be Be').
+Proof.
+intros. revert H H0.
+simpl. unfold BExpr_dec; rewrite Bdec.eqb_refl.
+case_eq (Xmerge Bt Bt'); case_eq (Xmerge Be Be'); simpl; auto.
+all: intros; try (elim H1; auto; fail); try (elim H2; auto; fail).
 Qed.
 
 Lemma Xmerge_inv_inject : forall B1 B2 B, Xmerge B1 B2 = inject B ->
@@ -3544,6 +3592,16 @@ elim (Xmerge_inv_inject _ _ _ H). intros B1' HB1.
 elim (Xmerge_inv_inject' _ _ _ H). intros B2' HB2.
 exists B1', B2'; repeat split; auto.
 unfold merge. rewrite <- HB1, <- HB2; auto.
+Qed.
+
+Lemma Xmerge_inv_XCall : forall B B' X,
+  Xmerge B B' = XCall X -> B = XCall X.
+Proof.
+intros.
+elim (Xmerge_inv B B' (Call X)); auto.
+intros. destroy H0.
+elim (merge_inv_Call _ _ _ H0); intros.
+rewrite H1, H3; auto.
 Qed.
 
 End Merge.
