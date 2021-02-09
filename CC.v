@@ -74,7 +74,13 @@ Inductive Choreography : Type :=
 .
 
 (** A program is a pair containing all procedure definitions and the main
-    choreography. *)
+    choreography.
+
+  Procedure definitions are functions from a variable number of processes to
+  choreographies, without free process names. We model this as a function
+  returning a pair (list Pid)*Choreography, with the proviso that all processes
+  occurring in the choreography must be included in the list of processes.
+ *)
 
 Definition DefSet := RecVar -> (list Pid)*Choreography.
 
@@ -933,6 +939,24 @@ End BigStepSemantics.
 Section Properties.
 
 (** ** Main properties of the semantics *)
+
+(** Determining the state from the label. *)
+Lemma CCC_To_Com_state : forall Defs C s p v q x C' s',
+  CCC_To Defs C s (R_Com p v q x) C' s' ->
+  eq_state_ext s' (update s q x v).
+Proof. induction C; intros; inversion H; eauto. Qed.
+
+Lemma CCC_To_Sel_state : forall Defs C s p v l C' s',
+  CCC_To Defs C s (R_Sel p v l) C' s' -> eq_state_ext s s'.
+Proof. induction C, l; intros; inversion H; eauto. Qed.
+
+Lemma CCC_To_Cond_state : forall Defs C s p C' s',
+  CCC_To Defs C s (R_Cond p) C' s' -> eq_state_ext s s'.
+Proof. induction C; intros; inversion H; eauto. Qed.
+
+Lemma CCC_To_Call_state : forall Defs C s p X C' s',
+  CCC_To Defs C s (R_Call X p) C' s' -> eq_state_ext s s'.
+Proof. induction C; intros; inversion H; eauto. Qed.
 
 (** Reductions preserve well-formedness. *)
 
