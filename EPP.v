@@ -293,6 +293,16 @@ elim Hb; simpl; intros; auto.
 + tauto.
 Qed.
 
+Lemma epp_out : forall Xs ps Defs C HP p, ~In p ps ->
+  Net (epp Xs ps {| Procedures := Defs; Main := C |} HP) p = End.
+Proof.
+intros; unfold epp.
+unfold epp.
+case HP; intros.
+case a; simpl; intro HD. clear a; intros.
+apply epp_C_out; auto.
+Qed.
+
 End EPP.
 
 Section MoreBranches.
@@ -1956,6 +1966,21 @@ induction C; intros; inversion H; eauto;
 all: rewrite <- H4; elim (H0 p); auto.
 Qed.
 
+Lemma Program_WF_Defs_strongly_projectable : forall Xs ps P,
+  CCBase.Program_WF Xs P -> projectable Xs ps P -> well_ann P ->
+  forall X p, In X Xs -> In p ps -> strongly_projectable (Procedures P) (CCBase.Procs P X) p.
+Proof.
+intros. destroy H.
+elim (H X); auto.
+intros. clear H; destroy H8.
+destroy H0.
+elim (In_dec P.eq_dec p (Vars P X)); intros.
++ apply initial_strongly_projectable with (Vars P X); auto.
+  red in H11. rewrite Forall_forall in H11. apply H11; auto.
++ apply initial_strongly_projectable'; auto.
+  intro; apply b, H1. auto.
+Qed.
+
 Lemma EPP_Complete : forall P Xs ps,
   Program_WF Xs P -> well_ann P -> forall (HP:projectable Xs ps P),
   (forall p, In p ps -> strongly_projectable (Procedures P) (Main P) p) ->
@@ -2241,14 +2266,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
   assert (In X Xs) as HX.
   1: { eapply CCC_To_Xs; eauto. destroy HWF; auto. }
   elim (bproj_reduce_Call_p Defs C s C' s' p X Xs); intros; auto.
-  2: { destroy HWF. elim (HWF Y); intros; auto.
-    elim (In_dec P.eq_dec p (fst (Defs Y))); intros.
-    - apply initial_strongly_projectable with (fst (Defs Y)); auto.
-      tauto. inversion_clear HP. inversion_clear H7.
-      red in H8. rewrite Forall_forall in H8. auto.
-    - apply initial_strongly_projectable'; auto.
-      tauto. intro; apply b, Hann. auto.
-  }
+  2: { eapply Program_WF_Defs_strongly_projectable with (P:=CCBase.Build_Program Defs C); eauto. }
   2: apply Hann.
   elim (Hout p); intro.
   rewrite H; case x; intros; try (inversion p0); try (inversion p1).
@@ -2281,40 +2299,29 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
       apply Network_rm_out; auto.
       unfold Process, Pid_dec; Pneq H2; auto.
     * apply CCC_To_Call_state with Defs C p X C'; auto.
-
-(* *)
-
   - simpl; intros H5 r.
     replace N with (Net (Build_Program Defs' N)); auto.
     case_eq (Pid_dec r p); intro.
-    2: case_eq (Pid_dec r q); intro.
-    3: elim (In_dec P.eq_dec r ps); intro.
-    * rewrite Pdec.eqb_eq in H6; rewrite H6.
-      replace (Net (epp  _ _ _ H5) p) with Bp. apply more_branches_refl.
-      rewrite epp_C_char' with (HP:=H5) in H2; auto.
-      apply inject_inj in H2; auto.
-    * rewrite Pdec.eqb_eq in H7; rewrite H7.
-      replace (Net (epp  _ _ _ H5) q) with Bq. apply more_branches_refl.
-      rewrite epp_C_char' with (HP:=H5) in H3; auto.
-      apply inject_inj in H3; auto.
-    * replace (Net (epp _ _ _ H5) r) with (N r). apply more_branches_refl.
+    * rewrite Pdec.eqb_eq in H2; rewrite H2.
+      elim (bproj_reduce_Call_p Defs C s C' s' p X Xs); auto.
+      intros.
+      destroy H6.
+      replace Bp with x. replace (Net (epp _ _ _ H5) p) with x0; auto.
+      apply inject_inj. rewrite <- H8, epp_C_char' with (HP:=H5); auto.
+      apply inject_inj. apply collapse_inv in H4.
+      rewrite <- H7; auto.
+      intros. eapply Program_WF_Defs_strongly_projectable with (P:=CCBase.Build_Program Defs C); eauto.
+    * rewrite Pdec.eqb_neq in H2.
+      elim (In_dec P.eq_dec r ps); intro Hr.
+      replace (Net (epp _ _ _ H5) r) with (N r). apply more_branches_refl.
       replace N with (Net (Build_Program Defs' N)); auto.
       rewrite HN.
       apply inject_inj.
       repeat rewrite <- epp_C_char'; auto.
-      rewrite Pdec.eqb_neq in H6, H7.
-      symmetry; apply bproj_reduce_Com_r with s s' p q v x; auto.
-    * replace (Net (epp _ _ _ H5) r) with End.
-      simpl. replace (N r) with End. constructor.
-      replace N with (Net (Build_Program Defs' N)); auto.
-      rewrite HN, epp_C_char with (HC:=HC), epp_C_out; auto.
-      elim (strongly_projectable_reduces (CCBase.Build_Program Defs C) Xs ps)
-        with s (CCBase.TL.L_Com p v q) (CCBase.Build_Program Defs C') s'; intros; auto.
-      rewrite epp_C_char with (HC:=H8), epp_C_out; auto.
-      eauto.
-+ 
-
-
+      symmetry; apply bproj_reduce_Call_r with s s' p X; auto.
+      rewrite HN.
+      repeat rewrite epp_out; auto. constructor.
+Qed.
 
 End Projectability.
 
@@ -2322,7 +2329,6 @@ End Projectability.
 
 More branches is behavioural equivalence.
 
-*)
 
 
 Definition more_branches_beh (B1 B2:Behaviour) := (merge_beh B1 B2) = Some B1.
@@ -2613,5 +2619,6 @@ inversion H3.
 Admitted.
 
 End EPP_Properties.
+*)
 
 End EPPBase.
