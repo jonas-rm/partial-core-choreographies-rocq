@@ -1,4 +1,4 @@
-echo coqc Basic.v
+coqc Basic.v
 coqc Common.v
 coqc CC.v
 echo coqc Kleene.v

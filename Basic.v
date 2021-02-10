@@ -458,6 +458,13 @@ intros; do 2 elim T_dec; simpl; intros.
   intros; rewrite IHX; auto.
 Qed.
 
+Lemma set_remove'_out : forall x y (X:set T),
+  ~In x (set_remove' y X) -> In x X -> x = y.
+Proof.
+intros. elim (T_dec x y); auto.
+intro. elim H. apply set_remove'_3; auto.
+Qed.
+
 (** Size *)
 
 Fixpoint set_size (X:set T) :=
