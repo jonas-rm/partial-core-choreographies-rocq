@@ -44,7 +44,8 @@ Ltac assert_NotIn_from_neq_2 x y z H H' :=
 
 Section EPP.
 
-(** First step: returns an XBehaviour, possibly with XUndefined subcomponents. *)
+(** ** EndPoint projection
+  First step: returns an XBehaviour, possibly with XUndefined subcomponents. *)
 Fixpoint bproj (Defs:DefSet) (C:Choreography) (r:Pid) : XBehaviour :=
 match C with
 | CCBase.End                => XEnd
@@ -508,134 +509,6 @@ rewrite epp_C_Then_r with (HC1:=HC1) (HC2:=HC2); auto.
 Qed.
 *)
 
-Lemma epp_C_Cond_Send_inv : forall Defs ps p b C1 C2 HC HC1 HC2 r q e B,
-  epp_C Defs ps (If p ?? b Then C1 Else C2) HC r = q ! e; B ->
-  exists B1 B2, epp_C Defs ps C1 HC1 r = q ! e; B1
-  /\ epp_C Defs ps C2 HC2 r = q ! e; B2 /\ merge B1 B2 = inject B.
-Proof.
-intros.
-assert (p <> r).
-1: {
-  intro. revert HC H; rewrite H0. intro.
-  elim (In_dec P.eq_dec r ps); intro.
-  rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto. discriminate.
-  rewrite epp_C_out; auto. discriminate.
-}
-generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
-rewrite H in H1.
-apply merge_inv_Send; auto.
-Qed.
-
-Lemma epp_C_Cond_Recv_inv : forall Defs ps p b C1 C2 HC HC1 HC2 r q x B,
-  epp_C Defs ps (If p ?? b Then C1 Else C2) HC r = q ? x; B ->
-  exists B1 B2, epp_C Defs ps C1 HC1 r = q ? x; B1
-  /\ epp_C Defs ps C2 HC2 r = q ? x; B2 /\ merge B1 B2 = inject B.
-Proof.
-intros.
-assert (p <> r).
-1: {
-  intro. revert HC H; rewrite H0. intro.
-  elim (In_dec P.eq_dec r ps); intro.
-  rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto. discriminate.
-  rewrite epp_C_out; auto. discriminate.
-}
-generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
-rewrite H in H1.
-apply merge_inv_Recv; auto.
-Qed.
-
-Lemma epp_C_Cond_Sel_inv : forall Defs ps p b C1 C2 HC HC1 HC2 r q l B,
-  epp_C Defs ps (If p ?? b Then C1 Else C2) HC r = q (+) l; B ->
-  exists B1 B2, epp_C Defs ps C1 HC1 r = q (+) l; B1
-  /\ epp_C Defs ps C2 HC2 r = q (+) l; B2 /\ merge B1 B2 = inject B.
-Proof.
-intros.
-assert (p <> r).
-1: {
-  intro. revert HC H; rewrite H0. intro.
-  elim (In_dec P.eq_dec r ps); intro.
-  rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto. discriminate.
-  rewrite epp_C_out; auto. discriminate.
-}
-generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
-rewrite H in H1.
-apply merge_inv_Sel; auto.
-Qed.
-
-Lemma bproj_not_Branching_None_None : forall Defs C r q,
-  bproj Defs C r <> inject (q & None // None).
-Proof.
-intros. induction C; simpl. induction e. 2: induction l.
-1,2,3,4: elim Pid_dec.
-2,4,6: elim Pid_dec.
-12,13: elim In_dec.
-all: auto.
-all: try discriminate.
-intro. 
-apply Xmerge_inv_Branching in H; destroy H.
-clear H4 H.
-elim H2; auto. clear H2; intros.
-elim H3; auto. clear H3; intros.
-apply IHC1. rewrite H, H3 in H0; auto.
-Qed.
-
-Lemma epp_C_not_Branching_None_None : forall Defs ps C HC p q,
-  epp_C Defs ps C HC p <> q & None // None.
-Proof.
-intros.
-unfold epp_C.
-elim In_dec; intro; simpl. 2: discriminate.
-elim collapse_char'; intro; simpl.
-induction a0. intro. rewrite H in p0.
-clear H x a HC ps.
-revert p0. apply bproj_not_Branching_None_None.
-exfalso. apply projectable_C_use' with (p:=p) in HC; auto.
-Qed.
-
-Lemma epp_C_Cond_Branching_l_inv : forall Defs ps p b C1 C2 HC HC1 HC2 r q B,
-  epp_C Defs ps (If p ?? b Then C1 Else C2) HC r = q & Some B // None ->
-  exists B1 B2, epp_C Defs ps C1 HC1 r = q & Some B1 // None
-  /\ epp_C Defs ps C2 HC2 r = q & Some B2 // None /\ merge B1 B2 = inject B.
-Proof.
-intros.
-assert (p <> r).
-1: {
-  intro. revert HC H; rewrite H0. intro.
-  elim (In_dec P.eq_dec r ps); intro.
-  rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto. discriminate.
-  rewrite epp_C_out; auto. discriminate.
-}
-generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
-rewrite H in H1.
-symmetry in H1. apply merge_inv_Branching_Some_None in H1.
-inversion_clear H1; inversion_clear H2.
-1: elim (epp_C_not_Branching_None_None _ _ _ _ _ _ H1).
-1: inversion_clear H1. elim (epp_C_not_Branching_None_None _ _ _ _ _ _ H3).
-destroy H1. eauto.
-Qed.
-
-Lemma epp_C_Cond_Branching_r_inv : forall Defs ps p b C1 C2 HC HC1 HC2 r q B,
-  epp_C Defs ps (If p ?? b Then C1 Else C2) HC r = q & None // Some B ->
-  exists B1 B2, epp_C Defs ps C1 HC1 r = q & None // Some B1
-  /\ epp_C Defs ps C2 HC2 r = q & None // Some B2 /\ merge B1 B2 = inject B.
-Proof.
-intros.
-assert (p <> r).
-1: {
-  intro. revert HC H; rewrite H0. intro.
-  elim (In_dec P.eq_dec r ps); intro.
-  rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto. discriminate.
-  rewrite epp_C_out; auto. discriminate.
-}
-generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
-rewrite H in H1.
-symmetry in H1. apply merge_inv_Branching_None_Some in H1.
-inversion_clear H1; inversion_clear H2.
-1: elim (epp_C_not_Branching_None_None _ _ _ _ _ _ H1).
-1: inversion_clear H1. elim (epp_C_not_Branching_None_None _ _ _ _ _ _ H3).
-destroy H1. eauto.
-Qed.
-
 Lemma epp_C_Call : forall Defs ps X p HC, In p ps -> In p (fst (Defs X)) ->
   epp_C Defs ps (CCBase.Call X) HC p = Call (X,p).
 Proof.
@@ -706,9 +579,142 @@ case o, o0; inversion p0.
 discriminate.
 Qed.
 
+(** Strange inversion lemmas for conditionals. *)
+Lemma bproj_not_Branching_None_None : forall Defs C r q,
+  bproj Defs C r <> inject (q & None // None).
+Proof.
+intros. induction C; simpl. induction e. 2: induction l.
+1,2,3,4: elim Pid_dec.
+2,4,6: elim Pid_dec.
+12,13: elim In_dec.
+all: auto.
+all: try discriminate.
+intro. 
+apply Xmerge_inv_Branching in H; destroy H.
+clear H4 H.
+elim H2; auto. clear H2; intros.
+elim H3; auto. clear H3; intros.
+apply IHC1. rewrite H, H3 in H0; auto.
+Qed.
+
+Lemma epp_C_not_Branching_None_None : forall Defs ps C HC p q,
+  epp_C Defs ps C HC p <> q & None // None.
+Proof.
+intros.
+unfold epp_C.
+elim In_dec; intro; simpl. 2: discriminate.
+elim collapse_char'; intro; simpl.
+induction a0. intro. rewrite H in p0.
+clear H x a HC ps.
+revert p0. apply bproj_not_Branching_None_None.
+exfalso. apply projectable_C_use' with (p:=p) in HC; auto.
+Qed.
+
+Lemma epp_C_Cond_Send_inv : forall Defs ps p b C1 C2 HC HC1 HC2 r q e B,
+  epp_C Defs ps (If p ?? b Then C1 Else C2) HC r = q ! e; B ->
+  exists B1 B2, epp_C Defs ps C1 HC1 r = q ! e; B1
+  /\ epp_C Defs ps C2 HC2 r = q ! e; B2 /\ merge B1 B2 = inject B.
+Proof.
+intros.
+assert (p <> r).
+1: {
+  intro. revert HC H; rewrite H0. intro.
+  elim (In_dec P.eq_dec r ps); intro.
+  rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto. discriminate.
+  rewrite epp_C_out; auto. discriminate.
+}
+generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
+rewrite H in H1.
+apply merge_inv_Send; auto.
+Qed.
+
+Lemma epp_C_Cond_Recv_inv : forall Defs ps p b C1 C2 HC HC1 HC2 r q x B,
+  epp_C Defs ps (If p ?? b Then C1 Else C2) HC r = q ? x; B ->
+  exists B1 B2, epp_C Defs ps C1 HC1 r = q ? x; B1
+  /\ epp_C Defs ps C2 HC2 r = q ? x; B2 /\ merge B1 B2 = inject B.
+Proof.
+intros.
+assert (p <> r).
+1: {
+  intro. revert HC H; rewrite H0. intro.
+  elim (In_dec P.eq_dec r ps); intro.
+  rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto. discriminate.
+  rewrite epp_C_out; auto. discriminate.
+}
+generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
+rewrite H in H1.
+apply merge_inv_Recv; auto.
+Qed.
+
+Lemma epp_C_Cond_Sel_inv : forall Defs ps p b C1 C2 HC HC1 HC2 r q l B,
+  epp_C Defs ps (If p ?? b Then C1 Else C2) HC r = q (+) l; B ->
+  exists B1 B2, epp_C Defs ps C1 HC1 r = q (+) l; B1
+  /\ epp_C Defs ps C2 HC2 r = q (+) l; B2 /\ merge B1 B2 = inject B.
+Proof.
+intros.
+assert (p <> r).
+1: {
+  intro. revert HC H; rewrite H0. intro.
+  elim (In_dec P.eq_dec r ps); intro.
+  rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto. discriminate.
+  rewrite epp_C_out; auto. discriminate.
+}
+generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
+rewrite H in H1.
+apply merge_inv_Sel; auto.
+Qed.
+
+Lemma epp_C_Cond_Branching_l_inv : forall Defs ps p b C1 C2 HC HC1 HC2 r q B,
+  epp_C Defs ps (If p ?? b Then C1 Else C2) HC r = q & Some B // None ->
+  exists B1 B2, epp_C Defs ps C1 HC1 r = q & Some B1 // None
+  /\ epp_C Defs ps C2 HC2 r = q & Some B2 // None /\ merge B1 B2 = inject B.
+Proof.
+intros.
+assert (p <> r).
+1: {
+  intro. revert HC H; rewrite H0. intro.
+  elim (In_dec P.eq_dec r ps); intro.
+  rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto. discriminate.
+  rewrite epp_C_out; auto. discriminate.
+}
+generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
+rewrite H in H1.
+symmetry in H1. apply merge_inv_Branching_Some_None in H1.
+inversion_clear H1; inversion_clear H2.
+1: elim (epp_C_not_Branching_None_None _ _ _ _ _ _ H1).
+1: inversion_clear H1. elim (epp_C_not_Branching_None_None _ _ _ _ _ _ H3).
+destroy H1. eauto.
+Qed.
+
+Lemma epp_C_Cond_Branching_r_inv : forall Defs ps p b C1 C2 HC HC1 HC2 r q B,
+  epp_C Defs ps (If p ?? b Then C1 Else C2) HC r = q & None // Some B ->
+  exists B1 B2, epp_C Defs ps C1 HC1 r = q & None // Some B1
+  /\ epp_C Defs ps C2 HC2 r = q & None // Some B2 /\ merge B1 B2 = inject B.
+Proof.
+intros.
+assert (p <> r).
+1: {
+  intro. revert HC H; rewrite H0. intro.
+  elim (In_dec P.eq_dec r ps); intro.
+  rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto. discriminate.
+  rewrite epp_C_out; auto. discriminate.
+}
+generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
+rewrite H in H1.
+symmetry in H1. apply merge_inv_Branching_None_Some in H1.
+inversion_clear H1; inversion_clear H2.
+1: elim (epp_C_not_Branching_None_None _ _ _ _ _ _ H1).
+1: inversion_clear H1. elim (epp_C_not_Branching_None_None _ _ _ _ _ _ H3).
+destroy H1. eauto.
+Qed.
+
+
 End EPP.
 
 Section MoreBranches.
+(** ** Pruning
+  The pruning relation is defined as: B can be pruned to B' if B' is obtained
+  from B by removing some branches in branching terms. *)
 
 Inductive more_branches : Behaviour -> Behaviour -> Prop :=
 | MB_End : more_branches End End
@@ -1360,6 +1366,7 @@ induction B using Behaviour_ind'; intros.
   constructor.
 Qed.
 
+(** The same relation on extended behaviours, and corresponding lemmas. *)
 Definition Xmore_branches XB XB' := exists B B',
   XB = inject B /\ XB' = inject B' /\ more_branches B B'.
 
@@ -1376,6 +1383,31 @@ exists x, x2; repeat split; auto.
 apply more_branches_trans with x0; auto.
 rewrite H3 in H2. apply inject_inj in H2. inversion H2. 
 rewrite <- H5; auto.
+Qed.
+
+Lemma Xmore_branches_merge : forall B B1 B2,
+  Xmore_branches B B1 -> Xmore_branches B B2 -> Xmore_branches B (Xmerge B1 B2).
+Proof.
+intros.
+destroy H; destroy H0.
+rewrite H1 in H3; apply inject_inj in H3.
+rewrite <- H3 in H0; clear x1 H3.
+elim (more_branches_merge _ _ _ H H0).
+intros. destroy H3.
+rewrite H1, H2, H4. red; eauto.
+Qed.
+
+Lemma Xmore_branches_merge_extend : forall B1 B2 B1' B2' B,
+  Xmore_branches B1 B1' -> Xmore_branches B2 B2' ->
+  Xmerge B1 B2 = inject B ->
+  Xmore_branches (Xmerge B1 B2) (Xmerge B1' B2').
+Proof.
+intros. destroy H. destroy H0.
+rewrite H2, H4 in H1.
+elim (more_branches_merge_extend _ _ _ _ _ H H0 H1); intros.
+destroy H6.
+rewrite H2, H3, H4, H5.
+eexists; eexists; repeat split; eauto.
 Qed.
 
 Definition more_branches_N (N N':Network) :=
@@ -1575,6 +1607,26 @@ induction C; simpl; intros; auto.
     repeat rewrite bproj_not_In; auto. elim Pid_dec; discriminate.
 + destroy H.
 Qed.
+
+(** Inversion lemmas for strong projectability. *)
+Lemma strongly_projectable_inv_Eta : forall Defs eta C p,
+  strongly_projectable Defs (eta;;C) p -> strongly_projectable Defs C p.
+Proof. auto. Qed.
+
+Lemma strongly_projectable_inv_Then : forall Defs p b C1 C2 r,
+  strongly_projectable Defs (If p ?? b Then C1 Else C2) r ->
+  strongly_projectable Defs C1 r.
+Proof. intros. destroy H. auto. Qed.
+
+Lemma strongly_projectable_inv_Else : forall Defs p b C1 C2 r,
+  strongly_projectable Defs (If p ?? b Then C1 Else C2) r ->
+  strongly_projectable Defs C2 r.
+Proof. intros. destroy H. auto. Qed.
+
+Lemma strongly_projectable_inv_RT_Call : forall Defs ps X C p,
+  strongly_projectable Defs (RT_Call ps X C) p ->
+  strongly_projectable Defs C p.
+Proof. intros. destroy H. auto. Qed.
 
 (** Inversion lemmas about program projectability. *)
 Lemma projectable_inv_Eta : forall Xs ps Defs eta C,
@@ -2170,6 +2222,35 @@ induction C; intros; inversion H.
   intros. elim Hpr. apply set_size_1 with P.eq_dec l; auto.
 Qed.
 
+Lemma bproj_reduces_disjoint : forall Defs C s tl C' s' ps p,
+  (forall X, set_incl_pid (CCC_pn (snd (Defs X)) (fun Y => fst (Defs Y))) (fst (Defs X))) ->
+  (forall r, In r ps -> strongly_projectable Defs C r) -> In p ps ->
+  CCBase.TL.disjoint_p_rl p tl -> CCC_To Defs C s tl C' s' ->
+  Xmore_branches (bproj Defs C p) (bproj Defs C' p).
+Proof.
+do 7 intro. intros r HDefs.
+intros. induction tl.
+- destroy H1.
+  rewrite (bproj_reduce_Com_r Defs C s C' s' p q v x); auto.
+  apply strongly_projectable_C' in H.
+  apply projectable_C_use with (p:=r) in H; auto.
+  destroy H. apply collapse_inv in H.
+  exists x0, x0; repeat split; auto. apply more_branches_refl.
+- destroy H1.
+  rewrite (bproj_reduce_Sel_r Defs C s C' s' p q l); auto.
+  apply strongly_projectable_C' in H.
+  apply projectable_C_use with (p:=r) in H; auto.
+  destroy H. apply collapse_inv in H.
+  exists x, x; repeat split; auto. apply more_branches_refl.
+- apply (bproj_reduce_Cond_r Defs C s C' s' p r); auto.
+- rewrite (bproj_reduce_Call_r Defs C s C' s' p X); auto.
+  apply strongly_projectable_C' in H.
+  apply projectable_C_use with (p:=r) in H; auto.
+  destroy H. apply collapse_inv in H.
+  exists x, x; repeat split; auto. apply more_branches_refl.
+Qed.
+
+(** Projectability of well-formed programs is preserved by reductions. *)
 Lemma projectable_C_reduces_Com : forall Defs ps C s C' s' p v q x,
   (forall p, In p ps -> strongly_projectable Defs C p) ->
   CCC_To Defs C s (CCBase.TL.R_Com p v q x) C' s' ->
@@ -2285,7 +2366,6 @@ eapply projectable_C_reduces_Call; eauto.
 eapply CCC_To_Xs; eauto.
 Qed.
 
-(** Projectability of well-formed programs is preserved by reductions. *)
 Lemma projectable_reduces : forall P Xs ps,
   Program_WF Xs P -> well_ann P -> projectable Xs ps P ->
   (forall p, In p ps -> strongly_projectable (Procedures P) (Main P) p) ->
@@ -2321,54 +2401,8 @@ destroy H0; intros. repeat split; auto.
 + apply H1.
 Qed.
 
-Lemma bproj_reduces_disjoint : forall Defs C s tl C' s' ps p,
-  (forall X, set_incl_pid (CCC_pn (snd (Defs X)) (fun Y => fst (Defs Y))) (fst (Defs X))) ->
-  (forall r, In r ps -> strongly_projectable Defs C r) -> In p ps ->
-  CCBase.TL.disjoint_p_rl p tl -> CCC_To Defs C s tl C' s' ->
-  Xmore_branches (bproj Defs C p) (bproj Defs C' p).
-Proof.
-do 7 intro. intros r HDefs.
-intros. induction tl.
-- destroy H1.
-  rewrite (bproj_reduce_Com_r Defs C s C' s' p q v x); auto.
-  apply strongly_projectable_C' in H.
-  apply projectable_C_use with (p:=r) in H; auto.
-  destroy H. apply collapse_inv in H.
-  exists x0, x0; repeat split; auto. apply more_branches_refl.
-- destroy H1.
-  rewrite (bproj_reduce_Sel_r Defs C s C' s' p q l); auto.
-  apply strongly_projectable_C' in H.
-  apply projectable_C_use with (p:=r) in H; auto.
-  destroy H. apply collapse_inv in H.
-  exists x, x; repeat split; auto. apply more_branches_refl.
-- apply (bproj_reduce_Cond_r Defs C s C' s' p r); auto.
-- rewrite (bproj_reduce_Call_r Defs C s C' s' p X); auto.
-  apply strongly_projectable_C' in H.
-  apply projectable_C_use with (p:=r) in H; auto.
-  destroy H. apply collapse_inv in H.
-  exists x, x; repeat split; auto. apply more_branches_refl.
-Qed.
-
-Lemma strongly_projectable_inv_Eta : forall Defs eta C p,
-  strongly_projectable Defs (eta;;C) p -> strongly_projectable Defs C p.
-Proof. auto. Qed.
-
-Lemma strongly_projectable_inv_Then : forall Defs p b C1 C2 r,
-  strongly_projectable Defs (If p ?? b Then C1 Else C2) r ->
-  strongly_projectable Defs C1 r.
-Proof. intros. destroy H. auto. Qed.
-
-Lemma strongly_projectable_inv_Else : forall Defs p b C1 C2 r,
-  strongly_projectable Defs (If p ?? b Then C1 Else C2) r ->
-  strongly_projectable Defs C2 r.
-Proof. intros. destroy H. auto. Qed.
-
-Lemma strongly_projectable_inv_RT_Call : forall Defs ps X C p,
-  strongly_projectable Defs (RT_Call ps X C) p ->
-  strongly_projectable Defs C p.
-Proof. intros. destroy H. auto. Qed.
-
-(** For chaining, we need to know that the reductum is also strongly projectable. *)
+(** Strong projectability of well-formed programs is preserved by reductions
+  - this is needed for chaining applications of the EPP theorem. *)
 Lemma strongly_projectable_reduces_Com : forall Defs C s C' s' ps p v q x r,
   (forall p, In p ps -> strongly_projectable Defs C p) ->
   (forall p, In p (CCC_pn C (fun X => fst (Defs X))) -> In p ps) ->
@@ -2544,19 +2578,6 @@ induction C; intros; inversion H.
   apply H0. apply Hnames. simpl. sup.
 Qed.
 
-Lemma Xmore_branches_merge_extend : forall B1 B2 B1' B2' B,
-  Xmore_branches B1 B1' -> Xmore_branches B2 B2' ->
-  Xmerge B1 B2 = inject B ->
-  Xmore_branches (Xmerge B1 B2) (Xmerge B1' B2').
-Proof.
-intros. destroy H. destroy H0.
-rewrite H2, H4 in H1.
-elim (more_branches_merge_extend _ _ _ _ _ H H0 H1); intros.
-destroy H6.
-rewrite H2, H3, H4, H5.
-eexists; eexists; repeat split; eauto.
-Qed.
-
 Lemma strongly_projectable_reduces_Cond : forall Defs C s C' s' ps p r,
   (forall p, In p ps -> strongly_projectable Defs C p) ->
   (forall p, In p (CCC_pn C (fun X => fst (Defs X))) -> In p ps) ->
@@ -2630,18 +2651,6 @@ induction C; intros; inversion H.
   elim (H0 r); auto. intros. elim (H11 p0); auto.
   apply (bproj_reduce_Cond_r Defs C s C'0 s' p); auto.
   apply H0. apply Hnames. simpl. sup.
-Qed.
-
-Lemma Xmore_branches_merge : forall B B1 B2,
-  Xmore_branches B B1 -> Xmore_branches B B2 -> Xmore_branches B (Xmerge B1 B2).
-Proof.
-intros.
-destroy H; destroy H0.
-rewrite H1 in H3; apply inject_inj in H3.
-rewrite <- H3 in H0; clear x1 H3.
-elim (more_branches_merge _ _ _ H H0).
-intros. destroy H3.
-rewrite H1, H2, H4. red; eauto.
 Qed.
 
 Lemma strongly_projectable_reduces_Call : forall Defs C s C' s' ps p X r Xs,
