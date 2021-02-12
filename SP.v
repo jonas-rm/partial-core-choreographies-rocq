@@ -3196,6 +3196,230 @@ fold (merge x x). apply merge_idempotent.
 Qed.
 
 (** Inversion lemmas for Xmerge. *)
+Ltac Beq := unfold BExpr_dec; rewrite Bdec.eqb_refl; simpl.
+
+Lemma Xmerge_Cond_inv : forall b Bt Bt' Be Be',
+  Xmerge Bt Bt' <> XUndefined -> Xmerge Be Be' <> XUndefined ->
+  Xmerge (XCond b Bt Be) (XCond b Bt' Be') = XCond b (Xmerge Bt Bt') (Xmerge Be Be').
+Proof.
+intros. revert H H0.
+simpl. unfold BExpr_dec; rewrite Bdec.eqb_refl.
+case_eq (Xmerge Bt Bt'); case_eq (Xmerge Be Be'); simpl; auto.
+all: intros; try (elim H1; auto; fail); try (elim H2; auto; fail).
+Qed.
+
+Lemma Xmerge_inv_Send : forall B1 B2 p e B,
+  Xmerge B1 B2 = XSend p e B -> exists B1' B2',
+  B1 = XSend p e B1' /\ B2 = XSend p e B2' /\ Xmerge B1' B2' = B.
+Proof.
+intros B1 B2.
+case B1; case B2; try discriminate.
++ intros. revert H. simpl.
+  case_eq (Pid_dec p0 p); intro. 2: discriminate.
+  case_eq (Expr_dec e0 e); intro. 2: discriminate.
+  elim (XUndefined_dec (Xmerge x0 x)); intro.
+  rewrite a; discriminate.
+  rewrite Xmatch_elim; auto.
+  simpl. unfold Pid_dec in H; unfold Expr_dec in H0.
+  rewrite Pdec.eqb_eq in H; rewrite Edec.eqb_eq in H0.
+  rewrite H, H0; intros.
+  inversion H1; eauto.
++ intros. revert H. simpl.
+  case_eq (Pid_dec p0 p); intro. 2: discriminate.
+  case_eq (Var_dec v0 v); intro. 2: discriminate.
+  elim (XUndefined_dec (Xmerge x0 x)); intro.
+  rewrite a; discriminate.
+  rewrite Xmatch_elim; auto.
+  simpl. unfold Pid_dec in H; unfold Var_dec in H0.
+  rewrite Pdec.eqb_eq in H; rewrite Xdec.eqb_eq in H0.
+  rewrite H, H0; intros.
+  inversion H1; eauto.
++ intros. revert H. simpl.
+  case_eq (Pid_dec p0 p); intro. 2: discriminate.
+  case_eq (eqb_label l0 l); intro. 2: discriminate.
+  elim (XUndefined_dec (Xmerge x0 x)); intro.
+  rewrite a; discriminate.
+  rewrite Xmatch_elim; auto.
+  simpl. unfold Pid_dec in H.
+  rewrite Pdec.eqb_eq in H; rewrite label_eqb_eq in H0.
+  rewrite H, H0; intros.
+  inversion H1; eauto.
++ intros. exfalso.
+  revert H. simpl.
+  elim Pid_dec. 2: discriminate.
+  case o, o0, o1, o2; try discriminate.
+  1,2: elim (XUndefined_dec (Xmerge x1 x)); intro Hx1x;
+    [rewrite Hx1x | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec (Xmerge x2 x0)); intro Hx2x0;
+    [rewrite Hx2x0 | rewrite Xmatch_elim; auto]; try discriminate.
+  2,3,6,7,11,12,13,14: elim (XUndefined_dec x); intro Hx;
+    [rewrite Hx | rewrite Xmatch_elim; auto]; try discriminate.
+  1,3,4,5,8,9: elim (XUndefined_dec x0); intro Hx0;
+    [rewrite Hx0 | rewrite Xmatch_elim; auto]; try discriminate.
+  2: elim (XUndefined_dec x); intro Hx;
+    [rewrite Hx | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec (Xmerge x1 x)); intro Hx1x;
+    [rewrite Hx1x | rewrite Xmatch_elim; auto]; try discriminate.
+  2,3,4: elim (XUndefined_dec (Xmerge x0 x)); intro Hx0x;
+    [rewrite Hx0x | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec (Xmerge x1 x0)); intro Hx1x0;
+    [rewrite Hx1x0 | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec x1); intro Hx1;
+    [rewrite Hx1 | rewrite Xmatch_elim; auto]; try discriminate.
++ intros. exfalso.
+  elim (B.eq_dec b0 b); intro Hb.
+  2: revert H; simpl; unfold BExpr_dec; rewrite <- Bdec.eqb_neq in Hb; rewrite Hb; discriminate.
+  rewrite Hb in H; clear b0 Hb.
+  elim (XUndefined_dec (Xmerge x1 x)); intro H1.
+  2: elim (XUndefined_dec (Xmerge x2 x0)); intro H0.
+  - revert H. simpl. Beq. rewrite H1; discriminate.
+  - revert H. simpl. Beq. rewrite H0, Xmatch_elim. discriminate. auto.
+  - rewrite Xmerge_Cond_inv in H; auto. discriminate.
++ intros. exfalso.
+  revert H. simpl. elim RecVar_dec; discriminate.
+Qed.
+
+Lemma Xmerge_inv_Recv : forall B1 B2 p x B,
+  Xmerge B1 B2 = XRecv p x B -> exists B1' B2',
+  B1 = XRecv p x B1' /\ B2 = XRecv p x B2' /\ Xmerge B1' B2' = B.
+Proof.
+intros B1 B2.
+case B1; case B2; try discriminate.
++ intros. revert H. simpl.
+  case_eq (Pid_dec p0 p); intro. 2: discriminate.
+  case_eq (Expr_dec e0 e); intro. 2: discriminate.
+  elim (XUndefined_dec (Xmerge x0 x)); intro.
+  rewrite a; discriminate.
+  rewrite Xmatch_elim; auto.
+  simpl. unfold Pid_dec in H; unfold Expr_dec in H0.
+  rewrite Pdec.eqb_eq in H; rewrite Edec.eqb_eq in H0.
+  rewrite H, H0; intros. discriminate.
++ intros. revert H. simpl.
+  case_eq (Pid_dec p0 p); intro. 2: discriminate.
+  case_eq (Var_dec v0 v); intro. 2: discriminate.
+  elim (XUndefined_dec (Xmerge x0 x)); intro.
+  rewrite a; discriminate.
+  rewrite Xmatch_elim; auto.
+  simpl. unfold Pid_dec in H; unfold Var_dec in H0.
+  rewrite Pdec.eqb_eq in H; rewrite Xdec.eqb_eq in H0.
+  rewrite H, H0; intros.
+  inversion H1; eauto.
++ intros. revert H. simpl.
+  case_eq (Pid_dec p0 p); intro. 2: discriminate.
+  case_eq (eqb_label l0 l); intro. 2: discriminate.
+  elim (XUndefined_dec (Xmerge x0 x)); intro.
+  rewrite a; discriminate.
+  rewrite Xmatch_elim; auto.
+  simpl. unfold Pid_dec in H.
+  rewrite Pdec.eqb_eq in H; rewrite label_eqb_eq in H0.
+  rewrite H, H0; intros.
+  inversion H1; eauto.
++ intros. exfalso.
+  revert H. simpl.
+  elim Pid_dec. 2: discriminate.
+  case o, o0, o1, o2; try discriminate.
+  1,2: elim (XUndefined_dec (Xmerge x2 x0)); intro Hx1x;
+    [rewrite Hx1x | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec (Xmerge x3 x1)); intro Hx2x0;
+    [rewrite Hx2x0 | rewrite Xmatch_elim; auto]; try discriminate.
+  2,3,6,7,11,12,13,14: elim (XUndefined_dec x0); intro Hx;
+    [rewrite Hx | rewrite Xmatch_elim; auto]; try discriminate.
+  1,3,4,5,8,9: elim (XUndefined_dec x1); intro Hx0;
+    [rewrite Hx0 | rewrite Xmatch_elim; auto]; try discriminate.
+  2: elim (XUndefined_dec x0); intro Hx;
+    [rewrite Hx | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec (Xmerge x2 x0)); intro Hx1x;
+    [rewrite Hx1x | rewrite Xmatch_elim; auto]; try discriminate.
+  2,3,4: elim (XUndefined_dec (Xmerge x1 x0)); intro Hx0x;
+    [rewrite Hx0x | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec (Xmerge x2 x1)); intro Hx1x0;
+    [rewrite Hx1x0 | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec x2); intro Hx1;
+    [rewrite Hx1 | rewrite Xmatch_elim; auto]; try discriminate.
++ intros. exfalso.
+  elim (B.eq_dec b0 b); intro Hb.
+  2: revert H; simpl; unfold BExpr_dec; rewrite <- Bdec.eqb_neq in Hb; rewrite Hb; discriminate.
+  rewrite Hb in H; clear b0 Hb.
+  elim (XUndefined_dec (Xmerge x1 x)); intro H1.
+  2: elim (XUndefined_dec (Xmerge x2 x0)); intro H0.
+  - revert H. simpl. Beq. rewrite H1; discriminate.
+  - revert H. simpl. Beq. rewrite H0, Xmatch_elim. discriminate. auto.
+  - rewrite Xmerge_Cond_inv in H; auto. discriminate.
++ intros. exfalso.
+  revert H. simpl. elim RecVar_dec; discriminate.
+Qed.
+
+Lemma Xmerge_inv_Sel : forall B1 B2 p l B,
+  Xmerge B1 B2 = XSel p l B -> exists B1' B2',
+  B1 = XSel p l B1' /\ B2 = XSel p l B2' /\ Xmerge B1' B2' = B.
+Proof.
+intros B1 B2.
+case B1; case B2; try discriminate.
++ intros. revert H. simpl.
+  case_eq (Pid_dec p0 p); intro. 2: discriminate.
+  case_eq (Expr_dec e0 e); intro. 2: discriminate.
+  elim (XUndefined_dec (Xmerge x0 x)); intro.
+  rewrite a; discriminate.
+  rewrite Xmatch_elim; auto.
+  simpl. unfold Pid_dec in H; unfold Expr_dec in H0.
+  rewrite Pdec.eqb_eq in H; rewrite Edec.eqb_eq in H0.
+  rewrite H, H0; intros.
+  inversion H1; eauto.
++ intros. revert H. simpl.
+  case_eq (Pid_dec p0 p); intro. 2: discriminate.
+  case_eq (Var_dec v0 v); intro. 2: discriminate.
+  elim (XUndefined_dec (Xmerge x0 x)); intro.
+  rewrite a; discriminate.
+  rewrite Xmatch_elim; auto.
+  simpl. unfold Pid_dec in H; unfold Var_dec in H0.
+  rewrite Pdec.eqb_eq in H; rewrite Xdec.eqb_eq in H0.
+  rewrite H, H0; intros.
+  inversion H1; eauto.
++ intros. revert H. simpl.
+  case_eq (Pid_dec p0 p); intro. 2: discriminate.
+  case_eq (eqb_label l0 l); intro. 2: discriminate.
+  elim (XUndefined_dec (Xmerge x0 x)); intro.
+  rewrite a; discriminate.
+  rewrite Xmatch_elim; auto.
+  simpl. unfold Pid_dec in H.
+  rewrite Pdec.eqb_eq in H; rewrite label_eqb_eq in H0.
+  rewrite H, H0; intros.
+  inversion H1; eauto.
++ intros. exfalso.
+  revert H. simpl.
+  elim Pid_dec. 2: discriminate.
+  case o, o0, o1, o2; try discriminate.
+  1,2: elim (XUndefined_dec (Xmerge x1 x)); intro Hx1x;
+    [rewrite Hx1x | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec (Xmerge x2 x0)); intro Hx2x0;
+    [rewrite Hx2x0 | rewrite Xmatch_elim; auto]; try discriminate.
+  2,3,6,7,11,12,13,14: elim (XUndefined_dec x); intro Hx;
+    [rewrite Hx | rewrite Xmatch_elim; auto]; try discriminate.
+  1,3,4,5,8,9: elim (XUndefined_dec x0); intro Hx0;
+    [rewrite Hx0 | rewrite Xmatch_elim; auto]; try discriminate.
+  2: elim (XUndefined_dec x); intro Hx;
+    [rewrite Hx | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec (Xmerge x1 x)); intro Hx1x;
+    [rewrite Hx1x | rewrite Xmatch_elim; auto]; try discriminate.
+  2,3,4: elim (XUndefined_dec (Xmerge x0 x)); intro Hx0x;
+    [rewrite Hx0x | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec (Xmerge x1 x0)); intro Hx1x0;
+    [rewrite Hx1x0 | rewrite Xmatch_elim; auto]; try discriminate.
+  1: elim (XUndefined_dec x1); intro Hx1;
+    [rewrite Hx1 | rewrite Xmatch_elim; auto]; try discriminate.
++ intros. exfalso.
+  elim (B.eq_dec b0 b); intro Hb.
+  2: revert H; simpl; unfold BExpr_dec; rewrite <- Bdec.eqb_neq in Hb; rewrite Hb; discriminate.
+  rewrite Hb in H; clear b0 Hb.
+  elim (XUndefined_dec (Xmerge x1 x)); intro H1.
+  2: elim (XUndefined_dec (Xmerge x2 x0)); intro H0.
+  - revert H. simpl. Beq. rewrite H1; discriminate.
+  - revert H. simpl. Beq. rewrite H0, Xmatch_elim. discriminate. auto.
+  - rewrite Xmerge_Cond_inv in H; auto. discriminate.
++ intros. exfalso.
+  revert H. simpl. elim RecVar_dec; discriminate.
+Qed.
+
 Lemma Xmerge_inv_Branching : forall B B' p Bl Br, Xmerge B B' = XBranching p Bl Br ->
   exists Bl' Bl'' Br' Br'', B = XBranching p Bl' Br' /\ B' = XBranching p Bl'' Br''
   /\ (Bl = None -> Bl' = None /\ Bl'' = None)
@@ -3350,16 +3574,6 @@ case B; case B'; intros; revert HBB';
   revert HM HM' H0.
   case (Xmerge x1 x); case (Xmerge x2 x0);
   intros; inversion H0.
-Qed.
-
-Lemma Xmerge_Cond_inv : forall b Bt Bt' Be Be',
-  Xmerge Bt Bt' <> XUndefined -> Xmerge Be Be' <> XUndefined ->
-  Xmerge (XCond b Bt Be) (XCond b Bt' Be') = XCond b (Xmerge Bt Bt') (Xmerge Be Be').
-Proof.
-intros. revert H H0.
-simpl. unfold BExpr_dec; rewrite Bdec.eqb_refl.
-case_eq (Xmerge Bt Bt'); case_eq (Xmerge Be Be'); simpl; auto.
-all: intros; try (elim H1; auto; fail); try (elim H2; auto; fail).
 Qed.
 
 Lemma Xmerge_inv_inject : forall B1 B2 B, Xmerge B1 B2 = inject B ->
@@ -3610,225 +3824,6 @@ End SPBase.
 
 (* The remaining is stuff from CC that it would be interesting to adapt.
 
-
-(** Currently not used, but might prove useful. *)
-
-Lemma R_Com_reduce_eq : forall Defs p C v v' q q' x x' s C' s' C'' s'',
-  MCC_To Defs C s (R_Com p v q x) C' s' ->
-  MCC_To Defs C s (R_Com p v' q' x') C'' s'' ->
-  v = v' /\ q = q' /\ x = x'.
-Proof.
-induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H1 in H11; inversion H11.
-  repeat split.
-  * unfold v1, v2. rewrite H23; auto.
-  * transitivity q1; auto; transitivity q0; auto.
-  * transitivity x1; auto; transitivity x0; auto.
-+ rewrite <- H1 in H13; inversion H13.
-  destroy H19; exfalso; auto.
-+ rewrite <- H9 in H3; inversion H3.
-  destroy H19; exfalso; auto.
-Qed.
-
-Lemma L_Com_reduce_eq : forall Defs p C v v' q q' s C' s' C'' s'',
-  (Build_Program Defs C,s) --[L_Com p v q]--> (Build_Program Defs C', s') ->
-  (Build_Program Defs C,s) --[L_Com p v' q']--> (Build_Program Defs C'', s'') ->
-  v = v' /\ q = q'.
-Proof.
-intros.
-inversion H; inversion H0.
-induction t; try (inversion H5; fail).
-induction t0; try (inversion H12; fail).
-simpl in H5, H12.
-inversion H5; inversion H12.
-rewrite H16 in H2; rewrite H19 in H9.
-elim (R_Com_reduce_eq _ _ _ _ _ _ _ _ _ _ _ _ _ _ H2 H9); intros.
-destroy H22.
-split.
-+ transitivity v0; auto; transitivity v1; auto.
-+ transitivity q0; auto; transitivity q1; auto.
-Qed.
-
-Lemma R_Com_reduce_neq : forall Defs p p' C v v' q q' x x' s C' s' C'' s'',
-  MCC_To Defs C s (R_Com p v q x) C' s' ->
-  MCC_To Defs C s (R_Com p' v' q' x') C'' s'' ->
-  p <> p' -> q <> q'.
-Proof.
-induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H2 in H12; inversion H12.
-  exfalso; apply H1.
-  transitivity p0; auto; transitivity p1; auto.
-+ rewrite <- H2 in H14; inversion H14.
-  destroy H20; destroy H21. rewrite <- H8; auto.
-+ rewrite <- H10 in H4; inversion H4.
-  destroy H20; destroy H21. rewrite <- H16; auto.
-Qed.
-
-Lemma L_Com_reduce_neq : forall Defs p p' C v v' q q' s C' s' C'' s'',
-  (Build_Program Defs C,s) --[L_Com p v q]--> (Build_Program Defs C', s') ->
-  (Build_Program Defs C,s) --[L_Com p' v' q']--> (Build_Program Defs C'', s'') ->
-  p <> p' -> q <> q'.
-Proof.
-intros.
-rename H1 into Hp.
-inversion H; inversion H0.
-induction t; inversion H5.
-induction t0; inversion H12.
-rewrite H21, H20, H19 in H9; rewrite H18, H17, H16 in H2.
-apply (R_Com_reduce_neq _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ H2 H9); auto.
-Qed.
-
-Lemma R_Sel_reduce_eq : forall Defs p C q q' l l' s C' s' C'' s'',
-  MCC_To Defs C s (R_Sel p q l) C' s' ->
-  MCC_To Defs C s (R_Sel p q' l') C'' s'' ->
-  q = q' /\ l = l'.
-Proof.
-induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H1 in H10; inversion H10.
-  repeat split.
-  * transitivity q1; auto; transitivity q0; auto.
-  * transitivity l1; auto; transitivity l0; auto.
-+ rewrite <- H1 in H12; inversion H12.
-  destroy H18; exfalso; auto.
-+ rewrite <- H9 in H3; inversion H3.
-  destroy H18; exfalso; auto.
-Qed.
-
-Lemma L_Sel_reduce_eq : forall Defs p C q q' l l' s C' s' C'' s'',
-  (Build_Program Defs C,s) --[L_Sel p q l]--> (Build_Program Defs C', s') ->
-  (Build_Program Defs C,s) --[L_Sel p q' l']--> (Build_Program Defs C'', s'') ->
-  q = q' /\ l = l'.
-Proof.
-intros.
-inversion H; inversion H0.
-induction t; try (inversion H5; fail).
-induction t0; try (inversion H12; fail).
-simpl in H5, H12.
-inversion H5; inversion H12.
-rewrite H16 in H2; rewrite H19 in H9.
-elim (R_Sel_reduce_eq _ _ _ _ _ _ _ _ _ _ _ _ H2 H9); split.
-+ transitivity q0; auto; transitivity q1; auto.
-+ transitivity l0; auto; transitivity l1; auto.
-Qed.
-
-Lemma R_Sel_reduce_neq : forall Defs p p' C q q' l l' s C' s' C'' s'',
-  MCC_To Defs C s (R_Sel p q l) C' s' ->
-  MCC_To Defs C s (R_Sel p' q' l') C'' s'' ->
-  p <> p' -> q <> q'.
-Proof.
-induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H2 in H11; inversion H11.
-  exfalso; apply H1.
-  transitivity p0; auto; transitivity p1; auto.
-+ rewrite <- H2 in H13; inversion H13.
-  destroy H20; destroy H19. rewrite <- H7; auto.
-+ rewrite <- H10 in H4; inversion H4.
-  destroy H20; destroy H19. rewrite <- H15; auto.
-Qed.
-
-Lemma L_Sel_reduce_neq : forall Defs p p' C q q' l l' s C' s' C'' s'',
-  (Build_Program Defs C,s) --[L_Sel p q l]--> (Build_Program Defs C', s') ->
-  (Build_Program Defs C,s) --[L_Sel p' q' l']--> (Build_Program Defs C'', s'') ->
-  p <> p' -> q <> q'.
-Proof.
-intros.
-rename H1 into Hp.
-inversion H; inversion H0.
-induction t; inversion H5.
-induction t0; inversion H12.
-rewrite H21, H20, H19 in H9; rewrite H18, H17, H16 in H2.
-apply (R_Sel_reduce_neq _ _ _ _ _ _ _ _ _ _ _ _ _ H2 H9); auto.
-Qed.
-
-End Uniqueness.
-
-(** * Deadlock-freedom by design *)
-
-Theorem progress : forall P, Main P <> End -> MCP_WF P ->
-  forall s, exists tl c', (P,s) --[tl]--> c'.
-Proof.
-induction P.
-rename Procedures0 into Ps, Main0 into C.
-induction C; intros.
-+ simpl in H. elim H; auto.
-+ rename r into X; set (ps := fst (Ps X)).
-  simpl in H.
-  case_eq (set_size_pid ps); [idtac | intros; case_eq n].
-  - intro. exfalso.
-    unfold ps in H1.
-    generalize (MCP_WF_Vars _ H0 X); intros.
-    simpl in H2.
-    unfold Vars in H2; simpl in H2.
-    rewrite (set_size_0 _ _ H1) in H2.
-    apply H2; auto.
-    red. simpl. auto.
-  - intros.
-    rewrite H2 in H1; clear H2 n.
-    case_eq ps; intros.
-    1: { rewrite H2 in H1; inversion H1. }
-    unfold ps in H1, H2; clear ps.
-    assert (In p (fst (Ps X))). rewrite H2; left; auto.
-    do 2 eexists.
-    constructor; apply (C_Call_Local' Ps p X); auto.
-  - intros.
-    rewrite H2 in H1; clear n H2.
-    case_eq ps; intros.
-    1: { rewrite H2 in H1; inversion H1. }
-    unfold ps in H1, H2; clear ps.
-    assert (set_size_pid (fst (Ps X)) > 1).
-    1: { rewrite H1; auto with arith. }
-    assert (In p (fst (Ps X))).
-    1: { rewrite H2; left; auto. }
-    do 2 eexists.
-    constructor; apply (C_Call_Start' Ps p); auto.
-+ case_eq (set_size_pid l); intros; [idtac | case_eq n].
-  - clear H IHC; exfalso.
-    generalize (MCP_WF_Main _ H0).
-    simpl; intros.
-    inversion_clear H.
-    inversion_clear H3.
-    elim H; eapply set_size_0; apply H1.
-  - intros.
-    rewrite H2 in H1; clear n H2.
-    case_eq l; intro.
-    1: { rewrite H2 in H1; inversion H1. }
-    do 2 eexists; constructor.
-    apply C_Call_Finish'.
-    1: { rewrite <- H2; auto. }
-    left; eauto.
-  - intros.
-    rewrite H2 in H1; clear n H2.
-    case_eq l; intro.
-    1: { rewrite H2 in H1; inversion H1. }
-    do 2 eexists; constructor. apply C_Call_Enter'.
-    1: { rewrite <- H2; rewrite H1; auto with arith. }
-    left; eauto.
-+ case_eq e; do 2 eexists; do 2 constructor; ESEr.
-+ case_eq (beval_on_state b s p).
-  - do 2 eexists; constructor; apply C_Then'; auto.
-  - do 2 eexists; constructor; apply C_Else'; auto.
-Qed.
-
-Lemma MCC_To_within_Xs : forall P s l P' s' Xs,
-  Program_WF Xs P -> (P,s) --[l]--> (P',s') -> within_Xs Xs (Main P').
-Proof.
-intros.
-revert H.
-inversion_clear H0.
-simpl; intros.
-generalize (Program_WF_within_Xs _ _ H0); intros.
-unfold Procs in H1; simpl in H1.
-generalize (Program_WF_Main_within_Xs _ _ H0); simpl; intros.
-clear H0.
-induction H; auto.
-+ inversion_clear H2; auto.
-+ inversion_clear H2; auto.
-+ inversion_clear H2; split; auto.
-+ inversion_clear H2. simpl; auto.
-+ simpl; auto.
-+ inversion_clear H2; auto.
-Qed.
-
 Lemma MCC_To_Program_WF : forall P s l P' s' Xs,
   Program_WF Xs P -> (P,s) --[l]--> (P',s') -> Program_WF Xs P'.
 Proof.
@@ -3896,91 +3891,6 @@ induction H4.
   elim (lt_irrefl _ H1).
 + elim HC; intros.
   inversion_clear H4; red; auto.
-Qed.
-
-Lemma MCC_To_MCP_WF : forall P s l P' s',
-  MCP_WF P -> (P,s) --[l]--> (P',s') -> MCP_WF P'.
-Proof.
-intros.
-inversion H0.
-inversion_clear H.
-rename x into Xs; exists Xs; inversion_clear H7.
-simpl; split.
-rewrite H5.
-apply (MCC_To_Program_WF _ _ _ _ _ _ H H0).
-rewrite <- H1 in H8.
-apply well_ann_Main_change with C; auto.
-Qed.
-
-Section BigStepSemantics.
-
-Lemma RT_Call_reduce : forall Defs X ps C s, (ps <> List.nil) ->
-  exists tl, (Build_Program Defs (RT_Call X ps C),s) --[tl]-->* (Build_Program Defs C,s).
-Proof.
-intros.
-set (n := set_size_pid ps).
-assert (n = set_size_pid ps); auto.
-clearbody n; revert ps H H0.
-induction n; intros.
-+ symmetry in H0; apply set_size_0 in H0. exfalso; auto.
-+ case_eq n; intros.
-  - rewrite H1 in H0; clear IHn H1 n.
-    case_eq ps; intros. rewrite H1 in H; elim H; auto.
-    exists (L_Tau p::List.nil)%list.
-    econstructor. 2: constructor.
-    replace (L_Tau p) with (forget (R_Call X p)); auto.
-    constructor. apply C_Call_Finish'; [rewrite <- H1 | simpl]; auto.
-  - case_eq ps; intros. rewrite H2 in H; elim H; auto.
-    rewrite H1 in H0, IHn; clear n H1; rename n0 into n.
-    assert (S n = set_size_pid (set_remove_pid p ps)).
-    1: {
-      unfold set_size_pid in H0.
-      rewrite (set_size_remove' P.eq_dec ps p) in H0; auto.
-      rewrite H2; simpl; auto.
-    }
-    elim (IHn (set_remove_pid p ps)); intros; auto.
-    2: { intro. rewrite H3 in H1. simpl in H1; inversion H1. }
-    rename x into tls.
-    exists (L_Tau p :: tls)%list.
-    eapply MCT_Step with (Build_Program Defs (RT_Call X (set_remove_pid p ps) C),s); auto.
-    replace (L_Tau p) with (forget (R_Call X p)); auto.
-    constructor. rewrite H2; apply C_Call_Enter'.
-    rewrite <- H2, <- H0; auto with arith.
-    simpl; auto.
-Qed.
-
-Lemma Call_reduce : forall (Defs:DefSet) X s, (fst (Defs X) <> List.nil) ->
-  exists tl, (Build_Program Defs (Call X),s) --[tl]-->* (Build_Program Defs (snd (Defs X)),s).
-Proof.
-intros.
-case_eq (set_size_pid (fst (Defs X))); intros; [idtac | case_eq n]; intros.
-+ exfalso; apply set_size_0 in H0; auto.
-+ rewrite H1 in H0; clear n H1.
-  case_eq (fst (Defs X)); intros. exfalso; auto.
-  exists (L_Tau p::List.nil)%list.
-  econstructor. 2: constructor.
-  replace (L_Tau p) with (forget (R_Call X p)); auto.
-  change (fst (A:=set P.t) (Defs X) = p::l)%list in H1.
-  constructor. apply C_Call_Local'; auto. rewrite H1; simpl; auto.
-+ rewrite H1 in H0; clear n H1. rename n0 into n.
-  case_eq (fst (Defs X)); intros. exfalso; auto.
-  assert (set_remove_pid p (fst (Defs X)) <> List.nil).
-  1: {
-    intro. unfold set_size_pid, set_remove_pid in H0, H2.
-    rewrite (set_size_remove' P.eq_dec (fst (Defs X)) p) in H0.
-    2: rewrite H1; simpl; auto.
-    rewrite H2 in H0. inversion H0.
-  }
-  elim (RT_Call_reduce Defs X (set_remove_pid p (fst (Defs X))) (snd (Defs X)) s); auto.
-  intros.
-  exists (L_Tau p :: x)%list.
-  eapply MCT_Step; eauto.
-  replace (L_Tau p) with (forget (R_Call X p)); auto.
-  constructor. apply C_Call_Start'.
-  - change (set_size_pid (fst (A:=set P.t) (Defs X)) = S (S n)) in H0.
-    rewrite H0; auto with arith.
-  - change (fst (A:=set P.t) (Defs X) = p::l)%list in H1.
-    rewrite H1; simpl; auto.
 Qed.
 
 Lemma MCT_Trans : forall c tl c' tl' c'',
