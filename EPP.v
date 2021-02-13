@@ -201,7 +201,7 @@ Qed.
 
 (** Proof irrelevance for EPP. *)
 Lemma epp_C_wd : forall Defs C ps H H',
-  Network_eq (epp_C Defs ps C H) (epp_C Defs ps C H').
+  (epp_C Defs ps C H) == (epp_C Defs ps C H').
 Proof.
 intros; intro. unfold epp_C.
 elim In_dec; auto.
@@ -215,6 +215,52 @@ Qed.
 Lemma epp_C_out : forall Defs C ps H p, ~In p ps ->
   epp_C Defs ps C H p = End.
 Proof. intros; unfold epp_C. elim In_dec; tauto. Qed.
+
+Lemma epp_C_out' : forall Defs ps C HC p,
+  ~In p (CCC_pn C (fun X => fst (Defs X))) -> epp_C Defs ps C HC p = End.
+Proof.
+intros.
+unfold epp_C; simpl.
+elim In_dec; auto.
+elim collapse_char'; intros.
+induction a; simpl.
+apply inject_inj. rewrite <- p0.
+clear a0 p0 x.
+2: { exfalso. apply projectable_C_use' with (p:=p) in HC; auto. }
+clear HC.
+induction C; intros; auto.
+induction e. 2: induction l.
+all: simpl.
+1,2,3,4: case_eq (Pid_dec p0 p); intros.
+2,4,6: case_eq (Pid_dec p1 p); auto.
+12: elim (In_dec P.eq_dec p (fst (Defs r))); auto.
+13: elim (In_dec P.eq_dec p l).
+all: intros.
++ elim H. unfold Pid_dec in H0. rewrite Pdec.eqb_eq in H0. rewrite H0.
+  simpl; sup; simpl; auto.
++ elim H. unfold Pid_dec in H1. rewrite Pdec.eqb_eq in H1. rewrite H1.
+  simpl; sup; simpl; auto.
++ apply IHC; auto. intro; apply H. simpl; sup.
++ elim H. unfold Pid_dec in H1. rewrite Pdec.eqb_eq in H1. rewrite H1.
+  simpl; sup; simpl; auto.
++ apply IHC; auto. intro; apply H. simpl; sup.
++ elim H. unfold Pid_dec in H1. rewrite Pdec.eqb_eq in H1. rewrite H1.
+  simpl; sup; simpl; auto.
++ apply IHC; auto. intro; apply H. simpl; sup.
++ elim H. unfold Pid_dec in H0. rewrite Pdec.eqb_eq in H0. rewrite H0.
+  simpl; sup; simpl; auto.
++ elim H. unfold Pid_dec in H0. rewrite Pdec.eqb_eq in H0. rewrite H0.
+  simpl; sup; simpl; auto.
++ elim H. unfold Pid_dec in H0. rewrite Pdec.eqb_eq in H0. rewrite H0.
+  simpl; sup; sup; simpl; auto.
++ destroy Hsp. rewrite IHC1, IHC2; auto.
+  intro; apply H. simpl; sup; sup.
+  intro; apply H. simpl; sup; sup.
++ elim H; auto.
++ elim H. simpl; sup.
++ destroy Hsp. apply IHC; auto.
+  intro; apply H. simpl; sup.
+Qed.
 
 Lemma epp_D_wd : forall Xs Defs H H' X, epp_D Xs Defs H X = epp_D Xs Defs H' X.
 Proof.
@@ -232,8 +278,8 @@ apply in_map_iff. exists p; auto.
 Qed.
 
 Lemma epp_C_char : forall Xs ps Defs C HP HC,
-  Network_eq (Net (epp Xs ps {| Procedures := Defs; Main := C |} HP))
-  (epp_C Defs ps C HC).
+  (Net (epp Xs ps {| Procedures := Defs; Main := C |} HP))
+    == (epp_C Defs ps C HC).
 Proof.
 intros.
 unfold epp.
@@ -255,6 +301,15 @@ elim collapse_char'; simpl.
   apply (p0 (p, collapse (bproj Defs C p))); auto.
   apply in_map_iff. exists p; auto.
 + tauto.
+Qed.
+
+Lemma epp_C_bproj : forall Defs ps C HC p, In p ps ->
+  bproj Defs C p = inject (epp_C Defs ps C HC p).
+Proof.
+intros. unfold epp_C; simpl.
+elim In_dec; simpl. 2: tauto.
+elim collapse_char'. induction a; auto.
+intro; exfalso. apply projectable_C_use' with (p:=p) in HC; auto.
 Qed.
 
 Lemma epp_D_char : forall Xs ps Defs C HP HD X p,
@@ -287,6 +342,21 @@ elim Hb; simpl; intros; auto.
 + apply bproj_not_In.
   intro; apply Hp, H0. auto.
 + tauto.
+Qed.
+
+Lemma epp_D_char'' : forall Xs ps Defs C HP X p HX, In X Xs ->
+   Procs (epp Xs ps {| Procedures := Defs; Main := C |} HP) (X, p) =
+   epp_C Defs (fst (Defs X)) (snd (Defs X)) HX p.
+Proof.
+intros Xs ps Defs C HP X p HX HX'.
+inversion HP. clear H. destroy H0. clear H1 H2 H0.
+rewrite epp_D_char with (HD:=H).
+simpl. elim In_dec; intro.
+2: simpl; rewrite epp_C_out; auto.
+all: elim In_dec; simpl; auto. 2: intro H'; elim H'; auto.
+elim collapse_char'. induction a0; simpl; intros.
+apply inject_inj. rewrite <- p0. apply epp_C_bproj; auto.
+intro; exfalso. apply projectable_C_use' with (p:=p) in HX; auto.
 Qed.
 
 Lemma epp_out : forall Xs ps Defs C HP p, ~In p ps ->
@@ -1466,9 +1536,22 @@ Qed.
 Definition Xmore_branches XB XB' := exists B B',
   XB = inject B /\ XB' = inject B' /\ more_branches B B'.
 
+Lemma more_branches_X : forall B B',
+ more_branches B B' -> Xmore_branches (inject B) (inject B').
+Proof. red. eauto. Qed.
+
+Lemma X_more_branches : forall B B',
+ Xmore_branches (inject B) (inject B') -> more_branches B B'.
+Proof.
+intros.
+destroy H.
+apply inject_inj in H0; apply inject_inj in H1.
+rewrite H0, H1; auto.
+Qed.
+
 Lemma Xmore_branches_refl : forall X B, X = inject B ->
   Xmore_branches X X.
-Proof. intros. exists B, B. repeat split; auto. apply more_branches_refl. Qed.
+Proof. intros. rewrite H. apply more_branches_X, more_branches_refl. Qed.
 
 Lemma Xmore_branches_trans : forall X X' X'',
   Xmore_branches X X' -> Xmore_branches X' X'' -> Xmore_branches X X''.
@@ -1512,6 +1595,14 @@ Definition more_branches_N (N N':Network) :=
 End MoreBranches.
 
 Notation "N >> N'" := (more_branches_N N N') (at level 50).
+
+Lemma Network_eq_more_branches : forall (N N':Network),
+  (N == N') -> N >> N'.
+Proof. intros; intro. apply more_branches_refl'; auto. Qed.
+
+Lemma more_branches_N_trans : forall N N' N'',
+  N >> N' -> N' >> N'' -> N >> N''.
+Proof. intros; intro. eapply more_branches_trans; eauto. Qed.
 
 Section Projectability.
 
@@ -1821,9 +1912,9 @@ Qed.
 
 End Projectability.
 
-Section Completeness.
+Section EPP_Theorem.
 
-(** ** Completeness of EPP
+(** ** The EPP Theorem
   Lemmas about reduction and projection. *)
 
 Lemma bproj_reduce_Com_p : forall Defs C s C' s' p q v x,
@@ -2494,8 +2585,8 @@ destroy H0; intros. repeat split; auto.
 + apply H1.
 Qed.
 
-(** Strong projectability of well-formed programs is preserved by reductions
-  - this is needed for chaining applications of the EPP theorem. *)
+(** Strong projectability of well-formed programs is preserved by reductions:
+  this is needed for chaining applications of the EPP theorem. *)
 Lemma strongly_projectable_reduces_Com : forall Defs C s C' s' ps p v q x r,
   (forall p, In p ps -> strongly_projectable Defs C p) ->
   (forall p, In p (CCC_pn C (fun X => fst (Defs X))) -> In p ps) ->
@@ -2854,7 +2945,8 @@ simpl. eapply strongly_projectable_reduces; eauto.
 + apply Program_WF_Main_within_Xs; auto.
 Qed.
 
-(** The completeness part of the EPP theorem. *)
+(** ** Completeness
+  The completeness part of the EPP theorem. *)
 Lemma EPP_Complete : forall P Xs ps,
   Program_WF Xs P -> well_ann P -> forall (HP:projectable Xs ps P),
   (forall p, In p ps -> strongly_projectable (Procedures P) (Main P) p) ->
@@ -3197,22 +3289,20 @@ Qed.
 (* Future wish: same with ToStar (requires: N1 >> N2 and N2 --> N2' implies
  exists N1' st N1 --> N1' >> N2'. *)
 
-End Completeness.
-
-Section Soundness.
-
 (** ** Soundness of EPP
-  Lemmas about reduction and projection. *)
+  Soundness is proven by case analysis on the label of the reduction, and
+  then by induction on the choreography. We split the proofs for each label
+  in separate results, as we get some stronger statements. *)
 
 Definition SP_eq (P P':Program) : Prop :=
-  forall X, Procs P X = Procs P' X /\ Network_eq (Net P) (Net P').
+  forall X, Procs P X = Procs P' X /\ (Net P == Net P').
 
 Lemma bproj_Com_reduce : forall Defs Defs' ps C HC s N' s' p x q v,
   (forall p, In p ps -> strongly_projectable Defs C p) ->
   (forall p, In p (CCC_pn C (fun X => fst (Defs X))) -> In p ps) ->
   SP_To Defs' (epp_C Defs ps C HC) s (R_Com p v q x) N' s' ->
   exists C', CCC_To Defs C s (CCBase.TL.R_Com p v q x) C' s'
-  /\ forall HC', Network_eq N' (epp_C Defs ps C' HC').
+  /\ forall HC', N' == (epp_C Defs ps C' HC').
 Proof.
 intros.
 rename H into Hsp, H0 into Hin, H1 into H.
@@ -3554,7 +3644,7 @@ Lemma bproj_Sel_reduce_l : forall Defs Defs' ps C HC s N' s' p q,
   (forall p, In p (CCC_pn C (fun X => fst (Defs X))) -> In p ps) ->
   SP_To Defs' (epp_C Defs ps C HC) s (R_Sel p q left) N' s' ->
   exists C', CCC_To Defs C s (CCBase.TL.R_Sel p q left) C' s'
-  /\ forall HC', Network_eq N' (epp_C Defs ps C' HC').
+  /\ forall HC', N' == (epp_C Defs ps C' HC').
 Proof.
 intros.
 rename H into Hsp, H0 into Hin, H1 into H.
@@ -3887,7 +3977,7 @@ Lemma bproj_Sel_reduce_r : forall Defs Defs' ps C HC s N' s' p q,
   (forall p, In p (CCC_pn C (fun X => fst (Defs X))) -> In p ps) ->
   SP_To Defs' (epp_C Defs ps C HC) s (R_Sel p q right) N' s' ->
   exists C', CCC_To Defs C s (CCBase.TL.R_Sel p q right) C' s'
-  /\ forall HC', Network_eq N' (epp_C Defs ps C' HC').
+  /\ forall HC', N' == (epp_C Defs ps C' HC').
 Proof.
 intros.
 rename H into Hsp, H0 into Hin, H1 into H.
@@ -4215,73 +4305,12 @@ induction C; intros. induction e.
   rewrite epp_C_End in H2. inversion H2.
 Qed.
 
-Lemma more_branches_X : forall B B',
- more_branches B B' -> Xmore_branches (inject B) (inject B').
-Proof. red. eauto. Qed.
-
-Lemma X_more_branches : forall B B',
- Xmore_branches (inject B) (inject B') -> more_branches B B'.
-Proof.
-intros.
-destroy H.
-apply inject_inj in H0; apply inject_inj in H1.
-rewrite H0, H1; auto.
-Qed.
-
-Lemma epp_C_out' : forall Defs ps C HC p,
-  ~In p (CCC_pn C (fun X => fst (Defs X))) -> epp_C Defs ps C HC p = End.
-Proof.
-intros.
-unfold epp_C; simpl.
-elim In_dec; auto.
-elim collapse_char'; intros.
-induction a; simpl.
-apply inject_inj. rewrite <- p0.
-clear a0 p0 x.
-2: { exfalso. apply projectable_C_use' with (p:=p) in HC; auto. }
-clear HC.
-induction C; intros; auto.
-induction e. 2: induction l.
-all: simpl.
-1,2,3,4: case_eq (Pid_dec p0 p); intros.
-2,4,6: case_eq (Pid_dec p1 p); auto.
-12: elim (In_dec P.eq_dec p (fst (Defs r))); auto.
-13: elim (In_dec P.eq_dec p l).
-all: intros.
-+ elim H. unfold Pid_dec in H0. rewrite Pdec.eqb_eq in H0. rewrite H0.
-  simpl; sup; simpl; auto.
-+ elim H. unfold Pid_dec in H1. rewrite Pdec.eqb_eq in H1. rewrite H1.
-  simpl; sup; simpl; auto.
-+ apply IHC; auto. intro; apply H. simpl; sup.
-+ elim H. unfold Pid_dec in H1. rewrite Pdec.eqb_eq in H1. rewrite H1.
-  simpl; sup; simpl; auto.
-+ apply IHC; auto. intro; apply H. simpl; sup.
-+ elim H. unfold Pid_dec in H1. rewrite Pdec.eqb_eq in H1. rewrite H1.
-  simpl; sup; simpl; auto.
-+ apply IHC; auto. intro; apply H. simpl; sup.
-+ elim H. unfold Pid_dec in H0. rewrite Pdec.eqb_eq in H0. rewrite H0.
-  simpl; sup; simpl; auto.
-+ elim H. unfold Pid_dec in H0. rewrite Pdec.eqb_eq in H0. rewrite H0.
-  simpl; sup; simpl; auto.
-+ elim H. unfold Pid_dec in H0. rewrite Pdec.eqb_eq in H0. rewrite H0.
-  simpl; sup; sup; simpl; auto.
-+ destroy Hsp. rewrite IHC1, IHC2; auto.
-  intro; apply H. simpl; sup; sup.
-  intro; apply H. simpl; sup; sup.
-+ elim H; auto.
-+ elim H. simpl; sup.
-+ destroy Hsp. apply IHC; auto.
-  intro; apply H. simpl; sup.
-Qed.
-
-Lemma epp_C_bproj : forall Defs ps C HC p, In p ps ->
-  bproj Defs C p = inject (epp_C Defs ps C HC p).
-Proof.
-intros. unfold epp_C; simpl.
-elim In_dec; simpl. 2: tauto.
-elim collapse_char'. induction a; auto.
-intro; exfalso. apply projectable_C_use' with (p:=p) in HC; auto.
-Qed.
+Lemma bproj_Cond_reduce : forall Defs Defs' ps C HC s N' s' p,
+  (forall p, In p ps -> strongly_projectable Defs C p) ->
+  (forall p, In p (CCC_pn C (fun X => fst (Defs X))) -> In p ps) ->
+  SP_To Defs' (epp_C Defs ps C HC) s (R_Cond p) N' s' ->
+  exists C', CCC_To Defs C s (CCBase.TL.R_Cond p) C' s'
+  /\ forall HC', N' >> (epp_C Defs ps C' HC').
 
 Lemma bproj_Call_reduce : forall Defs Defs' ps C HC s N' s' p X Xs,
   Choreography_WF C -> within_Xs Xs C -> In X Xs ->
@@ -4687,14 +4716,6 @@ induction C; intros. induction e.
   rewrite epp_C_End in H2. inversion H2.
 Qed.
 
-Lemma Network_eq_more_branches : forall N N',
-  Network_eq N N' -> N >> N'.
-Proof. intros; intro. apply more_branches_refl'; auto. Qed.
-
-Lemma more_branches_N_trans : forall N N' N'',
-  N >> N' -> N' >> N'' -> N >> N''.
-Proof. intros; intro. eapply more_branches_trans; eauto. Qed.
-
 Lemma bproj_Call_reduce_name : forall Defs Defs' ps C HC s N' s' p X,
   SP_To Defs' (epp_C Defs ps C HC) s (R_Call X p) N' s' ->
   exists Y, X = (Y,p) /\ X_Free Y C.
@@ -4723,21 +4744,6 @@ all: unfold X_Free; simpl; unfold set_union_rv.
 - elim IHC; auto; intros. destroy H.
   exists x. split; auto. sup; simpl; auto.
 - clear H2. exfalso. apply projectable_C_use' with (p:=p) in HC; auto.
-Qed.
-
-Lemma epp_D_char'' : forall Xs ps Defs C HP X p HX, In X Xs ->
-   Procs (epp Xs ps {| Procedures := Defs; Main := C |} HP) (X, p) =
-   epp_C Defs (fst (Defs X)) (snd (Defs X)) HX p.
-Proof.
-intros Xs ps Defs C HP X p HX HX'.
-inversion HP. clear H. destroy H0. clear H1 H2 H0.
-rewrite epp_D_char with (HD:=H).
-simpl. elim In_dec; intro.
-2: simpl; rewrite epp_C_out; auto.
-all: elim In_dec; simpl; auto. 2: intro H'; elim H'; auto.
-elim collapse_char'. induction a0; simpl; intros.
-apply inject_inj. rewrite <- p0. apply epp_C_bproj; auto.
-intro; exfalso. apply projectable_C_use' with (p:=p) in HX; auto.
 Qed.
 
 Lemma EPP_Sound : forall P Xs ps,

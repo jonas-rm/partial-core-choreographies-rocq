@@ -1,6 +1,6 @@
-coqc Basic.v
-coqc Common.v
-coqc CC.v
+echo coqc Basic.v
+echo coqc Common.v
+echo coqc CC.v
 echo coqc Kleene.v
 echo coqc Implementation.v
 coqc SP.v

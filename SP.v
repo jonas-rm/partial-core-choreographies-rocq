@@ -297,6 +297,8 @@ Notation "N | N'" := (Par N N') (at level 202, right associativity) : SP_scope.
 Notation "p [ B ]" := (Process p B) (at level 201, no associativity) : SP_scope.
 Notation "N ~~ p" := (Network_rm N p)  (at level 200, no associativity) : SP_scope.
 
+Notation "N == N'" := (Network_eq N N') (at level 100) : SP_scope.
+
 Ltac BInduction B m1 m2 := induction B using Behaviour_ind';
   try case_eq m1; try case_eq m2.
 
@@ -444,8 +446,7 @@ unfold Network_disjoint; intros.
 elim (H p); auto.
 Qed.
 
-Lemma Par_comm : forall N N', Network_disjoint N N' ->
-  Network_eq (N | N') (N' | N).
+Lemma Par_comm : forall N N', Network_disjoint N N' -> (N | N') == (N' | N).
 Proof.
 red; intros.
 unfold Par.
@@ -456,7 +457,7 @@ do 2 elim Behaviour_eq_End_dec; intros; auto.
 Qed.
 
 Lemma Par_eq : forall N1 N2 N1' N2',
-  Network_eq N1 N1' -> Network_eq N2 N2' -> Network_eq (N1 | N2) (N1' | N2').
+  (N1 == N1') -> (N2 == N2') -> (N1 | N2) == (N1' | N2').
 Proof.
 intros; intro.
 unfold Par.
@@ -480,7 +481,7 @@ unfold Pid_dec; rewrite Pdec.eqb_sym, H; auto.
 Qed.
 
 Lemma Network_rm_add :
-  forall N p, Network_eq N (Network_rm N p | p [N p]).
+  forall N p, N == (Network_rm N p | p [N p]).
 Proof.
 intros.
 red. unfold Network_rm, Process, Par. intro.
@@ -526,14 +527,14 @@ rewrite Par_proj1; repeat rewrite Network_rm_out; auto.
 Qed.
 
 Lemma Network_rm_eq : forall N N', Network_eq N N' ->
-  forall p, Network_eq (Network_rm N p) (Network_rm N' p).
+  forall p, (Network_rm N p) == (Network_rm N' p).
 Proof.
 red; intros. unfold Network_rm.
 case_eq (Pid_dec p0 p); auto.
 Qed.
 
 Lemma Network_rm_res_ps :
-  forall N ps, Network_eq N (Network_rm_ps N ps | Network_res_ps N ps).
+  forall N ps, N == (Network_rm_ps N ps | Network_res_ps N ps).
 Proof.
 intros.
 red. unfold Network_rm_ps, Network_res_ps, Par. intro.
@@ -545,7 +546,7 @@ Qed.
 
 (* This construction makes the following lemma easier to prove. *)
 Lemma Network_eq_within_ps_dec : forall ps N N', within_ps ps N -> within_ps ps N' ->
-  {Network_eq N N'}+{~Network_eq N N'}.
+  { N == N' }+{~ (N == N') }.
 Proof.
 induction ps; intros.
 + left. intro. rewrite H, H0; auto.
@@ -860,8 +861,7 @@ Qed.
 (** ...and by network equivalence. *)
 
 Lemma SP_To_Network_eq : forall N1 N1' N2 SPDefs s s' t,
-    Network_eq N1 N2 ->
-    SP_To SPDefs N1 s t N1' s' -> SP_To SPDefs N2 s t N1' s'.
+    (N1 == N2) -> SP_To SPDefs N1 s t N1' s' -> SP_To SPDefs N2 s t N1' s'.
 Proof.
 intros.
 inversion H0.
@@ -968,8 +968,7 @@ Qed.
 
 (** Determinism of reductions given the label. *)
 Lemma SP_To_deterministic_1 : forall N N1 N2 tl s s1 s2,
-  SP_To Defs N s tl N1 s1 -> SP_To Defs N s tl N2 s2 ->
-  Network_eq N1 N2.
+  SP_To Defs N s tl N1 s1 -> SP_To Defs N s tl N2 s2 -> N1 == N2.
 Proof.
 induction tl; intros; inversion H; inversion H0.
 - rewrite H19 in H7; rewrite H22 in H10.
@@ -1011,7 +1010,7 @@ Qed.
 
 Lemma SP_To_deterministic : forall N N1 N2 tl1 tl2 s s1 s2,
   SP_To Defs N s tl1 N1 s1 -> SP_To Defs N s tl2 N2 s2 ->
-  tl1 = tl2 -> Network_eq N1 N2 /\ eq_state_ext s1 s2.
+  tl1 = tl2 -> (N1 == N2) /\ eq_state_ext s1 s2.
 Proof.
 intros.
 rewrite H1 in H; split.
@@ -1161,7 +1160,7 @@ Qed.
 Lemma Network_eq_cross'' : forall N N1 N2 p q Bp Bq,
   p <> q -> Network_eq N1 (Network_rm N p| p [Bp]) ->
   Network_eq N2 (Network_rm N q | q [Bq]) ->
-  Network_eq (Network_rm N2 p | p [Bp]) (Network_rm N1 q | q [Bq]).
+  (Network_rm N2 p | p [Bp]) == (Network_rm N1 q | q [Bq]).
 Proof.
 intros; intro x.
 case (P.eq_dec x p); intro Hxp. rewrite Hxp.
@@ -1180,8 +1179,8 @@ Lemma Network_eq_cross' : forall N N1 N2 p q r Bp Bq Br,
   p <> q -> p <> r -> q <> r ->
   Network_eq N1 (Network_rm (Network_rm N p) q | p [Bp] | q [Bq]) ->
   Network_eq N2 (Network_rm N r | r [Br]) ->
-  Network_eq (Network_rm (Network_rm N2 p) q | p [Bp] | q [Bq])
-             (Network_rm N1 r | r [Br]).
+  (Network_rm (Network_rm N2 p) q | p [Bp] | q [Bq])
+             == (Network_rm N1 r | r [Br]).
 Proof.
 intros; intro x.
 case (P.eq_dec x p); intro Hxp. rewrite Hxp.
@@ -1202,8 +1201,8 @@ Lemma Network_eq_cross : forall N N1 N2 p q r s Bp Bq Br Bs,
   p <> q -> p <> r -> p <> s -> q <> r -> q <> s -> r <> s ->
   Network_eq N1 (Network_rm (Network_rm N p) q | p [Bp] | q [Bq]) ->
   Network_eq N2 (Network_rm (Network_rm N r) s | r [Br] | s [Bs]) ->
-  Network_eq (Network_rm (Network_rm N2 p) q | p [Bp] | q [Bq])
-             (Network_rm (Network_rm N1 r) s | r [Br] | s [Bs]).
+  (Network_rm (Network_rm N2 p) q | p [Bp] | q [Bq])
+             == (Network_rm (Network_rm N1 r) s | r [Br] | s [Bs]).
 Proof.
 intros; intro x.
 case (P.eq_dec x p); intro Hxp. rewrite Hxp.
