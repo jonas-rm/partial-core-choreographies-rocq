@@ -57,10 +57,6 @@ simpl. elim BExpr_dec; auto.
 case (Xmerge Bt Bt'); try rewrite H; auto.
 Qed.
 
-Lemma Xmerge_cross : forall B1 B2 B1' B2',
-  Xmerge (Xmerge B1 B2) (Xmerge B1' B2') = Xmerge (Xmerge B1 B1') (Xmerge B2 B2').
-Proof.
-intros.
 
 
 

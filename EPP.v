@@ -1604,6 +1604,154 @@ Lemma more_branches_N_trans : forall N N' N'',
   N >> N' -> N' >> N'' -> N >> N''.
 Proof. intros; intro. eapply more_branches_trans; eauto. Qed.
 
+Lemma more_branches_N_reduces : forall Defs N1 s N2 s' Defs' N1' tl,
+  SP_To Defs N1 s tl N2 s' -> N1' >> N1 -> (forall X, Defs X = Defs' X) ->
+  exists N2', SP_To Defs' N1' s tl N2' s' /\ N2' >> N2.
+Proof.
+intros. rename H1 into HX. induction H.
+- generalize (H0 p) (H0 q). rewrite H, H1; intros.
+  inversion H4. inversion H5.
+  rewrite H12, H14 in H11; clear B'1 H15 x0 H14 p1 H12.
+  rewrite H7, H9 in H6; clear p0 H7 e0 H9 B'0 H10. clear H4 H5.
+  rename B0 into Bp, B1 into Bq.
+  assert (p <> q). intro. rewrite H4, H1 in H; inversion H.
+  exists (Network_rm (Network_rm N1' p) q | p[Bp] | q[Bq]); split.
+  apply S_Com with Bp Bq; auto. reflexivity.
+  intro r. rewrite H2.
+  elim (P.eq_dec r p); intro Hp. 2: elim (P.eq_dec r q); intro Hq.
+  rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
+  rewrite Hq, Network_rm_add_2_q, Network_rm_add_2_q; auto.
+  rewrite Network_rm_add_2_out, Network_rm_add_2_out; auto.
+- generalize (H0 p) (H0 q). rewrite H, H1; intros.
+  assert (p <> q) as Hpq. intro. rewrite H6, H1 in H; inversion H.
+  inversion H4.
+  rewrite H7, H9 in H6; clear p0 H7 l H9 B' H10 H4.
+  inversion H5.
+  + rewrite H7 in H4. rewrite <- H11 in H1. clear p0 H7 Bl' H10 Br H11 H5.
+    rename Bl0 into Bl', B0 into Bp.
+    exists (Network_rm (Network_rm N1' p) q | p[Bp] | q[Bl']); split.
+    apply S_LSel with Bp Bl' mBr; auto. reflexivity.
+    intro r. rewrite H2.
+    elim (P.eq_dec r p); intro Hp. 2: elim (P.eq_dec r q); intro Hq.
+    rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
+    rewrite Hq, Network_rm_add_2_q, Network_rm_add_2_q; auto.
+    rewrite Network_rm_add_2_out, Network_rm_add_2_out; auto.
+  + rewrite H7 in H4. rewrite <- H11 in H1. clear p0 H7 Bl' H9 Br H11 H5.
+    rename Bl0 into Bl', B0 into Bp.
+    exists (Network_rm (Network_rm N1' p) q | p[Bp] | q[Bl']); split.
+    apply S_LSel with Bp Bl' (Some Br0); auto. reflexivity.
+    intro r. rewrite H2.
+    elim (P.eq_dec r p); intro Hp. 2: elim (P.eq_dec r q); intro Hq.
+    rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
+    rewrite Hq, Network_rm_add_2_q, Network_rm_add_2_q; auto.
+    rewrite Network_rm_add_2_out, Network_rm_add_2_out; auto.
+- generalize (H0 p) (H0 q). rewrite H, H1; intros.
+  assert (p <> q) as Hpq. intro. rewrite H6, H1 in H; inversion H.
+  inversion H4.
+  rewrite H7, H9 in H6; clear p0 H7 l H9 B' H10 H4.
+  inversion H5.
+  + rewrite H7 in H4. rewrite <- H10 in H1. clear p0 H7 Br' H10 Bl H11 H5.
+    rename Br0 into Br', B0 into Bp.
+    exists (Network_rm (Network_rm N1' p) q | p[Bp] | q[Br']); split.
+    apply S_RSel with Bp mBl Br'; auto. reflexivity.
+    intro r. rewrite H2.
+    elim (P.eq_dec r p); intro Hp. 2: elim (P.eq_dec r q); intro Hq.
+    rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
+    rewrite Hq, Network_rm_add_2_q, Network_rm_add_2_q; auto.
+    rewrite Network_rm_add_2_out, Network_rm_add_2_out; auto.
+  + rewrite H7 in H4. rewrite <- H9 in H1. clear p0 H7 Br' H9 Bl H11 H5.
+    rename Br0 into Br', B0 into Bp.
+    exists (Network_rm (Network_rm N1' p) q | p[Bp] | q[Br']); split.
+    apply S_RSel with Bp (Some Bl0) Br'; auto. reflexivity.
+    intro r. rewrite H2.
+    elim (P.eq_dec r p); intro Hp. 2: elim (P.eq_dec r q); intro Hq.
+    rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
+    rewrite Hq, Network_rm_add_2_q, Network_rm_add_2_q; auto.
+    rewrite Network_rm_add_2_out, Network_rm_add_2_out; auto.
+- generalize (H0 p). rewrite H; intros.
+  inversion H4.
+  rewrite H6 in H5; clear B2' B1' b0 H6 H7 H9 H4.
+  rename B0 into B1', B3 into B2'.
+  exists (Network_rm N1' p | p[B1']); split.
+  apply S_Then with b B1' B2'; auto. reflexivity.
+  intro r. rewrite H2.
+  elim (P.eq_dec r p); intro Hp.
+  rewrite Hp, Par_proj2, Par_proj2; auto.
+  unfold Process, Pid_dec. Peq; auto.
+  1,2: apply Network_rm_In.
+  rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
+  all: unfold Process, Pid_dec; Pneq Hp; auto.
+- generalize (H0 p). rewrite H; intros.
+  inversion H4.
+  rewrite H6 in H5; clear B2' B1' b0 H6 H7 H9 H4.
+  rename B0 into B1', B3 into B2'.
+  exists (Network_rm N1' p | p[B2']); split.
+  apply S_Else with b B1' B2'; auto. reflexivity.
+  intro r. rewrite H2.
+  elim (P.eq_dec r p); intro Hp.
+  rewrite Hp, Par_proj2, Par_proj2; auto.
+  unfold Process, Pid_dec. Peq; auto.
+  1,2: apply Network_rm_In.
+  rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
+  all: unfold Process, Pid_dec; Pneq Hp; auto.
+- generalize (H0 p). rewrite H; intros.
+  inversion H3.
+  rewrite H6 in H5; clear X0 H6 H3.
+  exists (Network_rm N1' p | p[Defs X]); split.
+  apply S_Call; auto. rewrite HX. reflexivity.
+  intro r. rewrite H1.
+  elim (P.eq_dec r p); intro Hp.
+  rewrite Hp, Par_proj2, Par_proj2; auto.
+  unfold Process, Pid_dec. Peq. apply more_branches_refl.
+  1,2: apply Network_rm_In.
+  rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
+  all: unfold Process, Pid_dec; Pneq Hp; auto.
+Qed.
+
+Lemma SP_eta : forall P, P = Build_Program (Procs P) (Net P).
+Proof. induction P; auto. Qed.
+
+Lemma more_branches_N_reduces' : forall P1 s P2 s' P1' tl,
+  Net P1' >> Net P1 -> (forall X, Procs P1 X = Procs P1' X) ->
+  (P1,s) --[tl]--> (P2,s') ->
+  exists P2', (P1',s) --[tl]--> (P2',s') /\ Net P2' >> Net P2
+    /\ forall X, Procs P2 X = Procs P2' X.
+Proof.
+intros.
+inversion H1.
+apply more_branches_N_reduces with (Defs':= Procs P1') (N1':=Net P1') in H5; auto.
+2: replace N with (Net P1); auto; rewrite <- H2; auto.
+destroy H5. exists (Build_Program (Procs P1') x).
+repeat split; auto.
+rewrite (SP_eta P1').
+constructor; auto.
+replace Defs with (Procs P1); auto.
+rewrite <- H2; auto.
+intro. rewrite <- H0, <- H2; auto.
+Qed.
+
+Lemma more_branches_N_reduces'' : forall P1 s P2 s' P1' tl,
+  Net P1' >> Net P1 -> (forall X, Procs P1 X = Procs P1' X) ->
+  (P1,s) --[tl]-->* (P2,s') ->
+  exists P2', (P1',s) --[tl]-->* (P2',s') /\ Net P2' >> Net P2
+  /\ forall X, Procs P1' X = Procs P2' X.
+Proof.
+intros. revert P1 s P2 s' P1' H H0 H1.
+induction tl; intros; inversion H1.
++ rewrite <- H3. exists P1'; repeat split; auto. constructor.
++ induction c2.
+  apply more_branches_N_reduces' with (P1':=P1') in H5; auto.
+  destroy H5.
+  clear c1 H4 t H2 l H3 c3 H6.
+  apply IHtl with (P1':=x) in H7; auto.
+  destroy H7.
+  exists x0; repeat split; auto.
+  apply SPT_Step with (x,b); auto.
+  intro. transitivity (Procs x X); auto.
+  rewrite (SP_eta P1'), (SP_eta x) in H8.
+  rewrite (SPP_To_Defs_stable _ _ _ _ _ _ _ H8); auto.
+Qed.
+
 Section Projectability.
 
 (** ** Properties of projectability
@@ -2954,7 +3102,8 @@ Lemma EPP_Complete : forall P Xs ps,
   (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
   forall s tl P' s', ((P,s) --[tl]--> (P',s'))%CC ->
   exists N tl', (epp Xs ps P HP,s) --[tl']--> (N,s')
-  /\ forall H, Net N >> Net (epp Xs ps P' H).
+    /\ Procs N = Procs (epp Xs ps P HP)
+    /\ forall H, Net N >> Net (epp Xs ps P' H).
 Proof.
 intros P Xs ps HWF Hann HP Hsp HMain HXs s tl P' s' HTo.
 induction P as (Defs,C), P' as (Defs',C').
@@ -3288,6 +3437,95 @@ Qed.
 
 (* Future wish: same with ToStar (requires: N1 >> N2 and N2 --> N2' implies
  exists N1' st N1 --> N1' >> N2'. *)
+
+Lemma well_annotated_pn_reduces : forall P s tl P' s',
+  well_ann P -> ((P,s) --[tl]--> (P',s'))%CC ->
+  forall p, In p (CCC_pn (Main P') (fun X => Vars P' X)) ->
+    In p (CCC_pn (Main P) (fun X => Vars P X)).
+Proof.
+intros.
+revert H1. inversion H0. unfold Vars; simpl.
+rewrite <- H1 in H. clear P H0 H1 P' H5.
+revert dependent C'.
+clear s'0 H6 tl H2 s0 H3.
+induction C; intros; revert H1; inversion H4.
+all: simpl; repeat sup.
++ intro. inversion_clear H9; auto.
+  right. eauto.
++ intro. inversion_clear H12.
+  left. inversion_clear H13; auto.
+  right. eauto.
+  right. eauto.
++ apply H.
++ intro. inversion_clear H9.
+  eapply set_remove'_1; eauto.
+  apply H; auto.
++ intro. inversion_clear H10; auto.
+  right. eauto.
++ intro. inversion_clear H11; auto.
+  left. eapply set_remove'_1; eauto.
+Qed.
+
+Lemma EPP_Complete' : forall P Xs ps,
+  Program_WF Xs P -> well_ann P -> forall (HP:projectable Xs ps P),
+  initial (Main P) ->
+  (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
+  (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
+  forall s tl P' s', ((P,s) --[tl]-->* (P',s'))%CC ->
+  exists N tl', (epp Xs ps P HP,s) --[tl']-->* (N,s')
+  /\ forall H, Net N >> Net (epp Xs ps P' H).
+Proof.
+intros P Xs ps HWF Hann HP Hinit HMain HXs s tl P' s' HTo.
+assert (forall p, In p ps -> strongly_projectable (Procedures P) (Main P) p) as Hsp.
+1: { intros. apply initial_strongly_projectable with ps; auto. apply HP. }
+induction P as (Defs,C), P' as (Defs',C').
+generalize (CCP_ToStar_Defs_stable Defs Defs' C C' tl s s' HTo); intro.
+rewrite <- H in HTo; rewrite <- H; clear Defs' H.
+simpl in Hsp, HMain. clear Hinit.
+revert dependent C'. revert dependent C. revert s s'. induction tl.
++ intros. inversion HTo.
+  exists (epp _ _ _ HP), nil; repeat split.
+  constructor; auto.
+  rewrite <- H0. intros; apply Network_eq_more_branches.
+  intro. inversion HP.
+  rewrite epp_C_char with (HC:=H3). rewrite epp_C_char with (HC:=H3).
+  auto.
++ intros. inversion HTo. clear HTo.
+  rewrite <- H in H2; clear a H l H0 c1 H1 c3 H3.
+  induction c2 as ((Defs',C''),s'').
+  generalize (CCP_To_Defs_stable Defs Defs' _ _ _ _ _ H2); intro.
+  rewrite <- H in H2, H4; clear Defs' H.
+  elim EPP_Complete with (HP:=HP) (s:=s) (s':=s'') (tl:=t)
+    (P':=CCBase.Build_Program Defs C''); auto.
+  intros. destroy H. rename x into pP, x0 into t'.
+  assert (projectable Xs ps (CCBase.Build_Program Defs C'')) as HP''.
+  1: {
+    inversion HP. simpl in H5; destroy H5.
+    repeat split; auto.
+    apply strongly_projectable_C'.
+    eapply strongly_projectable_reduces'; eauto.
+    intros. apply HMain. change C with (Main (CCBase.Build_Program Defs C)).
+    eapply well_annotated_pn_reduces; eauto.
+    eapply CCC_pn_mon. 2: apply H9. simpl; tauto.
+  }
+  elim IHtl with (s:=s'') (s':=s') (C:=C'') (C':=C') (HP:=HP''); auto.
+  - intros. destroy H3. rename x into pP', x0 into tl'.
+    apply more_branches_N_reduces'' with (P1':=pP) in H5.
+    destroy H5.
+    exists x, (t'::tl'). repeat split; auto.
+    apply SPT_Step with (pP,s''); auto.
+    intro. apply more_branches_N_trans with (Net pP'); auto.
+    auto.
+    intro. rewrite H1.
+    inversion HP''. simpl in H7; clear H6; destroy H7.
+    induction X. repeat rewrite epp_D_char with (HD:=H6); auto.
+  - eapply CCC_To_Program_WF; eauto.
+  - intros. apply HMain. change C with (Main (CCBase.Build_Program Defs C)).
+    eapply well_annotated_pn_reduces; eauto.
+  - change C'' with (Main (CCBase.Build_Program Defs C'')).
+    change Defs with (Procedures (CCBase.Build_Program Defs C'')).
+    intros. eapply strongly_projectable_reduces'; eauto.
+Qed.
 
 (** ** Soundness of EPP
   Soundness is proven by case analysis on the label of the reduction, and
