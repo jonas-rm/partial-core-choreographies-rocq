@@ -4697,7 +4697,7 @@ Proof. intros; intro. eapply more_branches_trans; eauto. Qed.
 
 Lemma bproj_Call_reduce_name : forall Defs Defs' ps C HC s N' s' p X,
   SP_To Defs' (epp_C Defs ps C HC) s (R_Call X p) N' s' ->
-  exists Y, X = (Y,p).
+  exists Y, X = (Y,p) /\ X_Free Y C.
 Proof.
 intros.
 inversion H.
@@ -4714,10 +4714,30 @@ induction e. 2: induction l.
 1,2,3: elim Pid_dec; try discriminate; auto.
 2,3: elim In_dec; try discriminate; auto.
 all: intros.
-- apply Xmerge_inv_XCall in HC. auto.
+all: unfold X_Free; simpl; unfold set_union_rv.
+- apply Xmerge_inv_XCall in HC.
+  elim IHC1; auto; intros. destroy H.
+  exists x; repeat split; auto. sup.
 - inversion HC; eauto.
-- inversion HC; eauto.
+- inversion HC. exists r. split; auto. sup; simpl; auto.
+- elim IHC; auto; intros. destroy H.
+  exists x. split; auto. sup; simpl; auto.
 - clear H2. exfalso. apply projectable_C_use' with (p:=p) in HC; auto.
+Qed.
+
+Lemma epp_D_char'' : forall Xs ps Defs C HP X p HX, In X Xs ->
+   Procs (epp Xs ps {| Procedures := Defs; Main := C |} HP) (X, p) =
+   epp_C Defs (fst (Defs X)) (snd (Defs X)) HX p.
+Proof.
+intros Xs ps Defs C HP X p HX HX'.
+inversion HP. clear H. destroy H0. clear H1 H2 H0.
+rewrite epp_D_char with (HD:=H).
+simpl. elim In_dec; intro.
+2: simpl; rewrite epp_C_out; auto.
+all: elim In_dec; simpl; auto. 2: intro H'; elim H'; auto.
+elim collapse_char'. induction a0; simpl; intros.
+apply inject_inj. rewrite <- p0. apply epp_C_bproj; auto.
+intro; exfalso. apply projectable_C_use' with (p:=p) in HX; auto.
 Qed.
 
 Lemma EPP_Sound : forall P Xs ps,
@@ -4786,20 +4806,35 @@ induction t. 2: induction l.
   - apply H2.
 + admit.
 + elim (bproj_Call_reduce_name _ _ _ _ _ _ _ _ _ _ H4); intros.
-  rename x into Y. rewrite H16 in H4, H8; clear X H16.
+  destroy H16. rename x into Y. rewrite H17 in H4, H8; clear X H17.
+  assert (In Y Xs).
+  1: apply within_Xs_char with (X:=Y) in H7; auto.
   apply bproj_Call_reduce with (Xs:=Xs) in H4; auto.
   destroy H4. rename x into C'.
   assert (projectable_C Defs ps C').
   1: { eapply projectable_C_reduces; eauto. }
   exists (CCBase.Build_Program Defs C'),
      (CCBase.TL.forget (CCBase.TL.R_Call Y p)); repeat split; auto.
-  - simpl. intros. eapply more_branches_N_trans. apply (H4 H17).
+  - simpl. intros. eapply more_branches_N_trans. apply (H4 H19).
     apply Network_eq_more_branches. symmetry. apply epp_C_char.
-(* *)
-  - apply H1.
-  - apply H2.
-
-
+  - replace Defs' with (Procs (epp _ _ _ HP)).
+    2: rewrite <- H5; auto.
+    intro r; intros. rewrite epp_D_char'' with (HX:=H12 _ H17); auto.
+    elim (In_dec P.eq_dec r (fst (Defs Y))); intro Hr.
+    apply inject_inj. rewrite <- epp_C_bproj, <- epp_C_bproj; eauto.
+    rewrite epp_C_out; auto. rewrite epp_C_out'; auto.
+    intro. apply Hr, H0; auto.
+  - intros; apply H0; auto.
+  - intros. apply Forall_forall; intro.
+    induction x as (r,B). unfold epp_list; rewrite in_map_iff.
+    intros. destroy H19. inversion H20. rewrite H22 in H19; clear x H22 H23 H20.
+    elim (In_dec P.eq_dec r (fst (Defs X))); intro Hr.
+    simpl. apply H12, projectable_C_use with (p:=r) in H18; auto.
+    destroy H18. rewrite H18; apply inject_not_undefined.
+    simpl. rewrite bproj_not_In; auto. discriminate.
+    intro; apply Hr, H0; auto.
+  - split; eauto. apply H; auto.
+Admitted.
 
 
 
