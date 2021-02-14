@@ -1153,6 +1153,34 @@ induction C; intros; inversion H.
 + simpl; sup.
 Qed.
 
+Lemma CCC_To_pn'' : forall P s tl P' s',
+  well_ann P -> ((P,s) --[tl]--> (P',s'))%CC ->
+  forall p, In p (CCC_pn (Main P') (fun X => Vars P' X)) ->
+    In p (CCC_pn (Main P) (fun X => Vars P X)).
+Proof.
+intros.
+revert H1. inversion H0. unfold Vars; simpl.
+rewrite <- H1 in H. clear P H0 H1 P' H5.
+revert dependent C'.
+clear s'0 H6 tl H2 s0 H3.
+induction C; intros; revert H1; inversion H4.
+all: simpl; repeat sup.
++ intro. inversion_clear H9; auto.
+  right. eauto.
++ intro. inversion_clear H12.
+  left. inversion_clear H13; auto.
+  right. eauto.
+  right. eauto.
++ apply H.
++ intro. inversion_clear H9.
+  eapply set_remove'_1; eauto.
+  apply H; auto.
++ intro. inversion_clear H10; auto.
+  right. eauto.
++ intro. inversion_clear H11; auto.
+  left. eapply set_remove'_1; eauto.
+Qed.
+
 (** Some more specific properties. *)
 
 Lemma CCC_To_Com_neq : forall Defs C s p v q x C' s', Choreography_WF C ->

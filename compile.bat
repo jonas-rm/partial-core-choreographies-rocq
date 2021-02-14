@@ -1,7 +1,10 @@
-echo coqc Basic.v
-echo coqc Common.v
-echo coqc CC.v
-echo coqc Kleene.v
-echo coqc Implementation.v
+coqc Basic.v
+coqc Common.v
+coqc CC.v
+coqc Kleene.v
+coqc Implementation.v
 coqc SP.v
+coqc Merge.v
+coqc Pruning.v
+echo coqc EPP.v
 coqdoc -g *.v
