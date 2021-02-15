@@ -1,8 +1,11 @@
-Require Import SP.
+Require Import EPP.
 
 Module Blah (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
-Module Import SP_LCF := SPBase P X V E B R Ev BEv.
+Module Import SP_LCF := EPPBase P X V E B R Ev BEv.
+
+
+
 
 Local Ltac solve B B' H := try (elim (XUndefined_dec (Xmerge B B')); intro H;
   [rewrite H| rewrite Xmatch_elim]; auto).

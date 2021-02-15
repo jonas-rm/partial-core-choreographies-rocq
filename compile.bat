@@ -6,5 +6,5 @@ coqc Implementation.v
 coqc SP.v
 coqc Merge.v
 coqc Pruning.v
-echo coqc EPP.v
+coqc EPP.v
 coqdoc -g *.v

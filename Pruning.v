@@ -771,12 +771,14 @@ elim (collapse_char' B2); intro. induction a.
   apply inject_not_undefined in b; auto.
 Qed.
 
+End MoreBranches.
+
 Definition more_branches_N (N N':Network) :=
   forall p, more_branches (N p) (N' p).
 
-End MoreBranches.
-
 Notation "N >> N'" := (more_branches_N N N') (at level 50).
+
+Section MoreBranchesN.
 
 Lemma Network_eq_more_branches : forall (N N':Network),
   (N == N') -> N >> N'.
@@ -786,7 +788,7 @@ Lemma more_branches_N_trans : forall N N' N'',
   N >> N' -> N' >> N'' -> N >> N''.
 Proof. intros; intro. eapply more_branches_trans; eauto. Qed.
 
-Lemma more_branches_N_reduces : forall Defs N1 s N2 s' Defs' N1' tl,
+Lemma SP_To_more_branches_N : forall Defs N1 s N2 s' Defs' N1' tl,
   SP_To Defs N1 s tl N2 s' -> N1' >> N1 -> (forall X, Defs X = Defs' X) ->
   exists N2', SP_To Defs' N1' s tl N2' s' /\ N2' >> N2.
 Proof.
@@ -890,7 +892,7 @@ intros. rename H1 into HX. induction H.
   all: unfold Process, Pid_dec; Pneq Hp; auto.
 Qed.
 
-Lemma more_branches_N_reduces' : forall P1 s P2 s' P1' tl,
+Lemma SPP_To_more_branches_N : forall P1 s P2 s' P1' tl,
   Net P1' >> Net P1 -> (forall X, Procs P1 X = Procs P1' X) ->
   (P1,s) --[tl]--> (P2,s') ->
   exists P2', (P1',s) --[tl]--> (P2',s') /\ Net P2' >> Net P2
@@ -898,7 +900,7 @@ Lemma more_branches_N_reduces' : forall P1 s P2 s' P1' tl,
 Proof.
 intros.
 inversion H1.
-apply more_branches_N_reduces with (Defs':= Procs P1') (N1':=Net P1') in H5; auto.
+apply SP_To_more_branches_N with (Defs':= Procs P1') (N1':=Net P1') in H5; auto.
 2: replace N with (Net P1); auto; rewrite <- H2; auto.
 destroy H5. exists (Build_Program (Procs P1') x).
 repeat split; auto.
@@ -909,7 +911,7 @@ rewrite <- H2; auto.
 intro. rewrite <- H0, <- H2; auto.
 Qed.
 
-Lemma more_branches_N_reduces'' : forall P1 s P2 s' P1' tl,
+Lemma SPP_ToStar_more_branches_N : forall P1 s P2 s' P1' tl,
   Net P1' >> Net P1 -> (forall X, Procs P1 X = Procs P1' X) ->
   (P1,s) --[tl]-->* (P2,s') ->
   exists P2', (P1',s) --[tl]-->* (P2',s') /\ Net P2' >> Net P2
@@ -919,7 +921,7 @@ intros. revert P1 s P2 s' P1' H H0 H1.
 induction tl; intros; inversion H1.
 + rewrite <- H3. exists P1'; repeat split; auto. constructor.
 + induction c2.
-  apply more_branches_N_reduces' with (P1':=P1') in H5; auto.
+  apply SPP_To_more_branches_N with (P1':=P1') in H5; auto.
   destroy H5.
   clear c1 H4 t H2 l H3 c3 H6.
   apply IHtl with (P1':=x) in H7; auto.
@@ -930,5 +932,7 @@ induction tl; intros; inversion H1.
   rewrite (SP_eta P1'), (SP_eta x) in H8.
   rewrite (SPP_To_Defs_stable _ _ _ _ _ _ _ H8); auto.
 Qed.
+
+End MoreBranchesN.
 
 End SP_Prune.

@@ -929,7 +929,7 @@ case_eq tl; intros.
     rewrite H3; discriminate.
 Qed.
 
-(** ...and by network equivalence. *)
+(** ...by network equivalence... *)
 
 Lemma SP_To_Network_eq : forall N1 N1' N2 SPDefs s s' t,
     (N1 == N2) -> SP_To SPDefs N1 s t N1' s' -> SP_To SPDefs N2 s t N1' s'.
@@ -966,6 +966,43 @@ inversion H0.
   etransitivity. eauto.
   apply Par_eq. 2: reflexivity.
   apply Network_rm_eq; auto.
+Qed.
+
+Lemma SPP_To_Network_eq : forall P1 P1' P2 s s' tl,
+  (Net P1 == Net P1') -> (Procs P1 = Procs P1') ->
+  (P1,s) --[tl]--> (P2,s') -> (P1',s) --[tl]--> (P2,s').
+Proof.
+intros.
+inversion H1.
+induction P1' as (Defs',N1'). simpl in H, H0.
+rewrite <- H0, <- H2; simpl. constructor.
+apply SP_To_Network_eq with N; auto.
+rewrite <- H, <- H2; simpl. reflexivity.
+Qed.
+
+Lemma SPP_ToStar_Network_eq : forall P1 P1' P2 s s' tl,
+  (Net P1 == Net P1') -> (Procs P1 = Procs P1') -> tl <> nil ->
+  (P1,s) --[tl]-->* (P2,s') -> (P1',s) --[tl]-->* (P2,s').
+Proof.
+intros.
+inversion H2. rewrite <- H4 in H1. elim H1; auto.
+clear tl H6 c3 H7 H2 H1.
+induction c2 as (P'',s'').
+apply SPT_Step with (P'',s''); auto.
+eapply SPP_To_Network_eq; eauto.
+Qed.
+
+(** ... and by extensionally equal sets of procedure definitions. *)
+Lemma SP_To_Defs_wd : forall Defs Defs', (forall X, Defs X = Defs' X) ->
+  forall N s tl N' s', SP_To Defs N s tl N' s' -> SP_To Defs' N s tl N' s'.
+Proof.
+intros. inversion H0.
++ econstructor; eauto.
++ econstructor; eauto.
++ econstructor; eauto.
++ econstructor; eauto.
++ eapply S_Else; eauto.
++ apply S_Call; auto. rewrite <- H; auto.
 Qed.
 
 (** The set of procedure definitions never changes. *)
@@ -1880,6 +1917,79 @@ induction tl1, tl2; intros; inversion H; inversion H0.
       rewrite H4; discriminate.
     * apply Network_eq_cross'' with N; auto.
     * eESEt; ESEs.
+Qed.
+
+(** Useful generalizations *)
+
+Lemma SPP_To_deterministic_1 : forall P s tl P' s' P'' s'',
+  (P,s) --[tl]--> (P',s') -> (P,s) --[tl]--> (P'',s'') ->
+  Net P' == Net P''.
+Proof.
+intros.
+induction P as (Defs,N), P' as (Defs',N'), P'' as (Defs'',N'').
+inversion H; inversion H0. simpl.
+assert (t = t0).
++ clear s'1 H16 N'1 H15 s1 H12 N1 H11 Defs1 H9 s'0 H8 N'0 H7 s0 H4 N0 H3 Defs0 H1 H H0.
+  rewrite <- H14 in H13; rewrite <- H6 in H5. clear Defs' Defs'' H6 H14.
+  rewrite <- H10 in H2; clear tl H10. rename t0 into t'.
+  induction H5; induction H13; try discriminate; inversion H2; auto.
+  - rewrite <- H11, H0 in H5; inversion H5. auto.
+  - rewrite <- H8, H in H4. discriminate.
+  - rewrite <- H8, H in H4. discriminate.
+  - rewrite <- H8, H in H3. discriminate.
+  - rewrite <- H8, H in H3. discriminate.
+  - rewrite <- H7, H in H3; inversion H3. auto.
++ rewrite <- H17 in H13.
+  eapply SP_To_deterministic_1; eauto.
+  rewrite <- H6, H14; eauto.
+Qed.
+
+Lemma SPP_To_deterministic_2 : forall P s tl P' s' P'' s'',
+  (P,s) --[tl]--> (P',s') -> (P,s) --[tl]--> (P'',s'') ->
+  eq_state_ext s' s''.
+Proof.
+intros.
+induction P as (Defs,N), P' as (Defs',N'), P'' as (Defs'',N'').
+inversion H; inversion H0. simpl.
+assert (t = t0).
++ clear s'1 H16 N'1 H15 s1 H12 N1 H11 Defs1 H9 s'0 H8 N'0 H7 s0 H4 N0 H3 Defs0 H1 H H0.
+  rewrite <- H14 in H13; rewrite <- H6 in H5. clear Defs' Defs'' H6 H14.
+  rewrite <- H10 in H2; clear tl H10. rename t0 into t'.
+  induction H5; induction H13; try discriminate; inversion H2; auto.
+  - rewrite <- H11, H0 in H5; inversion H5. auto.
+  - rewrite <- H8, H in H4. discriminate.
+  - rewrite <- H8, H in H4. discriminate.
+  - rewrite <- H8, H in H3. discriminate.
+  - rewrite <- H8, H in H3. discriminate.
+  - rewrite <- H7, H in H3; inversion H3. auto.
++ rewrite <- H17 in H13.
+  eapply SP_To_deterministic_2; eauto.
+  rewrite <- H6, H14; eauto.
+Qed.
+
+Lemma SPP_ToStar_deterministic_1 : forall P s tl P' s' P'' s'',
+  (P,s) --[tl]-->* (P',s') -> (P,s) --[tl]-->* (P'',s'')
+  -> Net P' == Net P''.
+Proof.
+intros P s tl; revert P s.
+induction tl; intros; inversion H; inversion H0.
++ rewrite <- H2, H5; reflexivity.
++ induction c2; induction c4.
+  generalize (SPP_To_deterministic_1 _ _ _ _ _ _ _ H4 H10); intro.
+  generalize (SPP_To_deterministic_2 _ _ _ _ _ _ _ H4 H10); intro.
+  apply SPP_To_eq with (s1':=s) (s2':=b) in H10. 2: ESEr. 2: ESEs.
+  case_eq tl.
+  - intro. rewrite H15 in H12, H6; inversion H6; inversion H12.
+    rewrite <- H20, <- H17; auto.
+  - intros. apply IHtl with a1 b s' s''; auto.
+    apply SPP_ToStar_Network_eq with a0; auto.
+    rewrite (SP_eta P), (SP_eta a0) in H4.
+    rewrite (SP_eta P), (SP_eta a1) in H10.
+    rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ H4).
+    rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ H10); auto.
+    rewrite H15; discriminate.
+    apply SPP_ToStar_eq with b0 s''; auto.
+    ESEs. ESEr. rewrite H15; discriminate.
 Qed.
 
 End Determinism.
