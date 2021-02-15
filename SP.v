@@ -1919,6 +1919,8 @@ induction tl1, tl2; intros; inversion H; inversion H0.
     * eESEt; ESEs.
 Qed.
 
+End Determinism.
+
 (** Useful generalizations *)
 
 Lemma SPP_To_deterministic_1 : forall P s tl P' s' P'' s'',
@@ -1991,8 +1993,6 @@ induction tl; intros; inversion H; inversion H0.
     apply SPP_ToStar_eq with b0 s''; auto.
     ESEs. ESEr. rewrite H15; discriminate.
 Qed.
-
-End Determinism.
 
 End SPBase.
 
