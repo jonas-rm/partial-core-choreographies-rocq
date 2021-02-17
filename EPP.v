@@ -2450,10 +2450,10 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
       apply inject_inj in H1; rewrite <- H1, HN; auto.
   1,4: intro r; case_eq (Pid_dec r p); intro;
       [ rewrite Pdec.eqb_eq in H3; rewrite H3, Par_proj2;
-        [ unfold Process; Peq; auto | apply Network_rm_In]
+        [ symmetry; apply Process_refl | apply Network_rm_In]
       | symmetry; rewrite Pdec.eqb_neq in H3; rewrite Par_proj1';
         [apply Network_rm_out; auto
-        | unfold Process, Pid_dec; Pneq H3; auto]].
+        | apply Process_out; auto]].
   1,3: apply CCC_To_Cond_state with Defs C p C'; auto.
   all: simpl; intros H5 r; replace N with (Net (Build_Program Defs' N)); auto.
   all: case_eq (Pid_dec r p); intro; [idtac | elim (In_dec P.eq_dec r ps); intro].
@@ -2530,8 +2530,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
       rewrite epp_C_char' with (HP:=HP) in H; auto.
       apply inject_inj in H. rewrite <- H, HN; auto.
     * intro r. case_eq (Pid_dec r p); intro.
-      rewrite Pdec.eqb_eq in H2; rewrite H2, Par_proj2.
-      unfold Process; Peq; auto.
+      rewrite Pdec.eqb_eq in H2; rewrite H2, Par_proj2, Process_refl.
       replace Defs' with (Procs (Build_Program Defs' N)); auto.
       rewrite HN, <- HY. rewrite epp_D_char' with (HP:=HP) in H4; auto.
       2: apply Hann.
@@ -2539,7 +2538,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
       apply Network_rm_In.
       symmetry; rewrite Pdec.eqb_neq in H2; rewrite Par_proj1'.
       apply Network_rm_out; auto.
-      unfold Process, Pid_dec; Pneq H2; auto.
+      apply Process_out; auto.
     * apply CCC_To_Call_state with Defs C p X C'; auto.
   - simpl; intros H5 r.
     replace N with (Net (Build_Program Defs' N)); auto.
@@ -3685,20 +3684,20 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       rewrite <- Hp'r, Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_Com_p with (HC':=H'), epp_C_Com_p with (HC':=HC'); auto.
       constructor; auto. all: rewrite Hp'r; auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite <- Hq'r, Par_proj1', Network_rm_out; auto.
       rewrite <- Hq'r, Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_Com_q with (HC':=H'), epp_C_Com_q with (HC':=HC'); auto.
       constructor; auto. all: rewrite Hq'r; auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_Com_r with (HC':=H'), epp_C_Com_r with (HC':=HC'); auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_out, epp_C_out; auto. constructor.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
   * apply S_Then with b B1 B2; auto.
     rewrite epp_C_Com_r with (HC':=projectable_C_inv_Com _ _ _ _ _ _ _ HC) in H1; inversion H1; auto.
     apply epp_C_wd.
@@ -3735,20 +3734,20 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       rewrite <- Hp'r, Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_Com_p with (HC':=H'), epp_C_Com_p with (HC':=HC'); auto.
       constructor; auto. all: rewrite Hp'r; auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite <- Hq'r, Par_proj1', Network_rm_out; auto.
       rewrite <- Hq'r, Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_Com_q with (HC':=H'), epp_C_Com_q with (HC':=HC'); auto.
       constructor; auto. all: rewrite Hq'r; auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_Com_r with (HC':=H'), epp_C_Com_r with (HC':=HC'); auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_out, epp_C_out; auto. constructor.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
   * apply S_Else with b B1 B2; auto.
     rewrite epp_C_Com_r with (HC':=projectable_C_inv_Com _ _ _ _ _ _ _ HC) in H1; inversion H1; auto.
     apply epp_C_wd.
@@ -3787,22 +3786,22 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       rewrite <- Hp'r, Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_Sel_p with (HC':=H'), epp_C_Sel_p with (HC':=HC'); auto.
       constructor; auto. all: rewrite Hp'r; auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite <- Hq'r, Par_proj1', Network_rm_out; auto.
       rewrite <- Hq'r, Par_proj1', Network_rm_out in H; auto.
       induction l.
       rewrite epp_C_Sel_ql with (HC':=H'), epp_C_Sel_ql with (HC':=HC'); auto.
       6: rewrite epp_C_Sel_qr with (HC':=H'), epp_C_Sel_qr with (HC':=HC'); auto.
       1,6: constructor; auto. all: rewrite Hq'r; auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_Sel_r with (HC':=H'), epp_C_Sel_r with (HC':=HC'); auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_out, epp_C_out; auto. constructor.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
   * apply S_Then with b B1 B2; auto.
     rewrite epp_C_Sel_r with (HC':=projectable_C_inv_Sel _ _ _ _ _ _ HC) in H1; inversion H1; auto.
     apply epp_C_wd.
@@ -3841,22 +3840,22 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       rewrite <- Hp'r, Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_Sel_p with (HC':=H'), epp_C_Sel_p with (HC':=HC'); auto.
       constructor; auto. all: rewrite Hp'r; auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite <- Hq'r, Par_proj1', Network_rm_out; auto.
       rewrite <- Hq'r, Par_proj1', Network_rm_out in H; auto.
       induction l.
       rewrite epp_C_Sel_ql with (HC':=H'), epp_C_Sel_ql with (HC':=HC'); auto.
       6: rewrite epp_C_Sel_qr with (HC':=H'), epp_C_Sel_qr with (HC':=HC'); auto.
       1,6: constructor; auto. all: rewrite Hq'r; auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_Sel_r with (HC':=H'), epp_C_Sel_r with (HC':=HC'); auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H; auto.
       rewrite epp_C_out, epp_C_out; auto. constructor.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
   * apply S_Else with b B1 B2; auto.
     rewrite epp_C_Sel_r with (HC':=projectable_C_inv_Sel _ _ _ _ _ _ HC) in H1; inversion H1; auto.
     apply epp_C_wd.
@@ -3883,7 +3882,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     * rewrite Hpr, Par_proj2. 2: apply Network_rm_In.
       rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2) in H1; auto.
       inversion H1. apply more_branches_refl'.
-      unfold Process; Peq; apply epp_C_wd.
+      rewrite Process_refl. apply epp_C_wd.
     * rewrite Par_proj1', Network_rm_out; auto.
       apply X_more_branches.
       rewrite epp_C_Cond_r with (HC1:=HC') (HC2:=HC2); auto.
@@ -3893,10 +3892,10 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       elim (projectable_C_use _ _ _ HC r); auto.
       intros. rewrite <- epp_C_bproj, H; auto.
       apply inject_not_undefined.
-      unfold Process, Pid_dec. Pneq Hpr; auto.
+      apply Process_out; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       apply more_branches_refl'. repeat rewrite epp_C_out; auto.
-      unfold Process, Pid_dec. Pneq Hpr; auto.
+      apply Process_out; auto.
   - assert (forall p, In p ps -> strongly_projectable Defs C1 p) as Hsp1.
     1: apply Hsp.
     assert (forall p, In p ps -> strongly_projectable Defs C2 p) as Hsp2.
@@ -3928,7 +3927,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
          generalize (H HC1' r) (H5 HC2' r).
          rewrite Hpr, Par_proj2, Par_proj2, Par_proj2; auto.
          2,3,4: apply Network_rm_In.
-         unfold Process, Pid_dec. Peq. intros.
+         repeat rewrite Process_refl. intros.
          rewrite epp_C_Cond_r with (HC1:=HC1') (HC2:=HC2'); auto.
          elim (more_branches_merge_extend _ _ _ _ _ H8 H9 Ht); auto.
          intros. destroy H10.
@@ -3939,7 +3938,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
          rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto.
          rewrite epp_C_Cond_p with (HC1:=HC1') (HC2:=HC2'); auto.
          constructor; auto.
-         all: unfold Process, Pid_dec; Pneq Hpr; auto.
+         all: apply Process_out; auto.
       ++ apply X_more_branches.
          generalize (more_branches_X _ _ (H HC1' r)) (more_branches_X _ _ (H5 HC2' r)).
          rewrite Par_proj1', Par_proj1', Par_proj1', Network_rm_out, Network_rm_out, Network_rm_out; auto.
@@ -3948,10 +3947,10 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
          intros. eapply Xmore_branches_merge_extend; eauto.
          fold (merge (epp_C _ _ _ HC1 r) (epp_C _ _ _ HC2 r)).
          rewrite <- epp_C_Cond_r with (HC:=HC); eauto.
-         all: unfold Process, Pid_dec; Pneq Hpr; auto.
+         all: apply Process_out; auto.
       ++ rewrite Par_proj1', Network_rm_out; auto.
          repeat rewrite epp_C_out; auto. constructor.
-         unfold Process, Pid_dec; Pneq Hpr; auto.
+         apply Process_out; auto.
     * apply S_Then with b0 B2t B2e; auto. reflexivity.
     * apply S_Then with b0 B1t B1e; auto. reflexivity.
 + clear s'0 H8 N'0 H7 p1 H0 s0 H5 H.
@@ -3976,7 +3975,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     * rewrite Hpr, Par_proj2. 2: apply Network_rm_In.
       rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2) in H1; auto.
       inversion H1. apply more_branches_refl'.
-      unfold Process; Peq; apply epp_C_wd.
+      rewrite Process_refl; apply epp_C_wd.
     * rewrite Par_proj1', Network_rm_out; auto.
       apply X_more_branches.
       rewrite epp_C_Cond_r with (HC1:=HC1) (HC2:=HC'); auto.
@@ -3986,10 +3985,10 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       elim (projectable_C_use _ _ _ HC r); auto.
       intros. rewrite <- epp_C_bproj, H; auto.
       apply inject_not_undefined.
-      unfold Process, Pid_dec. Pneq Hpr; auto.
+      apply Process_out; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       apply more_branches_refl'. repeat rewrite epp_C_out; auto.
-      unfold Process, Pid_dec. Pneq Hpr; auto.
+      apply Process_out; auto.
   - assert (forall p, In p ps -> strongly_projectable Defs C1 p) as Hsp1.
     1: apply Hsp.
     assert (forall p, In p ps -> strongly_projectable Defs C2 p) as Hsp2.
@@ -4021,7 +4020,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
          generalize (H HC1' r) (H5 HC2' r).
          rewrite Hpr, Par_proj2, Par_proj2, Par_proj2; auto.
          2,3,4: apply Network_rm_In.
-         unfold Process, Pid_dec. Peq. intros.
+         repeat rewrite Process_refl. intros.
          rewrite epp_C_Cond_r with (HC1:=HC1') (HC2:=HC2'); auto.
          elim (more_branches_merge_extend _ _ _ _ _ H8 H9 He); auto.
          intros. destroy H10.
@@ -4032,7 +4031,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
          rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2); auto.
          rewrite epp_C_Cond_p with (HC1:=HC1') (HC2:=HC2'); auto.
          constructor; auto.
-         all: unfold Process, Pid_dec; Pneq Hpr; auto.
+         all: apply Process_out; auto.
       ++ apply X_more_branches.
          generalize (more_branches_X _ _ (H HC1' r)) (more_branches_X _ _ (H5 HC2' r)).
          rewrite Par_proj1', Par_proj1', Par_proj1', Network_rm_out, Network_rm_out, Network_rm_out; auto.
@@ -4041,10 +4040,10 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
          intros. eapply Xmore_branches_merge_extend; eauto.
          fold (merge (epp_C _ _ _ HC1 r) (epp_C _ _ _ HC2 r)).
          rewrite <- epp_C_Cond_r with (HC:=HC); eauto.
-         all: unfold Process, Pid_dec; Pneq Hpr; auto.
+         all: apply Process_out; auto.
       ++ rewrite Par_proj1', Network_rm_out; auto.
          repeat rewrite epp_C_out; auto. constructor.
-         unfold Process, Pid_dec; Pneq Hpr; auto.
+         apply Process_out; auto.
     * apply S_Else with b0 B2t B2e; auto. reflexivity.
     * apply S_Else with b0 B1t B1e; auto. reflexivity.
 (* RT_Call - order switched because of inversion *)
@@ -4080,12 +4079,12 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       apply more_branches_refl'.
       repeat rewrite epp_C_RT_Call; auto.
       1,2: apply Hin; simpl; sup.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H0; auto.
       rewrite epp_C_RT_Call_out with (HC':=H'); auto.
       rewrite epp_C_RT_Call_out with (HC':=HC'); auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
   * apply S_Then with b B1 B2; auto.
     rewrite epp_C_RT_Call_out with (HC':=HC') in H1; inversion H1; auto.
     reflexivity.
@@ -4121,12 +4120,12 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       apply more_branches_refl'.
       repeat rewrite epp_C_RT_Call; auto.
       1,2: apply Hin; simpl; sup.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H0; auto.
       rewrite epp_C_RT_Call_out with (HC':=H'); auto.
       rewrite epp_C_RT_Call_out with (HC':=HC'); auto.
-      all: unfold Process, Pid_dec; Pneq Hpr; auto.
+      all: apply Process_out; auto.
   * apply S_Else with b B1 B2; auto.
     rewrite epp_C_RT_Call_out with (HC':=HC') in H1; inversion H1; auto.
     reflexivity.
@@ -4191,21 +4190,19 @@ induction C; intros. induction e.
     - rewrite <- Hpr, Par_proj2, Par_proj2. 2,3: apply Network_rm_In.
       rewrite epp_C_Com_r with (HC':=H'); auto.
     - rewrite <- Hp'r, Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
-      2,3: unfold Process, Pid_dec; Pneq Hp'p; auto.
+      2,3: apply Process_out; auto.
       rewrite epp_C_Com_p with (HC':=H'), epp_C_Com_p with (HC':=HC'); auto.
       constructor; auto. all: rewrite Hp'r; auto.
     - rewrite <- Hq'r, Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
-      2,3: unfold Process, Pid_dec; Pneq Hq'p; auto.
+      2,3: apply Process_out; auto.
       rewrite epp_C_Com_q with (HC':=H'), epp_C_Com_q with (HC':=HC'); auto.
       constructor; auto. all: rewrite Hq'r; auto.
     - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
-      2,3: assert (r <> p) as Hrp; auto;
-        unfold Process, Pid_dec; Pneq Hrp; auto.
+      2,3: apply Process_out; auto.
       rewrite epp_C_Com_r with (HC':=H'), epp_C_Com_r with (HC':=HC'); auto.
     - intro. apply more_branches_refl'.
       rewrite Par_proj1', Network_rm_out; auto.
-      2: assert (r <> p) as Hrp; auto;
-        unfold Process, Pid_dec; Pneq Hrp; auto.
+      2: apply Process_out; auto.
       rewrite epp_C_out, epp_C_out; auto.
   * apply S_Call; auto.
     rewrite epp_C_Com_r with (HC':=projectable_C_inv_Com _ _ _ _ _ _ _ HC) in H2; inversion H2; auto.
@@ -4244,24 +4241,22 @@ induction C; intros. induction e.
     - rewrite <- Hpr, Par_proj2, Par_proj2. 2,3: apply Network_rm_In.
       rewrite epp_C_Sel_r with (HC':=H'); auto.
     - rewrite <- Hp'r, Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
-      2,3: unfold Process, Pid_dec; Pneq Hp'p; auto.
+      2,3: apply Process_out; auto.
       rewrite epp_C_Sel_p with (HC':=H'), epp_C_Sel_p with (HC':=HC'); auto.
       constructor; auto. all: rewrite Hp'r; auto.
     - rewrite <- Hq'r, Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
-      2,3: unfold Process, Pid_dec; Pneq Hq'p; auto.
+      2,3: apply Process_out; auto.
       induction l.
       rewrite epp_C_Sel_ql with (HC':=H'), epp_C_Sel_ql with (HC':=HC'); auto.
       constructor; auto. 1,2,3,4: rewrite Hq'r; auto.
       rewrite epp_C_Sel_qr with (HC':=H'), epp_C_Sel_qr with (HC':=HC'); auto.
       constructor; auto. 1,2,3,4: rewrite Hq'r; auto.
     - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
-      2,3: assert (r <> p) as Hrp; auto;
-        unfold Process, Pid_dec; Pneq Hrp; auto.
+      2,3: apply Process_out; auto.
       rewrite epp_C_Sel_r with (HC':=H'), epp_C_Sel_r with (HC':=HC'); auto.
     - intro. apply more_branches_refl'.
       rewrite Par_proj1', Network_rm_out; auto.
-      2: assert (r <> p) as Hrp; auto;
-        unfold Process, Pid_dec; Pneq Hrp; auto.
+      2: apply Process_out; auto.
       rewrite epp_C_out, epp_C_out; auto.
   * apply S_Call; auto.
     rewrite epp_C_Sel_r with (HC':=projectable_C_inv_Sel _ _ _ _ _ _ HC) in H2; inversion H2; auto.
@@ -4311,12 +4306,12 @@ induction C; intros. induction e.
       rewrite merge_comm, <- epp_C_Cond_r with (HC:=HC') in H9; auto.
       apply inject_inj in H9. rewrite H9; auto.
     - rewrite <- Hp'r, Par_proj1', Par_proj1', Par_proj1', Network_rm_out, Network_rm_out, Network_rm_out; auto.
-      2,3,4: unfold Process, Pid_dec; Pneq Hp'p; auto.
+      2,3,4: apply Process_out; auto.
       rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2). 2: rewrite Hp'r; auto.
       rewrite epp_C_Cond_p with (HC1:=H1') (HC2:=H2'). 2: rewrite Hp'r; auto.
       constructor; auto.
     - rewrite Par_proj1', Par_proj1', Par_proj1', Network_rm_out, Network_rm_out, Network_rm_out; auto.
-      2,3,4: assert (r <> p) as Hrp; auto; unfold Process, Pid_dec; Pneq Hrp; auto.
+      2,3,4: apply Process_out; auto.
       intros. apply X_more_branches.
       rewrite epp_C_Cond_r with (HC1:=HC1) (HC2:=HC2); auto.
       rewrite epp_C_Cond_r with (HC1:=H1') (HC2:=H2'); auto.
@@ -4327,8 +4322,7 @@ induction C; intros. induction e.
       apply (Xmore_branches_merge_extend _ _ _ _ _ H4 H0 H7).
     - intros. apply more_branches_refl'.
       rewrite Par_proj1', Network_rm_out; auto.
-      2: assert (r <> p) as Hrp; auto;
-        unfold Process, Pid_dec; Pneq Hrp; auto.
+      2: apply Process_out; auto.
       rewrite epp_C_out, epp_C_out; auto.
   * apply S_Call; auto.
     assert (inject (epp_C _ _ _ HC p) = inject (Call (X,p))). rewrite H2; auto.
@@ -4367,15 +4361,14 @@ induction C; intros. induction e.
     apply more_branches_refl'.
     elim (P.eq_dec p r); intro Hpr.
     * rewrite <- Hpr, Par_proj2. 2: apply Network_rm_In.
-      unfold Process, Pid_dec; Peq. auto.
+      rewrite Process_refl; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       rewrite epp_C_Call_out, epp_C_out'; auto.
       ++ intro. apply Hpr.
          apply Hnames in H1.
          eapply set_size_1; eauto.
       ++ intro. apply Hpr. eapply set_size_1; eauto.
-      ++ unfold Process, Pid_dec.
-         assert (r <> p); auto. Pneq H1; auto.
+      ++ apply Process_out; auto.
   - exists (RT_Call X (set_remove_pid p (fst (Defs X))) (snd (Defs X))).
     split.
     apply C_Call_Start; auto. rewrite <- H1; auto with arith.
@@ -4383,7 +4376,7 @@ induction C; intros. induction e.
     elim (P.eq_dec p r); intro Hpr.
     2: elim (In_dec P.eq_dec r (fst (Defs X))); intro Hr.
     * rewrite <- Hpr, Par_proj2. 2: apply Network_rm_In.
-      unfold Process, Pid_dec; Peq.
+      rewrite Process_refl.
       apply more_branches_refl'.
       rewrite epp_C_RT_Call_out with (HC':=HDefs' X HXs); auto.
       intro Hp; apply set_remove'_2 in Hp; auto.
@@ -4391,16 +4384,14 @@ induction C; intros. induction e.
       apply more_branches_refl'.
       rewrite epp_C_RT_Call, epp_C_Call; auto.
       apply set_remove'_3; auto.
-      unfold Process, Pid_dec.
-      assert (r <> p); auto. Pneq H6; auto.
+      apply Process_out; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       apply more_branches_refl'.
       rewrite epp_C_out', epp_C_out'; auto.
       simpl. sup. intro; apply Hr.
       inversion_clear H6. eapply set_remove'_1; eauto.
       apply Hnames; auto.
-      unfold Process, Pid_dec.
-      assert (r <> p); auto. Pneq H6; auto.
+      apply Process_out; auto.
 + inversion H.
   clear s'0 H7 N'0 H6 p0 H1 X0 H0 s0 H4.
   assert (In p ps) as Hpps.
@@ -4425,14 +4416,14 @@ induction C; intros. induction e.
     intro. intro r. rewrite H5.
     elim (P.eq_dec p r); intro Hpr.
     * rewrite <- Hpr, Par_proj2. 2: apply Network_rm_In.
-      unfold Process, Pid_dec; Peq.
+      rewrite Process_refl.
       elim (Hsp p); auto; intros. elim (H6 p); auto; intros; clear H6.
       rewrite (HDefs _ (HDefs' _ HXs)); auto.
       apply X_more_branches. rewrite <- epp_C_bproj, <- epp_C_bproj; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       rewrite epp_C_RT_Call_out with (HC':=HC'). apply more_branches_refl.
       intro. apply Hpr. eapply set_size_1; eauto.
-      unfold Process, Pid_dec. assert (r <> p); auto. Pneq H4; auto.
+      apply Process_out; auto.
   - exists (RT_Call X (set_remove_pid p l) C).
     split.
     apply C_Call_Enter; auto.
@@ -4440,8 +4431,7 @@ induction C; intros. induction e.
     intro. intro r. rewrite H5.
     elim (P.eq_dec p r); intro Hpr.
     2: elim (In_dec P.eq_dec r l); intro Hr.
-    * rewrite <- Hpr, Par_proj2. 2: apply Network_rm_In.
-      unfold Process, Pid_dec; Peq.
+    * rewrite <- Hpr, Par_proj2, Process_refl. 2: apply Network_rm_In.
       elim (Hsp p); auto; intros.
       rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
       elim (H6 p); auto; clear H6; intros.
@@ -4453,15 +4443,13 @@ induction C; intros. induction e.
       rewrite epp_C_RT_Call, epp_C_RT_Call; auto.
       1,3: apply Hin; simpl; sup.
       apply set_remove'_3; auto.
-      unfold Process, Pid_dec.
-      assert (r <> p); auto. Pneq H4; auto.
+      apply Process_out; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       apply more_branches_refl'.
       rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
       rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
       intro. apply Hr. eapply set_remove'_1; eauto.
-      unfold Process, Pid_dec.
-      assert (r <> p); auto. Pneq H4; auto.
+      apply Process_out; auto.
   - elim (IHC HCp) with (N':=(Network_rm (epp_C _ _ _ HCp) p | p[Defs'(X,p)])); auto.
     2: elim HCXs; auto.
     2: intros; elim (Hsp p0); auto.
@@ -4496,8 +4484,8 @@ induction C; intros. induction e.
       ++ rewrite epp_C_RT_Call_out with (HC':=H7); auto.
          rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
          rewrite Par_proj1', Network_rm_out in H; auto.
-         unfold Process, Pid_dec. assert (r <> p); auto. Pneq H3; auto.
-      ++ unfold Process, Pid_dec. assert (r <> p); auto. Pneq H3; auto.
+         apply Process_out; auto.
+      ++ apply Process_out; auto.
     * apply S_Call; auto.
       rewrite epp_C_RT_Call_out with (HC':=HCp) in H2; auto.
       reflexivity.
@@ -4537,8 +4525,8 @@ induction C; intros. induction e.
       ++ rewrite epp_C_RT_Call_out with (HC':=H6); auto.
          rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
          rewrite Par_proj1', Network_rm_out in H; auto.
-         unfold Process, Pid_dec. assert (r <> p); auto. Pneq H1; auto.
-      ++ unfold Process, Pid_dec. assert (r <> p); auto. Pneq H1; auto.
+         apply Process_out; auto.
+      ++ apply Process_out; auto.
     * apply S_Call; auto.
       rewrite epp_C_RT_Call_out with (HC':=HCp) in H2; auto.
       reflexivity.
@@ -4776,10 +4764,10 @@ inversion HTo.
   1: apply S_Then with b B1' B2'; auto. reflexivity.
   eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
   intro r. elim (P.eq_dec r p); intro Hp.
-  - rewrite Hp, Par_proj2, Par_proj2. 2,3: apply Network_rm_In.
-    unfold Process, Pid_dec; Peq; auto.
-  - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
-    all: unfold Process, Pid_dec; Pneq Hp; auto.
+  - rewrite Hp, Par_proj2, Par_proj2, Process_refl, Process_refl; auto;
+      apply Network_rm_In.
+  - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto;
+      apply Process_out; auto.
 + clear s'0 H7 N' H6 tl H5 N H3 s0 H4 HTo.
   generalize (Hmb p); intro.
   rewrite H in H3; inversion H3.
@@ -4789,10 +4777,10 @@ inversion HTo.
   1: apply S_Else with b B1' B2'; auto. reflexivity.
   eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
   intro r. elim (P.eq_dec r p); intro Hp.
-  - rewrite Hp, Par_proj2, Par_proj2. 2,3: apply Network_rm_In.
-    unfold Process, Pid_dec; Peq; auto.
-  - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
-    all: unfold Process, Pid_dec; Pneq Hp; auto.
+  - rewrite Hp, Par_proj2, Par_proj2, Process_refl, Process_refl; auto;
+      apply Network_rm_In.
+  - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto;
+      apply Process_out; auto.
 + clear s'0 H6 N' H5 tl H4 s0 H3 N H2 HTo.
   generalize (Hmb p); intro.
   rewrite H in H2; inversion H2.
@@ -4803,9 +4791,9 @@ inversion HTo.
   eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
   intro r. elim (P.eq_dec r p); intro Hp.
   - rewrite Hp, Par_proj2, Par_proj2. 2,3: apply Network_rm_In.
-    unfold Process, Pid_dec; Peq; auto. apply more_branches_refl.
-  - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
-    all: unfold Process, Pid_dec; Pneq Hp; auto.
+    apply more_branches_refl.
+  - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto;
+      apply Process_out; auto.
 Qed.
 
 Lemma SPP_To_more_branches_N : forall P1 s P2 s' tl Xs ps P HP,
