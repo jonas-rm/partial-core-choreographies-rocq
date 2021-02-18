@@ -2584,7 +2584,7 @@ revert dependent C'. revert dependent C. revert s s'. induction tl.
 + intros. inversion HTo.
   exists (epp _ _ _ HP), nil; repeat split.
   constructor; auto.
-  rewrite <- H0. intros; apply Network_eq_more_branches.
+  rewrite <- H0. intros; apply more_branches_N_refl'.
   intro. inversion HP.
   rewrite epp_C_char with (HC:=H3). rewrite epp_C_char with (HC:=H3).
   auto.
@@ -4605,7 +4605,7 @@ induction t. 2: induction l.
   1: { eapply CCC_To_projectable_C; eauto. }
   exists (CCBase.Build_Program Defs C'),
      (CCBase.TL.forget (CCBase.TL.R_Com p v q x)); repeat split; auto.
-  - simpl. intros. apply Network_eq_more_branches.
+  - simpl. intros. apply more_branches_N_refl'.
     rewrite (H4 H17); auto. symmetry; apply epp_C_char.
   - apply H1.
   - apply H2.
@@ -4615,7 +4615,7 @@ induction t. 2: induction l.
   1: { eapply CCC_To_projectable_C; eauto. }
   exists (CCBase.Build_Program Defs C'),
      (CCBase.TL.forget (CCBase.TL.R_Sel p q left)); repeat split; auto.
-  - simpl. intros. apply Network_eq_more_branches.
+  - simpl. intros. apply more_branches_N_refl'.
     rewrite (H4 H17); auto. symmetry; apply epp_C_char.
   - apply H1.
   - apply H2.
@@ -4625,7 +4625,7 @@ induction t. 2: induction l.
   1: { eapply CCC_To_projectable_C; eauto. }
   exists (CCBase.Build_Program Defs C'),
      (CCBase.TL.forget (CCBase.TL.R_Sel p q right)); repeat split; auto.
-  - simpl. intros. apply Network_eq_more_branches.
+  - simpl. intros. apply more_branches_N_refl'.
     rewrite (H4 H17); auto. symmetry; apply epp_C_char.
   - apply H1.
   - apply H2.
@@ -4636,7 +4636,7 @@ induction t. 2: induction l.
   exists (CCBase.Build_Program Defs C'),
      (CCBase.TL.forget (CCBase.TL.R_Cond p)); repeat split; auto.
   - simpl. intros. eapply more_branches_N_trans. apply (H4 H17).
-    apply Network_eq_more_branches. symmetry. apply epp_C_char.
+    apply more_branches_N_refl'. symmetry. apply epp_C_char.
   - apply H1.
   - apply H2.
 + elim (SP_To_bproj_Call_name _ _ _ _ _ _ _ _ _ _ H4); intros.
@@ -4650,7 +4650,7 @@ induction t. 2: induction l.
   exists (CCBase.Build_Program Defs C'),
      (CCBase.TL.forget (CCBase.TL.R_Call Y p)); repeat split; auto.
   - simpl. intros. eapply more_branches_N_trans. apply (H4 H19).
-    apply Network_eq_more_branches. symmetry. apply epp_C_char.
+    apply more_branches_N_refl'. symmetry. apply epp_C_char.
   - replace Defs' with (Procs (epp _ _ _ HP)).
     2: rewrite <- H5; auto.
     intro r; intros. rewrite epp_D_char'' with (HX:=H12 _ H17); auto.
@@ -4689,7 +4689,7 @@ inversion HTo.
   exists (Network_rm (Network_rm (epp_C Defs' ps C HC) p) q | p[Bp] | q[Bq]).
   repeat split.
   1: apply S_Com with Bp Bq; auto. reflexivity.
-  eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
+  eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
   intro r. elim (P.eq_dec r p); intro Hp.
   2: elim (P.eq_dec r q); intro Hq.
   - rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
@@ -4709,7 +4709,7 @@ inversion HTo.
     exists (Network_rm (Network_rm (epp_C Defs' ps C HC) p) q | p[Bp] | q[Bl']).
     repeat split.
     1: apply S_LSel with Bp Bl' None; auto. reflexivity.
-    eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
+    eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
     intro r. elim (P.eq_dec r p); intro Hp.
     2: elim (P.eq_dec r q); intro Hq.
     * rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
@@ -4719,7 +4719,7 @@ inversion HTo.
     exists (Network_rm (Network_rm (epp_C Defs' ps C HC) p) q | p[Bp] | q[Bl']).
     repeat split.
     1: apply S_LSel with Bp Bl' (Some Br'); auto. reflexivity.
-    eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
+    eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
     intro r. elim (P.eq_dec r p); intro Hp.
     2: elim (P.eq_dec r q); intro Hq.
     * rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
@@ -4738,7 +4738,7 @@ inversion HTo.
     exists (Network_rm (Network_rm (epp_C Defs' ps C HC) p) q | p[Bp] | q[Br']).
     repeat split.
     1: apply S_RSel with Bp None Br'; auto. reflexivity.
-    eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
+    eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
     intro r. elim (P.eq_dec r p); intro Hp.
     2: elim (P.eq_dec r q); intro Hq.
     * rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
@@ -4749,7 +4749,7 @@ inversion HTo.
     exists (Network_rm (Network_rm (epp_C Defs' ps C HC) p) q | p[Bp] | q[Br']).
     repeat split.
     1: apply S_RSel with Bp (Some Bl') Br'; auto. reflexivity.
-    eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
+    eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
     intro r. elim (P.eq_dec r p); intro Hp.
     2: elim (P.eq_dec r q); intro Hq.
     * rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
@@ -4762,7 +4762,7 @@ inversion HTo.
   exists (Network_rm (epp_C Defs' ps C HC) p | p[B1']).
   repeat split.
   1: apply S_Then with b B1' B2'; auto. reflexivity.
-  eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
+  eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
   intro r. elim (P.eq_dec r p); intro Hp.
   - rewrite Hp, Par_proj2, Par_proj2, Process_refl, Process_refl; auto;
       apply Network_rm_In.
@@ -4775,7 +4775,7 @@ inversion HTo.
   exists (Network_rm (epp_C Defs' ps C HC) p | p[B2']).
   repeat split.
   1: apply S_Else with b B1' B2'; auto. reflexivity.
-  eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
+  eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
   intro r. elim (P.eq_dec r p); intro Hp.
   - rewrite Hp, Par_proj2, Par_proj2, Process_refl, Process_refl; auto;
       apply Network_rm_In.
@@ -4788,7 +4788,7 @@ inversion HTo.
   exists (Network_rm (epp_C Defs' ps C HC) p | p [Defs X]).
   repeat split.
   1: apply S_Call; auto. reflexivity.
-  eapply more_branches_N_trans. apply Network_eq_more_branches; eauto.
+  eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
   intro r. elim (P.eq_dec r p); intro Hp.
   - rewrite Hp, Par_proj2, Par_proj2. 2,3: apply Network_rm_In.
     apply more_branches_refl.
@@ -4869,7 +4869,7 @@ revert dependent C. revert s s' N1 N2 H6. induction tl; intros.
   - simpl.
     apply SPP_ToStar_more_branches_N with (P1':=Build_Program Defs N3) in H14; auto.
     destroy H14. apply more_branches_N_trans with (Net x); auto.
-    apply Network_eq_more_branches.
+    apply more_branches_N_refl'.
     change N2 with (Net (Build_Program Defs N2)).
     eapply SPP_ToStar_deterministic_1; eauto.
     simpl; intro.
@@ -4898,13 +4898,13 @@ induction P as (Defs,C), P' as (Defs',N).
 revert dependent N. revert dependent C. revert Defs' s s'.
 induction tl; intros; inversion H4.
 + eexists; exists nil. repeat split. constructor.
-  intro. apply Network_eq_more_branches.
+  intro. apply more_branches_N_refl'.
   inversion HP. repeat rewrite epp_C_char with (HC:=H9).
   apply epp_C_wd.
 + clear c3 H9 l H6 t H5 c1 H7 H4. rename a into t.
   induction c2 as (P'', s'').
   eapply SPP_To_more_branches_N in H8; eauto. destroy H8.
-  rename x into P'. 2: apply Network_eq_more_branches; reflexivity.
+  rename x into P'. 2: apply more_branches_N_refl.
   rewrite (SP_eta (epp _ _ _ HP)), (SP_eta P') in H4.
   generalize (SPP_To_Defs_stable _ _ _ _ _ _ _ H4); intro H4'.
   rewrite <- SP_eta, <- SP_eta in H4.

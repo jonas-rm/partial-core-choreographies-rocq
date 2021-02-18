@@ -780,7 +780,10 @@ Notation "N >> N'" := (more_branches_N N N') (at level 50).
 
 Section MoreBranchesN.
 
-Lemma Network_eq_more_branches : forall (N N':Network),
+Lemma more_branches_N_refl : forall N, N >> N.
+Proof. intros; intro. apply more_branches_refl. Qed.
+
+Lemma more_branches_N_refl' : forall (N N':Network),
   (N == N') -> N >> N'.
 Proof. intros; intro. apply more_branches_refl'; auto. Qed.
 
