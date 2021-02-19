@@ -4670,7 +4670,7 @@ induction t. 2: induction l.
   - split; eauto. apply H; auto.
 Qed.
 
-Lemma SP_To_more_branches_N : forall Defs N1 s N2 s' tl Defs' ps C HC,
+Lemma SP_To_more_branches_N_epp : forall Defs N1 s N2 s' tl Defs' ps C HC,
   N1 >> epp_C Defs' ps C HC -> SP_To Defs N1 s tl N2 s' ->
   exists N2', SP_To Defs (epp_C Defs' ps C HC) s tl N2' s' /\ N2 >> N2'.
 Proof.
@@ -4796,7 +4796,7 @@ inversion HTo.
       apply Process_out; auto.
 Qed.
 
-Lemma SPP_To_more_branches_N : forall P1 s P2 s' tl Xs ps P HP,
+Lemma SPP_To_more_branches_N_epp : forall P1 s P2 s' tl Xs ps P HP,
   (forall X, Procs P1 X = Procs (epp Xs ps P HP) X) ->
   Net P1 >> Net (epp Xs ps P HP) -> (P1,s) --[tl]--> (P2,s') ->
   exists P2', (epp Xs ps P HP,s) --[tl]--> (P2',s') /\ Net P2 >> Net P2'
@@ -4809,7 +4809,7 @@ rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ H1) in H1; clear Defs2.
 induction P as (Defs',C).
 inversion HP. inversion_clear H3. clear H5. simpl in H2, H4.
 inversion H1. clear s'0 H10 N' H9 tl H5 s0 H7 N H6 Defs0 H3 H1.
-eapply SP_To_more_branches_N with (HC:=H2) in H8; eauto.
+eapply SP_To_more_branches_N_epp with (HC:=H2) in H8; eauto.
 2: intro r; rewrite <- epp_C_char with (HP:=HP); auto.
 destroy H8. rename x into N2'.
 exists (Build_Program (Procs (epp _ _ _ HP)) N2'); repeat split; auto.
@@ -4842,7 +4842,7 @@ revert dependent C. revert s s' N1 N2 H6. induction tl; intros.
 + inversion H6. clear c3 H11 l H8 t H7 c1 H9 H6. rename a into t.
   induction c2 as ((Defs2,N3),s'').
   rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ H10) in H12, H10. clear Defs2.
-  apply SPP_To_more_branches_N with (HP:=HP) in H10; auto.
+  apply SPP_To_more_branches_N_epp with (HP:=HP) in H10; auto.
   destroy H10. induction x as (Defs3,N3'). simpl in H7, H10.
   generalize H6 as H6'; intro.
   rewrite (SP_eta (epp _ _ _ HP)) in H6'.
@@ -4903,7 +4903,7 @@ induction tl; intros; inversion H4.
   apply epp_C_wd.
 + clear c3 H9 l H6 t H5 c1 H7 H4. rename a into t.
   induction c2 as (P'', s'').
-  eapply SPP_To_more_branches_N in H8; eauto. destroy H8.
+  eapply SPP_To_more_branches_N_epp in H8; eauto. destroy H8.
   rename x into P'. 2: apply more_branches_N_refl.
   rewrite (SP_eta (epp _ _ _ HP)), (SP_eta P') in H4.
   generalize (SPP_To_Defs_stable _ _ _ _ _ _ _ H4); intro H4'.
