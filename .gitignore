@@ -323,3 +323,8 @@ TSWLatexianTemp*
 
 # glossaries
 *.glstex
+*.html
+*.tex~
+*.bib~
+coqdoc.css
+ITP2021/lipics-v2021-sample-article.tex
