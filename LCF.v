@@ -4,9 +4,6 @@ Module Blah (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
 
 Module Import SP_LCF := EPPBase P X V E B R Ev BEv.
 
-
-
-
 Local Ltac solve B B' H := try (elim (XUndefined_dec (Xmerge B B')); intro H;
   [rewrite H| rewrite Xmatch_elim]; auto).
 
@@ -59,10 +56,6 @@ intros.
 simpl. elim BExpr_dec; auto.
 case (Xmerge Bt Bt'); try rewrite H; auto.
 Qed.
-
-
-
-
 
 Lemma Xmerge_assoc : forall B B' B'',
   Xmerge (Xmerge B B') B'' = Xmerge B (Xmerge B' B'').
@@ -329,37 +322,6 @@ elim (P.eq_dec p p0); elim (P.eq_dec p0 p1); intros Hp0p1 Hpp0.
 }
 rewrite <- Hp0p1, <- Hpp0; clear Hpp0 Hp0p1 p0 p1.
 
-(*
-elim (Xmerge_Branching_elim p mB mB' p mB0 mB'0); intro H1.
-1,2: elim (Xmerge_Branching_elim p mB0 mB'0 p mB1 mB'1); intro H2.
-1: { rewrite H1, H2. rewrite Xmerge_comm at 1. auto. }
-rewrite H1. destroy H2; clear H3. rewrite H2.
-elim (Xmerge_Branching_elim p mB mB' p x x0); intro H3.
-1: { rewrite H3, Xmerge_comm at 1. auto. }
-destroy H3. clear H4.
-1: { exfalso.
-  apply Xmerge_inv_Branching in H3; destroy H3.
-  inversion H4; clear H4; inversion H5; clear H5.
-  rewrite <- H10, <- H9 in H8, H6; clear x3 x4 H10 H9.
-  rewrite <- H11, <- H12 in H7, H3; clear x5 x6 H11 H12.
-  apply Xmerge_inv_Branching in H2; destroy H2.
-  inversion H4; clear H4; inversion H5; clear H5.
-  rewrite <- H12, <- H13 in H11, H9; clear x3 x4 H12 H13.
-  rewrite <- H14, <- H15 in H2, H10; clear x5 x6 H14 H15.
-  revert H1; simpl; Peq.
-  induction x; [elim (H11 a); auto | elim H9; auto]; clear H11 H9;
-    intros Hx1 Hx2; destroy Hx2; [idtac | set (a:=True)].
-  all: induction x0; [elim (H2 a0); auto | elim H10; auto]; clear H10 H2;
-    intros Hx3 Hx4; destroy Hx4; [idtac | set (a0:=True)].
-  all: induction x1; [elim (H8 a1); auto | elim H6; auto]; clear H6 H8;
-    intros Hx5 Hx6; destroy Hx6; [idtac | set (a1:=True)].
-  all: induction x2; [elim (H3 a2); auto | elim H7; auto]; clear H7 H3;
-    intros Hx7 Hx8; destroy Hx8.
-  - clear H3 H4.
-    induction mB. 
-*)
-
-(*
 simpl. unfold Pid_dec; rewrite Pdec.eqb_refl.
 induction mB, mB', mB0, mB'0, mB1, mB'1.
 + solve a x0 Ha0. 2: solve x x1 H_1. all: solve x0 x2 H02.
@@ -378,20 +340,260 @@ induction mB, mB', mB0, mB'0, mB1, mB'1.
   - simpl. Peq. solve (Xmerge a x0) x2 Ha02.
     rewrite Xmerge_comm; auto.
   - simpl. Peq. rewrite (H a), H02, Xmerge_comm; auto.
-+ solve a x0 Ha0. 2: solve x x1 H_1. all: simpl; solve' x0 H'0.
-  1,2,4: solve x1 x2 H12. all: try Peq.
++ solve a x0 Ha0. 2: solve x x1 H_1. all: solve' x0 H'0.
+  1,2,4: solve x1 x2 H12. all: simpl; Peq.
   - rewrite Ha0; auto.
   - rewrite <- (H0 x), H_1, Xmerge_comm; simpl; auto. solve' (Xmerge x0 a) H_.
-  - rewrite (H0 x), H12, Xmerge_comm; simpl; auto. solve' x0 H_.
-  - solve (Xmerge x x1) x2 H_12. repeat rewrite Xmatch_elim; auto.
-    Peq. rewrite <- (H x), H_12; auto.
-
-solve' x0 H_.
-  - simpl. Peq. solve (Xmerge a x0) x2 Ha02.
-    rewrite Xmerge_comm; auto.
-  - simpl. Peq. rewrite (H a), H02, Xmerge_comm; auto.
-*)
-
+  - rewrite Xmatch_elim; auto. rewrite (H0 x), H12, Xmerge_comm; auto.
+  - rewrite Xmatch_elim; auto. solve (Xmerge x x1) x2 H_12.
+    rewrite Xmatch_elim; auto. rewrite <- (H0 x), H_12; auto.
+    rewrite Xmatch_elim; auto. rewrite <- (H0 x), Xmatch_elim; auto.
+  - rewrite Xmerge_comm; auto.
++ solve a x0 Ha0. 2: solve x x1 H_1. all: solve' x0 H'0.
+  1,2,4: solve' x1 H1. all: simpl; Peq.
+  - rewrite Ha0; auto.
+  - rewrite Xmatch_elim, H_1; auto.
+  - rewrite Xmatch_elim, Xmerge_comm; auto.
+  - rewrite Xmerge_comm; auto.
++ solve a x0 Ha0. 2: solve' x H'. all: solve x0 x1 H01.
+  1,2,4: solve' x2 H2. all: simpl; Peq.
+  - rewrite <- (H a), Ha0; auto.
+  - solve a (Xmerge x0 x1) Ha01.
+  - solve (Xmerge a x0) x1 Ha01. rewrite Xmerge_comm; auto.
+  - solve (Xmerge a x0) x1 Ha01. rewrite <- (H a), Ha01; auto.
+    solve x x2 H_2. rewrite <- (H a), Xmatch_elim; auto.
+    rewrite <- (H a), Xmatch_elim, Xmatch_elim; auto.
+  - rewrite (H a), H01, Xmerge_comm; auto.
++ solve a x0 Ha0. 2: solve' x H'. all: solve x0 x1 H01.
+  all: simpl; Peq.
+  - rewrite <- (H a), Ha0; auto.
+  - solve a (Xmerge x0 x1) Ha01.
+  - rewrite (H a), H01, Xmerge_comm; auto.
+  - solve (Xmerge a x0) x1 Ha01. rewrite <- (H a), Ha01; auto.
+    rewrite Xmatch_elim, <- (H a), Xmatch_elim, Xmatch_elim; auto.
++ solve a x0 Ha0. 2: solve' x H'. all: solve' x0 H'0.
+  1,2,4: solve' x1 H1. all: simpl; Peq.
+  - rewrite Ha0; auto.
+  - rewrite Xmatch_elim; auto.
+  - rewrite Xmatch_elim, Xmerge_comm; auto.
+  - rewrite Xmerge_comm; auto.
++ solve a x0 Ha0. 2: solve' x H'. all: solve' x0 H'0.
+  all: simpl; Peq.
+  - rewrite Ha0; auto.
+  - rewrite Xmatch_elim; auto.
+  - rewrite Xmerge_comm; auto.
++ solve' a Ha. 2: solve x x0 H_0. all: solve' x1 H1.
+  1,2,4: solve x0 x2 H02. all: simpl; Peq; auto.
+  - rewrite <- (H0 x), H_0; simpl; auto. solve a x1 Ha1.
+  - rewrite (H0 x), H02, (Xmerge_comm x); simpl; auto. solve a x1 Ha1.
+  - solve a x1 Ha1. solve (Xmerge x x0) x2 H_02.
+    rewrite <- (H0 x), H_02; auto. rewrite Xmatch_elim; auto.
+    rewrite Xmatch_elim, <- (H0 x), Xmatch_elim; auto.
+  - rewrite Xmerge_comm; auto.
++ solve' a Ha. 2: solve x x0 H_0. all: solve' x1 H1.
+  1,2,4: solve' x0 H'0. all: simpl; Peq; auto.
+  - solve a x1 Ha1. rewrite H_0; auto.
+  - solve a x1 Ha1. rewrite Xmerge_comm; auto.
+  - rewrite Xmerge_comm; auto.
++ solve' a Ha. 2: solve x x0 H_0. all: solve x0 x1 H01.
+  all: simpl; Peq; auto.
+  - rewrite Xmatch_elim, <- (H0 x), H_0; auto.
+  - rewrite Xmatch_elim, (H0 x), H01, Xmerge_comm; auto.
+  - rewrite Xmatch_elim; auto. solve (Xmerge x x0) x1 H_01.
+    rewrite Xmatch_elim, <- (H0 x), H_01; auto.
+    rewrite Xmatch_elim, <- (H0 x), Xmatch_elim; auto.
++ solve' a Ha. 2: solve x x0 H_0. all: solve' x0 H'0.
+  all: simpl; Peq; auto.
+  - rewrite Xmatch_elim, H_0; auto.
+  - rewrite Xmatch_elim, Xmerge_comm; auto.
++ solve' a Ha. 2: solve' x H_. all: solve' x0 H'0.
+  1,2,4: solve' x1 H1. all: simpl; Peq; auto.
+  - solve a x0 Ha0.
+  - solve a x0 Ha0; rewrite Xmerge_comm; auto.
+  - rewrite Xmerge_comm; auto.
++ solve' a Ha. 2: solve' x H_. all: solve' x0 H'0.
+  all: simpl; Peq; auto.
+  - solve a x0 Ha0.
+  - rewrite Xmerge_comm; auto.
++ solve' a Ha. 2: solve' x H_. all: solve' x0 H'0.
+  all: simpl; Peq; auto.
+  - rewrite Xmatch_elim; auto.
+  - rewrite Xmatch_elim, Xmerge_comm; auto.
++ solve' a Ha. 2: solve' x H_. all: simpl; Peq; auto.
+  rewrite Xmatch_elim, Xmatch_elim; auto.
++ solve a x Ha_. 2: solve' x0 H'0. all: solve x x1 H_1.
+  1,3: solve x0 x2 H02. all: simpl; Peq; auto.
+  - rewrite <- (H a), Ha_; auto.
+  - rewrite H02. solve (Xmerge a x) x1 Ha_1.
+  - solve (Xmerge a x) x1 Ha_1.
+    rewrite <- (H a), Ha_1; auto.
+    rewrite Xmatch_elim, <- (H a), Xmatch_elim, Xmatch_elim; auto.
+  - rewrite (H a), H_1, Xmerge_comm; auto.
++ solve a x Ha_. 2: solve' x0 H'0. all: solve x x1 H_1.
+  1,3: solve' x0 H'0. all: simpl; Peq; auto.
+  - rewrite <- (H a), Ha_; auto.
+  - solve (Xmerge a x) x1 Ha_1.
+    rewrite Xmatch_elim; auto. Peq. rewrite <- (H a), Ha_1; auto.
+    rewrite Xmatch_elim, Xmatch_elim; auto. Peq.
+    rewrite <- (H a), Xmatch_elim, Xmatch_elim; auto.
+  - rewrite (H a), H_1, Xmerge_comm; auto.
++ solve a x Ha_. 2: solve' x0 H'0. all: solve' x H_.
+  1,3: solve x0 x1 H01. all: simpl; Peq; auto.
+  - rewrite Ha_; auto.
+  - rewrite Xmatch_elim, H01; auto.
+  - rewrite Xmerge_comm; auto.
++ solve a x Ha_. 2: solve' x0 H'0. all: solve' x H_.
+  1,3: solve' x0 H'0. all: simpl; Peq; auto.
+  - rewrite Ha_; auto.
+  - repeat rewrite Xmatch_elim; auto. Peq; auto.
+  - rewrite Xmerge_comm; auto.
++ solve a x Ha_. all: solve x x0 H_0. 1,3: solve' x1 H1.
+  all: simpl; Peq; auto.
+  - rewrite <- (H a), Ha_; auto.
+  - solve (Xmerge a x) x0 Ha_0.
+  - solve (Xmerge a x) x0 Ha_0. rewrite <- (H a), Ha_0; auto.
+    rewrite Xmatch_elim, <- (H a), Xmatch_elim, Xmatch_elim; auto.
+  - rewrite (H a), H_0, Xmerge_comm; auto.
++ solve a x Ha_. all: solve x x0 H_0. all: simpl; Peq; auto.
+  - rewrite <- (H a), Ha_; auto.
+  - rewrite (H a), H_0, Xmerge_comm; auto.
+  - solve (Xmerge a x) x0 Ha_0. rewrite <- (H a), Ha_0; auto.
+    rewrite <- (H a), Xmatch_elim; auto.
++ solve a x Ha_. all: solve' x H_. 1,3: solve' x0 H'0.
+  all: simpl; Peq; auto.
+  - rewrite Ha_; auto.
+  - rewrite Xmatch_elim; auto.
+  - rewrite Xmerge_comm; auto.
++ solve a x Ha_. all: solve' x H_. all: simpl; Peq; auto.
+  - rewrite Ha_; auto.
+  - rewrite Xmerge_comm; auto.
++ solve' a Ha. 2: solve' x H_. all: solve' x0 H'0.
+  1,3: solve x x1 H_1. all: simpl; Peq; auto.
+  - rewrite H_1. solve a x0 Ha0.
+  - rewrite Xmerge_comm; auto.
++ solve' a Ha. 2: solve' x H_. all: solve' x0 H'0.
+  1,3: solve' x H_. all: simpl; Peq; auto.
+  - solve a x0 Ha0.
+    rewrite Xmatch_elim; auto. Peq. rewrite Ha0; auto.
+    repeat rewrite Xmatch_elim; auto. Peq; auto.
+  - rewrite Xmerge_comm; auto.
++ solve' a Ha. 2: solve' x H_. all: solve x x0 H_0.
+  all: simpl; Peq; auto. rewrite Xmatch_elim, H_0; auto.
++ solve' a Ha. all: solve' x H_.
+  - Peq; auto.
+  - rewrite Xmatch_elim; auto.
++ solve' a Ha. all: solve' x H_. 1,3: solve' x0 H'0.
+  all: simpl; Peq; auto.
+  - solve a x Ha_.
+  - rewrite Xmerge_comm; auto.
++ solve' a Ha. all: solve' x H_. all: simpl; Peq; auto.
+  rewrite Xmerge_comm; auto.
++ solve' a Ha. all: solve' x H_. all: simpl; Peq; auto.
+  rewrite Xmatch_elim; auto.
++ solve' a Ha. all: simpl; Peq; auto. rewrite Xmatch_elim; auto.
++ solve' x0 H'0. solve x x1 H_1. all: solve x0 x2 H02.
+  1,3: solve x1 x3 H13. all: simpl; Peq; auto.
+  - rewrite Xmatch_elim, <- (H0 x), H_1; auto.
+  - rewrite Xmatch_elim, (H0 x), H13, Xmerge_comm; auto.
+  - rewrite Xmatch_elim; auto. solve (Xmerge x x1) x3 H_13.
+    rewrite Xmatch_elim, <- (H0 x), H_13; auto.
+    rewrite Xmatch_elim, <- (H0 x), Xmatch_elim; auto.
+  - rewrite H02; auto.
++ solve' x0 H'0. solve x x1 H_1. all: solve x0 x2 H02.
+  1,3: solve' x1 H1. all: simpl; Peq; auto.
+  - rewrite Xmatch_elim, H_1; auto.
+  - rewrite Xmatch_elim, Xmerge_comm; auto.
+  - rewrite H02; auto.
++ solve' x0 H'0. solve x x1 H_1. all: solve' x0 H'0.
+  all: rewrite Xmatch_elim; auto. all: solve x1 x2 H12.
+  all: simpl; Peq; auto.
+  - rewrite Xmatch_elim, <- (H0 x), H_1; auto.
+  - rewrite Xmatch_elim, (H0 x), H12, Xmerge_comm; auto.
+  - rewrite Xmatch_elim; auto. solve (Xmerge x x1) x2 H_12.
+    rewrite Xmatch_elim, <- (H0 x), H_12; auto.
+    rewrite Xmatch_elim, <- (H0 x), Xmatch_elim; auto.
++ solve' x0 H'0. solve x x1 H_1. all: solve' x0 H'0.
+  all: rewrite Xmatch_elim; auto. all: solve' x1 H1.
+  all: simpl; Peq; auto.
+  - rewrite Xmatch_elim, H_1; auto.
+  - rewrite Xmatch_elim, Xmerge_comm; auto.
++ solve' x0 H'0. solve' x H_. all: solve x0 x1 H01.
+  1,3: solve' x2 H2. all: simpl; Peq; auto.
+  - rewrite Xmatch_elim; auto.
+  - rewrite Xmatch_elim, Xmerge_comm; auto.
+  - rewrite H01; auto.
++ solve' x0 H'0. solve' x H_. all: solve x0 x1 H01.
+  all: simpl; Peq; auto.
+  - rewrite Xmatch_elim; auto.
+  - rewrite H01; auto.
++ solve' x0 H'0. solve' x H_. all: solve' x0 H'0.
+  all: rewrite Xmatch_elim; auto. all: solve' x1 H1.
+  all: simpl; Peq; auto.
+  - rewrite Xmatch_elim; auto.
+  - rewrite Xmatch_elim, Xmerge_comm; auto.
++ solve' x0 H'0. solve' x H_. all: rewrite Xmatch_elim; auto.
+  Peq. rewrite Xmatch_elim; auto.
++ solve x x0 H_0. all: solve' x1 H1. 1,3: solve x0 x2 H02.
+  all: simpl; Peq; auto.
+  - rewrite Xmatch_elim, <- (H0 x), H_0; auto.
+  - rewrite Xmatch_elim, (H0 x), H02, Xmerge_comm; auto.
+  - rewrite Xmatch_elim; auto. solve (Xmerge x x0) x2 H_02.
+    rewrite Xmatch_elim, <- (H0 x), H_02; auto.
+    rewrite Xmatch_elim, <- (H0 x), Xmatch_elim; auto.
++ solve x x0 H_0. all: solve' x1 H1. 1,3: solve' x0 H'0.
+  all: simpl; Peq; auto.
+  - rewrite Xmatch_elim, H_0; auto.
+  - rewrite Xmatch_elim, Xmerge_comm; auto.
++ solve x x0 H_0. all: solve x0 x1 H01. all: simpl; Peq; auto.
+  - rewrite <- (H0 x), H_0; auto.
+  - rewrite (H0 x), H01, Xmerge_comm; auto.
+  - solve (Xmerge x x0) x1 H_01.
+    rewrite <- (H0 x), H_01; auto.
+    rewrite <- (H0 x), Xmatch_elim; auto.
++ solve x x0 H_0. all: solve' x0 H'0. all: simpl; Peq; auto.
+  - rewrite H_0; auto.
+  - rewrite Xmerge_comm; auto.
++ solve' x H_. all: solve' x0 H'0. 1,3: solve' x1 H1.
+  all: simpl; Peq; auto.
+  - rewrite Xmatch_elim; auto.
+  - rewrite Xmatch_elim, Xmerge_comm; auto.
++ solve' x H_. all: solve' x0 H'0. all: simpl; Peq; auto.
+  rewrite Xmatch_elim; auto.
++ solve' x H_. all: solve' x0 H'0. all: simpl; Peq; auto.
+  rewrite Xmerge_comm; auto.
++ solve' x H_. all: simpl; Peq; auto.
+  rewrite Xmatch_elim; auto.
++ solve' x H_. all: solve' x0 H'0. all: solve x x1 H1.
+  2: solve x0 x2 H02. all: simpl; Peq; auto.
+  - rewrite H1; auto.
+  - rewrite Xmatch_elim, H02; auto.
++ solve' x H_. solve' x0 H'0. all: solve x x1 H_1.
+  all: simpl; Peq; auto.
+  - rewrite H_1; auto.
+  - repeat rewrite Xmatch_elim; auto. Peq; auto.
++ solve' x H_. solve' x0 H'0. all: rewrite Xmatch_elim; auto.
+  solve x0 x1 H01. simpl; Peq. rewrite Xmatch_elim, H01; auto.
++ solve' x H_. solve' x0 H'0.
++ solve' x H_. solve x x0 H_0. 2: solve' x1 H1.
+  all: simpl; Peq; auto.
+  - rewrite H_0; auto.
+  - rewrite Xmatch_elim; auto.
++ solve' x H_. solve x x0 H_0. simpl; Peq. rewrite H_0; auto.
++ solve' x H_. rewrite Xmatch_elim; auto.
+  solve' x0 H'0. simpl; Peq. rewrite Xmatch_elim; auto.
++ solve' x H_.
++ solve' x H_. all: solve' x0 H'0. 2: solve x x1 H_1.
+  all: simpl; Peq; auto. rewrite Xmatch_elim, H_1; auto.
++ solve' x H_. all: solve' x0 H'0. 2: rewrite Xmatch_elim; auto.
+  simpl; Peq; auto.
++ solve' x H_. solve x x0 H_0. simpl; Peq. rewrite H_0; auto.
++ solve' x H_.
++ solve' x H_. 2: solve' x0 H'0. all: simpl; Peq; auto.
+  rewrite Xmatch_elim; auto.
++ solve' x H_. simpl; Peq; auto.
++ solve' x H_. simpl; Peq; auto.
++ simpl; Peq; auto.
+Qed.
 
 
 
