@@ -12,7 +12,7 @@ _ := $(foreach exe,$(EXEs),\
 
 CLEANING_LIST := %.aux %.glob %.o %.vo 
 
-targets := Basic Common CC SP EPP Kleene Implementation
+targets := Basic Common CC SP Merge Pruning EPP Kleene Implementation
 
 .PHONY: all clean targets
 	
