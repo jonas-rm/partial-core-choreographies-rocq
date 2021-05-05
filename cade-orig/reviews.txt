@@ -1,0 +1,175 @@
+----------------------- REVIEW 1 ---------------------
+SUBMISSION: 57
+TITLE: Certifying Choreography Compilation
+AUTHORS: Luís Cruz-Filipe, Fabrizio Montesi and Marco Peressotti
+
+----------- Overall evaluation -----------
+This work presents the certification of a choreography compiler.  Choreographic programming is an emerging paradigm to describe distributed systems via choreographies, i.e. interactions between communicating processes not unlike the way cryptographic protocols are commonly described (yes, a concrete, interesting, example program/protocol would have helped me understand the point better).  The target language is a distributed process calculus.  The certification task is conducted using using Coq.
+
+It should be made clearer that the whole formalization can be found in 13.
+
+This undeniably corresponds to a lot of work.  Besides the formalization of the Choreography language, the certified compilation is around 10000 lines (EPP.v is nearly 5000 lines long, Merge.v is 2000 lines long, and Pruning.v is 1000 lines long).  I understand that the authors want to get the most out of their investment, but I am afraid CADE is not the right medium.  CADE is quite open to paper presenting formalization using proof assistants like these, but since neither formalization per se, nor process calculus are core topics of CADE, it needs a better job at motivating the work.  Currently, the paper remains very abstract.  There is not even one motivating example (a small interesting application of choreography, with its compilation into process calculus).  Is this formalization intended for practical purposes (like, e.g. CompCert), or will it stay a pretty abstract exercise of the mind?
+
+The paper is very carefully written, it is clear, probably at the right level for somebody with a strong interest for formalization in Coq, and knowledge in process calculus.  Again, I am conscious of the enormous amount of energy and clever thinking put into this work, but without more care to motivate your work, I guess you will simply miss the CADE audience.
+
+
+
+
+
+Minor remarks:
+
+Proving a methodology for EPP correct: maybe change to Proving correct a methodology...
+
+Make sure capital letters show up in titles in the bibliography.
+----------- Specific questions for rebuttal -----------
+Could you add an illustrative example, that could motivate the work?
+
+
+----------------------- REVIEW 2 ---------------------
+SUBMISSION: 57
+TITLE: Certifying Choreography Compilation
+AUTHORS: Luís Cruz-Filipe, Fabrizio Montesi and Marco Peressotti
+
+----------- Overall evaluation -----------
+A choreography is a global description of a distributed system written
+as a sequential Alice-and-Bob-style program. To be deployed,
+choreographies must be projected (compiled) onto separate programs for
+each participating node. A standard expected result for such a
+projection function is the EPP theorem (Endpoint Projection Theorem),
+which states that the compilation enjoys operational correspondence.
+This paper presents a Coq formalisation of the EPP theorem, for a
+projection function from a variant of Core Choreographies to a
+purpose-built distributed process calculus.  Unlike previous published
+work choreography formalisation, this one considers a target language
+featuring recursion.
+
+Endpoint projection tends to be rather messy, and its correctness
+proofs likewise, so a formalisation of this result is a welcome
+addition to the literature. The writing is clear and (mostly)
+technically self-contained. Proof scripts are available online and
+represent a non-trivial amount of novel formalisation work.  Your
+result seems stronger than the title implies: you could call it
+"certified choreography compilation" instead of "certifying
+choreography compilation", since you prove the compiler itself
+correct, not individual runs of the compiler.
+
+The reader comes out of the paper assured, as the conclusion puts it,
+that "the proof techniques used in the literature are correct, and
+identified only missing minor assumptions about runtime terms that
+trivially hold when these are used as in-tended". (This "missing minor
+assumption" is not mentioned at all until the conclusion---maybe the
+discussion of runtime terms in Section 5 could signpost which parts
+exactly are novel?)
+
+Beyond that, however, I get the impression that the paper doesn't have
+very much to tell me other than "we formalised this". Section 3-7 in
+particular comes across as rather dry summaries of how the authors
+transcribed their previous pen-and-paper work into Coq using (as far
+as I can tell) standard techniques throughout, and we learn how long
+the proofs are and that some proofs require case analysis with
+hundreds of cases. There is little real discussion about techniques
+used, design decisions taken or lessons learned. (The authors refer to
+[12], which this formalisation builds on, for design decisions about
+the source language formalisation, but that only covers the background
+material of the present paper).
+
+The authors appear to have made the decision to present lemmas exactly
+as they appear in the Coq sources, or at least with a very close
+correspondence between the two. This is laudable for its honesty, but
+not optimal in terms of readability. As a representative example,
+consider the lemma Network_eq_cross. There are several things you
+could do here to make it more readable without straying too far from
+the formalisation: instead of p?q?p?r?p?s?q?r?q?s?r?s? you could
+introduce an abbreviation like all_distinct [p,q,r,s]?. The following
+two lines are difficult to parse, because there are at least four
+infix operators in use and no parentheses to indicate precedence. You
+could either add more parentheses, or use differences in spacing to
+indicate operator precedence.
+
+I'm puzzled by the decision to introduce a separate type XBehaviour to
+define merging, it seems overkill. First, the main thing it does that
+options don't is allow you to chuck an XUndefined somewhere deep in
+the innards of a term, but from the definition of Xmerge it appears
+that you don't use this capability: any deep occurence of XUndefined
+is bubbled up to the top level. You state that you need to distinguish
+between merge failure and undefinedness, which I guess is a reference
+to the line starting this "in match BL, BR ...". However, I don't see
+how this problem would arise if the type of Xmerge was
+Behaviour?Behaviour?option Behaviour. The only difference would be
+that the type of BL,BR here would be option(option Behaviour), with
+None denoting undefinedness and Some(None) denoting merge failure, so
+I fail to see how you'd lose the distinction.
+
+Later on, we learn that the inclusion of XUndefined sets the stage for
+future work on choreography repair. If so, I think it would be more
+elegant to just include Undefined in the syntax of Behaviour even
+though it's not meant to be part of any real program, same as you did
+with RT_Call in the source language---saves you some needless
+duplication and obviates the need to define injections.
+
+What is the parallel composition of networks with overlapping Pids?
+
+"completeness of EPP is proven by structural induction on the
+derivation of the transition performed by the choreography C"
+
+Are you sure you meant to write *structural* induction here?  It's
+induction on the semantics not the syntax that you're describing.
+
+
+----------------------- REVIEW 3 ---------------------
+SUBMISSION: 57
+TITLE: Certifying Choreography Compilation
+AUTHORS: Luís Cruz-Filipe, Fabrizio Montesi and Marco Peressotti
+
+----------- Overall evaluation -----------
+Choreographies are high-level (global) descriptions of the desired
+    behavior of a distributed computation.  Choreography compilation
+    (or endpoint projection) translates this to local programs running
+    in individual communicating processes.  The present paper describes
+    a Coq formalization and correctness proof from a language called
+    Core Choreographies (CC) defined by a subset of the authors [24,11]
+    into Stateful Processes (SP), designed to be coherent with CC also
+    by the authors [10,11].
+
+    Choreographies and choreographic compilation has a lot of
+    potential for build correct-by-construction distributed systems.
+    But the compilation process is complicated and error-prone, so a
+    formalization effort seems indeed a useful enterprise.
+
+    Unfortunately, I found the paper to be poorly written to the point
+    of being incomprehensible, despite the compelling nature of the
+    introduction and high-level motivation.  The paper mainly consists
+    of brief descriptions which seem to require an understanding of
+    the prior work in [10,11], an longish definitions and theorems in
+    Coq that don't help in this understanding.  As a result, I am left
+    uncertain as to what is learned from the enterprise from the
+    formalization perspective, and also what has been learned about
+    choreographies and choreography compilation itself.  Finally, the
+    conclusion indicates that the work is incomplete in its present
+    state, not covering the Turing completeness of SP.
+
+    As an example of my simple objections let's consider the syntax of
+    choreographies on page 3.  It is not explained what p, q, e, x, or
+    l stand for, so I didn't know how to even read Eta.  What is the
+    value that is being communicated?  What is the role of x?  What
+    does "label communication" mean?  Also, I could not follow at all
+    the description of RT_Call X ps C, and the formalization does not
+    help.  There are no examples, so there was no way for me to
+    understand these definitions.  Also, just quoting lengthy Coq code
+    does not help understanding, or at least it didn't help me.
+
+    My recommendation would be to cut down drastically on quoted Coq
+    formalization and use informal descriptions and examples to
+    explain the key concepts.  Coq formalizations can presumably be
+    found in online, so the point of a paper *about* a formalization
+    has to be to explain the underlying languages, their semantics,
+    their relationship, and the difficulties and lessons learned from
+    attempts to formalize them.  I have the feeling the paper tried
+    to do this in Sections 4, 5, and 6, but I was already too lost at
+    this point to understand.
+----------- Specific questions for rebuttal -----------
+What were the key lessons learned about choreographies and
+    choreographic projection through this formalization effort?
+
+
+------------------------------------------------------

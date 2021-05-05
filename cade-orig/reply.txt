@@ -1,0 +1,29 @@
+We thank the reviewers for their comments, which we will take into account. Below we answer theior specific questions.
+
+REVIEWER 1
+----------
+This formalization is intended as a first step in a CompCert-like library for choreographic programming.
+
+A concrete, simple, example of a choreography we can write is the following procudure, specifying an authentication protocol where a client (c) sends their password to an authentication server (a); a then checks with a secure server (s) that this password is correct, and in the affirmative case sends a token to c, otherwise recurs.
+
+X = c # pwd --> a $ pwd; a # pwd --> s $ x;
+  if s.ok then (s --> a[ok]; a --> c[ok]; a # token --> c $ y)
+          else (s --> a[ko]; a --> c[ko]; X)
+
+Applying the extracted compilation procedure from the Coq formalization to this choreography yields the corresponding procedures at s, a and c, guaranteed to comply with the original choreography.
+
+
+REVIEWER 2
+----------
+The parallel composition of networks with overlapping pids keeps the definition of the behaviour in the first network. (We chose this default option to make composition a total function.)
+
+The proof of completeness of EPP is by induction on the derivation of the transition. We meant "structural induction" in the sense that the induction is on the structure of the derivation tree.
+
+
+REVIEWER 3
+----------
+There are two main lessons from this formalization work.
+
+The first is that it is feasible to use a theorem prover to formalize state-of-the-art research in choreographies and related topics, where proofs are known to be complex due to the number of cases to consider, and where errors in published proofs have unfortunately been found a number of times.
+
+The second is that it is even desirable to work in such a manner. This formalization process showed that it is easy to miss problematic details in proofs by structural induction due to the large number of cases to be considered. We tried to give a hint of the problems encountered in the paper, but it is hard to be very concrete due to the very technical nature of such problems and the space restrictions.
