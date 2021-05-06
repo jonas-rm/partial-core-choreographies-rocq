@@ -328,3 +328,4 @@ TSWLatexianTemp*
 *.bib~
 coqdoc.css
 ITP2021/lipics-v2021-sample-article.tex
+*.sty~
