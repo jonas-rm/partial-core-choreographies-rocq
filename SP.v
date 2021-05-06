@@ -1969,6 +1969,18 @@ assert (t = t0).
   rewrite <- H6, H14; eauto.
 Qed.
 
+Lemma SPP_To_deterministic : forall P s tl P' s' P'' s'',
+  (P,s) --[tl]--> (P',s') -> (P,s) --[tl]--> (P'',s'') ->
+  (Net P' == Net P'') /\ Procs P' = Procs P'' /\ eq_state_ext s' s''.
+Proof.
+repeat split.
++ eapply SPP_To_deterministic_1; eauto.
++ transitivity (Procs P). symmetry.
+  induction P, P'. eapply SPP_To_Defs_stable; eauto.
+  induction P, P''. eapply SPP_To_Defs_stable; eauto.
++ eapply SPP_To_deterministic_2; eauto.
+Qed.
+
 Lemma SPP_ToStar_deterministic_1 : forall P s tl P' s' P'' s'',
   (P,s) --[tl]-->* (P',s') -> (P,s) --[tl]-->* (P'',s'')
   -> Net P' == Net P''.
