@@ -1,6 +1,113 @@
 Require Import EPP.
 
-Open Scope MC_scope.
+Module Amend (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
+
+Module PR := DecProd R P.
+
+Module Export EPPBase := EPPBase P X V E B R Ev BEv.
+
+Section Amend.
+
+Open Scope CC_scope.
+
+Fixpoint amend Defs (C:Choreography) (p:Pid) := 
+match C with
+| eta;; C' => eta;; (amend Defs C' p)
+| If q ?? b Then C1 Else C2 =>
+    let C1' := amend Defs C1 p in let C2' := amend Defs C2 p in
+    match (collapse (bproj Defs (If q ?? b Then C1' Else C2') p)) with
+    | XUndefined => If q ?? b Then (q --> p[left];; C1') Else (q --> p[right];; C2')
+    | _ => If q ?? b Then C1' Else C2'
+    end
+| RT_Call X ps C' => RT_Call X ps (amend Defs C' p)
+| _ => C
+end.
+
+Lemma amend_proj : forall Defs C p,
+  collapse (bproj Defs (amend Defs C p) p) <> XUndefined.
+Proof.
+induction C; intros.
++ simpl.
+  induction e. 2: case l. all: elim Pid_dec; simpl.
+  1,3,5: rewrite Xmatch_elim; auto; discriminate.
+  all: elim Pid_dec; simpl; auto;
+    rewrite Xmatch_elim; auto; discriminate.
++ rename p0 into p, p into q.
+change (amend Defs (If q ?? b Then C1 Else C2) p) with
+    match (collapse (bproj Defs (If q ?? b Then (amend Defs C1 p) Else (amend Defs C2 p)) p)) with
+    | XUndefined => If q ?? b Then (q --> p[left];; amend Defs C1 p) Else (q --> p[right];; amend Defs C2 p)
+    | _ => If q ?? b Then (amend Defs C1 p) Else (amend Defs C2 p)
+    end.
+  elim (XUndefined_dec (collapse (bproj Defs (If q ?? b Then (amend Defs C1 p) Else (amend Defs C2 p)) p))); intros.
+  - rewrite a; simpl. case Pid_dec; simpl.
+    * rewrite Xmatch_elim; auto. 2: rewrite Xmatch_elim; auto; discriminate.
+      rewrite Xmatch_elim; auto. 2: rewrite Xmatch_elim; auto; discriminate.
+      discriminate.
+    * Peq. Peq. repeat rewrite Xmatch_elim; auto.
+      simpl. repeat rewrite Xmatch_elim; auto. discriminate.
+      intro H; eapply IHC2; rewrite H; auto.
+      intro H; eapply IHC1; rewrite H; auto.
+  - rewrite Xmatch_elim; auto.
++ simpl. elim in_dec; discriminate.
++ simpl. elim in_dec; auto. discriminate.
++ discriminate.
+Qed.
+
+(* Lemma : P --[tl]-->* P' iff amend(P) --[tl']-->* amend(P') *)
+
+(*
+Lemma amend_reduce_1 : forall Defs C p sigma t C' sigma',
+  CCC_To Defs (amend Defs C p) sigma t C' sigma' ->
+  
+*)
+
+Inductive more_sels : Choreography -> Choreography -> Prop :=
+| MS_refl C : more_sels C C
+| MS_Eta eta C C' : more_sels C C' -> more_sels (eta;;C) (eta;;C')
+| MS_If p b C1 C1' C2 C2' : more_sels C1 C1' -> more_sels C2 C2' ->
+      more_sels (If p ?? b Then C1 Else C2) (If p ?? b Then C1' Else C2')
+| MS_RT_Call X ps C C' : more_sels C C' -> more_sels (RT_Call X ps C) (RT_Call X ps C')
+| MS_sel p q l C C' : more_sels C C' -> more_sels (p --> q[l];; C) C'
+.
+
+Lemma amend_more_sels : forall Defs C p, more_sels (amend Defs C p) C.
+Proof.
+induction C.
+all: try (constructor; auto).
+rename p into q; intro p.
+change (amend Defs (If q ?? b Then C1 Else C2) p) with
+    match (collapse (bproj Defs (If q ?? b Then (amend Defs C1 p) Else (amend Defs C2 p)) p)) with
+    | XUndefined => If q ?? b Then (q --> p[left];; amend Defs C1 p) Else (q --> p[right];; amend Defs C2 p)
+    | _ => If q ?? b Then (amend Defs C1 p) Else (amend Defs C2 p)
+    end.
+  elim (XUndefined_dec (collapse (bproj Defs (If q ?? b Then (amend Defs C1 p) Else (amend Defs C2 p)) p))); intros.
+- rewrite a. constructor; constructor; auto.
+- rewrite Xmatch_elim; auto. constructor; auto.
+Qed.
+
+Lemma more_sels_reduce_1 : forall C1 C2, more_sels C1 C2 ->
+  forall Defs sigma t C1' sigma', CCC_To Defs C1 sigma t C1' sigma' ->
+  more_sels C1' C2 \/ exists C2', CCC_To Defs C2 sigma t C2' sigma' /\ more_sels C1' C2'.
+Proof.
+intros C1 C2 H. induction H; intros.
+- right. exists C1'. split; auto. constructor.
+- inversion H0.
+  + right. exists C'; split; auto. constructor; auto. rewrite <- H5; auto.
+  + right. exists C'; split; auto. constructor; auto. rewrite <- H5; auto.
+  + rewrite <- H6 in H0.
+    clear s' H7 C1' H6 t0 H5 s H4 C0 H2 eta0 H1.
+    elim (IHmore_sels _ _ _ _ _ H8); intros.
+    left; constructor; auto.
+    right. inversion_clear H1. inversion_clear H2. rename x into C2'.
+    exists (eta;; C2'). split; constructor; auto.
+- inversion H1.
+  + right. exists C1'; split; auto. constructor; auto. rewrite <- H8; auto.
+  + right. exists C2'; split; auto. constructor; auto. rewrite <- H8; auto.
+  + elim (IHmore_sels1 _ _ _ _ _ H11); elim (IHmore_sels2 _ _ _ _ _ H12); intros.
+    * left. constructor; auto.
+    * 
+
+
 
 (** MOVE ME *)
 
