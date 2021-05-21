@@ -53,7 +53,30 @@ change (amend Defs (If q ?? b Then C1 Else C2) p) with
 + discriminate.
 Qed.
 
-(* Lemma : P --[tl]-->* P' iff amend(P) --[tl']-->* amend(P') *)
+(* Lemma : P --[tl]-->* P' iff amend(P) --[tl']-->* amend(P')
+
+p.e -> q.x;; If r ?? b Then r.e' -> p.y Else 0
+
+-->
+
+p.e -> q.x ;; r.e' -> p.y
+
+
+(* amended *)
+p.e -> q.x;; If r ?? b Then r --> p[l];; r.e' -> p.y Else r --> p[r]
+
+-->
+
+p.e -> q.x;; r --> p[l];; r.e' -> p.y
+
+
+*)
+
+(*
+if P -->* P' and amend(P) -->* P''
+then there exists P''' such that
+  P' -->* P''' and P'' -->* amend(P''')
+*)
 
 (*
 Lemma amend_reduce_1 : forall Defs C p sigma t C' sigma',
@@ -84,6 +107,17 @@ change (amend Defs (If q ?? b Then C1 Else C2) p) with
 - rewrite a. constructor; constructor; auto.
 - rewrite Xmatch_elim; auto. constructor; auto.
 Qed.
+
+(*
+C1 R C2
+C1 --> C1'
+
+* C1' R than C2
+* C2 --> C2' and C1' R C2'
+
+C1 : If r.e Then p --> q[l] Else p --> q[l]
+C2 : If r.e Then p --> q[l] Else 0
+*)
 
 Lemma more_sels_reduce_1 : forall C1 C2, more_sels C1 C2 ->
   forall Defs sigma t C1' sigma', CCC_To Defs C1 sigma t C1' sigma' ->
