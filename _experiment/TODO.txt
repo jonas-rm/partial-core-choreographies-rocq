@@ -1,0 +1,4 @@
+- finish removing Modules
+- add indices to communications (family of communication operations)
+  and selections?
+- formalize trees (communication expressions)
