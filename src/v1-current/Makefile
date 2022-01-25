@@ -1,65 +1,25 @@
-SHELL=/bin/bash
+# KNOWNTARGETS will not be passed along to CoqMakefile
+KNOWNTARGETS := CoqMakefile
+# KNOWNFILES will not get implicit targets from the final rule, and so
+# depending on them won't invoke the submake
+# Warning: These files get declared as PHONY, so any targets depending
+# on them always get rebuilt
+KNOWNFILES   := Makefile _CoqProject
 
-# Detect number of cores
-NPROCS := 32
+.DEFAULT_GOAL := invoke-coqmakefile
 
-# TODO: This doesn't actually work for some reason
-# ifdef NUMBER_OF_PROCESSORS # Windows
-# 	NPROCS := $(NUMBER_OF_PROCESSORS) \
-# else
-# 	OS := $(shell uname -s) \
-# 	ifeq($(OS),Linux) # Linux
-# 		NPROCS := $(shell grep -c '^processor' /proc/cpuinfo) \
-# 	endif
-# 	ifeq($(OS),Darwin) # Mac OS X
-# 		NPROCS := $(shell system_profiler | awk '/Number Of CPUs/{print $4}{next;}') \
-# 	endif
-# endif
+CoqMakefile: Makefile _CoqProject
+	$(COQBIN)coq_makefile -f _CoqProject -o CoqMakefile
 
-# Make these cores work
-MAKEFLAGS := --jobs=$(NPROCS)
+invoke-coqmakefile: CoqMakefile
+	$(MAKE) --no-print-directory -f CoqMakefile $(filter-out $(KNOWNTARGETS),$(MAKECMDGOALS))
 
-COQFLAGS?=
+.PHONY: invoke-coqmakefile $(KNOWNFILES)
 
-EXEs := coqc coqdoc
-_ := $(foreach exe,$(EXEs),\
-				$(if $(shell which $(exe)),\
-						$(eval $(exe) := $(exe)),\
-						$(if $(shell which $(exe).exe),\
-							$(eval $(exe) := $(exe).exe),\
-							$(error "No $(exe) or $(exe).exe in PATH"))))
+####################################################################
+##                      Your targets here                         ##
+####################################################################
 
-CLEANING_LIST := %.aux %.glob %.o %.vo %.vio %.vok %.vos %.html
-
-targets := Basic Common CC Kleene Implementation SP BranchingOrder Merge EPP EPPTheorem Amendment Turing
-doc-targets := $(addsuffix .html, $(targets))
-build-targets := $(addsuffix .vo, $(targets))
-
-all: doc build
-
-$(build-targets):
-	$(coqc) $(COQFLAGS) $(basename $@).v
-
-.SECONDEXPANSION:
-$(doc-targets): $$(basename $$@).vo
-	$(coqdoc) -g $(basename $@).v
-
-# TODO: Use coqdep instead of writing deps manually
-Common.vo: Basic.vo
-CC.vo: Basic.vo Common.vo
-Kleene.vo: Basic.vo
-Implementation.vo: Common.vo CC.vo Kleene.vo
-SP.vo: Common.vo CC.vo
-BranchingOrder.vo: SP.vo
-Merge.vo: BranchingOrder.vo
-EPP.vo: CC.vo Merge.vo
-EPPTheorem.vo: EPP.vo
-Amendment.vo: EPP.vo
-Turing.vo: Amendment.vo EPPTheorem.vo Implementation.vo
-
-doc: $(doc-targets)
-
-build: $(build-targets)
-
-clean:
-	@rm -f $(foreach file,$(targets),$(subst %,$(file),$(CLEANING_LIST))) 3>&1 1>&2 2>&3 3>&- | grep -v "No such file or directory" | 3>&1 1>&2 2>&3 3>&-
+# This should be the last rule, to handle any targets not declared above
+%: invoke-coqmakefile
+	@true

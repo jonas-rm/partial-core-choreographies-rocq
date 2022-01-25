@@ -332,3 +332,5 @@ ITP2021/lipics-v2021-sample-article.tex
 *.hs
 *.ml
 *.mli
+CoqMakefile
+CoqMakefile.conf
