@@ -1,4 +1,6 @@
-- finish removing Modules
+- fix Parallel.v
+- finish proof of merge associative
+
 - add indices to communications (family of communication operations)
   and selections?
 - formalize trees (communication expressions)

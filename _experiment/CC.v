@@ -13,6 +13,7 @@ Record Signature :=
     expr : DecType;
     bexpr : DecType;
     recvar : DecType;
+    ann : DecType;
     ev: @Eval expr var value value;
     bev : @Eval bexpr var value Bool}.
 
@@ -26,6 +27,7 @@ Local Definition Value := value Sig.
 Local Definition Expr := expr Sig.
 Local Definition BExpr := bexpr Sig.
 Local Definition RecVar := recvar Sig.
+Local Definition Ann := ann Sig.
 Local Definition Ev := ev Sig.
 Local Definition BEv := bev Sig.
 
@@ -52,7 +54,7 @@ Proof. decide equality; try apply eq_dec. decide equality. Qed.
 (** Choreographies. *)
 
 Inductive Choreography : Type :=
- | Interaction : Eta -> Choreography -> Choreography
+ | Interaction : Ann -> Eta -> Choreography -> Choreography
  | Cond        : Pid -> BExpr -> Choreography -> Choreography -> Choreography
  | Call        : RecVar -> Choreography
  | RT_Call     : RecVar -> (list Pid) -> Choreography -> Choreography
@@ -89,7 +91,7 @@ Bind Scope CC_scope with Eta.
 
 Notation "p # e --> q $ x" := (Com p e q x) (at level 50, e at level 9) : CC_scope.
 Notation "p --> q [ l ]" := (Sel p q l) (at level 50) : CC_scope.
-Notation "eta ';;' C" := (Interaction eta C) (at level 60, right associativity) : CC_scope.
+Notation "eta '@' ann ';;' C" := (Interaction ann eta C) (at level 60, right associativity) : CC_scope.
 Notation "'If' p '??' b 'Then' C1 'Else' C2" := (Cond p b C1 C2) (at level 60) : CC_scope.
 
 Open Scope CC_scope.
@@ -108,11 +110,11 @@ Qed.
 (** An initial choreography is what a programmer should write. *)
 Fixpoint initial (C:Choreography) : Prop :=
 match C with
-| Interaction _ C' => initial C'
-| Cond _ _ C1 C2   => initial C1 /\ initial C2
-| Call _           => True
-| RT_Call _ _ _    => False
-| End              => True
+| Interaction _ _ C' => initial C'
+| Cond _ _ C1 C2     => initial C1 /\ initial C2
+| Call _             => True
+| RT_Call _ _ _      => False
+| End                => True
 end.
 
 Lemma initial_dec : forall C, {initial C}+{~initial C}.
@@ -126,12 +128,12 @@ Qed.
 Definition set_union_rv := set_union (@eq_dec RecVar).
 
 Fixpoint Free_RecVar (C:Choreography) : list RecVar :=
-match C with
-| Interaction _ C' => Free_RecVar C'
-| Cond _ _ C1 C2   => set_union_rv (Free_RecVar C1) (Free_RecVar C2)
-| Call Y           => (Y::nil)
-| RT_Call Y _ C'   => set_union_rv (Y::nil) (Free_RecVar C')
-| End              => nil
+match C with  
+| Interaction _ _ C' => Free_RecVar C'
+| Cond _ _ C1 C2     => set_union_rv (Free_RecVar C1) (Free_RecVar C2)
+| Call Y             => (Y::nil)
+| RT_Call Y _ C'     => set_union_rv (Y::nil) (Free_RecVar C')
+| End                => nil
 end.
 
 Definition X_Free (X:RecVar) (C:Choreography) : Prop :=
@@ -162,8 +164,8 @@ Qed.
 
 (** Inversion results for bound variables. *)
 
-Lemma X_Free_Eta : forall X eta C,
-  X_Free X (eta;;C) -> X_Free X C.
+Lemma X_Free_Eta : forall X ann eta C,
+  X_Free X (eta@ann;;C) -> X_Free X C.
 Proof. intros. apply H. Qed.
 
 Lemma X_Free_Cond : forall X p b C1 C2,
@@ -173,8 +175,8 @@ intros. red in H. simpl in H.
 elim (set_union_elim _ _ _ _ H); auto.
 Qed.
 
-Lemma Not_X_Free_Eta : forall X eta C,
-  ~X_Free X (eta;;C) -> ~X_Free X C.
+Lemma Not_X_Free_Eta : forall X ann eta C,
+  ~X_Free X (eta@ann;;C) -> ~X_Free X C.
 Proof.
 intros. intro. apply H. red. simpl. auto.
 Qed.
@@ -203,11 +205,11 @@ end.
 
 Fixpoint CCC_pn (C:Choreography) (Pids:RecVar -> list Pid) : list Pid :=
 match C with
-| Interaction eta C' => (set_union_pid (eta_pn eta) (CCC_pn C' Pids))
-| Cond p _ C1 C2     => (set_union_pid (set_union_pid (p::nil) (CCC_pn C1 Pids)) (CCC_pn C2 Pids))
-| Call X             => Pids X
-| RT_Call _ l C'     => set_union_pid l (CCC_pn C' Pids)
-| End                => nil
+| Interaction _ eta C' => (set_union_pid (eta_pn eta) (CCC_pn C' Pids))
+| Cond p _ C1 C2       => (set_union_pid (set_union_pid (p::nil) (CCC_pn C1 Pids)) (CCC_pn C2 Pids))
+| Call X               => Pids X
+| RT_Call _ l C'       => set_union_pid l (CCC_pn C' Pids)
+| End                  => nil
 end.
 
 Ltac sup := unfold set_union_pid; rewrite set_union_iff; auto.
@@ -233,14 +235,14 @@ Definition set_incl_pid := set_incl (@eq_dec Pid).
 
 Fixpoint no_self_comm (C:Choreography) : Prop :=
 match C with
-| Interaction eta C' => match eta with
-                        | Com p _ q _ => p <> q
-                        | Sel p q _   => p <> q
-                        end /\ no_self_comm C'
-| Cond _ _ C1 C2     => no_self_comm C1 /\ no_self_comm C2
-| Call _             => True
-| RT_Call _ _ C'     => no_self_comm C'
-| End                => True
+| Interaction _ eta C' => match eta with
+                          | Com p _ q _ => p <> q
+                          | Sel p q _   => p <> q
+                          end /\ no_self_comm C'
+| Cond _ _ C1 C2       => no_self_comm C1 /\ no_self_comm C2
+| Call _               => True
+| RT_Call _ _ C'       => no_self_comm C'
+| End                  => True
 end.
 
 Lemma no_self_comm_dec : forall C, {no_self_comm C} + {~no_self_comm C}.
@@ -249,13 +251,13 @@ induction C; simpl; auto.
 + (* Eta *)
   inversion_clear IHC.
   - induction e; simpl; auto.
-    * case_eq (t =? t1); simpl; intros.
+    * case_eq (t0 =? t2); simpl; intros.
       ++ right; intro.
          inversion_clear H1.
          apply H2; apply eqb_eq; auto.
       ++ left; split; auto.
          apply eqb_neq; auto.
-    * case_eq (t =? t0); simpl; intros.
+    * case_eq (t0 =? t1); simpl; intros.
       ++ right; intro.
          inversion_clear H1.
          apply H2; apply eqb_eq; auto.
@@ -272,11 +274,11 @@ Qed.
 
 Fixpoint no_empty_ann (C:Choreography) : Prop :=
 match C with
-| Interaction eta C' => no_empty_ann C'
-| Cond _ _ C1 C2     => no_empty_ann C1 /\ no_empty_ann C2
-| Call _             => True
-| RT_Call _ l C'     => l <> nil /\ no_empty_ann C'
-| End                => True
+| Interaction _ eta C' => no_empty_ann C'
+| Cond _ _ C1 C2       => no_empty_ann C1 /\ no_empty_ann C2
+| Call _               => True
+| RT_Call _ l C'       => l <> nil /\ no_empty_ann C'
+| End                  => True
 end.
 
 Lemma no_empty_ann_dec : forall C, {no_empty_ann C} + {~no_empty_ann C}.
@@ -323,8 +325,8 @@ Lemma Choreography_WF_no_empty_ann : forall C,
 Proof. intros. inversion_clear H. auto. Qed.
 
 (** Inversion results. *)
-Lemma Choreography_WF_eta : forall eta C,
-  Choreography_WF (eta;;C) -> Choreography_WF C.
+Lemma Choreography_WF_eta : forall ann eta C,
+  Choreography_WF (eta@ann;;C) -> Choreography_WF C.
 Proof.
 intros.
 inversion_clear H; simpl in H0, H1.
@@ -376,7 +378,7 @@ Qed.
 
 Fixpoint within_Xs (Xs:list RecVar) (C:Choreography) : Prop :=
 match C with
-| Interaction _ C' => within_Xs Xs C'
+| Interaction _ _ C' => within_Xs Xs C'
 | Cond _ _ C1 C2   => within_Xs Xs C1 /\ within_Xs Xs C2
 | Call X           => In X Xs
 | RT_Call X _ C'   => In X Xs /\ within_Xs Xs C'
@@ -421,7 +423,7 @@ Qed.
 
 Fixpoint consistent (Xs:RecVar -> list Pid) (C:Choreography) : Prop :=
 match C with
-| Interaction _ C' => consistent Xs C'
+| Interaction _ _ C' => consistent Xs C'
 | Cond _ _ C1 C2   => consistent Xs C1 /\ consistent Xs C2
 | Call X           => True
 | RT_Call X l C'   => set_incl_pid l (Xs X) /\ consistent Xs C'
@@ -547,14 +549,14 @@ intros.
 destroy H2; repeat (split; auto).
 Qed.
 
-Lemma Program_WF_eta : forall Xs Defs C eta,
-  Program_WF Xs (Build_Program Defs (eta;;C)) -> Program_WF Xs (Build_Program Defs C).
+Lemma Program_WF_eta : forall Xs Defs C ann eta,
+  Program_WF Xs (Build_Program Defs (eta@ann;;C)) -> Program_WF Xs (Build_Program Defs C).
 Proof.
 intros.
 elim (Program_WF_Main _ _ H); simpl; intros.
 inversion_clear H0.
 eapply Program_WF_Main_change; eauto.
-eapply Choreography_WF_eta; repeat split; eauto.
+eapply Choreography_WF_eta with (ann:=ann0); repeat split; eauto.
 apply (Program_WF_Main_within_Xs _ _ H).
 destroy H; auto.
 Qed.
@@ -630,8 +632,8 @@ apply Program_WF_Vars with Xs; auto.
 apply Program_WF_Vars_In with P; auto.
 Qed.
 
-Lemma CCP_WF_eta : forall Defs C eta,
-  CCP_WF (Build_Program Defs (eta;;C)) -> CCP_WF (Build_Program Defs C).
+Lemma CCP_WF_eta : forall Defs C ann eta,
+  CCP_WF (Build_Program Defs (eta@ann;;C)) -> CCP_WF (Build_Program Defs C).
 Proof.
 intros.
 inversion_clear H; inversion_clear H1.
@@ -712,20 +714,20 @@ Proof. intros. apply disjoint_Sel_Sel with l left; auto. Qed.
 
 Inductive CCC_To (Defs : DefSet) :
   Choreography -> Store -> (RichLabel Pid Value Var RecVar) -> Choreography -> Store -> Prop :=
- | C_Com p e q x C s s' : let v := (eval_on_state Ev e s p) in
+ | C_Com p e q x a C s s' : let v := (eval_on_state Ev e s p) in
         s' [==] update s q x v ->
-        CCC_To Defs (p # e --> q $ x;; C) s (R_Com p v q x) C s'
- | C_Sel p q l C s s': s [==] s' ->
-        CCC_To Defs (p --> q [l];; C) s (R_Sel p q l) C s'
+        CCC_To Defs (p # e --> q $ x @ a ;; C) s (R_Com p v q x) C s'
+ | C_Sel p q l a C s s': s [==] s' ->
+        CCC_To Defs (p --> q [l] @ a ;; C) s (R_Sel p q l) C s'
  | C_Then p b C1 C2 s s': s [==] s' ->
         eval_on_state BEv b s p = true ->
         CCC_To Defs (If p ?? b Then C1 Else C2) s (R_Cond p) C1 s'
  | C_Else p b C1 C2 s s': s [==] s' ->
         eval_on_state BEv b s p = false ->
         CCC_To Defs (If p ?? b Then C1 Else C2) s (R_Cond p) C2 s'
- | C_Delay_Eta eta C C' s s' t: disjoint_eta_rl eta t -> 
+ | C_Delay_Eta eta ann C C' s s' t: disjoint_eta_rl eta t -> 
         CCC_To Defs C s t C' s' ->
-        CCC_To Defs (eta;; C) s t (eta;; C') s'
+        CCC_To Defs (eta@ann;; C) s t (eta@ann;; C') s'
  | C_Delay_Cond p b C1 C2 C1' C2' s s' t: disjoint_p_rl p t -> 
         CCC_To Defs C1 s t C1' s' ->
         CCC_To Defs C2 s t C2' s' ->
@@ -757,12 +759,12 @@ Inductive CCC_To (Defs : DefSet) :
 (* Grrrr *)
 (** Useful for inferring a transition automatically. *)
 
-Lemma C_Com' : forall Defs p e q x C s, let v := (eval_on_state Ev e s p) in
-        CCC_To Defs (p # e --> q $ x;; C) s (R_Com p v q x) C (update s q x v).
+Lemma C_Com' : forall Defs p e q x a C s, let v := (eval_on_state Ev e s p) in
+        CCC_To Defs (p # e --> q $ x @ a;; C) s (R_Com p v q x) C (update s q x v).
 Proof. intros. apply C_Com. ESEr. Qed.
 
-Lemma C_Sel' : forall Defs p q l C s,
-  CCC_To Defs (p --> q [l];; C) s (R_Sel p q l) C s.
+Lemma C_Sel' : forall Defs p q l a C s,
+  CCC_To Defs (p --> q [l] @ a;; C) s (R_Sel p q l) C s.
 Proof. intros. apply C_Sel. ESEr. Qed.
 
 Lemma C_Then' : forall Defs p b C1 C2 s,
@@ -823,15 +825,15 @@ Definition Forget := @forget Pid Value Var RecVar.
 
 Section Sanity_Checks.
 
-Example Com_reduction : forall P p e q x C s,
-  (Build_Program P (p # e --> q $ x;; C), s) --[ L_Com p (eval_on_state Ev e s p) q ]--> (Build_Program P C, update s q x (eval_on_state Ev e s p)).
+Example Com_reduction : forall P p e q x a C s,
+  (Build_Program P (p # e --> q $ x @ a;; C), s) --[ L_Com p (eval_on_state Ev e s p) q ]--> (Build_Program P C, update s q x (eval_on_state Ev e s p)).
 Proof.
 intros. rewrite <- (forget_Com _ Value _ RecVar x).
 constructor. apply C_Com'.
 Qed.
 
-Example Sel_reduction : forall P p q l C s, 
-  (Build_Program P (p --> q [l];; C), s) --[ L_Sel p q l ]--> (Build_Program P C, s).
+Example Sel_reduction : forall P p q l a C s, 
+  (Build_Program P (p --> q [l] @ a;; C), s) --[ L_Sel p q l ]--> (Build_Program P C, s).
 Proof.
 intros. rewrite <- (forget_Sel _ Value Var RecVar). constructor. apply C_Sel'.
 Qed.
@@ -1081,8 +1083,8 @@ Lemma CCC_To_pn : forall Defs C s tl C' s', CCC_To Defs C s tl C' s' ->
   forall p, In p (tpn _ _ _ _ tl) -> In p (CCC_pn C (fun X => fst (Defs X))).
 Proof.
 induction C; simpl; intros; inversion H; simpl.
-+ rewrite <- H4 in H0; simpl in H0. sup.
-+ rewrite <- H4 in H0; simpl in H0. sup.
++ rewrite <- H5 in H0; simpl in H0. sup.
++ rewrite <- H5 in H0; simpl in H0. sup.
 + sup. right. eapply IHC; eauto.
 + rewrite <- H6 in H0; simpl in H0. sup. sup.
 + rewrite <- H6 in H0; simpl in H0. sup. sup.
@@ -1108,7 +1110,7 @@ induction C; intros; inversion H.
 + left. simpl. sup.
 + simpl. sup. rewrite <- H6 in H0; simpl in H0.
   revert H0; sup; intro. inversion_clear H0; auto.
-  elim (IHC _ _ _ _ H8 p); auto.
+  elim (IHC _ _ _ _ H9 p); auto.
 + left. simpl. sup; sup.
 + left. simpl. sup; sup.
 + simpl. sup; sup. rewrite <- H7 in H0; simpl in H0.
@@ -1148,7 +1150,7 @@ revert dependent C'.
 clear s'0 H6 tl H2 s0 H3.
 induction C; intros; revert H1; inversion H4.
 all: simpl; repeat sup.
-+ intro. inversion_clear H9; auto.
++ intro. inversion_clear H10; auto.
   right. eauto.
 + intro. inversion_clear H12.
   left. inversion_clear H13; auto.
@@ -1170,9 +1172,9 @@ Lemma CCC_To_Com_neq : forall Defs C s p v q x C' s', Choreography_WF C ->
   CCC_To Defs C s (R_Com p v q x) C' s' -> p <> q.
 Proof.
 induction C; intros; inversion H0.
-+ rewrite <- H1 in H; destroy H.
-  simpl in H11. rewrite <- H5, <- H7; tauto.
-+ eapply IHC; eauto. apply Choreography_WF_eta with e; auto.
++ rewrite <- H3 in H; destroy H.
+  simpl in H12. rewrite <- H6, <- H8; tauto.
++ eapply IHC; eauto. apply Choreography_WF_eta with t e; auto.
 + eapply IHC1; eauto. apply Choreography_WF_Then with p b C2; auto.
 + eapply IHC; eauto. eapply Choreography_WF_Call_1; eauto.
 Qed.
@@ -1181,9 +1183,9 @@ Lemma CCC_To_Sel_neq : forall Defs C s p q l C' s', Choreography_WF C ->
   CCC_To Defs C s (R_Sel p q l) C' s' -> p <> q.
 Proof.
 induction C; intros; inversion H0.
-+ rewrite <- H1 in H; destroy H.
-  simpl in H10. rewrite <- H5, <- H6; tauto.
-+ eapply IHC; eauto. apply Choreography_WF_eta with e; auto.
++ rewrite <- H3 in H; destroy H.
+  simpl in H11. rewrite <- H6, <- H7; tauto.
++ eapply IHC; eauto. apply Choreography_WF_eta with t e; auto.
 + eapply IHC1; eauto. apply Choreography_WF_Then with p b C2; auto.
 + eapply IHC; eauto. eapply Choreography_WF_Call_1; eauto.
 Qed.
@@ -1424,15 +1426,15 @@ Proof.
 induction C; intros; inversion H; inversion H0; 
   try (transitivity C; auto; fail).
 (* Eta *)
-- exfalso. rewrite <- H1, <- H4 in H10.
-  inversion_clear H10. inversion_clear H16. auto.
-- exfalso. rewrite <- H1, <- H4 in H10.
-  inversion_clear H10. inversion_clear H16. auto.
-- exfalso. rewrite <- H12, <- H9 in H3.
-  inversion_clear H3. inversion_clear H16. auto.
-- exfalso. rewrite <- H12, <- H9 in H3.
-  inversion_clear H3. inversion_clear H16. auto.
-- elim (IHC _ _ _ _ _ _ H8 H16); auto.
+- exfalso. rewrite <- H3, <- H5 in H16.
+  inversion_clear H16. inversion_clear H18. auto.
+- exfalso. rewrite <- H3, <- H5 in H16.
+  inversion_clear H16. inversion_clear H18. auto.
+- exfalso. rewrite <- H12, <- H14 in H8.
+  inversion_clear H8. inversion_clear H18. auto.
+- exfalso. rewrite <- H12, <- H14 in H8.
+  inversion_clear H8. inversion_clear H18. auto.
+- elim (IHC _ _ _ _ _ _ H9 H18); auto.
 (* Cond *)
 - transitivity C1; auto.
 - rewrite H10 in H20; inversion H20.
@@ -1470,19 +1472,19 @@ induction C; intros; inversion H; inversion H0;
   try (ESEt s; ESEs; fail); eauto.
 (* Eta *)
 - ESEt (update s q x v).
-  revert H14; unfold v, v0.
-  rewrite <- H1 in H8; inversion H8.
+  revert H16; unfold v, v0.
+  rewrite <- H3 in H11; inversion H11.
   ESEs.
-- rewrite <- H4 in H11; inversion H11.
-- rewrite <- H1, <- H4 in H10.
-  inversion_clear H10. inversion H16. elim H10; auto.
-- rewrite <- H4 in H11; inversion H11.
-- rewrite <- H1, <- H4 in H10.
-  inversion_clear H10. inversion H16. elim H10; auto.
-- rewrite <- H9, <- H12 in H3.
-  inversion_clear H3. inversion H16. elim H3; auto.
-- rewrite <- H9, <- H12 in H3.
-  inversion_clear H3. inversion H16. elim H3; auto.
+- rewrite <- H3 in H11; inversion H11.
+- rewrite <- H3, <- H5 in H16.
+  inversion_clear H16. inversion H18. elim H16; auto.
+- rewrite <- H3 in H11; inversion H11.
+- rewrite <- H3, <- H5 in H16.
+  inversion_clear H16. inversion H18. elim H16; auto.
+- rewrite <- H12, <- H14 in H8.
+  inversion_clear H8. inversion H18. elim H8; auto.
+- rewrite <- H12, <- H14 in H8.
+  inversion_clear H8. inversion H18. elim H8; auto.
 (* Cond *)
 - rewrite <- H6 in H19; elim H19; auto.
 - rewrite <- H6 in H19; elim H19; auto.
@@ -1512,22 +1514,22 @@ Qed.
 (** Conversely: the result choreography determines the transition label
   and resulting state. *)
 
-Lemma CCC_To_eta_reduction : forall eta C s1 s2 tl,
-  CCC_To Defs (eta;;C) s1 tl C s2 ->
+Lemma CCC_To_eta_reduction : forall ann eta C s1 s2 tl,
+  CCC_To Defs (eta@ann;;C) s1 tl C s2 ->
   (forall p e q x, eta = (p # e --> q $ x) -> tl = R_Com p (eval_on_state Ev e s1 p) q x)
   /\
   (forall p q l, eta = (p --> q[l]) -> tl = R_Sel p q l).
 Proof.
 induction C; intros; inversion H; split; intros;
-  try (unfold v); try (inversion H6; auto; fail).
-+ clear s' H5 C' H6 t H4 s H3 eta0 H0 C0 H1.
-  rewrite H2, H9 in IHC; rewrite H9 in H7, H8.
-  clear e H9 H2 H.
-  elim (IHC _ _ _ H8); auto.
-+ clear s' H5 C' H6 t H4 s H3 eta0 H0 C0 H1.
-  rewrite H2, H9 in IHC; rewrite H9 in H7, H8.
-  clear e H9 H2 H.
-  elim (IHC _ _ _ H8); auto.
+  try (unfold v); try (inversion H7; auto; fail).
++ clear s' H5 C' H8 t0 H4 s H2 eta0 H1 ann1 H0 C0 H3.
+  rewrite H6, H7, H11 in *.
+  clear e H9 H11 H.
+  elim (IHC _ _ _ H10); auto.
++ clear s' H5 C' H8 t0 H4 s H2 eta0 H1 C0 H3.
+  rewrite H6, H7, H11 in *.
+  clear e H9 H11 H.
+  elim (IHC _ _ _ H10); auto.
 Qed.
 
 Lemma CCC_To_Then_reduction : forall p b C1 C2 s1 s2 tl,
@@ -1588,7 +1590,7 @@ Qed.
 
 Fixpoint C_size (C:Choreography) :=
 match C with
-| Eta;; C'       => S (C_size C')
+| Eta@_;; C'     => S (C_size C')
 | Cond _ _ C1 C2 => S (C_size C1 + C_size C2)
 | RT_Call _ _ C' => S (C_size C')
 | _              => 0
@@ -1596,7 +1598,7 @@ end.
 
 Fixpoint subterm (C1 C2:Choreography) : Prop :=
 match C2 with
-| Eta;;C'          => C1 = C' \/ subterm C1 C'
+| Eta@_;;C'        => C1 = C' \/ subterm C1 C'
 | Cond _ _ C1' C2' => C1 = C1' \/ C1 = C2' \/ subterm C1 C1' \/ subterm C1 C2'
 | RT_Call _ _ C'   => C1 = C' \/ subterm C1 C'
 | _                => False
@@ -1638,25 +1640,24 @@ Lemma CCC_To_deterministic_3 : forall C C' tl1 tl2 s s1 s2,
 Proof.
 induction C; intros; inversion H; inversion H0; auto.
 (* Eta *)
-+ unfold v, v0; rewrite <- H1 in H8; inversion H8; auto.
-+ rewrite <- H1 in H8; inversion H8; auto.
-+ rewrite H5, <- H13 in H15.
-  clear H H0 C0 H3 s0 H2 H5 s' H6 C1 H9 eta H8 s3 H11 t H12 s'0 H14 C' H13.
-  elim (CCC_To_eta_reduction _ _ _ _ _ H15); intros.
-  symmetry; apply H; auto.
-+ rewrite <- H1 in H8; inversion H8; auto.
-+ rewrite <- H1 in H8; inversion H8; auto.
-+ rewrite H5, <- H13 in H15.
-  clear H H0 C0 H3 s0 H2 H5 s' H6 C1 H9 eta H8 s3 H11 t H12 s'0 H14 C' H13.
-  elim (CCC_To_eta_reduction _ _ _ _ _ H15); intros.
-  symmetry; apply H0; auto.
-+ rewrite H13, <- H6 in H8.
-  elim (CCC_To_eta_reduction _ _ _ _ _ H8); intros.
-  apply H16; auto.
-+ rewrite H13, <- H6 in H8.
-  elim (CCC_To_eta_reduction _ _ _ _ _ H8); intros.
-  apply H17; auto.
-+ revert H8 H16. rewrite <- H6 in H14; inversion H14.
++ unfold v, v0; rewrite <- H3 in H11; inversion H11; auto.
++ rewrite <- H3 in H11; inversion H11; auto.
++ rewrite H6, <- H14 in H17.
+(*   clear H H0 C0 H3 s0 H2 H5 s' H6 C1 H9 eta H8 s3 H11 t H12 s'0 H14 C' H13. *)
+  elim (CCC_To_eta_reduction _ _ _ _ _ _ H17); intros.
+  symmetry; apply H18; auto.
++ rewrite <- H3 in H11; inversion H11; auto.
++ rewrite <- H3 in H11; inversion H11; auto.
++ rewrite H6, <- H14 in H17.
+  elim (CCC_To_eta_reduction _ _ _ _ _ _ H17); intros.
+  symmetry; apply H19; auto.
++ rewrite H15, <- H6 in H9.
+  elim (CCC_To_eta_reduction _ _ _ _ _ _ H9); intros.
+  apply H18; auto.
++ rewrite H15, <- H6 in H9.
+  elim (CCC_To_eta_reduction _ _ _ _ _ _ H9); intros.
+  apply H19; auto.
++ revert H9 H18. rewrite <- H6 in H15; inversion H15.
   eauto.
 (* Cond *)
 + rewrite H7, <- H17 in H20.
@@ -1708,18 +1709,16 @@ Lemma CCC_To_rl_implies_state : forall C1 s tl C1' s1 C2 C2' s2,
 Proof.
 induction C1; induction C2; intros; inversion H; inversion H0;
   try (ESEt s; ESEs; fail); eauto;
-  try (rewrite <- H4 in H13; inversion H13; fail);
-  try (rewrite <- H6 in H14; inversion H14; fail).
+  try (rewrite <- H5 in H14; inversion H14; fail);
+  try (rewrite <- H6 in H15; inversion H15; fail);
+  try (rewrite <- H5 in H13; inversion H13; fail).
 (* Eta *)
 + ESEt (update s q x v). ESEs. ESEt (update s q0 x0 v0).
-  rewrite <- H4 in H11; inversion H11. ESEr.
-(* Cond *)
-+ rewrite <- H4 in H11; inversion H11.
-+ rewrite <- H4 in H11; inversion H11.
+  rewrite <- H5 in H13; inversion H13. ESEr.
 (* Call *)
-+ rewrite <- H6 in H12; inversion H12.
++ rewrite <- H6 in H13; inversion H13.
 (* RT_Call *)
-+ rewrite <- H6 in H12; inversion H12.
++ rewrite <- H6 in H13; inversion H13.
 Qed.
 
 (** Currently not used, but might prove useful. *)
@@ -1730,15 +1729,15 @@ Lemma R_Com_reduce_eq : forall Defs p C v v' q q' x x' s C' s' C'' s'',
   v = v' /\ q = q' /\ x = x'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H1 in H11; inversion H11.
++ rewrite <- H3 in H14; inversion H14.
   repeat split.
-  * unfold v1, v2. rewrite H23; auto.
+  * unfold v1, v2. rewrite H25; auto.
   * transitivity q1; auto; transitivity q0; auto.
   * transitivity x1; auto; transitivity x0; auto.
-+ rewrite <- H1 in H13; inversion H13.
-  destroy H19; exfalso; auto.
-+ rewrite <- H9 in H3; inversion H3.
-  destroy H19; exfalso; auto.
++ rewrite <- H3 in H19; inversion H19.
+  destroy H21; exfalso; auto.
++ rewrite <- H12 in H8; inversion H8.
+  destroy H21; exfalso; auto.
 Qed.
 
 Lemma L_Com_reduce_eq : forall Defs p C v v' q q' s C' s' C'' s'',
@@ -1766,13 +1765,13 @@ Lemma R_Com_reduce_neq : forall Defs p p' C v v' q q' x x' s C' s' C'' s'',
   p <> p' -> q <> q'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H2 in H12; inversion H12.
-  exfalso; apply H1.
++ rewrite <- H4 in H15; inversion H15.
+  exfalso. apply H1.
   transitivity p0; auto; transitivity p1; auto.
-+ rewrite <- H2 in H14; inversion H14.
-  destroy H20; destroy H21. rewrite <- H8; auto.
-+ rewrite <- H10 in H4; inversion H4.
-  destroy H20; destroy H21. rewrite <- H16; auto.
++ rewrite <- H4 in H20; inversion H20.
+  destroy H22; destroy H23. rewrite <- H9; auto.
++ rewrite <- H13 in H9; inversion H9.
+  destroy H22; destroy H23. rewrite <- H18; auto.
 Qed.
 
 Lemma L_Com_reduce_neq : forall Defs p p' C v v' q q' s C' s' C'' s'',
@@ -1795,14 +1794,14 @@ Lemma R_Sel_reduce_eq : forall Defs p C q q' l l' s C' s' C'' s'',
   q = q' /\ l = l'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H1 in H10; inversion H10.
++ rewrite <- H3 in H13; inversion H13.
   repeat split.
   * transitivity q1; auto; transitivity q0; auto.
   * transitivity l1; auto; transitivity l0; auto.
-+ rewrite <- H1 in H12; inversion H12.
-  destroy H18; exfalso; auto.
-+ rewrite <- H9 in H3; inversion H3.
-  destroy H18; exfalso; auto.
++ rewrite <- H3 in H18; inversion H18.
+  destroy H20; exfalso; auto.
++ rewrite <- H12 in H8; inversion H8.
+  destroy H20; exfalso; auto.
 Qed.
 
 Lemma L_Sel_reduce_eq : forall Defs p C q q' l l' s C' s' C'' s'',
@@ -1828,13 +1827,13 @@ Lemma R_Sel_reduce_neq : forall Defs p p' C q q' l l' s C' s' C'' s'',
   p <> p' -> q <> q'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H2 in H11; inversion H11.
++ rewrite <- H4 in H14; inversion H14.
   exfalso; apply H1.
   transitivity p0; auto; transitivity p1; auto.
-+ rewrite <- H2 in H13; inversion H13.
-  destroy H20; destroy H19. rewrite <- H7; auto.
-+ rewrite <- H10 in H4; inversion H4.
-  destroy H20; destroy H19. rewrite <- H15; auto.
++ rewrite <- H4 in H19; inversion H19.
+  destroy H21; destroy H22. rewrite <- H8; auto.
++ rewrite <- H13 in H9; inversion H9.
+  destroy H21; destroy H22. rewrite <- H17; auto.
 Qed.
 
 Lemma L_Sel_reduce_neq : forall Defs p p' C q q' l l' s C' s' C'' s'',
@@ -1861,40 +1860,40 @@ Lemma diamond_Chor : forall Defs C s tl1 tl2 C1 C2 s1 s2,
 Proof.
 induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
 + (* Eta *)
-  inversion HC'; inversion HC''; try (rewrite <- H in H6; inversion H6).
-  - elim Htl. unfold v, v0 in H9, H2. rewrite <- H9, <- H2, H14, H15, H16, H17; auto.
-  - clear HC' HC'' Htl s'1 H12 C'' H11 t H10 s1 H9 C1 H7 eta H6 H14.
-    rewrite <- H3.
-    clear s'0 H4 C' H3 C0 H1 s0 H0 tl' H2.
+  inversion HC'; inversion HC''; try (rewrite <- H1 in H9; inversion H9).
+  - elim Htl. unfold v, v0 in H11, H3. rewrite <- H11, <- H3, H16, H17, H18, H19; auto.
+  - clear HC' HC'' Htl s'1 H13 C'' H12 t0 H11 s1 H9 C1 H10 eta H8 ann0 H7.
+    rewrite <- H4.
+    clear s'0 H5 C' H4 C0 H2 s0 H0 tl' H3.
     rename C'0 into C'.
-    generalize (C_Com' Defs p e0 q x C' s''); rewrite H; intro.
-    rewrite <- H in H8; inversion_clear H8.
+    generalize (C_Com' Defs p e0 q x t C' s''); rewrite H1; intro.
+    rewrite <- H1 in H14; inversion_clear H14.
     exists C', (update s'' q x v); split.
     * apply CCC_To_eq with (update s q x v) (update s'' q x v). ESEs. ESEr.
       apply CCC_To_disjoint_update; auto.
     * unfold v.
-      rewrite (CCC_To_disjoint_eval _ _ _ _ _ _ _ _ H1 H13); auto.
-  - elim Htl. rewrite <- H9, <- H2, H14, H15, H16; auto.
-  - rewrite <- H3.
-    generalize (C_Sel' Defs p q l C'0 s''); rewrite H; intro.
-    rewrite <- H in H8; inversion_clear H8.
+      rewrite (CCC_To_disjoint_eval _ _ _ _ _ _ _ _ H2 H15); auto.
+  - elim Htl. rewrite <- H11, <- H3, H16, H17, H18; auto.
+  - rewrite <- H4.
+    generalize (C_Sel' Defs p q l t C'0 s''); rewrite H1; intro.
+    rewrite <- H1 in H14; inversion_clear H14.
     exists C'0, s''; split; auto.
     apply CCC_To_eq with s s''; auto. ESEr.
-  - rewrite <- H11.
-    generalize (C_Com' Defs p e0 q x C'0 s'); rewrite H7; intro.
-    rewrite <- H7 in H1; inversion_clear H1.
+  - rewrite <- H13.
+    generalize (C_Com' Defs p e0 q x t C'0 s'); rewrite H10; intro.
+    rewrite <- H10 in H6; inversion_clear H6.
     exists C'0, (update s' q x v); split.
     * unfold v.
-      rewrite (CCC_To_disjoint_eval _ _ _ _ _ _ _ _ H15 H6); auto.
+      rewrite (CCC_To_disjoint_eval _ _ _ _ _ _ _ _ H18 H7); auto.
     * apply CCC_To_eq with (update s q x v) (update s' q x v). ESEs. ESEr.
       apply CCC_To_disjoint_update; auto.
-  - rewrite <- H11.
-    generalize (C_Sel' Defs p q l C'0 s'); rewrite H7; intro.
-    rewrite <- H7 in H1; inversion_clear H1.
+  - rewrite <- H13.
+    generalize (C_Sel' Defs p q l t C'0 s'); rewrite H10; intro.
+    rewrite <- H10 in H6; inversion_clear H6.
     exists C'0, s'; split; auto.
     apply CCC_To_eq with s s'; auto. ESEr.
-  - elim (IHC _ _ _ _ _ _ _ H6 H14); intros; auto.
-    inversion_clear H15. inversion_clear H16.
+  - elim (IHC _ _ _ _ _ _ _ H7 H16); intros; auto.
+    inversion_clear H17. inversion_clear H18.
     do 2 eexists; split; apply C_Delay_Eta; eauto.
 + (* Cond *)
   inversion HC'; inversion HC''; try (rewrite H8 in H18; inversion H18).
@@ -2247,7 +2246,7 @@ Bind Scope CC_scope with Eta.
 
 Notation "p # e --> q $ x" := (Com _ p e q x) (at level 50, e at level 9) : CC_scope.
 Notation "p --> q [ l ]" := (Sel _ p q l) (at level 50) : CC_scope.
-Notation "eta ';;' C" := (Interaction _ eta C) (at level 60, right associativity) : CC_scope.
+Notation "eta '@' ann ';;' C" := (Interaction _ ann eta C) (at level 60, right associativity) : CC_scope.
 Notation "'If' p '??' b 'Then' C1 'Else' C2" := (Cond _ p b C1 C2) (at level 60) : CC_scope.
 Notation "c --[ tl ]--> c'" := (CCP_To _ c tl c') (at level 50, left associativity) : CC_scope.
 Notation "c --[ ts ]-->* c'" := (CCP_ToStar _ c ts c') (at level 50, left associativity) : CC_scope.

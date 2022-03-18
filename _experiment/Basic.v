@@ -8,16 +8,23 @@ Ltac destroy H := repeat (elim H; intro; clear H; intro H).
 
 Section Logic.
 
-Lemma if_irrelevant : forall A (b:bool) (t:A), (if b then t else t) = t.
+Variable A:Type.
+Variable b:bool.
+
+Lemma if_irrelevant : forall (t:A), (if b then t else t) = t.
 Proof. induction b; auto. Qed.
 
-Lemma if_case : forall A (b:bool) (t t':A),
+Lemma if_case : forall (t t':A),
   {(if b then t else t') = t} + {(if b then t else t') = t'}.
 Proof. induction b; auto. Qed.
 
-Lemma if_case' : forall A (b:bool) (t t' t'':A),
+Lemma if_case' : forall (t t' t'':A),
   (if b then t' else t'') = t -> {t' = t } + {t'' = t}.
 Proof. induction b; auto. Qed.
+
+Lemma if_elim : forall (t t' t'':A),
+  (if b then t' else t'') = t -> {b = true /\ t = t'} + {b = false /\ t = t''}.
+Proof. induction b; simpl; auto. Qed.
 
 End Logic.
 
@@ -26,7 +33,7 @@ Section Natural_Numbers.
 
 Lemma minus_S : forall m n, n - S m = pred (n - m).
 Proof.
-double induction m n; simpl; auto.
+induction m, n; simpl; auto.
 intros; rewrite minus_n_O; auto.
 Qed.
 
@@ -70,9 +77,9 @@ Qed.
 
 Lemma O_plus_O : forall {n m}, n+m = 0 -> n = 0.
 Proof.
-double induction n m; auto; clear n m; intros.
-- inversion H0.
-- inversion H1.
+induction n, m; auto; intros.
+- inversion H.
+- inversion H.
 Qed.
 
 Lemma O_plus_O' : forall {n m}, n+m = 0 -> m = 0.

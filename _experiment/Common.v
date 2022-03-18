@@ -160,6 +160,15 @@ Notation "x '=?' y" := (eqb _ x y).
 
 (** ** Cartesian product of two decidable types. *)
 
+Section UnitType.
+
+Lemma unit_dec : forall (x y:unit), {x = y} + {x <> y}.
+Proof. induction x, y; auto. Qed.
+
+Definition Unit := Build_DecType unit unit_dec.
+
+End UnitType.
+
 Section DecProd.
 
 Variable A B:DecType.

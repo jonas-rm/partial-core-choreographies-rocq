@@ -15,23 +15,11 @@ Local Definition Value := value Sig.
 Local Definition Expr := expr Sig.
 Local Definition BExpr := bexpr Sig.
 Local Definition RecVar := recvar Sig.
+Local Definition Ann := ann Sig.
 Local Definition Ev := ev Sig.
 Local Definition BEv := bev Sig.
 
 Local Definition Store := State Pid Var Value.
-
-(*
-Module EvSt := EvalState P E X V V Ev.
-Module BEvSt := EvalState P B X V Bool BEv.
-
-Definition eval_on_state := EvSt.eval_on_state.
-Definition beval_on_state := BEvSt.eval_on_state.
-
-Definition eval_eq := EvSt.eval_eq.
-Definition eval_neq := EvSt.eval_neq.
-Definition beval_eq := BEvSt.eval_eq.
-Definition beval_neq := BEvSt.eval_neq.
-*)
 
 (** * Syntax of processes *)
 
@@ -41,10 +29,10 @@ Section Syntax.
 
 Inductive Behaviour : Type :=
 | End : Behaviour
-| Send : Pid -> Expr -> Behaviour -> Behaviour
-| Recv : Pid -> Var -> Behaviour -> Behaviour
-| Sel : Pid -> Label -> Behaviour -> Behaviour
-| Branching : Pid -> option Behaviour -> option Behaviour -> Behaviour
+| Send : Pid -> Expr -> Ann -> Behaviour -> Behaviour
+| Recv : Pid -> Var -> Ann -> Behaviour -> Behaviour
+| Sel : Pid -> Label -> Ann -> Behaviour -> Behaviour
+| Branching : Pid -> option (Ann*Behaviour) -> option (Ann*Behaviour) -> Behaviour
 | Cond : BExpr -> Behaviour -> Behaviour -> Behaviour
 | Call : RecVar -> Behaviour
 .
@@ -53,12 +41,12 @@ Inductive Behaviour : Type :=
 
 Fixpoint depth (B:Behaviour) : nat :=
 match B with
- | Send p e B' => 1 + depth B'
- | Recv p x B' => 1 + depth B'
- | Sel p l B' => 1 + depth B'
- | Branching p mB mB' => 1
-                         + (match mB with None => 0 | Some B => depth B end)
-                         + (match mB' with None => 0 | Some B => depth B end)
+ | Send p e _ B' => 1 + depth B'
+ | Recv p x _ B' => 1 + depth B'
+ | Sel p l _ B' => 1 + depth B'
+ | Branching p mB mB' =>
+             1 + (match mB with None => 0 | Some (_,B) => depth B end)
+               + (match mB' with None => 0 | Some (_,B) => depth B end)
  | Cond b B1 B2 => 1 + Nat.max (depth B1) (depth B2)
  | Call X => 1
  | End => 1
@@ -67,11 +55,11 @@ end.
 Theorem Behaviour_ind' :
   forall P:Behaviour -> Prop,
     P End ->
-    (forall p e B, P B -> P (Send p e B)) ->
-    (forall p v B, P B -> P (Recv p v B)) ->
-    (forall p l B, P B -> P (Sel p l B)) ->
-    (forall p mB mB', (forall B, mB = Some B -> P B) ->
-                      (forall B, mB' = Some B -> P B) ->
+    (forall p e a B, P B -> P (Send p e a B)) ->
+    (forall p v a B, P B -> P (Recv p v a B)) ->
+    (forall p l a B, P B -> P (Sel p l a B)) ->
+    (forall p mB mB', (forall a B, mB = Some (a,B) -> P B) ->
+                      (forall a B, mB' = Some (a,B) -> P B) ->
                       P (Branching p mB mB')) ->
     (forall b B1 B2, P B1 -> P B2 -> P (Cond b B1 B2)) ->
     (forall X, P (Call X)) ->
@@ -97,11 +85,11 @@ Qed.
 Theorem Behaviour_rec' :
   forall P:Behaviour -> Type,
     P End ->
-    (forall p e B, P B -> P (Send p e B)) ->
-    (forall p v B, P B -> P (Recv p v B)) ->
-    (forall p l B, P B -> P (Sel p l B)) ->
-    (forall p mB mB', (forall B, mB = Some B -> P B) ->
-                      (forall B, mB' = Some B -> P B) ->
+    (forall p e a B, P B -> P (Send p e a B)) ->
+    (forall p v a B, P B -> P (Recv p v a B)) ->
+    (forall p l a B, P B -> P (Sel p l a B)) ->
+    (forall p mB mB', (forall a B, mB = Some (a,B) -> P B) ->
+                      (forall a B, mB' = Some (a,B) -> P B) ->
                       P (Branching p mB mB')) ->
     (forall b B1 B2, P B1 -> P B2 -> P (Cond b B1 B2)) ->
     (forall X, P (Call X)) ->
@@ -133,38 +121,56 @@ induction B using Behaviour_rec'; induction B' using Behaviour_rec';
   2: right; intro; inversion H; auto.
   case (eq_dec e e0); intros.
   2: right; intro; inversion H; auto.
+  case (eq_dec a a0); intros.
+  2: right; intro; inversion H; auto.
   elim (IHB B'); intros.
   2: right; intro; inversion H; auto.
-  rewrite e1, e2, a; auto.
+  rewrite e1, e2, e3, a1; auto.
 + case (eq_dec p p0); intros.
   2: right; intro; inversion H; auto.
   case (eq_dec v v0); intros.
   2: right; intro; inversion H; auto.
+  case (eq_dec a a0); intros.
+  2: right; intro; inversion H; auto.
   elim (IHB B'); intros.
   2: right; intro; inversion H; auto.
-  rewrite e, e0, a; auto.
+  rewrite e, e0, e1, a1; auto.
 + case (eq_dec p p0); intros.
   2: right; intro; inversion H; auto.
   case (eq_label_dec l l0); intros.
   2: right; intro; inversion H; auto.
+  case (eq_dec a a0); intros.
+  2: right; intro; inversion H; auto.
   elim (IHB B'); intros.
   2: right; intro; inversion H; auto.
-  rewrite e, e0, a; auto.
+  rewrite e, e0, e1, a1; auto.
 + case (eq_dec p p0); intros.
   2: right; intro; inversion H; auto.
   rewrite <- e; clear e p0.
   case_eq mB; case_eq mB'; case_eq mB0; case_eq mB'0; intros; auto;
     try (right; discriminate).
-  - elim (X b2) with b0; auto; intros.
+  all: try (induction p0); try (induction p1); try (induction p2); try (induction p3).
+  - case (eq_dec a2 a0); intros.
+    2: right; intro; inversion H3; auto.
+    case (eq_dec a1 a); intros.
+    2: right; intro; inversion H3; auto.
+    rewrite <- e, <- e0.
+    elim (X a2 b2) with b0; auto; intros.
     2: right; intro Hx; inversion Hx; auto.
-    elim (X0 b1) with b; auto; intros.
+    elim (X0 a1 b1) with b; auto; intros.
     2: right; intro Hx; inversion Hx; auto.
-    rewrite a, a0; auto.
-  - elim (X b0) with b; auto; intros.
-    rewrite a; auto.
+    rewrite a3, a4; auto.
+  - case (eq_dec a a0); intros.
+    2: right; intro; inversion H3; auto.
+    rewrite <- e.
+    elim (X a0 b0) with b; auto; intros.
+    rewrite a1; auto.
     right; intro Hx; inversion Hx; auto.
-  - elim (X0 b0) with b; auto; intros.
-    rewrite a; auto.
+  - case (eq_dec a a0); intros.
+    2: right; intro; inversion H3; auto.
+    rewrite <- e.
+    elim (X0 a0 b0) with b; auto; intros.
+    rewrite a1; auto.
     right; intro Hx; inversion Hx; auto.
 + case (eq_dec b b0); intros.
   2: right; intro; inversion H; auto.
@@ -285,9 +291,9 @@ Delimit Scope SP_scope with SP.
 Bind Scope SP_scope with Behaviour.
 Bind Scope SP_scope with Network.
 
-Notation "p ! e ; B" := (Send p e B) (at level 60, e at level 9, right associativity) : SP_scope.
-Notation "p ? xx ; B" := (Recv p xx B) (at level 60, right associativity) : SP_scope.
-Notation "p (+) l ; B" := (Sel p l B) (at level 49, l at level 9, right associativity) : SP_scope.
+Notation "p ! e @! a ; B" := (Send p e a B) (at level 60, e at level 9, right associativity) : SP_scope.
+Notation "p ? xx @? a ; B" := (Recv p xx a B) (at level 60, right associativity) : SP_scope.
+Notation "p (+) l @+ a ; B" := (Sel p l a B) (at level 49, l at level 9, right associativity) : SP_scope.
 Notation "p '&' B1 '//' B2" := (Branching p B1 B2) (at level 60, no associativity) : SP_scope.
 Notation "'If' e 'Then' B1 'Else' B2" := (Cond e B1 B2) (at level 60) : SP_scope.
 Notation "'bnil'" := (End) : SP_scope.
@@ -382,34 +388,34 @@ Qed.
 
 (** Lemmas about subterms. *)
 
-Lemma Send_neq_cont : forall p e B, Send p e B <> B.
+Lemma Send_neq_cont : forall p e a B, Send p e a B <> B.
 Proof.
 intros; intro.
-assert (depth (p!e;B) = depth B). rewrite H; auto.
+assert (depth (p!e@!a;B) = depth B). rewrite H; auto.
 simpl in H0. apply lt_irrefl with (depth B).
 rewrite <- H0 at 2. auto.
 Qed.
 
-Lemma Recv_neq_cont : forall p x B, Recv p x B <> B.
+Lemma Recv_neq_cont : forall p x a B, Recv p x a B <> B.
 Proof.
 intros; intro.
 apply lt_irrefl with (depth B). rewrite <- H at 2. auto.
 Qed.
 
-Lemma Sel_neq_cont : forall p l B, Sel p l B <> B.
+Lemma Sel_neq_cont : forall p l a B, Sel p l a B <> B.
 Proof.
 intros; intro.
 apply lt_irrefl with (depth B). rewrite <- H at 2; auto.
 Qed.
 
-Lemma Branching_l_neq_cont : forall p Bl Br, Branching p (Some Bl) Br <> Bl.
+Lemma Branching_l_neq_cont : forall p a Bl Br, Branching p (Some (a,Bl)) Br <> Bl.
 Proof.
 intros; intro.
 apply lt_irrefl with (depth Bl). rewrite <- H at 2; simpl.
 auto with arith.
 Qed.
 
-Lemma Branching_r_neq_cont : forall p Bl Br, Branching p Bl (Some Br) <> Br.
+Lemma Branching_r_neq_cont : forall p a Bl Br, Branching p Bl (Some (a,Br)) <> Br.
 Proof.
 intros; intro.
 apply lt_irrefl with (depth Br). rewrite <- H at 2; simpl.
@@ -623,29 +629,6 @@ induction ps; intros.
     apply Network_rm_eq; auto.
 Qed.
 
-(* Equivalence of processes - where?
-Fixpoint Behaviour_equiv (B1 B2:Behaviour) : Prop :=
-match B1, B2 with
-| bnil, bnil => True
-| Call X, Call Y   => X = Y
-| (p ! e; B), (p' ! e'; B') => p = p' /\ e = e' /\ Behaviour_equiv B B'
-| (p ? x; B), (p' ? x'; B') => p = p' /\ x = x' /\ Behaviour_equiv B B'
-| (p (+) l; B), (p' (+) l'; B') => p = p' /\ l = l' /\ Behaviour_equiv B B'
-| (p & B1 // B2), (p' & B1' // B2') => p = p' /\ (OptionBehaviour_equiv B1 B1') /\ (OptionBehaviour_equiv B2 B2')
-| (If e Then Bt Else Be), (If e' Then Bt' Else Be') => e = e' /\ Behaviour_equiv Bt Bt' /\ Behaviour_equiv Be Be'
-| _, _ => False
-end
-
-with
-
-OptionBehaviour_equiv (O O':option Behaviour) : Prop :=
-match O, O' with
-| None, None => True
-| Some B, Some B'=> Behaviour_equiv B B'
-| _, _ => False
-end.
-*)
-
 (** ** Well-formedness
   We do not know whether we need well-formedness of processes yet.
   Well-formedness does not check that, in branchings, all labels are distinct.
@@ -655,12 +638,12 @@ Fixpoint Behaviour_WF (p:Pid) (B:Behaviour) : Prop :=
 match B with
 | bnil => True
 | Call _ => True
-| (q ! _; B') => p <> q /\ Behaviour_WF p B'
-| (q ? _; B') => p <> q /\ Behaviour_WF p B'
-| (q (+) l; B') => p <> q /\ Behaviour_WF p B'
+| (q ! _ @! _ ; B') => p <> q /\ Behaviour_WF p B'
+| (q ? _ @? _ ; B') => p <> q /\ Behaviour_WF p B'
+| (q (+) l @+ _; B') => p <> q /\ Behaviour_WF p B'
 | (q & B1 // B2) => p <> q
-                /\ (match B1 with None => True | Some B => Behaviour_WF p B end)
-                /\ (match B2 with None => True | Some B => Behaviour_WF p B end)
+                /\ (match B1 with None => True | Some (_,B) => Behaviour_WF p B end)
+                /\ (match B2 with None => True | Some (_,B) => Behaviour_WF p B end)
 | (If e Then B1 Else B2) => Behaviour_WF p B1 /\ Behaviour_WF p B2
 end.
 
@@ -672,11 +655,11 @@ induction B using Behaviour_rec'; simpl; auto;
   right; intro H'; inversion_clear H'; auto).
 + elim (eq_dec p p0); intro.
   1: right; rewrite a; tauto.
-  case_eq mB; case_eq mB'; auto; intros.
-  - elim (X b1); auto. 2: right; tauto.
-    elim (X0 b0); tauto.
-  - elim (X b0); tauto.
-  - elim (X0 b0); tauto.
+  case_eq mB; case_eq mB'; auto; intros; induction p1; try induction p2.
+  - elim (X a0 b1); auto. 2: right; tauto.
+    elim (X0 a b0); tauto.
+  - elim (X a b0); tauto.
+  - elim (X0 a b0); tauto.
 + inversion_clear IHB1.
   2: right; intro H'; inversion_clear H'; auto.
   inversion_clear IHB2; auto.
@@ -766,19 +749,19 @@ Section Semantics.
 
 Inductive SP_To (Defs : DefSetB) :
   Network -> Store -> (RichLabel Pid Value Var RecVar) -> Network -> Store -> Prop :=
- | S_Com N p e B q x B' N' s s' :
-    N p = (q ! e ; B) -> N q = (p ? x ; B') ->
+ | S_Com N p e a B q x a' B' N' s s' :
+    N p = (q ! e @!a ; B) -> N q = (p ? x @? a'; B') ->
     let v := (eval_on_state Ev e s p) in
     Network_eq N' ((Network_rm (Network_rm N p) q) | p[B] | q[B']) ->
     eq_state_ext s' (update s q x v) ->
     SP_To Defs N s (R_Com p v q x) N' s'
- | S_LSel N p B q Bl Br N' s s' :
-    N p = (q (+) left ; B) -> N q = (p & Some Bl // Br) ->
+ | S_LSel N p a B q a' Bl Br N' s s' :
+    N p = (q (+) left @+ a ; B) -> N q = (p & Some (a',Bl) // Br) ->
     Network_eq N' ((Network_rm (Network_rm N p) q) | p[B] | q[Bl]) ->
     eq_state_ext s s' ->
     SP_To Defs N s (R_Sel p q left) N' s'
- | S_RSel N p B q Bl Br N' s s' :
-    N p = (q (+) right ; B) -> N q = (p & Bl // Some Br) ->
+ | S_RSel N p a B q a' Bl Br N' s s' :
+    N p = (q (+) right @+ a ; B) -> N q = (p & Bl // Some (a',Br)) ->
     Network_eq N' ((Network_rm (Network_rm N p) q) | p[B] | q[Br]) ->
     eq_state_ext s s' ->
     SP_To Defs N s (R_Sel p q right) N' s'
@@ -802,21 +785,21 @@ Inductive SP_To (Defs : DefSetB) :
 
 (** Default reductions. *)
 
-Lemma S_Com' : forall Defs N p e B q x B' s,
-  N p = (q ! e ; B) -> N q = (p ? x ; B') ->
+Lemma S_Com' : forall Defs N p e a B q x a' B' s,
+  N p = (q ! e @! a ; B) -> N q = (p ? x @? a' ; B') ->
   let v := (eval_on_state Ev e s p) in
   SP_To Defs N s (R_Com p v q x) ((Network_rm (Network_rm N p) q) | p[B] | q[B']) (update s q x v).
-Proof. intros. apply S_Com with B B'; auto. reflexivity. ESEr. Qed.
+Proof. intros. apply S_Com with a B a' B'; auto. reflexivity. ESEr. Qed.
 
-Lemma S_LSel' : forall Defs N p B q Bl Br s,
-  N p = (q (+) left ; B) -> N q = (p & Some Bl // Br) ->
+Lemma S_LSel' : forall Defs N p a B q a' Bl Br s,
+  N p = (q (+) left @+ a ; B) -> N q = (p & Some (a',Bl) // Br) ->
   SP_To Defs N s (R_Sel p q left) ((Network_rm (Network_rm N p) q) | p[B] | q[Bl]) s.
-Proof. intros. apply S_LSel with B Bl Br; auto. reflexivity. ESEr. Qed.
+Proof. intros. apply S_LSel with a B a' Bl Br; auto. reflexivity. ESEr. Qed.
 
-Lemma S_RSel' : forall Defs N p B q Bl Br s,
-  N p = (q (+) right ; B) -> N q = (p & Bl // Some Br) ->
+Lemma S_RSel' : forall Defs N p a B q a' Bl Br s,
+  N p = (q (+) right @+ a ; B) -> N q = (p & Bl // Some (a',Br)) ->
   SP_To Defs N s (R_Sel p q right) ((Network_rm (Network_rm N p) q) | p[B] | q[Br]) s.
-Proof. intros. apply S_RSel with B Bl Br; auto. reflexivity. ESEr. Qed.
+Proof. intros. apply S_RSel with a B a' Bl Br; auto. reflexivity. ESEr. Qed.
 
 Lemma S_Then' : forall Defs N p b B1 B2 s,
   N p = (If b Then B1 Else B2) ->
@@ -867,12 +850,12 @@ intros.
 induction H1.
 + unfold v.
   rewrite (eval_eq _ e s s1'); auto.
-  apply S_Com with B B'; auto.
+  apply S_Com with a B a' B'; auto.
   ESEt s'. ESEs. eESEt.
   rewrite <- (eval_eq _ e s s1'); auto. fold v.
   ESEc; auto.
-+ apply S_LSel with B Bl Br; auto. ESEt s. ESEs. ESEt s'.
-+ apply S_RSel with B Bl Br; auto. ESEt s. ESEs. ESEt s'.
++ apply S_LSel with a B a' Bl Br; auto. ESEt s. ESEs. ESEt s'.
++ apply S_RSel with a B a' Bl Br; auto. ESEt s. ESEs. ESEt s'.
 + apply S_Then with b B1 B2; auto.
   rewrite <- (eval_eq _ b s); auto.
   ESEt s. ESEs. ESEt s'.
@@ -918,17 +901,17 @@ Lemma SP_To_Network_eq : forall N1 N1' N2 SPDefs s s' t,
 Proof.
 intros.
 inversion H0.
-+ apply S_Com with B B'; auto.
++ apply S_Com with a B a' B'; auto.
   1, 2: rewrite <- H; auto.
   etransitivity. eauto.
   apply Par_eq. 2: reflexivity.
   repeat apply Network_rm_eq; auto.
-+ apply S_LSel with B Bl Br; auto.
++ apply S_LSel with a B a' Bl Br; auto.
   1, 2: rewrite <- H; auto.
   etransitivity. eauto.
   apply Par_eq. 2: reflexivity.
   repeat apply Network_rm_eq; auto.
-+ apply S_RSel with B Bl Br; auto.
++ apply S_RSel with a B a' Bl Br; auto.
   1, 2: rewrite <- H; auto.
   etransitivity. eauto.
   apply Par_eq. 2: reflexivity.
@@ -1041,13 +1024,13 @@ intros.
 induction H0; try (constructor; auto; try ESEc; auto; fail).
 + inversion_clear H.
   unfold v0. rewrite (eval_neq _ e s p0 p x v); auto.
-  apply S_Com with B B'; auto.
+  apply S_Com with a B a' B'; auto.
   rewrite <- (eval_neq _ e s p0 p x v); auto.
   fold v0.
   ESEt (update (update s q x0 v0) p x v). ESEc; auto.
   apply update_independent; auto.
-+ apply S_LSel with B Bl Br; auto. ESEc; auto.
-+ apply S_RSel with B Bl Br; auto. ESEc; auto.
++ apply S_LSel with a B a' Bl Br; auto. ESEc; auto.
++ apply S_RSel with a B a' Bl Br; auto. ESEc; auto.
 + apply S_Then with b B1 B2; auto.
   rewrite <- eval_neq; auto.
   ESEc; auto.
@@ -1063,17 +1046,17 @@ Proof.
 induction tl; intros; inversion H; inversion H0.
 - rewrite H19 in H7; rewrite H22 in H10.
   inversion H7; inversion H10.
-  rewrite H27, H28 in H23.
+  rewrite H28, H30 in H23.
   etransitivity; eauto. symmetry; auto.
 - rewrite H15 in H4; rewrite H18 in H7.
   inversion H4; inversion H7.
-  rewrite H24, H25 in H21.
+  rewrite H25, H27 in H21.
   etransitivity; eauto. symmetry; auto.
 - rewrite H15 in H4; inversion H4.
 - rewrite H15 in H4; inversion H4.
 - rewrite H15 in H4; rewrite H18 in H7.
   inversion H4; inversion H7.
-  rewrite H24, H26 in H21.
+  rewrite H25, H28 in H21.
   etransitivity; eauto. symmetry; auto.
 - rewrite H11 in H2; inversion H2.
   rewrite H21 in H13.
@@ -1137,7 +1120,7 @@ induction tl1; induction tl2; intros; inversion H; inversion H0;
     generalize (H11 p); generalize (H23 p); intros.
     rewrite Network_rm_add_2_out in H25; auto.
     rewrite Network_rm_add_2_p in H26; auto.
-    rewrite H25, H7 in H26. apply (Send_neq_cont _ _ _ H26).
+    rewrite H25, H7 in H26. apply (Send_neq_cont _ _ _ _ H26).
 + (* Com/Left *)
   exfalso.
   diff_assert p p0 Hpq0 H16 H7.
@@ -1146,7 +1129,7 @@ induction tl1; induction tl2; intros; inversion H; inversion H0;
   generalize (H11 p); generalize (H22 p); intros.
   rewrite Network_rm_add_2_p in H25; auto.
   rewrite Network_rm_add_2_out in H24; auto.
-  rewrite H24, H7 in H25. apply (Send_neq_cont _ _ _ H25).
+  rewrite H24, H7 in H25. apply (Send_neq_cont _ _ _ _ H25).
 + (* Com/Right *)
   exfalso.
   diff_assert p p0 Hpq0 H16 H7.
@@ -1155,7 +1138,7 @@ induction tl1; induction tl2; intros; inversion H; inversion H0;
   generalize (H11 p); generalize (H22 p); intros.
   rewrite Network_rm_add_2_p in H25; auto.
   rewrite Network_rm_add_2_out in H24; auto.
-  rewrite H24, H7 in H25. apply (Send_neq_cont _ _ _ H25).
+  rewrite H24, H7 in H25. apply (Send_neq_cont _ _ _ _ H25).
 + (* Com/Then *)
   exfalso.
   diff_assert p p0 Hpp0 H14 H7.
@@ -1164,7 +1147,7 @@ induction tl1; induction tl2; intros; inversion H; inversion H0;
   rewrite Par_proj1, Network_rm_out in H22; auto.
   2: rewrite Network_rm_out, H7; auto; discriminate.
   rewrite Network_rm_add_2_p in H23; auto.
-  rewrite H22, H7 in H23. apply (Send_neq_cont _ _ _ H23).
+  rewrite H22, H7 in H23. apply (Send_neq_cont _ _ _ _ H23).
 + (* Com/Else *)
   exfalso.
   diff_assert p p0 Hpp0 H14 H7.
@@ -1173,7 +1156,7 @@ induction tl1; induction tl2; intros; inversion H; inversion H0;
   rewrite Par_proj1, Network_rm_out in H22; auto.
   2: rewrite Network_rm_out, H7; auto; discriminate.
   rewrite Network_rm_add_2_p in H23; auto.
-  rewrite H22, H7 in H23. apply (Send_neq_cont _ _ _ H23).
+  rewrite H22, H7 in H23. apply (Send_neq_cont _ _ _ _ H23).
 + (* Com/Call *)
   exfalso.
   diff_assert p p0 Hpp0 H15 H7.
@@ -1182,7 +1165,7 @@ induction tl1; induction tl2; intros; inversion H; inversion H0;
   rewrite Par_proj1, Network_rm_out in H22; auto.
   2: rewrite Network_rm_out, H7; auto; discriminate.
   rewrite Network_rm_add_2_p in H23; auto.
-  rewrite H22, H7 in H23. apply (Send_neq_cont _ _ _ H23).
+  rewrite H22, H7 in H23. apply (Send_neq_cont _ _ _ _ H23).
 + (* Left/Com *)
   exfalso.
   diff_assert p p0 Hpp0 H18 H4.
@@ -1191,7 +1174,7 @@ induction tl1; induction tl2; intros; inversion H; inversion H0;
   generalize (H10 p); generalize (H22 p); intros.
   rewrite Network_rm_add_2_out in H24; auto.
   rewrite Network_rm_add_2_p in H25; auto.
-  rewrite H24, H4 in H25. apply (Sel_neq_cont _ _ _ H25).
+  rewrite H24, H4 in H25. apply (Sel_neq_cont _ _ _ _ H25).
 + (* Right/Com *)
   exfalso.
   diff_assert p p0 Hpp0 H18 H4.
@@ -1200,7 +1183,7 @@ induction tl1; induction tl2; intros; inversion H; inversion H0;
   generalize (H10 p); generalize (H22 p); intros.
   rewrite Network_rm_add_2_out in H24; auto.
   rewrite Network_rm_add_2_p in H25; auto.
-  rewrite H24, H4 in H25. apply (Sel_neq_cont _ _ _ H25).
+  rewrite H24, H4 in H25. apply (Sel_neq_cont _ _ _ _ H25).
 + (* Then/Com *)
   exfalso.
   diff_assert p p0 Hpp0 H16 H2.
@@ -1228,7 +1211,7 @@ induction tl1; induction tl2; intros; inversion H; inversion H0;
   rewrite Network_rm_add_2_q in H22; auto.
   rewrite Par_proj1, Network_rm_out in H23; auto.
   2: rewrite Network_rm_out, H19; auto; discriminate.
-  rewrite H23, H19 in H22. apply (Recv_neq_cont _ _ _ H22).
+  rewrite H23, H19 in H22. apply (Recv_neq_cont _ _ _ _ H22).
 Qed.
 
 (** The label alone determines the resulting state. *)
@@ -1257,12 +1240,12 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p p0 Hpp0 H20 H8.
   1: {
     rewrite <- H4, H23 in H11; inversion H11.
-    apply H1. rewrite <- H3, <- H15, Hpp0, H4, H5, H9; auto.
+    apply H1. rewrite <- H3, <- H15, Hpp0, H4, H5, H9, H10; auto.
   }
   diff_assert q q0 Hqq0 H23 H11.
   1: {
     rewrite <- H4, H20 in H8; inversion H8.
-    apply H1. rewrite <- H3, <- H15, Hqq0, H4, H5, H9; auto.
+    apply H1. rewrite <- H3, <- H15, Hqq0, H4, H5, H9, H10; auto.
   }
   diff_assert p q0 Hpq0 H23 H8.
   diff_assert p0 q Hp0q H11 H20.
@@ -1280,12 +1263,12 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   }
   exists (Network_rm (Network_rm N1 p0) q0 | p0[B0] | q0[B'0]),
          (update s1 q0 x0 (eval_on_state Ev e0 s1 p0)); split.
-  - rewrite H4; apply S_Com'.
+  - rewrite H4; apply S_Com' with a0 a'0.
     * rewrite (H12 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H20; discriminate.
     * rewrite (H12 q0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H23; discriminate.
-  - rewrite H2; apply S_Com with B B'.
+  - rewrite H2; apply S_Com with a B a' B'.
     * rewrite (H24 p), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H8; discriminate.
     * rewrite (H24 q), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
@@ -1304,12 +1287,12 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H11 H8.
   diff_assert p0 q0 Hp0q0 H20 H17.
   exists (Network_rm (Network_rm N1 p0) q0 | p0[B0] | q0[Bl]), s1; split.
-  - apply S_LSel' with Br; auto.
+  - apply S_LSel' with a0 a'0 Br; auto.
     * rewrite (H12 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H17; discriminate.
     * rewrite (H12 q0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H20; discriminate.
-  - rewrite (eval_eq _ e s s2); auto; apply S_Com with B B'.
+  - rewrite (eval_eq _ e s s2); auto; apply S_Com with a B a' B'.
     * rewrite (H23 p), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H8; discriminate.
     * rewrite (H23 q), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
@@ -1327,12 +1310,12 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H11 H8.
   diff_assert p0 q0 Hp0q0 H20 H17.
   exists (Network_rm (Network_rm N1 p0) q0 | p0[B0] | q0[Br]), s1; split.
-  - apply S_RSel' with Bl; auto.
+  - apply S_RSel' with a0 a'0 Bl; auto.
     * rewrite (H12 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H17; discriminate.
     * rewrite (H12 q0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H20; discriminate.
-  - rewrite (eval_eq _ e s s2); auto; apply S_Com with B B'.
+  - rewrite (eval_eq _ e s s2); auto; apply S_Com with a B a' B'.
     * rewrite (H23 p), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H8; discriminate.
     * rewrite (H23 q), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
@@ -1352,7 +1335,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
       rewrite H15; discriminate.
     * rewrite (eval_eq _ b s1 (update s q x (eval_on_state Ev e s p))); auto.
       rewrite <- eval_neq; auto.
-  - rewrite (eval_eq _ e s s2); auto; apply S_Com with B B'.
+  - rewrite (eval_eq _ e s s2); auto; apply S_Com with a B a' B'.
     * rewrite (H17 p), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H8; discriminate.
     * rewrite (H17 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1372,7 +1355,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
       rewrite H15; discriminate.
     * rewrite (eval_eq _ b s1 (update s q x (eval_on_state Ev e s p))); auto.
       rewrite <- eval_neq; auto.
-  - rewrite (eval_eq _ e s s2); auto; apply S_Com with B B'.
+  - rewrite (eval_eq _ e s s2); auto; apply S_Com with a B a' B'.
     * rewrite (H17 p), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H8; discriminate.
     * rewrite (H17 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1390,7 +1373,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   - apply S_Call'.
     rewrite (H12 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
     rewrite H16; discriminate.
-  - rewrite (eval_eq _ e s s2); auto; apply S_Com with B B'.
+  - rewrite (eval_eq _ e s s2); auto; apply S_Com with a B a' B'.
     * rewrite (H19 p), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H8; discriminate.
     * rewrite (H19 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1408,14 +1391,14 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H8 H5.
   diff_assert p0 q0 Hp0q0 H22 H19.
   exists (Network_rm (Network_rm N2 p) q | p[B] | q[Bl]), s2; split.
-  - rewrite (eval_eq _ e s s1); auto; apply S_Com with B0 B'.
+  - rewrite (eval_eq _ e s s1); auto; apply S_Com with a0 B0 a'0 B'.
     * rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H19; discriminate.
     * rewrite (H11 q0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H22; discriminate.
     * apply Network_eq_cross with N; auto.
     * eESEt. rewrite (eval_eq _ e s s1); auto. ESEc; auto.
-  - apply S_LSel' with Br; auto.
+  - apply S_LSel' with a a' Br; auto.
     * rewrite (H23 p), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H23 q), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
@@ -1431,14 +1414,14 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H8 H5.
   diff_assert p0 q0 Hp0q0 H22 H19.
   exists (Network_rm (Network_rm N2 p) q | p[B] | q[Br]), s2; split.
-  - rewrite (eval_eq _ e s s1); auto; apply S_Com with B0 B'.
+  - rewrite (eval_eq _ e s s1); auto; apply S_Com with a0 B0 a'0 B'.
     * rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H19; discriminate.
     * rewrite (H11 q0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H22; discriminate.
     * apply Network_eq_cross with N; auto.
     * eESEt. rewrite (eval_eq _ e s s1); auto. ESEc; auto.
-  - apply S_RSel' with Bl; auto.
+  - apply S_RSel' with a a' Bl; auto.
     * rewrite (H23 p), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H23 q), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
@@ -1454,12 +1437,12 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H8 H5.
   diff_assert p0 q0 Hp0q0 H19 H16.
   exists (Network_rm (Network_rm N1 p0) q0 | p0[B0] | q0[Bl0]), s1; split.
-  - apply S_LSel' with Br0; auto.
+  - apply S_LSel' with a0 a'0 Br0; auto.
     * rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H16; discriminate.
     * rewrite (H11 q0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H19; discriminate.
-  - apply S_LSel with B Bl Br; auto.
+  - apply S_LSel with a B a' Bl Br; auto.
     * rewrite (H22 p), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H22 q), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
@@ -1476,12 +1459,12 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H8 H5.
   diff_assert p0 q0 Hp0q0 H19 H16.
   exists (Network_rm (Network_rm N1 p0) q0 | p0[B0] | q0[Br0]), s1; split.
-  - apply S_RSel' with Bl0; auto.
+  - apply S_RSel' with a0 a'0 Bl0; auto.
     * rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H16; discriminate.
     * rewrite (H11 q0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H19; discriminate.
-  - apply S_LSel with B Bl Br; auto.
+  - apply S_LSel with a B a' Bl Br; auto.
     * rewrite (H22 p), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H22 q), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
@@ -1498,12 +1481,12 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H8 H5.
   diff_assert p0 q0 Hp0q0 H19 H16.
   exists (Network_rm (Network_rm N1 p0) q0 | p0[B0] | q0[Bl0]), s1; split.
-  - apply S_LSel' with Br0; auto.
+  - apply S_LSel' with a0 a'0 Br0; auto.
     * rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H16; discriminate.
     * rewrite (H11 q0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H19; discriminate.
-  - apply S_RSel with B Bl Br; auto.
+  - apply S_RSel with a B a' Bl Br; auto.
     * rewrite (H22 p), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H22 q), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
@@ -1521,12 +1504,12 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H8 H5.
   diff_assert p0 q0 Hp0q0 H19 H16.
   exists (Network_rm (Network_rm N1 p0) q0 | p0[B0] | q0[Br0]), s1; split.
-  - apply S_RSel' with Bl0; auto.
+  - apply S_RSel' with a0 a'0 Bl0; auto.
     * rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H16; discriminate.
     * rewrite (H11 q0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H19; discriminate.
-  - apply S_RSel with B Bl Br; auto.
+  - apply S_RSel with a B a' Bl Br; auto.
     * rewrite (H22 p), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H22 q), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
@@ -1544,7 +1527,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
     * rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H14; discriminate.
     * rewrite (eval_eq _ b s1 s); auto. ESEs.
-  - apply S_LSel with B Bl Br; auto.
+  - apply S_LSel with a B a' Bl Br; auto.
     * rewrite (H16 p), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H16 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1562,7 +1545,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
     * rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H14; discriminate.
     * rewrite (eval_eq _ b s1 s); auto. ESEs.
-  - apply S_LSel with B Bl Br; auto.
+  - apply S_LSel with a B a' Bl Br; auto.
     * rewrite (H16 p), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H16 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1580,7 +1563,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
     * rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H14; discriminate.
     * rewrite (eval_eq _ b s1 s); auto. ESEs.
-  - apply S_RSel with B Bl Br; auto.
+  - apply S_RSel with a B a' Bl Br; auto.
     * rewrite (H16 p), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H16 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1598,7 +1581,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
     * rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
       rewrite H14; discriminate.
     * rewrite (eval_eq _ b s1 s); auto. ESEs.
-  - apply S_RSel with B Bl Br; auto.
+  - apply S_RSel with a B a' Bl Br; auto.
     * rewrite (H16 p), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H16 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1615,7 +1598,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   - apply S_Call'.
     rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
     rewrite H15; discriminate.
-  - apply S_LSel with B Bl Br; auto.
+  - apply S_LSel with a B a' Bl Br; auto.
     * rewrite (H18 p), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H18 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1632,7 +1615,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   - apply S_Call'.
     rewrite (H11 p0), Par_proj1; rewrite Network_rm_out, Network_rm_out; auto.
     rewrite H15; discriminate.
-  - apply S_RSel with B Bl Br; auto.
+  - apply S_RSel with a B a' Bl Br; auto.
     * rewrite (H18 p), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H5; discriminate.
     * rewrite (H18 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1645,7 +1628,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p0 q Hp0q H20 H17.
   diff_assert p q Hpq H20 H3.
   exists (Network_rm N2 p | p[B1]), s2; split.
-  - rewrite (eval_eq _ e s s1); auto; apply S_Com with B B'.
+  - rewrite (eval_eq _ e s s1); auto; apply S_Com with a B a' B'.
     * rewrite (H5 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H17; discriminate.
     * rewrite (H5 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1663,7 +1646,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p0 q Hp0q H20 H17.
   diff_assert p q Hpq H20 H3.
   exists (Network_rm N2 p | p[B2]), s2; split.
-  - rewrite (eval_eq _ e s s1); auto; apply S_Com with B B'.
+  - rewrite (eval_eq _ e s s1); auto; apply S_Com with a B a' B'.
     * rewrite (H5 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H17; discriminate.
     * rewrite (H5 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1680,7 +1663,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p0 q Hp0q H17 H14.
   diff_assert p q Hpq H17 H3.
   exists (Network_rm N2 p | p[B1]), s2; split.
-  - apply S_LSel with B Bl Br; auto.
+  - apply S_LSel with a B a' Bl Br; auto.
     * rewrite (H5 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H14; discriminate.
     * rewrite (H5 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1696,7 +1679,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p0 q Hp0q H17 H14.
   diff_assert p q Hpq H17 H3.
   exists (Network_rm N2 p | p[B1]), s2; split.
-  - apply S_RSel with B Bl Br; auto.
+  - apply S_RSel with a B a' Bl Br; auto.
     * rewrite (H5 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H14; discriminate.
     * rewrite (H5 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1712,7 +1695,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p0 q Hp0q H17 H14.
   diff_assert p q Hpq H17 H3.
   exists (Network_rm N2 p | p[B2]), s2; split.
-  - apply S_LSel with B Bl Br; auto.
+  - apply S_LSel with a B a' Bl Br; auto.
     * rewrite (H5 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H14; discriminate.
     * rewrite (H5 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1728,7 +1711,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p0 q Hp0q H17 H14.
   diff_assert p q Hpq H17 H3.
   exists (Network_rm N2 p | p[B2]), s2; split.
-  - apply S_RSel with B Bl Br; auto.
+  - apply S_RSel with a B a' Bl Br; auto.
     * rewrite (H5 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H14; discriminate.
     * rewrite (H5 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1821,7 +1804,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H20 H4.
   diff_assert p0 q Hp0q H20 H17.
   exists (Network_rm N2 p | p[Defs X]), s2; split.
-  - rewrite (eval_eq _ e s s1); auto; apply S_Com with B B'.
+  - rewrite (eval_eq _ e s s1); auto; apply S_Com with a B a' B'.
     * rewrite (H7 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H17; discriminate.
     * rewrite (H7 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1836,7 +1819,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H17 H4.
   diff_assert p0 q Hp0q H17 H14.
   exists (Network_rm N2 p | p[Defs X]), s2; split.
-  - apply S_LSel with B Bl Br; auto.
+  - apply S_LSel with a B a' Bl Br; auto.
     * rewrite (H7 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H14; discriminate.
     * rewrite (H7 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1851,7 +1834,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p q Hpq H17 H4.
   diff_assert p0 q Hp0q H17 H14.
   exists (Network_rm N2 p | p[Defs X]), s2; split.
-  - apply S_RSel with B Bl Br; auto.
+  - apply S_RSel with a B a' Bl Br; auto.
     * rewrite (H7 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H14; discriminate.
     * rewrite (H7 q), Par_proj1; rewrite Network_rm_out; auto.
@@ -1996,9 +1979,9 @@ Delimit Scope SP_scope with SP.
 Bind Scope SP_scope with Behaviour.
 Bind Scope SP_scope with Network.
 
-Notation "p ! e ; B" := (Send _ p e B) (at level 60, e at level 9, right associativity) : SP_scope.
-Notation "p ? xx ; B" := (Recv _ p xx B) (at level 60, right associativity) : SP_scope.
-Notation "p (+) l ; B" := (Sel _ p l B) (at level 49, l at level 9, right associativity) : SP_scope.
+Notation "p ! e @! a ; B" := (Send _ p e a B) (at level 60, e at level 9, right associativity) : SP_scope.
+Notation "p ? xx @? a ; B" := (Recv _ p xx a B) (at level 60, right associativity) : SP_scope.
+Notation "p (+) l @+ a ; B" := (Sel _ p l a B) (at level 49, l at level 9, right associativity) : SP_scope.
 Notation "p '&' B1 '//' B2" := (Branching _ p B1 B2) (at level 60, no associativity) : SP_scope.
 Notation "'If' e 'Then' B1 'Else' B2" := (Cond _ e B1 B2) (at level 60) : SP_scope.
 Notation "'bnil'" := (End _) : SP_scope.
