@@ -242,6 +242,16 @@ split.
 + apply more_branches_char_2.
 Qed.
 
+Lemma more_branches_antisym : forall (B B':Behaviour Sig),
+  more_branches B B' -> more_branches B' B -> B = B'.
+Proof.
+intros.
+apply more_branches_char_1 in H, H0.
+rewrite merge_comm in H.
+rewrite H in H0.
+apply inject_inj; auto.
+Qed.
+
 Lemma merge_more_branches : forall B1 B2 B,
   merge _ B1 B2 = inject Sig B -> more_branches B B1.
 Proof.
@@ -630,132 +640,133 @@ induction B using Behaviour_ind'; intros.
   - apply more_branches_refl.
 Qed.
 
-Open Scope SP.
-
 Lemma more_branches_merge : forall B B1 B2,
   more_branches B B1 -> more_branches B B2 ->
   exists B', merge _ B1 B2 = inject _ B' /\ more_branches B B'.
 Proof.
-induction B using Behaviour_ind'; intros.
-+ inversion H; inversion H0.
-  exists bnil%SP; split; auto. constructor.
-+ inversion H; inversion H0.
-  elim (IHB _ _ H6 H12); intros. destroy H13.
-  exists (p!e@!a; x)%SP; split.
-  - unfold merge; simpl; repeat rewrite eqb_refl.
-    unfold merge in H14; rewrite H14, Xmatch_elim; auto.
-    apply inject_not_undefined.
-  - constructor; auto.
-+ inversion H; inversion H0.
-  elim (IHB _ _ H6 H12); intros. destroy H13.
-  exists (p ? v @? a; x1)%SP; split.
-  - unfold merge; simpl. repeat rewrite eqb_refl.
-    unfold merge in H14; rewrite H14, Xmatch_elim; auto.
-    apply inject_not_undefined.
-  - constructor; auto.
-+ inversion H; inversion H0.
-  elim (IHB _ _ H6 H12); intros. destroy H13.
-  exists (p(+)l@+a; x)%SP; split.
-  - unfold merge; simpl. rewrite eqb_refl, label_eqb_refl, eqb_refl.
-    unfold merge in H14; rewrite H14, Xmatch_elim; auto.
-    apply inject_not_undefined.
-  - constructor; auto.
-+ inversion H1; inversion H2. all: unfold merge; simpl; rewrite eqb_refl.
-  - exists (p & None // None); split; auto.
-    constructor.
-  - exists (p & None // Some (a,Br')); split.
-    rewrite Xmatch_elim; auto. apply inject_not_undefined.
-    constructor; auto.
-  - exists (p & Some (a,Bl') // None); split.
-    rewrite Xmatch_elim; auto. apply inject_not_undefined.
-    constructor; auto.
-  - exists (p & Some (a,Bl') // Some (a',Br')); split.
-    repeat rewrite Xmatch_elim; auto. 1,2: apply inject_not_undefined.
-    constructor; auto.
-  - exists (p & None // Some (a,Br')); split.
-    rewrite Xmatch_elim; auto. apply inject_not_undefined.
-    constructor; auto.
-  - rewrite <- H6 in H11; inversion H11.
-    rewrite H15 in H12.
-    elim H0 with a Br Br' Br'0; auto. intros. destroy H13.
-    exists (p & None // Some (a,x)); split.
-    unfold merge in H16; rewrite eqb_refl, H16, Xmatch_elim.
-    simpl; auto. apply inject_not_undefined.
-    constructor; auto.
-  - repeat rewrite Xmatch_elim. 2,3: apply inject_not_undefined.
-    exists (p & Some (a0,Bl') // Some (a,Br')); split; auto.
-    constructor; auto.
-  - rewrite Xmatch_elim. 2: apply inject_not_undefined.
-    rewrite <- H6 in H11; inversion H11.
-    rewrite H16 in H13.
-    elim H0 with a Br Br' Br'0; auto. intros. destroy H14.
-    unfold merge in H17; rewrite eqb_refl, H17, Xmatch_elim.
-    2: apply inject_not_undefined.
-    exists (p & Some (a0,Bl') // Some (a,x)); split; auto.
-    constructor; auto.
-  - rewrite Xmatch_elim. 2: apply inject_not_undefined.
-    exists (p & Some (a,Bl') // None); split; auto.
-    constructor; auto.
-  - repeat rewrite Xmatch_elim. 2,3: apply inject_not_undefined.
-    exists (p & Some (a,Bl') // Some (a0,Br')); split; auto.
-    constructor; auto.
-  - rewrite <- H5 in H10. inversion H10.
-    rewrite H15 in H12.
-    elim H with a Bl Bl' Bl'0; auto. intros. destroy H13.
-    unfold merge in H16; rewrite eqb_refl, H16, Xmatch_elim.
-    2: apply inject_not_undefined.
-    exists (p & Some (a,x) // None); split; auto.
-    constructor; auto.
-  - rewrite <- H5 in H9. inversion H9.
-    rewrite H16 in H12.
-    elim H with a Bl Bl' Bl'0; auto. intros. destroy H14.
-    unfold merge in H17; rewrite eqb_refl, H17, Xmatch_elim, Xmatch_elim.
-    2,3: apply inject_not_undefined.
-    exists (p & Some (a,x) // Some (a',Br')); split; auto.
-    constructor; auto.
-  - repeat rewrite Xmatch_elim. 2,3: apply inject_not_undefined.
-    exists (p & Some (a,Bl') // Some (a',Br')); split; auto.
-    constructor; auto.
-  - rewrite Xmatch_elim. 2: apply inject_not_undefined.
-    rewrite <- H6 in H12; inversion H12.
-    rewrite H16 in H13.
-    elim H0 with a' Br Br' Br'0; auto. intros. destroy H14.
-    unfold merge in H17; rewrite eqb_refl, H17, Xmatch_elim.
-    2: apply inject_not_undefined.
-    exists (p & Some (a,Bl') // Some (a',x)); split; auto.
-    constructor; auto.
-  - rewrite <- H4 in H11. inversion H11.
-    rewrite H16 in H13.
-    elim H with a Bl Bl' Bl'0; auto. intros. destroy H14.
-    unfold merge in H17; rewrite eqb_refl, H17, Xmatch_elim, Xmatch_elim.
-    2,3: apply inject_not_undefined.
-    exists (p & Some (a,x) // Some (a',Br')); split; auto.
-    constructor; auto.
-  - rewrite <- H4 in H10. inversion H10.
-    rewrite H17 in H13.
-    elim H with a Bl Bl' Bl'0; auto. intros. destroy H15.
-    rewrite <- H6 in H12. inversion H12.
-    rewrite H21 in H14.
-    elim H0 with a' Br Br' Br'0; auto. intros. destroy H19.
-    unfold merge in H18, H22; repeat rewrite eqb_refl.
-    rewrite H18, H22, Xmatch_elim, Xmatch_elim.
-    2,3: apply inject_not_undefined.
-    exists (p & Some (a,x) // Some (a',x0)); split; auto.
-    constructor; auto.
-+ inversion H; inversion H0.
-  elim (IHB1 B1' B1'0); auto; intros. destroy H13.
-  elim (IHB2 B2' B2'0); auto; intros. destroy H15.
-  exists (If b Then x Else x0); split. unfold merge.
-  simpl (inject _ (If b Then B1' Else B2')). simpl (inject _ (If b Then B1'0 Else B2'0)).
-  rewrite Xmerge_Cond_inv.
-  - simpl. rewrite <- H14, <- H16; auto.
-  - unfold merge in H14; rewrite H14. apply inject_not_undefined.
-  - unfold merge in H16; rewrite H16. apply inject_not_undefined.
-  - constructor; auto.
-+ inversion H; inversion H0.
-  exists (Call _ X); split.
-  unfold merge; simpl. rewrite eqb_refl; auto.
-  constructor.
+intros.
+elim (more_branches_merge_extend _ _ _ _ _ H H0 (merge_idempotent _ B)).
+intros b Hb; destroy Hb.
+exists b; auto.
+Qed.
+
+Lemma more_branches_lub : forall B B1 B2,
+  more_branches B B1 -> more_branches B B2 ->
+  forall B', merge _ B1 B2 = inject _ B' -> more_branches B B'.
+Proof.
+intros.
+elim (more_branches_merge _ _ _ H H0).
+intros b Hb; destroy Hb.
+rewrite H2 in H1; apply inject_inj in H1.
+rewrite <- H1; auto.
+Qed.
+
+(** As a bonus, we can now prove associativity of merge. *)
+Lemma merge_assoc : forall (B B' B'':Behaviour Sig),
+  Xmerge _ (inject _ B) (Xmerge _ (inject _ B') (inject _ B''))
+  = Xmerge _ (Xmerge _ (inject _ B) (inject _ B')) (inject _ B'').
+Proof.
+intros.
+elim (XUndefined_dec _ (Xmerge _ (Xmerge _ (inject _ B) (inject _ B')) (inject _ B''))); intro H1.
+all: elim (XUndefined_dec _ (Xmerge _ (inject _ B) (Xmerge _ (inject _ B') (inject _ B'')))); intro H2.
++ rewrite H1, H2; auto.
++ elim (merge_undefined_or_behaviour _ B' B''); intro H3.
+  2: inversion H3 as (b,Hb); clear H3; rename Hb into H3.
+  all: unfold merge in H3; rewrite H3 in H2.
+  1: elim H2; rewrite Xmerge_comm; auto.
+  apply merge_not_undefined in H2.
+  inversion H2 as (b',Hb'); clear H2; rename Hb' into H2.
+  unfold merge in H2.
+  pose (merge_more_branches _ _ _ H3) as Hb1.
+  pose (merge_more_branches' _ _ _ H3) as Hb2.
+  pose (merge_more_branches _ _ _ H2) as Hb'1.
+  pose (merge_more_branches' _ _ _ H2) as Hb'2.
+  clearbody Hb1 Hb2 Hb'1 Hb'2.
+  pose (more_branches_trans _ _ _ Hb'2 Hb1) as Hb'3.
+  pose (more_branches_trans _ _ _ Hb'2 Hb2) as Hb'4.
+  clearbody Hb'3 Hb'4; clear dependent b.
+  pose (more_branches_merge _ _ _ Hb'1 Hb'3) as H2.
+  clearbody H2; destroy H2. rename x into B1.
+  pose (more_branches_merge _ _ _ H2 Hb'4) as H3.
+  clearbody H3; destroy H3. rename x into B2.
+  clear H3 H2 Hb'1 Hb'3 Hb'4.
+  unfold merge in H0, H; rewrite H, H0 in H1.
+  apply inject_not_undefined in H1; tauto.
++ elim (merge_undefined_or_behaviour _ B B'); intro H3.
+  2: inversion H3 as (b,Hb); clear H3; rename Hb into H3.
+  all: unfold merge in H3; rewrite H3 in H1.
+  1: elim H1; auto.
+  apply merge_not_undefined in H1.
+  inversion H1 as (b',Hb'); clear H1; rename Hb' into H1.
+  unfold merge in H1.
+  pose (merge_more_branches _ _ _ H3) as Hb1.
+  pose (merge_more_branches' _ _ _ H3) as Hb2.
+  pose (merge_more_branches _ _ _ H1) as Hb'1.
+  pose (merge_more_branches' _ _ _ H1) as Hb'2.
+  clearbody Hb1 Hb2 Hb'1 Hb'2.
+  pose (more_branches_trans _ _ _ Hb'1 Hb1) as Hb'3.
+  pose (more_branches_trans _ _ _ Hb'1 Hb2) as Hb'4.
+  clearbody Hb'3 Hb'4; clear dependent b.
+  pose (more_branches_merge _ _ _ Hb'4 Hb'2) as H1.
+  clearbody H1; destroy H1. rename x into B1.
+  pose (more_branches_merge _ _ _ Hb'3 H1) as H3.
+  clearbody H3; destroy H3. rename x into B2.
+  clear H1 H3 Hb'2 Hb'3 Hb'4.
+  unfold merge in H0, H; rewrite H, H0 in H2.
+  apply inject_not_undefined in H2; tauto.
++ elim (merge_undefined_or_behaviour _ B' B''); intro H3.
+  2: pose H2 as H2'; clearbody H2'.
+  2: inversion H3 as (b,Hb); clear H3; rename Hb into H3.
+  all: unfold merge in H3; rewrite H3 in H2.
+  1: elim H2; rewrite Xmerge_comm; auto.
+  apply merge_not_undefined in H2.
+  inversion H2 as (b',Hb'); clear H2; rename Hb' into H2.
+  pose (merge_more_branches _ _ _ H3) as Hb1.
+  pose (merge_more_branches' _ _ _ H3) as Hb2.
+  pose (merge_more_branches _ _ _ H2) as Hb'1.
+  pose (merge_more_branches' _ _ _ H2) as Hb'2.
+  clearbody Hb1 Hb2 Hb'1 Hb'2.
+  pose (more_branches_trans _ _ _ Hb'2 Hb1) as Hb'3.
+  pose (more_branches_trans _ _ _ Hb'2 Hb2) as Hb'4.
+  clearbody Hb'3 Hb'4; clear dependent b.
+  pose (more_branches_merge _ _ _ Hb'1 Hb'3) as H2.
+  clearbody H2; destroy H2. rename x into B1.
+  pose (more_branches_merge _ _ _ H2 Hb'4) as H3.
+  clearbody H3; destroy H3. rename x into B2.
+  unfold merge in H0, H; rewrite H, H0.
+  rename H1 into H1'.
+  elim (merge_undefined_or_behaviour _ B B'); intro H1.
+  2: inversion H1 as (b,Hb); clear H1; rename Hb into H1.
+  all: unfold merge in H1; rewrite H1 in H1'.
+  1: elim H1'; auto.
+  apply merge_not_undefined in H1'.
+  inversion H1' as (b'',Hb''); clear H1'; rename Hb'' into H4.
+  unfold merge in H4.
+  pose (merge_more_branches _ _ _ H1) as Hb1.
+  pose (merge_more_branches' _ _ _ H1) as Hb2.
+  pose (merge_more_branches _ _ _ H4) as Hb''1.
+  pose (merge_more_branches' _ _ _ H4) as Hb''2.
+  clearbody Hb1 Hb2 Hb''1 Hb''2.
+  pose (more_branches_trans _ _ _ Hb''1 Hb1) as Hb''3.
+  pose (more_branches_trans _ _ _ Hb''1 Hb2) as Hb''4.
+  clearbody Hb''3 Hb''4; clear dependent b.
+  pose (more_branches_merge _ _ _ Hb''4 Hb''2) as H1.
+  clearbody H1; destroy H1. rename x into B3.
+  pose (more_branches_merge _ _ _ Hb''3 H1) as H5.
+  clearbody H5; destroy H5. rename x into B4.
+  unfold merge in H4, H6; rewrite H4, H6.
+  replace B2 with B4; auto.
+  apply more_branches_antisym.
+  - eapply more_branches_lub; eauto.
+    eapply more_branches_lub; eauto.
+    2,3: apply more_branches_trans with B3.
+    2,4,5: eapply merge_more_branches'; eauto.
+    all: eapply merge_more_branches; eauto.
+  - eapply more_branches_lub; eauto.
+    2: eapply more_branches_lub; eauto.
+    1,2: apply more_branches_trans with B1; auto.
+    1,2,3: eapply merge_more_branches; eauto.
+    all: eapply merge_more_branches'; eauto.
 Qed.
 
 (** The same relation on extended behaviours, and corresponding lemmas. *)

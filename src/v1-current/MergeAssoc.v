@@ -1,4 +1,4 @@
-Require Export Merge.
+Require Export Pruning.
 
 Variable Sig : Signature.
 
