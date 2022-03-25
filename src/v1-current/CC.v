@@ -49,7 +49,7 @@ Inductive Eta : Type :=
 .
 
 Lemma eta_eq_dec : forall (eta eta':Eta), { eta = eta' } + { eta <> eta' }.
-Proof. decide equality; try apply eq_dec. decide equality. Qed.
+Proof. decide equality; apply eq_dec. Qed.
 
 (** Choreographies. *)
 

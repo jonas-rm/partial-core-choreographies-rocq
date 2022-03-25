@@ -58,9 +58,10 @@ Theorem Behaviour_ind' :
     (forall p e a B, P B -> P (Send p e a B)) ->
     (forall p v a B, P B -> P (Recv p v a B)) ->
     (forall p l a B, P B -> P (Sel p l a B)) ->
-    (forall p mB mB', (forall a B, mB = Some (a,B) -> P B) ->
-                      (forall a B, mB' = Some (a,B) -> P B) ->
-                      P (Branching p mB mB')) ->
+    (forall p, P (Branching p None None)) ->
+    (forall p a Bl, P Bl -> P (Branching p (Some (a,Bl)) None)) ->
+    (forall p a Br, P Br -> P (Branching p None (Some (a,Br)))) ->
+    (forall p a Bl a' Br, P Bl -> P Br -> P (Branching p (Some (a,Bl)) (Some (a',Br)))) ->
     (forall b B1 B2, P B1 -> P B2 -> P (Cond b B1 B2)) ->
     (forall X, P (Call X)) ->
     forall B, P B.
@@ -68,16 +69,13 @@ Proof.
 intros; revert B.
 assert (forall d B, depth B <= d -> P B).
 2: eauto.
-induction d; intros; case_eq B; intros; auto; rewrite H7 in H6; try (exfalso; inversion H6; fail); auto with arith.
-+ clear H H0 H1 H2 H4 H5 H7 B.
-  apply H3.
-  - intros; apply IHd.
-    rewrite H in H6; simpl in H6; apply le_S_n in H6.
-    etransitivity. 2: apply H6. auto with arith.
-  - intros; apply IHd.
-    rewrite H in H6; simpl in H6; apply le_S_n in H6.
-    etransitivity. 2: apply H6. auto with arith.
-+ apply H4; apply IHd; apply le_S_n in H6.
+induction d; intros; case_eq B; intros; auto; rewrite H10 in H9; try (exfalso; inversion H9; fail); auto with arith.
++ induction o; induction o0; try induction a; try induction a0; auto.
+  1: apply H6. 3: apply H4. 4: apply H5.
+  all: apply IHd.
+  all: simpl in H9; apply le_S_n in H9.
+  all: etransitivity; [idtac | apply H9]; auto with arith.
++ apply H7; apply IHd; apply le_S_n in H9.
   - etransitivity. eapply Nat.le_max_l. eauto.
   - etransitivity. eapply Nat.le_max_r. eauto.
 Qed.
@@ -88,9 +86,10 @@ Theorem Behaviour_rec' :
     (forall p e a B, P B -> P (Send p e a B)) ->
     (forall p v a B, P B -> P (Recv p v a B)) ->
     (forall p l a B, P B -> P (Sel p l a B)) ->
-    (forall p mB mB', (forall a B, mB = Some (a,B) -> P B) ->
-                      (forall a B, mB' = Some (a,B) -> P B) ->
-                      P (Branching p mB mB')) ->
+    (forall p, P (Branching p None None)) ->
+    (forall p a Bl, P Bl -> P (Branching p (Some (a,Bl)) None)) ->
+    (forall p a Br, P Br -> P (Branching p None (Some (a,Br)))) ->
+    (forall p a Bl a' Br, P Bl -> P Br -> P (Branching p (Some (a,Bl)) (Some (a',Br)))) ->
     (forall b B1 B2, P B1 -> P B2 -> P (Cond b B1 B2)) ->
     (forall X, P (Call X)) ->
     forall B, P B.
@@ -99,89 +98,41 @@ intros; revert B.
 assert (forall d B, depth B <= d -> P B).
 2: eauto.
 induction d; intros; case_eq B; intros; auto; rewrite H0 in H; try (exfalso; inversion H; fail); auto with arith.
-+ clear X X0 X1 X2 X4 X5 H0 B.
-  apply X3.
-  - intros; apply IHd.
-    rewrite H0 in H; simpl in H; apply le_S_n in H.
-    etransitivity. 2: apply H. auto with arith.
-  - intros; apply IHd.
-    rewrite H0 in H; simpl in H; apply le_S_n in H.
-    etransitivity. 2: apply H. auto with arith.
-+ apply X4; apply IHd; apply le_S_n in H.
++ induction o; induction o0; try induction a; try induction a0; auto.
+  1: apply X6. 3: apply X4. 4: apply X5.
+  all: apply IHd.
+  all: simpl in H; apply le_S_n in H.
+  all: etransitivity; [idtac | apply H]; auto with arith.
++ apply X7; apply IHd; apply le_S_n in H.
   - etransitivity. eapply Nat.le_max_l. eauto.
   - etransitivity. eapply Nat.le_max_r. eauto.
 Qed.
+
+Local Ltac dec_eq t t' H H' :=
+  case (eq_dec t t'); [intro H; rewrite <- H | right; intro; inversion H'; auto].
 
 (** Equality of behaviours is decidable. We are using the fact that equality on labels is decidable. *)
 Lemma Behaviour_eq_dec : forall (B B':Behaviour), {B=B'} + {B<>B'}.
 Proof.
 induction B using Behaviour_rec'; induction B' using Behaviour_rec';
   auto; try (right; discriminate).
-+ case (eq_dec p p0); intros.
-  2: right; intro; inversion H; auto.
-  case (eq_dec e e0); intros.
-  2: right; intro; inversion H; auto.
-  case (eq_dec a a0); intros.
-  2: right; intro; inversion H; auto.
-  elim (IHB B'); intros.
-  2: right; intro; inversion H; auto.
-  rewrite e1, e2, e3, a1; auto.
-+ case (eq_dec p p0); intros.
-  2: right; intro; inversion H; auto.
-  case (eq_dec v v0); intros.
-  2: right; intro; inversion H; auto.
-  case (eq_dec a a0); intros.
-  2: right; intro; inversion H; auto.
-  elim (IHB B'); intros.
-  2: right; intro; inversion H; auto.
-  rewrite e, e0, e1, a1; auto.
-+ case (eq_dec p p0); intros.
-  2: right; intro; inversion H; auto.
-  case (eq_label_dec l l0); intros.
-  2: right; intro; inversion H; auto.
-  case (eq_dec a a0); intros.
-  2: right; intro; inversion H; auto.
-  elim (IHB B'); intros.
-  2: right; intro; inversion H; auto.
-  rewrite e, e0, e1, a1; auto.
-+ case (eq_dec p p0); intros.
-  2: right; intro; inversion H; auto.
-  rewrite <- e; clear e p0.
-  case_eq mB; case_eq mB'; case_eq mB0; case_eq mB'0; intros; auto;
-    try (right; discriminate).
-  all: try (induction p0); try (induction p1); try (induction p2); try (induction p3).
-  - case (eq_dec a2 a0); intros.
-    2: right; intro; inversion H3; auto.
-    case (eq_dec a1 a); intros.
-    2: right; intro; inversion H3; auto.
-    rewrite <- e, <- e0.
-    elim (X a2 b2) with b0; auto; intros.
-    2: right; intro Hx; inversion Hx; auto.
-    elim (X0 a1 b1) with b; auto; intros.
-    2: right; intro Hx; inversion Hx; auto.
-    rewrite a3, a4; auto.
-  - case (eq_dec a a0); intros.
-    2: right; intro; inversion H3; auto.
-    rewrite <- e.
-    elim (X a0 b0) with b; auto; intros.
-    rewrite a1; auto.
-    right; intro Hx; inversion Hx; auto.
-  - case (eq_dec a a0); intros.
-    2: right; intro; inversion H3; auto.
-    rewrite <- e.
-    elim (X0 a0 b0) with b; auto; intros.
-    rewrite a1; auto.
-    right; intro Hx; inversion Hx; auto.
-+ case (eq_dec b b0); intros.
-  2: right; intro; inversion H; auto.
-  case (IHB1 B'1); intros.
-  2: right; intro; inversion H; auto.
-  elim (IHB2 B'2); intros.
-  2: right; intro; inversion H; auto.
-  rewrite e, e0, a; auto.
-+ case (eq_dec X X0); intros.
-  2: right; intro; inversion H; auto.
-  rewrite e; auto.
+1,2,3,4,5,6,7: dec_eq p p0 Hpp0 H.
+1: dec_eq e e0 Hee0 H.
+2: dec_eq v v0 Hvv0 H.
+3: dec_eq l l0 Hll0 H.
+9: dec_eq X X0 HXX0 H; auto.
+4: auto.
+1,2,3,4,5,6: dec_eq a a0 Haa0 H.
+6: dec_eq a' a'0 Ha'a'0 H.
+1,2,3: elim (IHB B'); intro H'; [left; rewrite H'; auto | right; intro; inversion H; auto].
+1,2: elim (IHB B'); intro H'; [left; rewrite H'; auto | right; intro; inversion H; auto].
++ elim (IHB1 B'1); intro H'. 2: right; intro; inversion H; auto.
+  elim (IHB2 B'2); intro H''. 2: right; intro; inversion H; auto.
+  rewrite H', H''; auto.
++ dec_eq b b0 Hbb0 H.
+  elim (IHB1 B'1); intro H'. 2: right; intro; inversion H; auto.
+  elim (IHB2 B'2); intro H''. 2: right; intro; inversion H; auto.
+  rewrite H', H''; auto.
 Qed.
 
 Lemma Behaviour_eq_End_dec : forall (b:Behaviour), {b=End} + {b<>End}.
@@ -651,19 +602,7 @@ Lemma Behaviour_WF_dec : forall p B,
   {Behaviour_WF p B} + {~Behaviour_WF p B}.
 Proof.
 induction B using Behaviour_rec'; simpl; auto;
-  try (elim (eq_dec p p0); intro; [idtac | inversion_clear IHB; auto];
-  right; intro H'; inversion_clear H'; auto).
-+ elim (eq_dec p p0); intro.
-  1: right; rewrite a; tauto.
-  case_eq mB; case_eq mB'; auto; intros; induction p1; try induction p2.
-  - elim (X a0 b1); auto. 2: right; tauto.
-    elim (X0 a b0); tauto.
-  - elim (X a b0); tauto.
-  - elim (X0 a b0); tauto.
-+ inversion_clear IHB1.
-  2: right; intro H'; inversion_clear H'; auto.
-  inversion_clear IHB2; auto.
-  right; intro H'; inversion_clear H'; auto.
+  try elim (eq_dec p p0); tauto.
 Qed.
 
 Definition Network_WF (N:Network) : Prop :=
@@ -1993,11 +1932,12 @@ Notation "N ~~ p" := (Network_rm _ N p)  (at level 200, no associativity) : SP_s
 
 Notation "N == N'" := (Network_eq _ N N') (at level 100) : SP_scope.
 
-Ltac BInduction B m1 m2 := induction B using Behaviour_ind';
-  try case_eq m1; try case_eq m2.
+(** Tactics for proofs by induction. *)
+Ltac BInduction B := induction B using Behaviour_ind'.
 
-Ltac BDInduction B B' m1 m2 m3 m4:= induction B using Behaviour_ind'; induction B' using Behaviour_ind';
-  try case_eq m1; try case_eq m2; try case_eq m3; try case_eq m4.
+Ltac BDInduction B B' := induction B using Behaviour_ind'; induction B' using Behaviour_ind'.
+
+Ltac elim_as mB p := case mB; try induction p.
 
 (* The remaining is stuff from CC that it would be interesting to adapt.
 

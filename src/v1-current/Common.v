@@ -4,70 +4,6 @@ Require Export Permutation.
 Require Export Setoid.
 Require Export Basic.
 
-(** * Labels
-    We require that there be exactly two labels (left and right), as this
-    is the default practice in many choreography languages. *)
-
-Section Labels.
-
-Inductive Label : Type :=
- | left : Label
- | right : Label
-.
-
-Lemma eq_label_dec : forall (l l' : Label), { l = l' } + { l <> l' }.
-Proof.
-decide equality.
-Qed.
-
-Definition eqb_label (l l':Label) : bool :=
-match l, l' with
- | left, left => true
- | right, right => true
- | _, _ => false
-end.
-
-Lemma label_eqb_eq : forall (l l':Label), (eqb_label l l') = true <-> l = l'.
-Proof.
-intros; unfold eqb; elim (eq_label_dec l l'); intros; split; auto.
-+ intro. rewrite <- H. case l; auto.
-+ generalize b. case l; case l'; try easy.
-Qed.
-
-Lemma label_eqb_neq : forall (l l':Label), (eqb_label l l') = false <-> l <> l'.
-Proof.
-split; intros.
-- red. rewrite <- label_eqb_eq, H. intro; inversion H0.
-- red in H; rewrite <- label_eqb_eq in H.
-  case_eq (eqb_label l l'); auto. tauto.
-Qed.
-
-Lemma label_eqb_refl : forall l, eqb_label l l = true.
-Proof. intro. rewrite label_eqb_eq. auto. Qed.
-
-Lemma label_eqb_sym : forall l l0, eqb_label l l0 = eqb_label l0 l.
-Proof. intros. case l; case l0; auto. Qed.
-
-Lemma label_eqb_trans : forall l l0 l1,
-  eqb_label l l0 = true -> eqb_label l0 l1 = true -> eqb_label l l1 = true.
-Proof.
-intros.
-apply label_eqb_eq.
-transitivity l0; apply label_eqb_eq; auto.
-Qed.
-
-Lemma label_eqb_ntrans : forall l l0 l1,
-  eqb_label l l0 = true -> eqb_label l0 l1 = false -> eqb_label l l1 = false.
-Proof.
-intros.
-apply label_eqb_neq.
-apply label_eqb_eq in H.
-apply label_eqb_neq in H0.
-intro; apply H0. transitivity l; auto.
-Qed.
-
-End Labels.
-
 (** * Decidable types
     Several structures need to be decidable.
     For some annoying reason, the standard library version does not work. *)
@@ -188,10 +124,80 @@ End DecProd.
 (** ** Booleans as a decidable type *)
 Definition Bool := {| t := bool; eq_dec := bool_dec |}.
 
+(** * Labels
+    We require that there be exactly two labels (left and right), as this
+    is the default practice in many choreography languages. *)
+
+Section Labels.
+
+Inductive label : Type :=
+ | left : label
+ | right : label
+.
+
+Lemma eq_label_dec : forall (l l' : label), { l = l' } + { l <> l' }.
+Proof.
+decide equality.
+Qed.
+
+Definition Label := {| t := label; eq_dec := eq_label_dec |}.
+
+(*
+Definition eqb_label (l l':Label) : bool :=
+match l, l' with
+ | left, left => true
+ | right, right => true
+ | _, _ => false
+end.
+
+Lemma label_eqb_eq : forall (l l':Label), (eqb_label l l') = true <-> l = l'.
+Proof.
+intros; unfold eqb; elim (eq_label_dec l l'); intros; split; auto.
++ intro. rewrite <- H. case l; auto.
++ generalize b. case l; case l'; try easy.
+Qed.
+
+Lemma label_eqb_neq : forall (l l':Label), (eqb_label l l') = false <-> l <> l'.
+Proof.
+split; intros.
+- red. rewrite <- label_eqb_eq, H. intro; inversion H0.
+- red in H; rewrite <- label_eqb_eq in H.
+  case_eq (eqb_label l l'); auto. tauto.
+Qed.
+
+Lemma label_eqb_refl : forall l, eqb_label l l = true.
+Proof. intro. rewrite label_eqb_eq. auto. Qed.
+
+Lemma label_eqb_sym : forall l l0, eqb_label l l0 = eqb_label l0 l.
+Proof. intros. case l; case l0; auto. Qed.
+
+Lemma label_eqb_trans : forall l l0 l1,
+  eqb_label l l0 = true -> eqb_label l0 l1 = true -> eqb_label l l1 = true.
+Proof.
+intros.
+apply label_eqb_eq.
+transitivity l0; apply label_eqb_eq; auto.
+Qed.
+
+Lemma label_eqb_ntrans : forall l l0 l1,
+  eqb_label l l0 = true -> eqb_label l0 l1 = false -> eqb_label l l1 = false.
+Proof.
+intros.
+apply label_eqb_neq.
+apply label_eqb_eq in H.
+apply label_eqb_neq in H0.
+intro; apply H0. transitivity l; auto.
+Qed.
+*)
+
+
+End Labels.
+
 (** * Local states
     This is the state of a particular process. It maps the values in the
     process's local set of variables to values.
     The set of variables needs to be decidable. *)
+
 
 Section LState.
 
@@ -607,10 +613,7 @@ Inductive TransitionLabel : Type :=
 .
 
 Lemma TransitionLabel_eq_dec : forall (x y:TransitionLabel), {x=y} + {x<>y}.
-Proof.
-decide equality; try (apply eq_dec).
-decide equality.
-Qed.
+Proof. decide equality; apply eq_dec. Qed.
 
 (** The semantics uses a labeled transition system with more expressive labels. *)
 
@@ -622,10 +625,7 @@ Inductive RichLabel : Type :=
 .
 
 Lemma RichLabel_eq_dec : forall (x y:RichLabel), {x=y} + {x<>y}.
-Proof.
-decide equality; try (apply eq_dec).
-decide equality.
-Qed.
+Proof. decide equality; apply eq_dec. Qed.
 
 Definition tpn (t:RichLabel) : list Pid :=
   match t with
