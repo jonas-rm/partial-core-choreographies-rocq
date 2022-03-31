@@ -17,25 +17,27 @@ Record Signature :=
     ev: @Eval expr var value value;
     bev : @Eval bexpr var value Bool}.
 
+Notation "X [~~] x" := (set_remove' (@eq_dec (pid _)) x X) (at level 50).
+Notation "[#] X" := (set_size (@eq_dec (pid _)) X) (at level 40).
+Notation "X [U] Y" := (set_union (@eq_dec (pid _)) X Y) (at level 50).
+Notation "X [C] Y" := (set_incl (@eq_dec (pid _)) X Y) (at level 40).
+
 Section CCBase.
 
 Variable Sig : Signature.
 
-Local Definition Pid := pid Sig.
-Local Definition Var := var Sig.
-Local Definition Value := value Sig.
-Local Definition Expr := expr Sig.
-Local Definition BExpr := bexpr Sig.
-Local Definition RecVar := recvar Sig.
-Local Definition Ann := ann Sig.
-Local Definition Ev := ev Sig.
-Local Definition BEv := bev Sig.
+Notation Pid := (pid Sig).
+Notation Var := (var Sig).
+Notation Value := (value Sig).
+Notation Expr := (expr Sig).
+Notation BExpr := (bexpr Sig).
+Notation RecVar := (recvar Sig).
+Notation Ann := (ann Sig).
+Notation Ev := (ev Sig).
+Notation BEv := (bev Sig).
 
-Local Definition PSt := LState Value Var.
-Local Definition Store := State Pid Var Value.
-
-Definition set_remove_pid := set_remove' (@eq_dec Pid).
-Definition set_size_pid := set_size (@eq_dec Pid).
+Notation PSt := (LState Value Var).
+Notation Store := (State Pid Var Value).
 
 (** ** Syntax of Core Choreographies. *)
 
@@ -195,8 +197,6 @@ Qed.
 
 (** The set of process names in a choreography. *)
 
-Definition set_union_pid := set_union (@eq_dec Pid).
-
 Definition eta_pn (e:Eta) : list Pid :=
 match e with
 | Com p _ q _ => (p::q::nil)
@@ -205,14 +205,14 @@ end.
 
 Fixpoint CCC_pn (C:Choreography) (Pids:RecVar -> list Pid) : list Pid :=
 match C with
-| Interaction _ eta C' => (set_union_pid (eta_pn eta) (CCC_pn C' Pids))
-| Cond p _ C1 C2       => (set_union_pid (set_union_pid (p::nil) (CCC_pn C1 Pids)) (CCC_pn C2 Pids))
+| Interaction _ eta C' => (eta_pn eta [U] CCC_pn C' Pids)
+| Cond p _ C1 C2       => ((p::nil) [U] CCC_pn C1 Pids [U] CCC_pn C2 Pids)
 | Call X               => Pids X
-| RT_Call _ l C'       => set_union_pid l (CCC_pn C' Pids)
+| RT_Call _ l C'       => l [U] CCC_pn C' Pids
 | End                  => nil
 end.
 
-Ltac sup := unfold set_union_pid; rewrite set_union_iff; auto.
+Ltac sup := rewrite set_union_iff; auto.
 
 Lemma CCC_pn_mon : forall X Y, (forall Z p, In p (X Z) -> In p (Y Z)) ->
   forall C p, In p (CCC_pn C X) -> In p (CCC_pn C Y).
@@ -223,8 +223,6 @@ induction C; simpl; auto.
   intro. elim H1; auto.
 + intro. sup; sup. intro. elim H0; auto.
 Qed.
-
-Definition set_incl_pid := set_incl (@eq_dec Pid).
 
 (** A choreography is well-formed if:
     - it does not contain self-communications;
@@ -356,12 +354,11 @@ destroy H; split; auto.
 Qed.
 
 Lemma Choreography_WF_Call_2 : forall X p ps C,
-  Choreography_WF (RT_Call X ps C) -> set_size_pid ps > 1 ->
-  Choreography_WF (RT_Call X (set_remove_pid p ps) C).
+  Choreography_WF (RT_Call X ps C) -> [#] ps > 1 ->
+  Choreography_WF (RT_Call X (ps [~~] p) C).
 Proof.
 intros.
 destroy H; repeat split; auto.
-unfold set_size_pid in H0. unfold set_remove_pid.
 elim (In_dec (@eq_dec Pid) p ps); intro.
 + rewrite (set_size_remove' (@eq_dec Pid) ps p) in H0; auto.
   apply lt_S_n in H0.
@@ -426,7 +423,7 @@ match C with
 | Interaction _ _ C' => consistent Xs C'
 | Cond _ _ C1 C2   => consistent Xs C1 /\ consistent Xs C2
 | Call X           => True
-| RT_Call X l C'   => set_incl_pid l (Xs X) /\ consistent Xs C'
+| RT_Call X l C'   => l [C] Xs X /\ consistent Xs C'
 | End              => True
 end.
 
@@ -600,7 +597,7 @@ Qed.
 (** A program is well-annotated if every process used by a procedure is in its annotation. *)
 
 Definition well_ann (P:Program) : Prop :=
-  forall X, set_incl_pid (CCC_pn (Procs P X) (Vars P)) (Vars P X).
+  forall X, CCC_pn (Procs P X) (Vars P) [C] Vars P X.
 
 Lemma well_ann_Main_change : forall Defs C C',
   well_ann (Build_Program Defs C) -> well_ann (Build_Program Defs C').
@@ -666,7 +663,7 @@ Qed.
 
 End Syntactic_Properties.
 
-Ltac sup := unfold set_union_pid; rewrite set_union_iff; auto.
+Ltac sup := rewrite set_union_iff; auto.
 
 (** ** Semantics of CC. *)
 
@@ -736,27 +733,26 @@ Inductive CCC_To (Defs : DefSet) :
         disjoint_ps_rl ps t -> CCC_To Defs C s t C' s' ->
         CCC_To Defs (RT_Call X ps C) s t (RT_Call X ps C') s'
  | C_Call_Local p X s s': s [==] s' ->
-        set_size_pid (fst (Defs X)) = 1 -> In p (fst (Defs X)) ->
+        [#] (fst (Defs X)) = 1 -> In p (fst (Defs X)) ->
         CCC_To Defs (Call X) s (R_Call X p) (snd (Defs X)) s'
  | C_Call_Start p X s s': s [==] s' ->
-        set_size_pid (fst (Defs X)) > 1 -> In p (fst (Defs X)) ->
+        [#] (fst (Defs X)) > 1 -> In p (fst (Defs X)) ->
         CCC_To Defs
                (Call X) s
                (R_Call X p)
-               (RT_Call X (set_remove_pid p (fst (Defs X))) (snd (Defs X))) s'
+               (RT_Call X (fst (Defs X) [~~] p) (snd (Defs X))) s'
  | C_Call_Enter p ps X C s s': s [==] s' ->
-        set_size_pid ps > 1 -> In p ps ->
+        [#] ps > 1 -> In p ps ->
         CCC_To Defs
                (RT_Call X ps C) s
                (R_Call X p)
-               (RT_Call X (set_remove_pid p ps) C) s'
+               (RT_Call X (ps [~~] p) C) s'
  | C_Call_Finish p ps X C s s': s [==] s' ->
-        set_size_pid ps = 1 -> In p ps ->
+        [#] ps = 1 -> In p ps ->
         CCC_To Defs
                (RT_Call X ps C) s (R_Call X p) C s'
 .
 
-(* Grrrr *)
 (** Useful for inferring a transition automatically. *)
 
 Lemma C_Com' : forall Defs p e q x a C s, let v := (eval_on_state Ev e s p) in
@@ -778,28 +774,28 @@ Lemma C_Else' : forall Defs p b C1 C2 s,
 Proof. intros. apply C_Else. ESEr. auto. Qed.
 
 Lemma C_Call_Local' : forall Defs p X s,
-        set_size_pid (fst (Defs X)) = 1 -> In p (fst (Defs X)) ->
+        [#] (fst (Defs X)) = 1 -> In p (fst (Defs X)) ->
         CCC_To Defs (Call X) s (R_Call X p) (snd (Defs X)) s.
 Proof. intros. apply C_Call_Local; auto. ESEr. Qed.
 
 Lemma C_Call_Start' : forall Defs p X s,
-        set_size_pid (fst (Defs X)) > 1 -> In p (fst (Defs X)) ->
+        [#] (fst (Defs X)) > 1 -> In p (fst (Defs X)) ->
         CCC_To Defs
                (Call X) s
                (R_Call X p)
-               (RT_Call X (set_remove_pid p (fst (Defs X))) (snd (Defs X))) s.
+               (RT_Call X (fst (Defs X) [~~] p) (snd (Defs X))) s.
 Proof. intros. apply C_Call_Start; auto. ESEr. Qed.
 
 Lemma C_Call_Enter' : forall Defs p ps X C s,
-        set_size_pid ps > 1 -> In p ps ->
+        [#] ps > 1 -> In p ps ->
         CCC_To Defs
                (RT_Call X ps C) s
                (R_Call X p)
-               (RT_Call X (set_remove_pid p ps) C) s.
+               (RT_Call X (ps [~~] p) C) s.
 Proof. intros. apply C_Call_Enter; auto. ESEr. Qed.
 
 Lemma C_Call_Finish' : forall Defs p ps X C s,
-        set_size_pid ps = 1 -> In p ps ->
+        [#] ps = 1 -> In p ps ->
         CCC_To Defs (RT_Call X ps C) s (R_Call X p) C s.
 Proof. intros. apply C_Call_Finish; auto. ESEr. Qed.
 
@@ -846,8 +842,8 @@ Lemma RT_Call_reduce : forall Defs X ps C s, (ps <> List.nil) ->
   exists tl, (Build_Program Defs (RT_Call X ps C),s) --[tl]-->* (Build_Program Defs C,s).
 Proof.
 intros.
-set (n := set_size_pid ps).
-assert (n = set_size_pid ps); auto.
+set (n := [#] ps).
+assert (n = [#] ps); auto.
 clearbody n; revert ps H H0.
 induction n; intros.
 + symmetry in H0; apply set_size_0 in H0. exfalso; auto.
@@ -860,17 +856,16 @@ induction n; intros.
     constructor. apply C_Call_Finish'; [rewrite <- H1 | simpl]; auto.
   - case_eq ps; intros. rewrite H2 in H; elim H; auto.
     rewrite H1 in H0, IHn; clear n H1; rename n0 into n.
-    assert (S n = set_size_pid (set_remove_pid t ps)).
+    assert (S n = [#] (ps [~~] t)).
     1: {
-      unfold set_size_pid in H0.
       rewrite (set_size_remove' (@eq_dec _) ps t) in H0; auto.
       rewrite H2; simpl; auto.
     }
-    elim (IHn (set_remove_pid t ps)); intros; auto.
+    elim (IHn (ps [~~] t)); intros; auto.
     2: { intro. rewrite H3 in H1. simpl in H1; inversion H1. }
     rename x into tls, t into p.
     exists (L_Tau p :: tls)%list.
-    eapply CCT_Step with (Build_Program Defs (RT_Call X (set_remove_pid p ps) C),s); auto.
+    eapply CCT_Step with (Build_Program Defs (RT_Call X (ps [~~] p) C),s); auto.
     replace (L_Tau p) with (Forget (R_Call X p)); auto.
     constructor. rewrite H2; apply C_Call_Enter'.
     rewrite <- H2, <- H0; auto with arith.
@@ -881,7 +876,7 @@ Lemma Call_reduce : forall (Defs:DefSet) X s, (fst (Defs X) <> List.nil) ->
   exists tl, (Build_Program Defs (Call X),s) --[tl]-->* (Build_Program Defs (snd (Defs X)),s).
 Proof.
 intros.
-case_eq (set_size_pid (fst (Defs X))); intros; [idtac | case_eq n]; intros.
+case_eq ([#] (fst (Defs X))); intros; [idtac | case_eq n]; intros.
 + exfalso; apply set_size_0 in H0; auto.
 + rewrite H1 in H0; clear n H1.
   case_eq (fst (Defs X)); intros. exfalso; auto.
@@ -892,20 +887,20 @@ case_eq (set_size_pid (fst (Defs X))); intros; [idtac | case_eq n]; intros.
   constructor. apply C_Call_Local'; auto. rewrite H1; simpl; auto.
 + rewrite H1 in H0; clear n H1. rename n0 into n.
   case_eq (fst (Defs X)); intros. exfalso; auto.
-  rename t into p. assert (set_remove_pid p (fst (Defs X)) <> List.nil).
+  rename t into p. assert (fst (Defs X) [~~] p <> List.nil).
   1: {
-    intro. unfold set_size_pid, set_remove_pid in H0, H2.
+    intro.
     rewrite (set_size_remove' (@eq_dec _) (fst (Defs X)) p) in H0.
     2: rewrite H1; simpl; auto.
     rewrite H2 in H0. inversion H0.
   }
-  elim (RT_Call_reduce Defs X (set_remove_pid p (fst (Defs X))) (snd (Defs X)) s); auto.
+  elim (RT_Call_reduce Defs X (fst (Defs X) [~~] p) (snd (Defs X)) s); auto.
   intros.
   exists (L_Tau p :: x)%list.
   eapply CCT_Step; eauto.
   replace (L_Tau p) with (Forget (R_Call X p)); auto.
   constructor. apply C_Call_Start'.
-  - change (set_size_pid (fst (A:=set Pid) (Defs X)) = S (S n)) in H0.
+  - change ([#] (fst (A:=set Pid) (Defs X)) = S (S n)) in H0.
     rewrite H0; auto with arith.
   - change (fst (A:=set Pid) (Defs X) = p::l)%list in H1.
     rewrite H1; simpl; auto.
@@ -977,10 +972,10 @@ clear H0.
 induction H; auto; inversion_clear H1; auto.
 1,2: inversion_clear H3; split; auto.
 + apply initial_consistent; auto.
-+ split. unfold set_incl_pid, set_remove_pid. intro; apply set_remove'_1.
++ split. intro; apply set_remove'_1.
   apply initial_consistent; auto.
 + split; auto.
-  unfold set_incl_pid, set_remove_pid; red; intros.
+  red; intros.
   apply set_remove'_1 in H1; auto.
 Qed.
 
@@ -1033,9 +1028,8 @@ induction H4.
   revert H1; case (fst (Defs X)); intros.
   1: exfalso; inversion H1.
   intro.
-  unfold set_size_pid in H1.
   rewrite (set_size_remove' (@eq_dec _)) with (t::l) p in H1; auto.
-  - unfold set_remove_pid in H5; rewrite H5 in H1.
+  - rewrite H5 in H1.
     elim (lt_irrefl _ H1).
   - revert H5; simpl. elim eq_dec; auto.
     intros. inversion H5.
@@ -1048,9 +1042,8 @@ induction H4.
   simpl in H4, H5.
   split; simpl; auto.
   inversion_clear H6; split; auto.
-  unfold set_size_pid in H1.
   rewrite (set_size_remove' (@eq_dec _)) with ps p in H1; auto.
-  unfold set_remove_pid; intro. rewrite H6 in H1.
+  intro. rewrite H6 in H1.
   elim (lt_irrefl _ H1).
 + destroy HC. repeat split; auto.
 Qed.
@@ -1220,7 +1213,7 @@ induction C; intros.
 + (* Call *)
   rename t into X; set (ps := fst (Ps X)).
   simpl in H.
-  case_eq (set_size_pid ps); [idtac | intros; case_eq n].
+  case_eq ([#] ps); [idtac | intros; case_eq n].
   - intro. exfalso.
     unfold ps in H1.
     generalize (CCP_WF_Vars _ H0 X); intros.
@@ -1242,14 +1235,14 @@ induction C; intros.
     case_eq ps; intros.
     1: { rewrite H2 in H1; inversion H1. }
     unfold ps in H1, H2; clear ps.
-    assert (set_size_pid (fst (Ps X)) > 1).
+    assert ([#] (fst (Ps X)) > 1).
     1: { rewrite H1; auto with arith. }
     assert (In t (fst (Ps X))).
     1: { rewrite H2; left; auto. }
     do 2 eexists.
     constructor; apply (C_Call_Start' Ps t); auto.
 + (* RT_Call *)
-  case_eq (set_size_pid l); intros; [idtac | case_eq n].
+  case_eq ([#] l); intros; [idtac | case_eq n].
   - clear H IHC; exfalso.
     generalize (CCP_WF_Main _ H0).
     simpl; intros.
@@ -1566,7 +1559,7 @@ Qed.
 
 Lemma CCC_To_Call_reduction_2 : forall p X s1 s2 tl,
   initial (snd (Defs X)) -> In p (fst (Defs X))
-  -> CCC_To Defs (Call X) s1 tl (RT_Call X (set_remove_pid p (fst (Defs X))) (snd (Defs X))) s2
+  -> CCC_To Defs (Call X) s1 tl (RT_Call X (fst (Defs X) [~~] p) (snd (Defs X))) s2
   -> tl = R_Call X p.
 Proof.
 intros.
@@ -1579,7 +1572,7 @@ Qed.
 
 Lemma CCC_To_Call_reduction_3 : forall C p ps X s1 s2 tl,
   In p ps ->
-  CCC_To Defs (RT_Call X ps C) s1 tl (RT_Call X (set_remove_pid p ps) C) s2 ->
+  CCC_To Defs (RT_Call X ps C) s1 tl (RT_Call X (ps [~~] p) C) s2 ->
   tl = R_Call X p.
 Proof.
 induction C; intros; inversion H0;
@@ -1631,7 +1624,7 @@ induction C; intros; inversion H0; auto;
 + rewrite <- H7; rewrite <- H7 in H11.
   rewrite <- H8 in H10, H11.
   eauto.
-+ elim (subterm_not_equal C (RT_Call t (set_remove_pid p0 ps) C)); simpl; auto.
++ elim (subterm_not_equal C (RT_Call t (ps [~~] p0) C)); simpl; auto.
 Qed.
 
 Lemma CCC_To_deterministic_3 : forall C C' tl1 tl2 s s1 s2,
@@ -1945,19 +1938,16 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     clear HC' HC'' Htl s'1 H14 C'' H13 tl'' H12 s1 H11 X0 H7.
     clear s'0 H6 C' H5 tl' H4 s0 H3 X H.
     rename t into X.
-    elim (Nat.eq_dec (set_size_pid (fst (Defs X))) 2); intro HX.
+    elim (Nat.eq_dec ([#] (fst (Defs X))) 2); intro HX.
     * exists (snd (Defs X)), s.
       split; apply C_Call_Finish; try ESEs.
       ++ revert HX.
-         unfold set_size_pid, set_remove_pid.
          intro; rewrite (set_size_remove' (@eq_dec _)) with (fst (Defs X)) p in HX; auto.
       ++ apply set_remove'_3; auto.
       ++ revert HX.
-         unfold set_size_pid, set_remove_pid.
          intro; rewrite (set_size_remove' (@eq_dec _)) with (fst (Defs X)) p0 in HX; auto.
       ++ apply set_remove'_3; auto.
-    * exists (RT_Call X (set_remove_pid p (set_remove_pid p0 (fst (Defs X)))) (snd (Defs X))), s.
-      unfold set_remove_pid.
+    * exists (RT_Call X (fst (Defs X) [~~] p0 [~~] p) (snd (Defs X))), s.
       rewrite set_remove'_remove' at 1.
       split; (apply C_Call_Enter; try ESEs;
         [eapply set_size_neq_2; eauto | apply set_remove'_3; auto]).
@@ -1969,7 +1959,7 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
   - elim (IHC _ _ _ _  _ _ _ H7 H16); auto; intros.
     inversion_clear H17; inversion_clear H18.
     do 2 eexists; split; apply C_Delay_Call; eauto.
-  - exists (RT_Call t (set_remove_pid p l) C'0), s'; split.
+  - exists (RT_Call t (l [~~] p) C'0), s'; split.
     * apply C_Call_Enter'; auto.
     * apply C_Delay_Call; auto.
       apply disjoint_ps_remove; auto. 
@@ -1977,7 +1967,7 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
   - exists C'0, s'; split.
     * apply C_Call_Finish'; auto.
     * apply CCC_To_eq with s s'; auto. ESEr. rewrite <- H14; auto.
-  - exists (RT_Call t (set_remove_pid p l) C'0), s''; split.
+  - exists (RT_Call t (l [~~] p) C'0), s''; split.
     * apply C_Delay_Call; auto.
       apply disjoint_ps_remove; auto. 
       apply CCC_To_eq with s s''; auto. ESEr.
@@ -1987,19 +1977,16 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     clear HC' HC'' Htl s'1 H16 C'' H15 tl'' H14 s1 H13 C1 H11 ps0 H10.
     clear X0 H9 s'0 H6 C' H5 tl' H4 C0 H1 ps H0 X H IHC.
     rename l into ps, t into X.
-    elim (Nat.eq_dec (set_size_pid ps) 2); intro HX.
+    elim (Nat.eq_dec ([#] ps) 2); intro HX.
     * exists C, s.
       split; apply C_Call_Finish; try ESEs.
       -- revert HX.
-         unfold set_size_pid, set_remove_pid.
          intro; rewrite (set_size_remove' (@eq_dec _)) with ps p in HX; auto.
       -- apply set_remove'_3; auto.
       -- revert HX.
-         unfold set_size_pid, set_remove_pid.
          intro; rewrite (set_size_remove' (@eq_dec _)) with ps p0 in HX; auto.
       -- apply set_remove'_3; auto.
-    * exists (RT_Call X (set_remove_pid p (set_remove_pid p0 ps)) C), s.
-      unfold set_remove_pid.
+    * exists (RT_Call X (ps [~~] p0 [~~] p) C), s.
       rewrite set_remove'_remove' at 1.
       split; (apply C_Call_Enter; try ESEs;
        [eapply set_size_neq_2; eauto | apply set_remove'_3; auto]).
@@ -2260,6 +2247,5 @@ Arguments Vars {Sig}.
 Arguments initial {Sig}.
 Arguments within_Xs {Sig}.
 Arguments Choreography_WF {Sig}.
-Arguments set_incl_pid {Sig}.
 Arguments CCC_pn {Sig}.
 Arguments CCP_WF {Sig}.

@@ -8,15 +8,15 @@ Section SP_Merge.
 
 Variable Sig : Signature.
 
-Local Definition Pid := XBehaviour.Pid Sig.
-Local Definition Var := XBehaviour.Var Sig.
-Local Definition Value := XBehaviour.Value Sig.
-Local Definition Expr := XBehaviour.Expr Sig.
-Local Definition BExpr := XBehaviour.BExpr Sig.
-Local Definition RecVar := XBehaviour.RecVar Sig.
-Local Definition Ann := XBehaviour.Ann Sig.
-Local Definition Ev := XBehaviour.Ev Sig.
-Local Definition BEv := XBehaviour.BEv Sig.
+Notation Pid := (pid Sig).
+Notation Var := (var Sig).
+Notation Value := (value Sig).
+Notation Expr := (expr Sig).
+Notation BExpr := (bexpr Sig).
+Notation RecVar := (recvar Sig).
+Notation Ann := (ann Sig).
+Notation Ev := (ev Sig).
+Notation BEv := (bev Sig).
 
 (** * Merging of two behaviours *)
 
@@ -101,10 +101,6 @@ all: try rewrite IHB1; repeat rewrite inject_match; simpl; auto.
     elim (inject_not_undefined _ _ H7).
 Qed.
 
-Local Ltac XBAnn_elim t1 t2 H := case (@eq_dec (XBehaviour.Ann Sig) t1 t2); intro H;
-    [rewrite H in *; rewrite eqb_refl
-    | rewrite <- eqb_neq in H; rewrite H; discriminate].
-
 Lemma merge_is_larger : forall B1 B2, B1 [\/] B2 = inject B1 -> B1 [>] B2.
 Proof.
 unfold merge.
@@ -120,7 +116,7 @@ all: try (rewrite eqb_eq in H0''; rewrite <- H0'').
 all: try not_XUndef_with (inject B1 [[\/]] inject B2) Hm H1.
 all: try (repeat rewrite inject_match in H1; inversion H1; fail).
 all: try (constructor; eauto; fail).
-1,2,3,5,7: revert H1; XBAnn_elim a a0 Haa0.
+1,2,3,5,7: revert H1; eq_dec_elim a a0 Haa0; rewrite eqb_eq in Haa0; rewrite Haa0.
 + intro. not_XUndef_with (inject B1 [[\/]] inject B2) Hm H1.
   constructor; eauto.
 + intro. not_XUndef_with (inject B1 [[\/]] inject B2_1) Hm H1.
@@ -131,15 +127,17 @@ all: try (constructor; eauto; fail).
   rewrite inject_match in H2; inversion H2.
   constructor; eauto.
 + intro. not_XUndef_with (inject B1_1 [[\/]] inject B2_1) Hm H1.
-  revert H1; XBAnn_elim a' a'0 Ha'a'0.
+  revert H1; eq_dec_elim a' a'0 Ha'a'0.
   intro. not_XUndef_with (inject B1_2 [[\/]] inject B2_2) Hm' H1.
+  rewrite eqb_eq in Ha'a'0; rewrite Ha'a'0.
   constructor; eauto.
 + rewrite inject_match in H1.
-  revert H1; XBAnn_elim a a' Haa'.
+  revert H1; eq_dec_elim a a' Haa'.
   intro. not_XUndef_with (inject B1 [[\/]] inject B2_2) Hm H1.
 + rewrite inject_match in H1.
-  revert H1; XBAnn_elim a' a0 Ha'a0.
+  revert H1; eq_dec_elim a' a0 Ha'a0.
   intro. not_XUndef_with (inject B1_2 [[\/]] inject B2) Hm H1.
+  rewrite eqb_eq in Ha'a0; rewrite Ha'a0.
   constructor; eauto.
 + rename B1_1 into Bt, B1_2 into Be, B2_1 into Bt', B2_2 into Be'.
   assert (inject Bt [[\/]] inject Bt' = inject Bt /\ inject Be [[\/]] inject Be' = inject Be).
@@ -221,11 +219,6 @@ Proof. intros. apply Xmerge_comm. Qed.
 
 (** ** Inversion lemmas
   We first show that [Xmerge] is homomorphically defined. *)
-
-Local Ltac Ann_kill a a' H' H'' := 
-    case_eq (eqb (XBehaviour.Ann Sig) a a');
-    [intro H'; rewrite eqb_eq in H'
-    | intros; inversion H''].
 
 Open Scope SP_scope.
 
@@ -495,7 +488,7 @@ all: try induction p as (a, x);
      try induction p0 as (a0, x0);
      try induction p1 as (a1, x1);
      try induction p2 as (a2, x2); revert H0.
-+ Ann_kill a0 a2 Ha0a2 H1. Ann_kill a a1 Haa1 H1.
++ eq_dec_elim a0 a2 Ha0a2. eq_dec_elim a a1 Haa1. all: rewrite eqb_eq in *.
   intros. not_XUndef_with (Xmerge x0 x2) HM H0.
   not_XUndef_with (Xmerge x x1) HM' H0.
   exists (Some (a0,x0)), (Some (a2,x2)), (Some (a,x)), (Some (a1,x1)); rewrite H;
@@ -503,15 +496,15 @@ all: try induction p as (a, x);
   inversion H6; inversion H7; inversion H10; auto.
   2: transitivity a2; auto. 1,2: transitivity a0; auto.
   2: transitivity a1; auto. 1,2: transitivity a; auto.
-  revert H1. case (Xmerge x0 x2); intros; inversion H1.
-+ Ann_kill a a1 Haa1 H1.
+  case (Xmerge x0 x2); discriminate.
++ eq_dec_elim a a1 Haa1. rewrite eqb_eq in Haa1.
   intro; not_XUndef_with (Xmerge x x1) HM H0; not_XUndef_with x0 HM' H0.
   exists (Some (a,x)), (Some (a1,x1)), None, (Some (a0,x0)); rewrite H;
   repeat (split; auto); try inversion H1; intros; try inversion H6;
     try (inversion H7; inversion H10; auto).
   2: transitivity a1; auto. all: transitivity a; auto.
 + intro; not_XUndef_with x1 HM H0.
-  revert H0. Ann_kill a a0 Haa0 H1.
+  revert H0. eq_dec_elim a a0 Haa0. rewrite eqb_eq in Haa0.
   intro; not_XUndef_with (Xmerge x x0) HM' H0.
   exists None, (Some (a1,x1)), (Some (a,x)), (Some (a0,x0)); rewrite H;
   repeat (split; auto); try inversion H1; intros; try inversion H6;
@@ -521,13 +514,13 @@ all: try induction p as (a, x);
   exists None, (Some (a0,x0)), None, (Some (a,x)); rewrite H;
   repeat (split; auto); try inversion H0; intros; try inversion H6;
     try (inversion H7; auto).
-+ Ann_kill a0 a1 Ha0a1 H1.
++ eq_dec_elim a0 a1 Ha0a1. rewrite eqb_eq in Ha0a1.
   intro; not_XUndef_with (Xmerge x0 x1) HM H0; not_XUndef_with x HM' H0.
   exists (Some (a0,x0)), (Some (a1,x1)), (Some (a,x)), None; rewrite H;
   repeat (split; auto); try inversion H1; intros; try inversion H6;
     try (inversion H7; inversion H10; auto).
   2: transitivity a1; auto. all: transitivity a0; auto.
-+ Ann_kill a a0 Haa0 H1.
++ eq_dec_elim a a0 Haa0. rewrite eqb_eq in Haa0.
   intro; not_XUndef_with (Xmerge x x0) HM' H0.
   exists (Some (a,x)), (Some (a0,x0)), None, None; rewrite H;
   repeat (split; auto); try inversion H1; intros; try inversion H5;
@@ -542,7 +535,7 @@ all: try induction p as (a, x);
   repeat (split; auto); try inversion H1; intros; try inversion H5;
     try (inversion H6; auto).
 + intro; not_XUndef_with x0 HM H0.
-  revert H0. Ann_kill a a1 Haa1 H1.
+  revert H0. eq_dec_elim a a1 Haa1. rewrite eqb_eq in Haa1.
   intro; not_XUndef_with (Xmerge x x1) HM' H0.
   exists (Some (a0,x0)), None, (Some (a,x)), (Some (a1,x1)); rewrite H;
   repeat (split; auto); try inversion H1; intros; try inversion H6;
@@ -552,7 +545,7 @@ all: try induction p as (a, x);
   exists (Some (a,x)), None, None, (Some (a0,x0)); rewrite H;
   repeat (split; auto); try inversion H1; intros; try inversion H6;
     try (inversion H7; inversion H10; auto).
-+ Ann_kill a a0 Haa0 H1.
++ eq_dec_elim a a0 Haa0. rewrite eqb_eq in Haa0.
   intro; not_XUndef_with (Xmerge x x0) HM' H0.
   exists None, None, (Some (a,x)), (Some (a0,x0)); rewrite H;
   repeat (split; auto); try inversion H1; intros; try inversion H5;
@@ -842,9 +835,9 @@ all: elim (if_elim _ _ _ _ _ HBB'); intro H0; inversion_clear H0; clear HBB';
 all: repeat rewrite inject_match in H1; try (inversion H1; fail).
 1,2,3: not_XUndef_with (Xmerge (inject B) (inject B')) HM H1.
 all: revert H1.
-6,8,11,14,16: Ann_kill a a0 Haa0 H1.
-14: Ann_kill a a' Haa' H1.
-16: Ann_kill a' a0 Ha'a0 H1.
+6,8,11,14,16: eq_dec_elim a a0 Haa0; rewrite eqb_eq in Haa0.
+14: eq_dec_elim a a' Haa'; rewrite eqb_eq in Haa'.
+16: eq_dec_elim a' a0 Ha'a0; rewrite eqb_eq in Ha'a0.
 all: intros.
 6,8: not_XUndef_with (Xmerge (inject B) (inject B')) HM H1.
 8: not_XUndef_with (Xmerge (inject B) (inject B'1)) HM H1.
@@ -852,7 +845,7 @@ all: intros.
 10: not_XUndef_with (Xmerge (inject B1) (inject B'1)) HM H1.
 14: not_XUndef_with (Xmerge (inject B) (inject B'2)) HM H1.
 16: not_XUndef_with (Xmerge (inject B2) (inject B')) HM H1.
-10: revert H1. 10: Ann_kill a' a'0 Ha'a'0 H1.
+10: revert H1. 10: eq_dec_elim a' a'0 Ha'a'0; rewrite eqb_eq in Ha'a'0.
 10: intro; not_XUndef_with (Xmerge (inject B2) (inject B'2)) HM' H1.
 all: inversion H1.
 all: apply eqb_eq in H; rewrite <- H in *.

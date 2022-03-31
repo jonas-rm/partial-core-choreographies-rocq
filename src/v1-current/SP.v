@@ -9,17 +9,17 @@ Section SPBase.
 
 Variable Sig : Signature.
 
-Local Definition Pid := pid Sig.
-Local Definition Var := var Sig.
-Local Definition Value := value Sig.
-Local Definition Expr := expr Sig.
-Local Definition BExpr := bexpr Sig.
-Local Definition RecVar := recvar Sig.
-Local Definition Ann := ann Sig.
-Local Definition Ev := ev Sig.
-Local Definition BEv := bev Sig.
+Notation Pid := (pid Sig).
+Notation Var := (var Sig).
+Notation Value := (value Sig).
+Notation Expr := (expr Sig).
+Notation BExpr := (bexpr Sig).
+Notation RecVar := (recvar Sig).
+Notation Ann := (ann Sig).
+Notation Ev := (ev Sig).
+Notation BEv := (bev Sig).
 
-Local Definition Store := State Pid Var Value.
+Notation Store := (State Pid Var Value).
 
 (** * Syntax of processes *)
 

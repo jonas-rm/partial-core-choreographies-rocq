@@ -4,15 +4,15 @@ Section SP_Prune.
 
 Variable Sig : Signature.
 
-Local Definition Pid := SP.Pid Sig.
-Local Definition Var := SP.Var Sig.
-Local Definition Value := SP.Value Sig.
-Local Definition Expr := SP.Expr Sig.
-Local Definition BExpr := SP.BExpr Sig.
-Local Definition RecVar := SP.RecVar Sig.
-Local Definition Ann := SP.Ann Sig.
-Local Definition Ev := SP.Ev Sig.
-Local Definition BEv := SP.BEv Sig.
+Notation Pid := (pid Sig).
+Notation Var := (var Sig).
+Notation Value := (value Sig).
+Notation Expr := (expr Sig).
+Notation BExpr := (bexpr Sig).
+Notation RecVar := (recvar Sig).
+Notation Ann := (ann Sig).
+Notation Ev := (ev Sig).
+Notation BEv := (bev Sig).
 
 Section MoreBranches.
 (** ** Pruning

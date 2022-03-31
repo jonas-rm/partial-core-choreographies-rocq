@@ -61,10 +61,10 @@ Definition IS := Build_Signature
   CC_Nat Bool CC_Nat CC_Expressions Bool_Expressions
   CC_Nat Unit CC_Eval CC_BEval.
 
-Local Definition Pid := CC.Pid IS.
-Local Definition RecVar := CC.RecVar IS.
-Local Notation beval_on_state := (eval_on_state CC_BEval).
-Local Definition Update := @update CC_Nat Bool CC_Nat.
+Notation Pid := (pid IS).
+Notation RecVar := (recvar IS).
+Notation beval_on_state := (eval_on_state CC_BEval).
+Notation Update := (@update CC_Nat Bool CC_Nat).
 
 Definition xx : var IS := true.
 Definition yy : var IS := false.
@@ -179,7 +179,7 @@ End CC_plus.
     Even worse, because of composition we need to do induction on the depth of the function... *)
 Section Definitions.
 
-Fixpoint all_pids (n:Pid) :=
+Fixpoint all_pids (n:Pid) : set Pid :=
   match n with
   | O => List.cons 0 List.nil
   | S k => List.cons (S k) (all_pids k)
@@ -586,12 +586,12 @@ intros. unfold IfEq.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (hd ps) this (S n) yy eps (Cond IS (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y)) s)).
 simpl; intro.
 assert (beval_on_state compare (Update s (S n) yy (s (hd ps) xx)) (S n) = true).
-1: { unfold beval_on_state; simpl; unfold beval, Update. rewrite update_read, update_read'', Nat.eqb_eq; auto. discriminate. }
+1: { unfold beval_on_state; simpl; unfold beval. rewrite update_read, update_read'', Nat.eqb_eq; auto. discriminate. }
 unfold Update in H1.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Then' IS Defs (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y) _ H1)).
 simpl; intro.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs n this q xx eps (@Call IS X) (Update s (S n) yy (s (hd ps) xx)))).
-unfold Update; simpl; intro.
+simpl; intro.
 do 2 eexists; split. 2: split.
 + do 3 (eapply (CCT_Step IS); eauto). constructor.
 + rewrite update_read, update_read'; auto.
@@ -606,7 +606,7 @@ intros. unfold IfEq.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (hd ps) this (S n) yy eps (Cond IS (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y)) s)).
 simpl; intro.
 assert (beval_on_state compare (Update s (S n) yy (s (hd ps) xx)) (S n) = false).
-1: { unfold beval_on_state; simpl; unfold beval, Update. rewrite update_read, update_read'', Nat.eqb_neq; auto. discriminate. }
+1: { unfold beval_on_state; simpl; unfold beval. rewrite update_read, update_read'', Nat.eqb_neq; auto. discriminate. }
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Else' IS Defs (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y) _ H1)).
 simpl; intro.
 eexists. do 2 (eapply (CCT_Step IS); eauto). constructor.
@@ -619,13 +619,13 @@ Proof.
 intros.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) this n xx eps (Send (S n) this (n+2) @ eps;; Send (n+2) succ_this (S n) @ eps;; @Call IS X) s)).
 simpl. set (s1 := Update s n xx (s (n+2) xx)).
-unfold Update in s1; fold xx s1; intro.
+fold xx s1; intro.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (S n) this (n+2) xx eps (Send (n+2) succ_this (S n) @ eps;; @Call IS X) s1)).
 simpl. set (s2 := update s1 (n+2) xx (s1 (S n) xx)).
-unfold Update in s2; fold xx s2; intro.
+fold xx s2; intro.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) succ_this (S n) xx eps (@Call IS X) s2)).
 simpl. set (s3 := update s2 (S n) xx (S (s2 (n+2) xx))).
-unfold Update in s3; fold xx s3; intro.
+fold xx s3; intro.
 do 2 eexists. split. do 3 (eapply (CCT_Step IS); eauto); constructor.
 assert (n+2<>n). apply gt_neq; red; rewrite plus_comm; simpl; auto.
 unfold s3, s2, s1. repeat split. 
@@ -648,13 +648,13 @@ Proof.
 intros. unfold IfEq.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+1) zero (n+2) xx eps (Com IS n this (n + 2) yy @ eps;; Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s)).
 simpl. set (s1 := Update s (n+2) xx 0).
-unfold Update in s1; fold s1; intro.
+fold s1; intro.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs n this (n+2) yy eps (Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s1)).
 simpl. set (s2 := Update s1 (n+2) yy (s1 n xx)).
-unfold Update in s2; fold xx s2; intro.
+fold xx s2; intro.
 assert (beval_on_state compare s2 (n+2) = true).
 1: {
-  unfold beval_on_state; simpl; unfold beval, Update, s2, s1.
+  simpl. unfold beval, s2, s1.
   rewrite update_read, update_read'', update_read, update_read', Nat.eqb_eq; auto.
   rewrite plus_comm; simpl; apply gt_neq; auto. discriminate.
 }
@@ -683,13 +683,13 @@ Proof.
 intros. unfold IfEq.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+1) zero (n+2) xx eps (Com IS n this (n + 2) yy @ eps;; Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s)).
 simpl. set (s1 := Update s (n+2) xx 0).
-unfold Update in s1; fold s1; intro.
+fold s1; intro.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs n this (n+2) yy eps (Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s1)).
 simpl. set (s2 := Update s1 (n+2) yy (s1 n xx)).
-unfold Update in s2; fold xx s2; intro.
+fold xx s2; intro.
 assert (beval_on_state compare s2 (n+2) = false).
 1: {
-  unfold beval_on_state; simpl; unfold Update, beval, s2, s1.
+  simpl. unfold beval, s2, s1.
   rewrite update_read, update_read'', update_read, update_read', Nat.eqb_neq; auto.
   rewrite plus_comm; simpl; apply gt_neq; auto. discriminate.
 }
@@ -697,7 +697,7 @@ generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Else' IS Defs (n+2) compare (Send (n +
 simpl; intro.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+1) this (n+2) xx eps (Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y) s2)).
 simpl. set (s3 := update s2 (n+2) xx (s2 (n+1) xx)).
-unfold Update in s3; fold xx s3; intro.
+fold xx s3; intro.
 generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) succ_this (n+1) xx eps (@Call IS Y) s3)).
 simpl; intro.
 do 2 eexists; split. do 5 (eapply (CCT_Step IS); eauto). constructor.
@@ -1173,7 +1173,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
     rewrite map_shiftin.
     apply shiftin_eq.
     unfold s0. rewrite plus_comm; apply update_read.
-    intro. rewrite nth_map'. unfold s0, Update; rewrite update_read'; auto.
+    intro. rewrite nth_map'. unfold s0; rewrite update_read'; auto.
     apply gt_neq; red. transitivity i; auto. rewrite plus_comm; auto.
   }
   elim (IHd _ _ Hd' _ _ _ _ _ _ _ Hi Hpsh Hi' HhDefs HhDefs' H2 _ Hinput'); intros.
@@ -1190,7 +1190,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
     /\ converges h (shiftin m ns) y' /\ s' i xx = y' /\ s' (i+1) xx = m /\ forall j, j < i -> s' j xx = s0 j xx).
   - induction m; intros.
     * exists List.nil, sI, x; repeat split; auto. constructor.
-      rewrite H4; auto with arith. unfold s0, Update. rewrite plus_comm, update_read; auto.
+      rewrite H4; auto with arith. unfold s0. rewrite plus_comm, update_read; auto.
       apply gt_neq. red; rewrite plus_comm; auto.
       intros; apply H4. transitivity i; auto. apply lt_neq; auto.
     * elim IHm; auto with arith; clear IHm.
@@ -2074,30 +2074,30 @@ Proof.
 induction n; simpl; intros; inversion_clear H; auto; inversion H0; auto.
 Qed.
 
-Lemma all_pids_incl : forall m n, m <= n -> @set_incl_pid IS (all_pids m) (all_pids n).
+Lemma all_pids_incl : forall (m n:Pid), m <= n -> all_pids m [C] all_pids n.
 Proof.
 red; red; intros.
 apply all_pids_In. transitivity m; auto. apply In_all_pids; auto.
 Qed.
 
 Lemma CCC_pn_all_pids_incl : forall (C:Choreography IS) m n, m <= n ->
-  (set_incl_pid (CCC_pn C (fun _ => all_pids m)) (all_pids m))
-  -> (set_incl_pid (CCC_pn C (fun _ => all_pids n)) (all_pids n)).
+  (CCC_pn C (fun _ => all_pids m) [C] all_pids m)
+  -> (CCC_pn C (fun _ => all_pids n) [C] all_pids n).
 Proof.
-induction C; simpl; unfold set_incl_pid, set_incl; intros; auto.
+induction C; simpl; unfold set_incl; intros; auto.
 - (* Eta *)
-  unfold set_incl_pid, set_incl in IHC.
+  unfold set_incl in IHC.
   elim (set_union_elim _ _ _ _ H1); intros.
   apply (all_pids_incl m); auto. apply H0. apply set_union_iff; auto.
   apply IHC with m; auto. intros; apply H0. apply set_union_iff; auto.
 - (* Cond *)
-  unfold set_incl_pid, set_incl in IHC1, IHC2.
+  unfold set_incl in IHC1, IHC2.
   elim (set_union_elim _ _ _ _ H1); intros. elim (set_union_elim _ _ _ _ a); intros.
   apply (all_pids_incl m); auto. apply H0. apply set_union_iff; left. apply set_union_iff; auto.
   apply IHC1 with m; auto. intros; apply H0. apply set_union_iff; left. apply set_union_iff; auto.
   apply IHC2 with m; auto. intros; apply H0. apply set_union_iff; auto.
 - (* RT_Call      *)
-  unfold set_incl_pid, set_incl in IHC.
+  unfold set_incl in IHC.
   elim (set_union_elim _ _ _ _ H1); intros.
   apply (all_pids_incl m); auto. apply H0. apply set_union_iff; auto.
   apply IHC with m; auto. intros; apply H0. apply set_union_iff; auto.

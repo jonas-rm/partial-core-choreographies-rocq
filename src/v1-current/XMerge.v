@@ -13,15 +13,15 @@ Section XMerge.
 
 Variable Sig : Signature.
 
-Local Definition Pid := XBehaviour.Pid Sig.
-Local Definition Var := XBehaviour.Var Sig.
-Local Definition Value := XBehaviour.Value Sig.
-Local Definition Expr := XBehaviour.Expr Sig.
-Local Definition BExpr := XBehaviour.BExpr Sig.
-Local Definition RecVar := XBehaviour.RecVar Sig.
-Local Definition Ann := XBehaviour.Ann Sig.
-Local Definition Ev := XBehaviour.Ev Sig.
-Local Definition BEv := XBehaviour.BEv Sig.
+Notation Pid := (pid Sig).
+Notation Var := (var Sig).
+Notation Value := (value Sig).
+Notation Expr := (expr Sig).
+Notation BExpr := (bexpr Sig).
+Notation RecVar := (recvar Sig).
+Notation Ann := (ann Sig).
+Notation Ev := (ev Sig).
+Notation BEv := (bev Sig).
 
 (** ** Properties of [Xmerge]
   This section contains properties of [Xmerge] that are needed for some later proofs.
@@ -318,7 +318,6 @@ elim (Xmerge_inv_inject' _ _ _ H). intros B2' HB2.
 exists B1', B2'; repeat split; auto.
 unfold merge. rewrite <- HB1, <- HB2; auto.
 Qed.
-
 
 (** ** Pruning on extended behaviours *)
 
