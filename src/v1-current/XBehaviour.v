@@ -122,6 +122,11 @@ induction d; intros; case_eq B; intros; auto; rewrite H0 in H; try (exfalso; inv
   - etransitivity. eapply Nat.le_max_r. eauto.
 Qed.
 
+(** Weird lemma for case analysis. *)
+Lemma XB_match : forall (T:Type) B (t:T),
+  match B with XUndefined => t | _ => t end = t.
+Proof. intros. case B; auto. Qed.
+
 Open Scope SP_scope.
 
 (** ** Injection

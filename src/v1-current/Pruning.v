@@ -219,29 +219,29 @@ intros. rename H1 into HX. induction H.
 Qed.
 
 Lemma SPP_To_more_branches_N : forall P1 s P2 s' P1' tl,
-  Net _ P1' >> Net _ P1 -> (forall X, Procs _ P1 X = Procs _ P1' X) ->
-  SPP_To Sig (P1,s) tl (P2,s') ->
-  exists P2', SPP_To _ (P1',s) tl (P2',s') /\ Net _ P2' >> Net _ P2
-    /\ forall X, Procs _ P2 X = Procs _ P2' X.
+  Net P1' >> Net P1 -> (forall X, Procs P1 X = Procs P1' X) ->
+  (P1,s) --[tl]--> (P2,s') ->
+  exists P2', (P1',s) --[tl]--> (P2',s') /\ Net P2' >> Net P2
+    /\ forall X, Procs P2 X = Procs P2' X.
 Proof.
 intros.
 inversion H1.
-apply SP_To_more_branches_N with (Defs':= Procs _ P1') (N1':=Net _ P1') in H5; auto.
-2: replace N with (Net _ P1); auto; rewrite <- H2; auto.
-destroy H5. exists (Build_Program _ (Procs _ P1') x).
+apply SP_To_more_branches_N with (Defs':= Procs P1') (N1':=Net P1') in H5; auto.
+2: replace N with (Net P1); auto; rewrite <- H2; auto.
+destroy H5. exists (Build_Program _ (Procs P1') x).
 repeat split; auto.
 rewrite (SP_eta _ P1').
 constructor; auto.
-replace Defs with (Procs _ P1); auto.
+replace Defs with (Procs P1); auto.
 rewrite <- H2; auto.
 intro. rewrite <- H0, <- H2; auto.
 Qed.
 
 Lemma SPP_ToStar_more_branches_N : forall P1 s P2 s' P1' tl,
-  Net _ P1' >> Net _ P1 -> (forall X, Procs _ P1 X = Procs _ P1' X) ->
-  SPP_ToStar _ (P1,s) tl (P2,s') ->
-  exists P2', SPP_ToStar _ (P1',s) tl (P2',s') /\ Net _ P2' >> Net _ P2
-  /\ forall X, Procs _ P1' X = Procs _ P2' X.
+  Net P1' >> Net P1 -> (forall X, Procs P1 X = Procs P1' X) ->
+  (P1,s) --[tl]-->* (P2,s') ->
+  exists P2', (P1',s) --[tl]-->* (P2',s') /\ Net P2' >> Net P2
+  /\ forall X, Procs P1' X = Procs P2' X.
 Proof.
 intros. revert P1 s P2 s' P1' H H0 H1.
 induction tl; intros; inversion H1.
@@ -254,7 +254,7 @@ induction tl; intros; inversion H1.
   destroy H7.
   exists x0; repeat split; auto.
   apply SPT_Step with (x,b); auto.
-  intro. transitivity (Procs _ x X); auto.
+  intro. transitivity (Procs x X); auto.
   rewrite (SP_eta _ P1'), (SP_eta _ x) in H8.
   rewrite (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H8); auto.
 Qed.
@@ -263,6 +263,5 @@ End MoreBranchesN.
 
 End SP_Prune.
 
-Arguments more_branches [Sig].
-
 Notation "N >> N'" := (more_branches_N _ N N') (at level 50).
+Notation "B [>] B'" := (more_branches _ B B') (at level 50).

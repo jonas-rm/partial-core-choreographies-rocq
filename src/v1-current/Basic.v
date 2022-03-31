@@ -6,6 +6,7 @@ Require Export Arith.
 
 Ltac destroy H := repeat (elim H; intro; clear H; intro H).
 
+(** * Auxiliary logical results *)
 Section Logic.
 
 Variable A:Type.
