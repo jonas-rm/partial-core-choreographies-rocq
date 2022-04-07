@@ -73,7 +73,8 @@ Theorem XBehaviour_ind' :
     (forall p, P (XBranching p None None)) ->
     (forall p a Bl, P Bl -> P (XBranching p (Some (a,Bl)) None)) ->
     (forall p a Br, P Br -> P (XBranching p None (Some (a,Br)))) ->
-    (forall p a Bl a' Br, P Bl -> P Br -> P (XBranching p (Some (a,Bl)) (Some (a',Br)))) ->
+    (forall p a Bl a' Br, P Bl -> P Br ->
+            P (XBranching p (Some (a,Bl)) (Some (a',Br)))) ->
     (forall b B1 B2, P B1 -> P B2 -> P (XCond b B1 B2)) ->
     (forall X, P (XCall X)) ->
     P XUndefined ->
@@ -102,7 +103,8 @@ Theorem XBehaviour_rec' :
     (forall p, P (XBranching p None None)) ->
     (forall p a Bl, P Bl -> P (XBranching p (Some (a,Bl)) None)) ->
     (forall p a Br, P Br -> P (XBranching p None (Some (a,Br)))) ->
-    (forall p a Bl a' Br, P Bl -> P Br -> P (XBranching p (Some (a,Bl)) (Some (a',Br)))) ->
+    (forall p a Bl a' Br, P Bl -> P Br ->
+            P (XBranching p (Some (a,Bl)) (Some (a',Br)))) ->
     (forall b B1 B2, P B1 -> P B2 -> P (XCond b B1 B2)) ->
     (forall X, P (XCall X)) ->
     P XUndefined ->
@@ -123,6 +125,7 @@ induction d; intros; case_eq B; intros; auto; rewrite H0 in H; try (exfalso; inv
 Qed.
 
 (** Weird lemma for case analysis. *)
+
 Lemma XB_match : forall (T:Type) B (t:T),
   match B with XUndefined => t | _ => t end = t.
 Proof. intros. case B; auto. Qed.
@@ -142,7 +145,8 @@ match B with
 | p & None // None                => XBranching p None None
 | p & Some (a,Bl) // None         => XBranching p (Some (a,inject Bl)) None
 | p & None // Some (a,Br)         => XBranching p None (Some (a,inject Br))
-| p & Some (a,Bl) // Some (a',Br) => XBranching p (Some (a,inject Bl)) (Some (a',inject Br))
+| p & Some (a,Bl) // Some (a',Br) => XBranching p (Some (a,inject Bl))
+                                                  (Some (a',inject Br))
 | If e Then B1 Else B2            => XCond e (inject B1) (inject B2)
 | Call _ X                        => XCall X
 end.
@@ -183,24 +187,25 @@ match B with
 | XRecv p x a B' => rec B'
 | XSel p l a B'  => rec B'
 | XBranching p mB mB' => match mB, mB' with
-                         | None,    None            => B
-                         | Some (a,Bl), None        => rec Bl
-                         | None,    Some (a,Br)     => rec Br
-                         | Some (_,Bl), Some (_,Br) => match collapse Bl, collapse Br with
-                                               | XUndefined, _ => XUndefined
-                                               | _, XUndefined => XUndefined
-                                               | _, _          => B
-                                               end
+                    | None,    None            => B
+                    | Some (a,Bl), None        => rec Bl
+                    | None,    Some (a,Br)     => rec Br
+                    | Some (_,Bl), Some (_,Br) => match collapse Bl, collapse Br with
+                                             | XUndefined, _ => XUndefined
+                                             | _, XUndefined => XUndefined
+                                             | _, _          => B
+                                             end
                          end
 | XCond b B1 B2 => match collapse B1, collapse B2 with
-                   | XUndefined, _ => XUndefined
-                   | _, XUndefined => XUndefined
-                   | _, _          => B
-                   end
+              | XUndefined, _ => XUndefined
+              | _, XUndefined => XUndefined
+              | _, _          => B
+              end
 | _ => B
 end.
 
 (** Relationship with inject. *)
+
 Lemma collapse_inject : forall B, collapse (inject B) = inject B.
 Proof.
 BInduction B; simpl; auto.
@@ -216,6 +221,7 @@ rewrite H, collapse_inject; apply inject_not_undefined.
 Qed.
 
 (** Elimination lemmas. *)
+
 Lemma collapse_char : forall B,
   {collapse B = XUndefined} + {collapse B = B}.
 Proof.
@@ -298,8 +304,9 @@ Qed.
 End XBehaviour.
 
 (** Tactics for induction proofs. *)
+
 Ltac XBInduction B := induction B using XBehaviour_ind'.
-Ltac XBDInduction B B' := induction B using XBehaviour_ind'; induction B' using XBehaviour_ind'.
+Ltac XBDInduction B B' := XBInduction B; XBInduction B'.
 
 Ltac not_XUndef B HB := 
     elim (XUndefined_dec _ B); intro HB;

@@ -6,7 +6,7 @@ Require Export Basic.
 
 (** * Decidable types
     Several structures need to be decidable.
-    For some annoying reason, the standard library version does not work. *)
+*)
 
 Record DecType : Type :=
   { t :> Type;
@@ -17,6 +17,7 @@ Arguments eq_dec [d].
 Section DecidableType.
 
 Variable M : DecType.
+
 Definition eqb (x y:M) := if (eq_dec x y) then true else false.
 
 Notation "x '=?' y" := (eqb x y).
@@ -76,8 +77,7 @@ intro; apply H.
 transitivity z; auto.
 Qed.
 
-Lemma DecType_eq : forall T (t:M) (A B:T),
-  (if eq_dec t t then A else B) = A.
+Lemma DecType_eq : forall T (t:M) (A B:T), (if eq_dec t t then A else B) = A.
 Proof.
 intros. elim eq_dec; auto.
 intros. elim b; auto.
@@ -94,16 +94,18 @@ End DecidableType.
 
 Notation "x '=?' y" := (eqb _ x y).
 
-(** ** Cartesian product of two decidable types. *)
+(** ** Unit type as a decidable types. *)
 
 Section UnitType.
 
 Lemma unit_dec : forall (x y:unit), {x = y} + {x <> y}.
 Proof. induction x, y; auto. Qed.
 
-Definition Unit := Build_DecType unit unit_dec.
+Definition Unit := {| t := unit; eq_dec := unit_dec |}.
 
 End UnitType.
+
+(** ** Cartesian product of two decidable types. *)
 
 Section DecProd.
 
@@ -122,11 +124,14 @@ Definition DecProd := {| t := A*B; eq_dec := DP_eq_dec |}.
 End DecProd.
 
 (** ** Booleans as a decidable type *)
+
 Definition Bool := {| t := bool; eq_dec := bool_dec |}.
 
-(** * Labels
+(** ** Labels
     We require that there be exactly two labels (left and right), as this
-    is the default practice in many choreography languages. *)
+    is the default practice in many choreography languages.
+    This is also a decidable type.
+*)
 
 Section Labels.
 
@@ -142,62 +147,12 @@ Qed.
 
 Definition Label := {| t := label; eq_dec := eq_label_dec |}.
 
-(*
-Definition eqb_label (l l':Label) : bool :=
-match l, l' with
- | left, left => true
- | right, right => true
- | _, _ => false
-end.
-
-Lemma label_eqb_eq : forall (l l':Label), (eqb_label l l') = true <-> l = l'.
-Proof.
-intros; unfold eqb; elim (eq_label_dec l l'); intros; split; auto.
-+ intro. rewrite <- H. case l; auto.
-+ generalize b. case l; case l'; try easy.
-Qed.
-
-Lemma label_eqb_neq : forall (l l':Label), (eqb_label l l') = false <-> l <> l'.
-Proof.
-split; intros.
-- red. rewrite <- label_eqb_eq, H. intro; inversion H0.
-- red in H; rewrite <- label_eqb_eq in H.
-  case_eq (eqb_label l l'); auto. tauto.
-Qed.
-
-Lemma label_eqb_refl : forall l, eqb_label l l = true.
-Proof. intro. rewrite label_eqb_eq. auto. Qed.
-
-Lemma label_eqb_sym : forall l l0, eqb_label l l0 = eqb_label l0 l.
-Proof. intros. case l; case l0; auto. Qed.
-
-Lemma label_eqb_trans : forall l l0 l1,
-  eqb_label l l0 = true -> eqb_label l0 l1 = true -> eqb_label l l1 = true.
-Proof.
-intros.
-apply label_eqb_eq.
-transitivity l0; apply label_eqb_eq; auto.
-Qed.
-
-Lemma label_eqb_ntrans : forall l l0 l1,
-  eqb_label l l0 = true -> eqb_label l0 l1 = false -> eqb_label l l1 = false.
-Proof.
-intros.
-apply label_eqb_neq.
-apply label_eqb_eq in H.
-apply label_eqb_neq in H0.
-intro; apply H0. transitivity l; auto.
-Qed.
-*)
-
-
 End Labels.
 
 (** * Local states
-    This is the state of a particular process. It maps the values in the
-    process's local set of variables to values.
+    A local state is the state of a particular process. It maps the values
+    in the process's local set of variables to values.
     The set of variables needs to be decidable. *)
-
 
 Section LState.
 
@@ -296,8 +251,8 @@ Notation "s [=] s'" := (Leq_state _ _ s s') (at level 50).
 Arguments Lupdate [Value Var].
 
 (** * Global states
-    These are states for a choreography, or for a network as a whole:
-    they map each process name to its state.
+    A global state is the state of a choreography, or of a network as a whole:
+    it maps each process name to its state.
     Note that all processes are required to use the same sets of variables
     and values. *)
 
@@ -407,7 +362,9 @@ Add Parametric Relation P : State (eq_state P)
 Definition update (s:State) (p:Pid) (x:Var) (v:Value) : State :=
   fun (q:Pid) => if (p =? q) then (Lupdate (s p) x v) else (s q).
 
-Lemma update_read : forall s p x v, update s p x v p x = v.
+Notation "s [ p , x => v ]" := (update s p x v) (at level 10).
+
+Lemma update_read : forall s p x v, s[p,x => v] p x = v.
 Proof.
   intros.
   unfold update.
@@ -415,16 +372,14 @@ Proof.
   apply Lupdate_read; auto.
 Qed.
 
-Lemma update_read' : forall s p q x y v, p <> q ->
-  update s p x v q y = s q y.
+Lemma update_read' : forall s p q x y v, p <> q -> s[p,x => v] q y = s q y.
 Proof.
   intros.
   unfold update.
   rewrite <- eqb_neq in H; rewrite H; auto.
 Qed.
 
-Lemma update_read'' : forall s p q x y v, x <> y ->
-  update s p x v q y = s q y.
+Lemma update_read'' : forall s p q x y v, x <> y -> s[p,x => v] q y = s q y.
 Proof.
   intros.
   unfold update.
@@ -433,8 +388,7 @@ Proof.
   rewrite eqb_eq in H0; rewrite H0. auto.
 Qed.
 
-Lemma update_update : forall s p x v w P,
-  update (update s p x w) p x v [= P =] update s p x v.
+Lemma update_update : forall s p x v w P, s[p,x => w][p,x => v] [= P =] s[p,x => v].
 Proof.
 intros.
 red.
@@ -446,8 +400,7 @@ case_eq (p =? q).
 + intros; apply Leq_state_refl.
 Qed.
 
-Lemma update_not_in : forall s p x v P,
-  ~In p P -> s [= P =] update s p x v.
+Lemma update_not_in : forall s p x v P, ~In p P -> s [= P =] s[p,x => v].
 Proof.
 intros.
 induction P.
@@ -478,12 +431,11 @@ Proof. red; intros. apply Leq_state_refl. Qed.
 Lemma eq_state_ext_sym : forall s s', s [==] s' -> s' [==] s.
 Proof. red; intros. apply Leq_state_sym. auto. Qed.
 
-Lemma eq_state_ext_trans : forall s s' s'',
-  s [==] s' -> s' [==] s'' -> s [==] s''.
+Lemma eq_state_ext_trans : forall s s' s'', s [==] s' -> s' [==] s'' -> s [==] s''.
 Proof. red; intros. apply Leq_state_trans with (s' p); auto. Qed.
 
 Lemma eq_state_ext_congr : forall s s' p x v,
-  s [==] s' -> update s p x v [==] update s' p x v.
+  s [==] s' -> s[p,x => v] [==] s'[p,x => v].
 Proof.
 repeat intro.
 unfold update.
@@ -502,8 +454,7 @@ Add Parametric Relation : State eq_state_ext
   as eq_state_ext_rel.
 *)
 
-Lemma update_update_ext : forall s p x v1 v2,
-  update (update s p x v2) p x v1 [==] update s p x v1.
+Lemma update_update_ext : forall s p x v w, s[p,x => w][p,x => v] [==] s[p,x => v].
 Proof.
 intros.
 red.
@@ -514,8 +465,8 @@ intro q; elim eqb; auto.
 + apply Leq_state_refl.
 Qed.
 
-Lemma update_independent : forall s p q x y v v', p <> q ->
-  update (update s q y v') p x v [==] update (update s p x v) q y v'.
+Lemma update_independent : forall s p q x y v w, p <> q ->
+  s[q,y => w][p,x => v] [==] s[p,x => v][q,y => w].
 Proof.
 red; intros.
 unfold update.
@@ -527,8 +478,8 @@ rewrite eqb_neq in H.
 elim H; transitivity p0; auto.
 Qed.
 
-Lemma update_independent' : forall s p x y v v', x <> y ->
-  update (update s p y v') p x v [==] update (update s p x v) p y v'.
+Lemma update_independent' : forall s p x y v w, x <> y ->
+  s[p,y => w][p,x => v] [==] s[p,x => v][p,y => w].
 Proof.
 red; intros.
 unfold update.
@@ -539,6 +490,11 @@ elim eqb.
 Qed.
 
 End GState.
+
+Notation "s '[[' p ',' x '=>' v ']]'" := (update _ _ _ s p x v) (at level 100).
+Notation "s [==] s'" := (eq_state_ext _ _ _ s s') (at level 50).
+
+(** Useful tactics while we can't rewrite. *)
 
 Ltac ESEr := apply eq_state_ext_refl.
 Ltac ESEs := apply eq_state_ext_sym; auto.
@@ -555,11 +511,6 @@ Record Eval {Expression Vars Input Output : DecType} :=
     eval_wd : forall f f', (forall x, f x = f' x) ->
       forall e, eval e f = eval e f'}.
 
-Arguments eq_state_ext [Pid Var Value].
-Arguments update [Pid Var Value].
-
-Notation "s [==] s'" := (eq_state_ext s s') (at level 50).
-
 (** Both CC and SP use two types of expressions - one
   for values, one for Boolean expressions. Their shared properties
   that depend on the state are proven here. *)
@@ -575,6 +526,8 @@ Local Definition CSt := State Pid Vars Input.
 
 Definition eval_on_state (e:Expression) (s:CSt) (p:Pid) : Output := eval Ev e (s p).
 
+(* Notation "[[ e | s , p ]]" := (eval_on_state e s p) (at level 20). *)
+
 (** Consistency with state equivalence. *)
 Lemma eval_eq : forall e s s' p, s [==] s' ->
   eval_on_state e s p = eval_on_state e s' p.
@@ -584,10 +537,10 @@ apply eval_wd, H.
 Qed.
 
 Lemma eval_neq : forall e s p q x v, p <> q ->
-  eval_on_state e s p = eval_on_state e (update s q x v) p.
+  eval_on_state e s p = eval_on_state e (s[[q,x => v]]) p.
 Proof.
 intros; unfold eval_on_state; simpl.
-replace (s p) with (update s q x v p); auto.
+replace (s p) with (s[[q,x => v]] p); auto.
 unfold update.
 case_eq (q =? p); auto.
 intro; elim H.
@@ -596,76 +549,82 @@ Qed.
 
 End EvalState.
 
+(* Notation "[[ Ev, e | s , p ]]" := (eval_on_state _ _ _ _ _ Ev e s p) (at level 20). *)
+
 Arguments eval_on_state [Pid Expression Vars Input Output].
 Arguments eval_eq [Pid Expression Vars Input Output].
 Arguments eval_neq [Pid Expression Vars Input Output].
+
+(** * Transition labels *)
 
 Section Transitions.
 
 Variable Pid Value Var RecVar : DecType.
 
-(** * Transition labels *)
+(** The labels in the LTS as in the reference articles. *)
 
 Inductive TransitionLabel : Type :=
-| L_Com (p:Pid) (v:Value) (q:Pid) : TransitionLabel
-| L_Sel (p:Pid) (q:Pid) (l:Label) : TransitionLabel
-| L_Tau (p:Pid) : TransitionLabel
+| TL_Com (p:Pid) (v:Value) (q:Pid) : TransitionLabel
+| TL_Sel (p:Pid) (q:Pid) (l:Label) : TransitionLabel
+| TL_Tau (p:Pid) : TransitionLabel
 .
 
 Lemma TransitionLabel_eq_dec : forall (x y:TransitionLabel), {x=y} + {x<>y}.
 Proof. decide equality; apply eq_dec. Qed.
 
-(** The semantics uses a labeled transition system with more expressive labels. *)
+(** The inductive definition of the semantics in Coq uses an LTS with
+  more expressive labels. *)
 
 Inductive RichLabel : Type :=
-| R_Com (p:Pid) (v:Value) (q:Pid) (x:Var) : RichLabel
-| R_Sel (p:Pid) (q:Pid) (l:Label) : RichLabel
-| R_Cond (p:Pid) : RichLabel
-| R_Call (X:RecVar) (p:Pid) : RichLabel
+| RL_Com (p:Pid) (v:Value) (q:Pid) (x:Var) : RichLabel
+| RL_Sel (p:Pid) (q:Pid) (l:Label) : RichLabel
+| RL_Cond (p:Pid) : RichLabel
+| RL_Call (X:RecVar) (p:Pid) : RichLabel
 .
 
 Lemma RichLabel_eq_dec : forall (x y:RichLabel), {x=y} + {x<>y}.
 Proof. decide equality; apply eq_dec. Qed.
 
-Definition tpn (t:RichLabel) : list Pid :=
+Definition RL_pn (t:RichLabel) : list Pid :=
   match t with
-  | R_Com p v q _ => p::q::nil
-  | R_Sel p q l   => p::q::nil
-  | R_Cond p      => p::nil
-  | R_Call _ p    => p::nil
+  | RL_Com p v q _ => p::q::nil
+  | RL_Sel p q l   => p::q::nil
+  | RL_Cond p      => p::nil
+  | RL_Call _ p    => p::nil
 end.
 
 Definition forget (t:RichLabel) : TransitionLabel :=
   match t with
-  | R_Com p v q _ => L_Com p v q
-  | R_Sel p q l   => L_Sel p q l
-  | R_Cond p      => L_Tau p
-  | R_Call _ p    => L_Tau p
+  | RL_Com p v q _ => TL_Com p v q
+  | RL_Sel p q l   => TL_Sel p q l
+  | RL_Cond p      => TL_Tau p
+  | RL_Call _ p    => TL_Tau p
 end.
 
 (** Useful for rewriting in proofs. *)
-Lemma forget_Com : forall x p v q, forget (R_Com p v q x) = L_Com p v q.
+
+Lemma forget_Com : forall x p v q, forget (RL_Com p v q x) = TL_Com p v q.
 Proof. auto. Qed.
 
-Lemma forget_Sel : forall p q l, forget (R_Sel p q l) = L_Sel p q l.
+Lemma forget_Sel : forall p q l, forget (RL_Sel p q l) = TL_Sel p q l.
 Proof. auto. Qed.
 
-Lemma forget_Cond : forall p, forget (R_Cond p) = L_Tau p.
+Lemma forget_Cond : forall p, forget (RL_Cond p) = TL_Tau p.
 Proof. auto. Qed.
 
-Lemma forget_Call : forall X p, forget (R_Call X p) = L_Tau p.
+Lemma forget_Call : forall X p, forget (RL_Call X p) = TL_Tau p.
 Proof. auto. Qed.
 
-(** Disjointness between a process/list of processes and a label
-  - used for a lot of properties of the semantics, these lemmas
-  are useful for reasoning about it. *)
+(** Disjointness between a process/list of processes and a label - used
+  for a lot of properties of the semantics, these lemmas are useful for
+  reasoning about it. *)
 
 Definition disjoint_p_rl (p:Pid) (t:RichLabel) : Prop :=
 match t with
-| R_Com r _ s _ => p <> r /\ p <> s
-| R_Sel r s _   => p <> r /\ p <> s
-| R_Cond r      => p <> r
-| R_Call _ r    => p <> r
+| RL_Com r _ s _ => p <> r /\ p <> s
+| RL_Sel r s _   => p <> r /\ p <> s
+| RL_Cond r      => p <> r
+| RL_Call _ r    => p <> r
 end.
 
 Fixpoint disjoint_ps_rl (ps:list Pid) (t:RichLabel) : Prop :=
@@ -682,7 +641,7 @@ rewrite <- H1; auto.
 Qed.
 
 Lemma disjoint_ps_Sel : forall p q l ps,
-  disjoint_ps_rl ps (R_Sel p q l) -> disjoint (p::q::nil) ps.
+  disjoint_ps_rl ps (RL_Sel p q l) -> disjoint (p::q::nil) ps.
 Proof.
 intros. intro; intro. inversion_clear H0.
 induction ps; auto.
@@ -693,7 +652,7 @@ inversion_clear H1; auto. inversion_clear H0; auto.
 Qed.
 
 Lemma disjoint_ps_Com : forall p v q x ps,
-  disjoint_ps_rl ps (R_Com p v q x) -> disjoint (p::q::nil) ps.
+  disjoint_ps_rl ps (RL_Com p v q x) -> disjoint (p::q::nil) ps.
 Proof.
 intros. intro; intro. inversion_clear H0.
 induction ps; auto.
@@ -703,8 +662,7 @@ rewrite H in H0. inversion_clear H0.
 inversion_clear H1; auto. inversion_clear H0; auto.
 Qed.
 
-Lemma disjoint_ps_Cond : forall p ps,
-  disjoint_ps_rl ps (R_Cond p) -> ~In p ps.
+Lemma disjoint_ps_Cond : forall p ps, disjoint_ps_rl ps (RL_Cond p) -> ~In p ps.
 Proof.
 induction ps; intros; simpl; auto.
 intro. inversion_clear H. simpl in H1.
@@ -712,8 +670,7 @@ inversion_clear H0; auto.
 apply IHps; auto.
 Qed.
 
-Lemma disjoint_ps_Call : forall p ps X,
-  disjoint_ps_rl ps (R_Call X p) -> ~In p ps.
+Lemma disjoint_ps_Call : forall p ps X, disjoint_ps_rl ps (RL_Call X p) -> ~In p ps.
 Proof.
 induction ps; intros; simpl; auto.
 intro. inversion_clear H. simpl in H1.
@@ -738,14 +695,14 @@ Qed.
 
 End Transitions.
 
-Arguments R_Com [Pid Value Var RecVar].
-Arguments R_Sel [Pid Value Var RecVar].
-Arguments R_Cond [Pid Value Var RecVar].
-Arguments R_Call [Pid Value Var RecVar].
+Arguments RL_Com [Pid Value Var RecVar].
+Arguments RL_Sel [Pid Value Var RecVar].
+Arguments RL_Cond [Pid Value Var RecVar].
+Arguments RL_Call [Pid Value Var RecVar].
 
-Arguments L_Com [Pid Value].
-Arguments L_Sel [Pid Value].
-Arguments L_Tau [Pid Value].
+Arguments TL_Com [Pid Value].
+Arguments TL_Sel [Pid Value].
+Arguments TL_Tau [Pid Value].
 
 Arguments forget [Pid Value Var RecVar].
 Arguments disjoint_ps_rl [Pid Value Var RecVar].

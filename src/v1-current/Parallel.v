@@ -1,12 +1,4 @@
-Require Import Arith.
-Require Export Basic.
-Require Export Common.
-Require Export MC.
 Require Export Implementation.
-
-Module Export MC_Nat := Implementation.MC_Nat.
-
-Open Scope MC_scope.
 
 Section ParallelImplementation.
 
@@ -14,7 +6,9 @@ Section ParallelImplementation.
   There is also a parallel variant for composition. This is defined in the same steps, but
   requires yet another auxiliary function. *)
 
-Definition copy_input {m} (ps qs:t Pid m) (X:RecVar) : Choreography.
+Open Scope CC_scope.
+
+Definition copy_input {m} (ps qs:t Pid m) (X:RecVar) : Choreography IS.
 (*
   match m with
   | 0 => End
@@ -24,14 +18,14 @@ Definition copy_input {m} (ps qs:t Pid m) (X:RecVar) : Choreography.
 Proof.
 induction m.
 + apply (Call X).
-+ apply (Send (hd ps) this (hd qs);; IHm (tl ps) (tl qs)).
++ apply (Interaction _ eps (Send (hd ps) this (hd qs)) (IHm (tl ps) (tl qs))).
 Defined.
 
 Fixpoint copy_input_iter {m} (ps:t Pid m) {n} (qs: t (t Pid m) n) (X:RecVar) :
-  RecVar -> Choreography :=
+  RecVar -> Choreography IS :=
   match qs with
   | nil _ => (fun _ => End)
-  | (rs::qs') => (fun Y => if RecVar_dec X Y
+  | (rs::qs') => (fun Y => if (X =? Y)
         then copy_input ps rs (S X)
         else copy_input_iter ps qs' (S X) Y)
   end.
@@ -45,14 +39,18 @@ Fixpoint Gamma' {m} (f:PRFunction m) : nat :=
   | Zero => 1
   | Successor => 1
   | Projection _ => 1
-  | @Composition k _ g fs => Gamma g + vsum (map Gamma fs) + k
-  | Recursion f g => Gamma f + Gamma g + 3
-  | Minimization f => Gamma f + 2
+  | @Composition k _ g fs => Gamma' g + vsum (map Gamma' fs) + k
+  | Recursion f g => Gamma' f + Gamma' g + 3
+  | Minimization f => Gamma' f + 2
   end.
 
-(** The extra argument ps_start is for the processes where the inputs in fs[@0] come from. *)
-Fixpoint par_compose {m} {k} (fs:t (PRFunction m) k) d (Hd:forall i, depth fs[@i] < d) (target init ps_start:nat) (X:RecVar)
-  (Implement : forall m' (f:PRFunction m') (Hd:depth f < d) (ps':t Pid m') (q' i':nat) (k':RecVar), RecVar -> Choreography) {struct fs} : RecVar -> Choreography.
+(** The extra argument ps_start is for the processes where the inputs in [fs[@0]] come from. *)
+
+Fixpoint par_compose {m} {k} (fs:t (PRFunction m) k)
+  d (Hd:forall i, depth fs[@i] < d) (target init ps_start:nat) (X:RecVar)
+  (Implement : forall m' (f:PRFunction m') (Hd:depth f < d)
+  (ps':t Pid m') (q' i':nat) (k':RecVar), RecVar -> Choreography IS) {struct fs}
+  : RecVar -> Choreography IS.
 Proof.
 destruct fs.
 - apply (fun _ => End).
@@ -64,20 +62,20 @@ destruct fs.
 Defined.
 
 Fixpoint Par_Implementation_aux {m} (f:PRFunction m) d (Hd:depth f<d)
-  (ps:t Pid m) (q:Pid) (init:nat) (X:RecVar) {struct d}: RecVar -> Choreography.
+  (ps:t Pid m) (q:Pid) (init:nat) (X:RecVar) {struct d}: RecVar -> Choreography IS.
 Proof.
 induction d.
 + elim (Nat.nlt_0_r _ Hd).
 + destruct f; intros; revert X0.
 
   (* Zero *)
-  - apply (Pack1 X (Send (hd ps) zero q;; Call (S X))).
+  - apply (Pack1 X (Send (hd ps) zero q @ eps;; @Call IS (S X))).
 
   (* Successor *)
-  - apply (Pack1 X (Send (hd ps) succ_this q;; Call (S X))).
+  - apply (Pack1 X (Send (hd ps) succ_this q @ eps;; @Call IS (S X))).
 
   (* Projection *)
-  - apply (Pack1 X (Send ps[@Fin.of_nat_lt l] this q;; Call (S X))).
+  - apply (Pack1 X (Send ps[@Fin.of_nat_lt l] this q @ eps;; @Call IS (S X))).
 
   (* Composition *)
   - simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
@@ -102,50 +100,52 @@ induction d.
     pose (Par_Implementation_aux _ g _ Hg (S init :: init :: tl ps) (init+2) (init+3 + Pi f) (X + Gamma' f + 2)) as Pg.
     apply (fun Y =>
       if (Y <? X + Gamma' f) then Pf Y
-      else if (RecVar_dec Y (X + Gamma' f)) then
-         Send (init+2) zero (S init);; Call (X + Gamma' f + 1)
-      else if (RecVar_dec Y (X + Gamma' f + 1)) then 
-         IfEq (S init) (hd ps) (Send init this q;; Call (X + Gamma' f + Gamma' g + 3)) (Call (X + Gamma' f + 2))
-      else if (RecVar_dec Y (X + Gamma' f + Gamma' g + 2)) then
-         Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma' f + 1)
+      else if (Y =? (X + Gamma' f)) then
+         Send (init+2) zero (S init) @ eps;; @Call IS (X + Gamma' f + 1)
+      else if (Y =? (X + Gamma' f + 1)) then 
+         IfEq (S init) (hd ps) (Send init this q @eps;; @Call IS (X + Gamma' f + Gamma' g + 3)) (@Call IS (X + Gamma' f + 2))
+      else if (Y =? (X + Gamma' f + Gamma' g + 2)) then
+         Send (init+2) this init @ eps;; Send (S init) this (init+2) @ eps;; Send (init+2) succ_this (S init) @ eps;; @Call IS (X + Gamma' f + 1)
       else Pg Y).
 
   (* Minimization *)
   - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
     pose (Par_Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3) (X + 1)) as Pf.
     apply (fun Y =>
-      if (RecVar_dec Y X) then
-         Send (init+2) zero (init+1);; Call (X + 1)
-      else if (RecVar_dec Y (X + Gamma' f + 1)) then
-         Send (init+1) zero (init+2);; IfEq (init+2) init
-           (Send (init+1) this q;; Call (X + Gamma' f + 2))
-           (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1))
+      if (Y =? X) then
+         Send (init+2) zero (init+1) @ eps;; @Call IS (X + 1)
+      else if (Y =? (X + Gamma' f + 1)) then
+         Send (init+1) zero (init+2) @ eps;; IfEq (init+2) init
+           (Send (init+1) this q @ eps;; @Call IS (X + Gamma' f + 2))
+           (Send (init+1) this (init+2) @ eps;; Send (init+2) succ_this (init+1) @ eps;; @Call IS (X + 1))
         else Pf Y).
 Defined.
 
-Definition Par_Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid) : Program :=
-  Build_Program
-    (fun X => (all_pids ((max q (vmax ps)) + Pi f),
-               Par_Implementation_aux f _ (lt_n_Sn (depth f)) ps q (S (max q (vmax ps))) 0 X))
-    (Call 0).
+Definition Par_Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid)
+  : Program IS :=
+  (fun X => (all_pids ((max q (vmax ps)) + Pi f),
+             Par_Implementation_aux f _ (lt_n_Sn (depth f))
+                                    ps q (S (max q (vmax ps))) 0 X),
+  @Call IS 0).
 
 (** By default, we take process 0 for q and 1..m for the ps. *)
-Definition Par_Implementation' {m} (f:PRFunction m) : Program :=
+
+Definition Par_Implementation' {m} (f:PRFunction m) : Program IS :=
   Par_Implementation f (vec_1_to_n m) 0.
 
 (* Sanity checks.
 Eval compute in (Main (Par_Implementation' (Composition Successor [Zero]))).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Successor [Zero]))) [0;1;2;3])).
+Eval compute in (map snd (map (Procedures _ (Par_Implementation' (Composition Successor [Zero]))) [0;1;2;3])).
 
 Eval compute in (Main (Par_Implementation' (Composition Zero [Projection aux13]))).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Zero [Projection aux13]))) [0;1;2;3])).
+Eval compute in (map snd (map (Procedures _ (Par_Implementation' (Composition Zero [Projection aux13]))) [0;1;2;3])).
 
 Eval compute in (Main (Par_Implementation' (Composition (Projection aux22) [Zero; Successor]))).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition (Projection aux22) (Zero :: [Successor])))) [0;1;2;3;4;5])).
+Eval compute in (map snd (map (Procedures _ (Par_Implementation' (Composition (Projection aux22) (Zero :: [Successor])))) [0;1;2;3;4;5])).
 
 Eval compute in (Main (Par_Implementation' PR_add)).
-Eval compute in (map snd (map (Procedures (Par_Implementation' PR_add)) [0;1;2;3;4;5;6;7;8;9])).
-Eval compute in (map snd (map (Procedures (Par_Implementation' (Composition Successor [Projection aux23]))) [0;1;2;3])).
+Eval compute in (map snd (map (Procedures _ (Par_Implementation' PR_add)) [0;1;2;3;4;5;6;7;8;9])).
+Eval compute in (map snd (map (Procedures _ (Par_Implementation' (Composition Successor [Projection aux23]))) [0;1;2;3])).
 *)
 
 End ParallelImplementation.

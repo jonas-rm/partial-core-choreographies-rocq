@@ -4,6 +4,7 @@ Export VectorNotations.
 
 (** * Definitions
     Our class of partial recursive functions, together with their semantics. *)
+
 Section Definitions.
 
 Inductive PRFunction : nat -> Set :=
@@ -16,9 +17,10 @@ Inductive PRFunction : nat -> Set :=
 .
 
 (** Kleene is imprecise about how e.g. composition should behave on undefined arguments:
-    does should (Composition g fs) be undefined if one of the fs is undefined, even if
+    does should [Composition g fs] be undefined if one of the fs is undefined, even if
     its value is never used? We believe the second approach to be the case (it is what 
     is assumed in typical proofs of Turing completeness). *)
+
 Fixpoint all_defined {n} (v:t (option nat) n) : bool :=
   match v with
   | []             => true
@@ -29,7 +31,9 @@ end.
 (** Auxiliary function for minimization: we need to specify how many computation steps we
     want to allow, as all Coq functions must be total. We do a &dlquote;diagonal&urquote;
     search. *)
-Fixpoint find_zero_from {k} (f:t (option nat) (1+k) -> option nat) (ns:t (option nat) k) (init:nat) (steps:nat) : option nat :=
+
+Fixpoint find_zero_from {k} (f:t (option nat) (1+k) -> option nat)
+      (ns:t (option nat) k) (init:nat) (steps:nat) : option nat :=
   match steps with
   | O   => None
   | S m => match f (shiftin (Some init) ns) with
@@ -39,9 +43,11 @@ Fixpoint find_zero_from {k} (f:t (option nat) (1+k) -> option nat) (ns:t (option
 end end.
 
 (** We'd love a readable definition of evaluation, but the dependent type of f makes it
-    tricky to write. So... *)
-(** First we define the fixpoint construction over the option type, to cater for undefinedness. *)
-Fixpoint eval_opt {m} (f:PRFunction m) : forall (steps:nat) (ns:t (option nat) m), option nat.
+    tricky to write. So... <br />
+    First we define the fixpoint construction over the option type, to cater for undefinedness. *)
+
+Fixpoint eval_opt {m} (f:PRFunction m) :
+  forall (steps:nat) (ns:t (option nat) m), option nat.
 Proof.
 destruct f; intros.
 
@@ -81,13 +87,16 @@ destruct f; intros.
 Defined.
 
 (** This is the evaluation function we actually want to use. *)
-Definition eval {m} (f:PRFunction m) (steps:nat) (ns:t nat m) : option nat := eval_opt f steps (map Some ns).
+
+Definition eval {m} (f:PRFunction m) (steps:nat) (ns:t nat m) : option nat
+  := eval_opt f steps (map Some ns).
 
 End Definitions.
 
 (** * Sanity checks
     Our first goal is to prove that evaluation works as expected.
     This requires some preliminary properties about the auxiliary functions. *)
+
 Section Auxiliary_Lemmas.
 
 (** Predicate all_defined works as expected. *)
@@ -98,7 +107,8 @@ induction n; simpl; intros.
 + rewrite (eta v); simpl; auto.
 Qed.
 
-Lemma all_defined_false : forall n v, all_defined (n:=n) v = false -> exists Hi, v[@Hi] = None.
+Lemma all_defined_false : forall n v, all_defined (n:=n) v = false ->
+  exists Hi, v[@Hi] = None.
 Proof.
 induction n; simpl; intros.
 + replace v with (nil (option nat)) in H; [inversion H | apply vector_0_inv].
@@ -111,7 +121,8 @@ induction n; simpl; intros.
     rewrite nth_hd; auto.
 Qed.
 
-Lemma all_defined_true : forall n v, all_defined (n:=n) v = true -> forall Hi, v[@Hi] <> None.
+Lemma all_defined_true : forall n v, all_defined (n:=n) v = true ->
+  forall Hi, v[@Hi] <> None.
 Proof.
 intros; intro.
 induction n.
@@ -125,7 +136,8 @@ induction n.
   - inversion H1.
 Qed.
 
-Lemma all_defined_false' : forall n v Hi, v[@Hi] = None ->  all_defined (n:=n) v = false.
+Lemma all_defined_false' : forall n v Hi, v[@Hi] = None ->
+  all_defined (n:=n) v = false.
 Proof.
 intros.
 case_eq (all_defined v); intros; auto.
@@ -136,8 +148,11 @@ Qed.
 (** If find_zero_from returns a value (Some n), then we know that f(n)=0,
     but also that f is positive for all values between the initial one and n.
     Furthermore, the number of values we tested is bounded by the first parameter. *)
-Lemma find_zero_from_Some : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
-  m < init + steps /\ f (shiftin (Some m) ns) = Some O /\ forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
+
+Lemma find_zero_from_Some : forall steps {k} f (ns:t (option nat) k) init m,
+  find_zero_from f ns init steps = Some m ->
+  m < init + steps /\ f (shiftin (Some m) ns) = Some O /\
+  forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
 Proof.
 induction steps; intros.
 + inversion H.
@@ -160,6 +175,7 @@ induction steps; intros.
 Qed.
 
 (** For convenience, we split these properties in separate lemmas. *)
+
 Lemma find_zero_from_bound : forall steps {k} f (ns:t (option nat) k) init m,
   find_zero_from f ns init steps = Some m -> m < init + steps.
 Proof. intros; elim (find_zero_from_Some steps f ns init m); auto. Qed.
@@ -172,14 +188,17 @@ inversion H1; auto.
 Qed.
 
 Lemma find_zero_from_middle : forall steps {k} f (ns:t (option nat) k) init m,
-  find_zero_from f ns init steps = Some m -> forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
+  find_zero_from f ns init steps = Some m ->
+  forall n, init <= n < m -> exists val, f (shiftin (Some n) ns) = Some (S val).
 Proof.
 intros; elim (find_zero_from_Some steps f ns init m); intros; auto.
 inversion_clear H2; auto.
 Qed.
 
 (** Furthermore, if f has other zeros, they must lie outside the range we tested. *)
-Lemma find_zero_from_min : forall steps {k} f (ns:t (option nat) k) init m, find_zero_from f ns init steps = Some m ->
+
+Lemma find_zero_from_min : forall steps {k} f (ns:t (option nat) k) init m,
+  find_zero_from f ns init steps = Some m ->
   forall n, f (shiftin (Some n) ns) = Some 0 -> n < init \/ m <= n.
 Proof.
 intros.
@@ -192,11 +211,13 @@ Qed.
 
 (** The negative counterpart: if find_zero returns None, then f is either undefined at least once
     in the range tested (for the given number of steps), or it is always positive. *)
+
 Lemma find_zero_from_None : forall steps {k} f (ns:t (option nat) k) init,
   find_zero_from f ns init steps = None ->
   { exists n, init <= n < init + steps /\ f (shiftin (Some n) ns) = None /\
-              forall k, init <= k < n -> exists val, f (shiftin (Some k) ns) = Some (S val)} +
-  { forall n, init <= n < init + steps -> exists val, f (shiftin (Some n) ns) = Some (S val) }.
+      forall k, init <= k < n -> exists val, f (shiftin (Some k) ns) = Some (S val)} +
+  { forall n, init <= n < init + steps ->
+      exists val, f (shiftin (Some n) ns) = Some (S val) }.
 Proof.
 induction steps; intros.
 + right; simpl; intros.
@@ -247,6 +268,7 @@ case_eq (eval_opt h st (shiftin (Some m) (map Some ns))).
 Qed.
 
 (** A useful characterization result. *)
+
 Lemma find_zero_from_compute : forall k h ns init m steps,
   (forall x, x < init+m -> exists y, h (shiftin (Some x) ns) = (Some (S y))) ->
   @find_zero_from k h ns init (m+steps) = find_zero_from h ns (m+init) steps.
@@ -263,6 +285,7 @@ Qed.
 End Auxiliary_Lemmas.
 
 (** Since our definition of eval is very indirect, we now prove that it behaves as expected. *)
+
 Section Sanity_Checks.
 
 Lemma Zero_correct : forall n steps, eval Zero steps [n] = Some 0.
@@ -275,15 +298,18 @@ replace (n+1) with (S n); auto.
 rewrite plus_comm; auto.
 Qed.
 
-Lemma Projection_correct : forall m k (Hkm: k<m) n steps, eval (Projection Hkm) steps n = Some (nth n (Fin.of_nat_lt Hkm)).
+Lemma Projection_correct : forall m k (Hkm: k<m) n steps,
+  eval (Projection Hkm) steps n = Some (nth n (Fin.of_nat_lt Hkm)).
 Proof.
 intros; unfold eval; simpl.
 rewrite all_defined_map_Some.
 apply nth_map'.
 Qed.
 
-Lemma Composition_correct : forall k m (g:PRFunction m) (f:t (PRFunction k) m) (ns:t nat k) (ms:t nat m) steps,
-  (forall Hi, eval (nth f Hi) steps ns = Some (nth ms Hi)) -> eval (Composition g f) steps ns = eval g steps ms.
+Lemma Composition_correct :
+  forall k m (g:PRFunction m) (f:t (PRFunction k) m) (ns:t nat k) (ms:t nat m) steps,
+  (forall Hi, eval (nth f Hi) steps ns = Some (nth ms Hi)) ->
+  eval (Composition g f) steps ns = eval g steps ms.
 Proof.
 intros; unfold eval; simpl.
 case_eq (all_defined (map_inv (map_inv (map eval_opt f) steps) (map Some ns))); simpl; intro.
@@ -304,7 +330,8 @@ case_eq (all_defined (map_inv (map_inv (map eval_opt f) steps) (map Some ns))); 
   inversion H1.
 Qed.
 
-Lemma Recursion_correct_base : forall k (g:PRFunction k) (h:PRFunction (2+k)) (ns:t nat (1+k)) steps,
+Lemma Recursion_correct_base :
+  forall k (g:PRFunction k) (h:PRFunction (2+k)) (ns:t nat (1+k)) steps,
   hd ns = 0 -> eval (Recursion g h) steps ns = eval g steps (tl ns).
 Proof.
 intros; unfold eval.
@@ -312,7 +339,8 @@ revert k ns g h H; refine (@caseS _ _ _).
 simpl; intros; rewrite H; auto.
 Qed.
 
-Lemma Recursion_correct_step : forall k (g:PRFunction k) (h:PRFunction (2+k)) (ns:t nat (1+k)) steps x y,
+Lemma Recursion_correct_step :
+  forall k (g:PRFunction k) (h:PRFunction (2+k)) (ns:t nat (1+k)) steps x y,
   hd ns = S x -> (eval (Recursion g h) steps (x :: tl ns)) = Some y ->
   eval (Recursion g h) steps ns = eval h steps (x :: y :: tl ns).
 Proof.
@@ -327,7 +355,8 @@ simpl (map Some (x :: t)) in H0.
 simpl; simpl in H0; rewrite H0; auto.
 Qed.
 
-Lemma Recursion_correct_step' : forall k (g:PRFunction k) (h:PRFunction (2+k)) (ns:t nat (1+k)) steps x,
+Lemma Recursion_correct_step' :
+  forall k (g:PRFunction k) (h:PRFunction (2+k)) (ns:t nat (1+k)) steps x,
   hd ns = S x -> (eval (Recursion g h) steps (x :: tl ns)) = None ->
   eval (Recursion g h) steps ns = None.
 Proof.
@@ -341,9 +370,11 @@ simpl (map Some (x :: t)) in H0.
 simpl; simpl in H0; rewrite H0; auto.
 Qed.
 
-Lemma Minimization_correct : forall k (h:PRFunction (1+k)) (ns:t nat k) steps n,
+Lemma Minimization_correct :
+  forall k (h:PRFunction (1+k)) (ns:t nat k) steps n,
   eval (Minimization h) steps ns = (Some n) ->
-  exists s, eval h s (shiftin n ns) = (Some 0) /\ forall m, m < n -> exists n', eval h s (shiftin m ns) = (Some (S n')).
+  exists s, eval h s (shiftin n ns) = (Some 0) /\
+    forall m, m < n -> exists n', eval h s (shiftin m ns) = (Some (S n')).
 Proof.
 intros; revert H; unfold eval.
 induction steps.
@@ -378,10 +409,12 @@ Ltac prove_composition_3 := intros;
                             auto.
 
 (** * Examples
-    We now recover the examples from the submitted journal paper. *)
+    We now recover the examples from the TCS article. *)
+
 Section Examples.
 
 (** These lemmas are used to define projections. Their names seem inconsistent, but they refer to the usual convention for naming projections. *)
+
 Lemma aux11 : 0 < 1.
 Proof. auto with arith. Qed.
 
@@ -401,14 +434,15 @@ Lemma aux33 : 2 < 3.
 Proof. auto with arith. Qed.
 
 (** ** Addition. *)
-Definition PR_add := Recursion (Projection aux11) (Composition Successor [Projection aux23]).
+
+Definition PR_add :=
+  Recursion (Projection aux11) (Composition Successor [Projection aux23]).
 
 (* Sanity checks.
 Eval compute in (eval PR_add 0 [2; 3]).
 Eval compute in (eval PR_add 0 [5; 7]).
 *)
 
-(* OMG *)
 Lemma add_correct : forall m n steps, eval PR_add steps [m; n] = Some (m + n).
 Proof.
 intros; induction m.
@@ -421,7 +455,9 @@ intros; induction m.
 Qed.
 
 (** ** Multiplication. *)
-Definition PR_mult := Recursion Zero (Composition PR_add [Projection aux33; Projection aux23]).
+
+Definition PR_mult :=
+  Recursion Zero (Composition PR_add [Projection aux33; Projection aux23]).
 
 (* Sanity checks.
 Eval compute in (eval PR_mult 0 [2; 3]).
@@ -440,6 +476,7 @@ intros; induction m.
 Qed.
 
 (** ** Sign function. *)
+
 Definition PR_sign := Composition
   (Recursion Zero(Composition Successor [Composition Zero [Projection aux23]]))
   [Projection aux11; Projection aux11].
@@ -462,7 +499,9 @@ rewrite IHn; auto.
 Qed.
 
 (** ** Predecessor. *)
-Definition PR_pred := Composition (Recursion Zero (Projection aux13)) [Projection aux11; Zero].
+
+Definition PR_pred :=
+  Composition (Recursion Zero (Projection aux13)) [Projection aux11; Zero].
 
 (* Sanity checks.
 Eval compute in (eval PR_pred 0 [32]).
@@ -480,7 +519,9 @@ rewrite Composition_correct with (ms := [n; 0]).
 Qed.
 
 (** ** Natural (total) subtraction. *)
-Definition PR_minus := Composition (Recursion (Projection aux11) (Composition PR_pred [Projection aux23]))
+
+Definition PR_minus := Composition
+  (Recursion (Projection aux11) (Composition PR_pred [Projection aux23]))
   [Projection aux22; Projection aux12].
 
 (* Sanity checks.
@@ -505,6 +546,7 @@ rewrite Composition_correct with (ms := [m; n]).
 Qed.
 
 (** ** Greater than. *)
+
 Definition PR_gt := Composition PR_sign [PR_minus].
 
 Lemma gt_correct_true : forall m n steps, n > m -> eval PR_gt steps [n; m] = Some 1.
@@ -546,7 +588,9 @@ split.
 Qed.
 
 (** ** Less or equal. *)
-Definition PR_le := Composition PR_minus [Composition Successor [Composition Zero [Projection aux12]]; PR_gt].
+
+Definition PR_le := Composition PR_minus
+  [Composition Successor [Composition Zero [Projection aux12]]; PR_gt].
 
 Lemma le_correct_true : forall m n steps, m <= n -> eval PR_le steps [m; n] = Some 1.
 Proof.
@@ -585,9 +629,12 @@ split.
 Qed.
 
 (** ** Equality. *)
-Definition PR_equal := Composition PR_mult [PR_le; Composition PR_le [Projection aux22; Projection aux12]].
 
-Lemma equal_correct_true : forall m n steps, m = n -> eval PR_equal steps [m; n] = Some 1.
+Definition PR_equal :=
+  Composition PR_mult [PR_le; Composition PR_le [Projection aux22; Projection aux12]].
+
+Lemma equal_correct_true :
+  forall m n steps, m = n -> eval PR_equal steps [m; n] = Some 1.
 Proof.
 intros; unfold PR_equal.
 rewrite Composition_correct with (ms := [1; 1]).
@@ -595,7 +642,8 @@ rewrite Composition_correct with (ms := [1; 1]).
 + prove_composition_2; apply le_correct_true; rewrite H; auto.
 Qed.
 
-Lemma equal_correct_false : forall m n steps, m <> n -> eval PR_equal steps [m; n] = Some 0.
+Lemma equal_correct_false :
+  forall m n steps, m <> n -> eval PR_equal steps [m; n] = Some 0.
 Proof.
 intros; unfold PR_equal.
 elim (not_eq _ _ H); intro.
@@ -611,7 +659,8 @@ elim (not_eq _ _ H); intro.
     * apply le_correct_true; auto with arith.
 Qed.
 
-Lemma equal_correct_1 : forall m n steps, m = n <-> eval PR_equal steps [m; n] = Some 1.
+Lemma equal_correct_1 :
+  forall m n steps, m = n <-> eval PR_equal steps [m; n] = Some 1.
 Proof.
 split.
 + apply equal_correct_true.
@@ -620,7 +669,8 @@ split.
   inversion H.
 Qed.
 
-Lemma equal_correct_0 : forall m n steps, m <> n <-> eval PR_equal steps [m; n] = Some 0.
+Lemma equal_correct_0 :
+  forall m n steps, m <> n <-> eval PR_equal steps [m; n] = Some 0.
 Proof.
 split.
 + apply equal_correct_false.
@@ -630,9 +680,12 @@ split.
 Qed.
 
 (** ** Inequality. *)
-Definition PR_diff := Composition PR_add [PR_gt; Composition PR_gt [Projection aux22; Projection aux12]].
 
-Lemma diff_correct_true : forall m n steps, m <> n -> eval PR_diff steps [m; n] = Some 1.
+Definition PR_diff :=
+  Composition PR_add [PR_gt; Composition PR_gt [Projection aux22; Projection aux12]].
+
+Lemma diff_correct_true :
+  forall m n steps, m <> n -> eval PR_diff steps [m; n] = Some 1.
 Proof.
 intros; unfold PR_diff.
 elim (not_eq _ _ H); intro.
@@ -648,7 +701,8 @@ elim (not_eq _ _ H); intro.
     * apply gt_correct_false; auto with arith.
 Qed.
 
-Lemma diff_correct_false : forall m n steps, m = n -> eval PR_diff steps [m; n] = Some 0.
+Lemma diff_correct_false :
+  forall m n steps, m = n -> eval PR_diff steps [m; n] = Some 0.
 Proof.
 intros; unfold PR_diff.
 rewrite Composition_correct with (ms := [0; 0]).
@@ -656,7 +710,8 @@ rewrite Composition_correct with (ms := [0; 0]).
 + prove_composition_2; apply gt_correct_false; rewrite H; auto.
 Qed.
 
-Lemma diff_correct_1 : forall m n steps, m <> n <-> eval PR_diff steps [m; n] = Some 1.
+Lemma diff_correct_1 :
+  forall m n steps, m <> n <-> eval PR_diff steps [m; n] = Some 1.
 Proof.
 split.
 + apply diff_correct_true.
@@ -665,7 +720,8 @@ split.
   inversion H.
 Qed.
 
-Lemma diff_correct_0 : forall m n steps, m = n <-> eval PR_diff steps [m; n] = Some 0.
+Lemma diff_correct_0 :
+  forall m n steps, m = n <-> eval PR_diff steps [m; n] = Some 0.
 Proof.
 split.
 + apply diff_correct_false.
@@ -676,12 +732,17 @@ Qed.
 
 (** ** Subtraction.
     (Finally.) *)
-Definition PR_sub_aux := Composition PR_diff [Composition PR_add [Projection aux23; Projection aux33]; Projection aux13].
+
+Definition PR_sub_aux :=
+  Composition PR_diff
+    [Composition PR_add [Projection aux23; Projection aux33]; Projection aux13].
+
 Definition PR_sub := Minimization PR_sub_aux.
 
 (** By the way, there is a typo in the definition of sub in the paper... *)
 
-Lemma sub_aux_correct : forall m n k steps, eval PR_sub_aux steps [m; n; k] = Some 0 <-> m = n + k.
+Lemma sub_aux_correct : forall m n k steps,
+  eval PR_sub_aux steps [m; n; k] = Some 0 <-> m = n + k.
 Proof.
 intros; unfold PR_sub_aux.
 rewrite Composition_correct with (ms := [k+n; m]).
@@ -693,7 +754,8 @@ rewrite Composition_correct with (ms := [k+n; m]).
     + prove_composition_2.
 Qed.
 
-Lemma sub_correct_1 : forall m n steps k, eval PR_sub steps [m; n] = Some k -> k = m - n.
+Lemma sub_correct_1 : forall m n steps k,
+  eval PR_sub steps [m; n] = Some k -> k = m - n.
 Proof.
 intros.
 unfold PR_sub in H.
@@ -705,7 +767,8 @@ rewrite sub_aux_correct in H.
 apply plus_minus; auto.
 Qed.
 
-Lemma sub_correct_2 : forall m n steps k, eval PR_sub steps [m; n] = Some k -> n <= m.
+Lemma sub_correct_2 : forall m n steps k,
+  eval PR_sub steps [m; n] = Some k -> n <= m.
 Proof.
 intros.
 generalize (sub_correct_1 _ _ _ _ H); intro; revert H.
@@ -729,7 +792,8 @@ End Examples.
 
 Section Evaluation.
 
-Lemma eval_opt_on_None : forall m (f:PRFunction m) steps ns Hi, ns[@Hi] = None -> eval_opt f steps ns = None.
+Lemma eval_opt_on_None : forall m (f:PRFunction m) steps ns Hi,
+  ns[@Hi] = None -> eval_opt f steps ns = None.
 Proof.
 induction f; intros.
 + simpl.
@@ -774,6 +838,7 @@ Qed.
 
 (** We first prove the induction schema for partial recursive functions, which requires 
     induction on the depth of the construction of the function. *)
+
 Fixpoint depth {m} (f:PRFunction m) : nat :=
   match f with
   | Zero             => 0
@@ -833,6 +898,7 @@ Defined.
     - if evaluation returns a value, this is preserved when the maximum number of steps
       is increased
     - if evaluation does not return a value (yet), then neither does it for less steps. *)
+
 Lemma eval_opt_inj : forall n (f:PRFunction n) s s' ns m m',
   eval_opt f s ns = Some m -> eval_opt f s' ns = Some m' -> m = m'.
 Proof.
@@ -1017,30 +1083,37 @@ Lemma eval_mon : forall m (f:PRFunction m) steps ns k, eval f steps ns = (Some k
   forall s', s' >= steps -> eval f s' ns = (Some k).
 Proof. intros. apply eval_opt_mon with steps; auto. Qed.
 
-Lemma eval_inj_Some : forall m (f:PRFunction m) s s' ns m m', eval f s ns = Some m -> eval f s' ns = Some m' -> m = m'.
+Lemma eval_inj_Some : forall m (f:PRFunction m) s s' ns m m',
+  eval f s ns = Some m -> eval f s' ns = Some m' -> m = m'.
 Proof. intros. rewrite (eval_opt_inj _ _ _ _ _ _ _ H H0); auto. Qed.
 
-Lemma eval_inj_None : forall m (f:PRFunction m) s ns, eval f s ns = None -> forall s', s'<s -> eval f s' ns = None.
+Lemma eval_inj_None : forall m (f:PRFunction m) s ns,
+  eval f s ns = None -> forall s', s'<s -> eval f s' ns = None.
 Proof. intros. apply eval_opt_mon' with s; auto with arith. Qed.
 
 End Evaluation.
 
 (** * Computation
     Finally we can define the computed value :-) *)
+
 Section Convergence.
 
-Definition converges {k} (f:PRFunction k) ns y := exists steps, eval f steps ns = Some y.
+Definition converges {k} (f:PRFunction k) ns y :=
+  exists steps, eval f steps ns = Some y.
 
-Definition diverges  {k} (f:PRFunction k) ns := forall steps, eval f steps ns = None.
+Definition diverges  {k} (f:PRFunction k) ns :=
+  forall steps, eval f steps ns = None.
 
-Lemma converges_inj : forall {k} f ns y y', converges (k:=k) f ns y -> converges f ns y' -> y = y'.
+Lemma converges_inj : forall {k} f ns y y',
+  converges (k:=k) f ns y -> converges f ns y' -> y = y'.
 Proof.
 intros.
 inversion_clear H; inversion_clear H0.
 revert H1 H; apply eval_inj_Some.
 Qed.
 
-Lemma converges_diverges : forall {k} f ns, (diverges (k:=k) f ns <-> forall y, ~converges f ns y).
+Lemma converges_diverges : forall {k} f ns,
+  (diverges (k:=k) f ns <-> forall y, ~converges f ns y).
 Proof.
 split; intros; intro.
 + inversion_clear H0.
@@ -1051,6 +1124,7 @@ split; intros; intro.
 Qed.
 
 (** Results for recursively proving convergence. *)
+
 Lemma Composition_converges : forall m k g fs ns ms y,
   (forall H, converges fs[@H] ns ms[@H]) -> converges g ms y ->
   converges (@Composition m k g fs) ns y.
@@ -1092,8 +1166,8 @@ rewrite (Recursion_correct_step k g h (S x::ns) (max s s') x) with y; auto.
 Qed.
 
 Lemma converges_max : forall k h ns y,
-  (forall x, x<y -> exists z, converges h (shiftin x ns) (S z)) ->
-  exists s, forall x, x<y -> exists z, @Kleene.eval (S k) h s (shiftin x ns) = Some (S z).
+  (forall x, x < y -> exists z, converges h (shiftin x ns) (S z)) ->
+  exists s, forall x, x<y -> exists z, @eval (S k) h s (shiftin x ns) = Some (S z).
 induction y; intros.
 + exists 0; intros. inversion H0.
 + elim IHy; auto. intros. rename x into s.
@@ -1104,8 +1178,8 @@ induction y; intros.
 Qed.
 
 Lemma Minimization_converges : forall k h ns y,
-  (forall x, x<y -> exists z, converges h (shiftin x ns) (S z)) -> converges h (shiftin y ns) 0 ->
-  converges (@Minimization k h) ns y.
+  (forall x, x < y -> exists z, converges h (shiftin x ns) (S z)) ->
+  converges h (shiftin y ns) 0 -> converges (@Minimization k h) ns y.
 Proof.
 intros.
 elim H0. intros sh Hh. clear H0.
@@ -1126,6 +1200,7 @@ rewrite find_zero_from_compute.
 Qed.
 
 (** Inversion results about convergence using each constructor. *)
+
 Lemma converges_Zero : forall ns y, converges Zero ns y -> y = 0.
 Proof.
 intros.
@@ -1231,7 +1306,8 @@ Qed.
 
 Lemma converges_Recursion_step : forall {m} (g:PRFunction m) h ns x y,
   converges (Recursion g h) ns y -> hd ns = (S x) ->
-  exists z, converges (Recursion g h) (x :: tl ns) z /\ converges h (x :: z :: tl ns) y.
+  exists z, converges (Recursion g h) (x :: tl ns) z
+    /\ converges h (x :: z :: tl ns) y.
 Proof.
 intros.
 elim H; intros. rename x0 into z.

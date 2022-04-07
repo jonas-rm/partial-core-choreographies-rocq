@@ -7,6 +7,7 @@ Require Export Arith.
 Ltac destroy H := repeat (elim H; intro; clear H; intro H).
 
 (** * Auxiliary logical results *)
+
 Section Logic.
 
 Variable A:Type.
@@ -27,9 +28,14 @@ Lemma if_elim : forall (t t' t'':A),
   (if b then t' else t'') = t -> {b = true /\ t = t'} + {b = false /\ t = t''}.
 Proof. induction b; simpl; auto. Qed.
 
+Lemma prove_if : forall (t t' t'':A),
+  b = true /\ t = t'' -> b = false /\ t' = t'' -> (if b then t else t') = t''.
+Proof. induction b; simpl; tauto. Qed.
+
 End Logic.
 
 (** * Natural numbers *)
+
 Section Natural_Numbers.
 
 Lemma minus_S : forall m n, n - S m = pred (n - m).
@@ -254,9 +260,7 @@ induction l; simpl; intros.
     * apply (NoDup_app_both _ _ H3) with x; auto.
 Qed.
 
-Lemma NoDup_app :
-  forall A (P Q:list A),
-  (NoDup (P ++ Q)) -> (NoDup P) /\ (NoDup Q).
+Lemma NoDup_app : forall A (P Q:list A), (NoDup (P ++ Q)) -> (NoDup P) /\ (NoDup Q).
 Proof.
 intros.
 induction P.
@@ -379,14 +383,11 @@ Qed.
 
 Hypothesis T_dec : forall x y:T, {x=y}+{x<>y}.
 
-Definition set_equals (T_dec : forall x y:T, {x=y}+{x<>y})
-  (X Y:set T) := forall z, In z X <-> In z Y.
+Definition set_equals (X Y:set T) := forall z, In z X <-> In z Y.
 
-Definition set_incl (T_dec : forall x y:T, {x=y}+{x<>y})
-  (X Y:set T) := forall z, In z X -> In z Y.
+Definition set_incl (X Y:set T) := forall z, In z X -> In z Y.
 
-Lemma set_incl_dec  :
-  forall X Y, {set_incl T_dec X Y}+{~set_incl T_dec X Y}.
+Lemma set_incl_dec : forall X Y, {set_incl X Y}+{~set_incl X Y}.
 Proof.
 intros X Y; revert X; induction X.
 + left; red; simpl; intros.
@@ -403,7 +404,8 @@ intros X Y; revert X; induction X.
     apply H0; simpl; auto.
 Qed.
 
-Lemma set_equals_char : forall X Y, set_equals T_dec X Y <-> (set_incl T_dec X Y /\ set_incl T_dec Y X).
+Lemma set_equals_char : forall X Y,
+  set_equals X Y <-> (set_incl X Y /\ set_incl Y X).
 Proof.
 split; intros.
 + split; red; intros; apply H; auto.
@@ -411,8 +413,7 @@ split; intros.
   split; auto.
 Qed.
 
-Lemma set_equals_dec  :
-  forall X Y, {set_equals T_dec X Y}+{~set_equals T_dec X Y}.
+Lemma set_equals_dec : forall X Y, {set_equals X Y}+{~set_equals X Y}.
 Proof.
 intros.
 elim (set_incl_dec X Y); [elim (set_incl_dec Y X) | idtac]; intros.
@@ -456,7 +457,8 @@ inversion_clear H; auto.
 rewrite <- H0; auto.
 Qed.
 
-Lemma set_remove'_3: forall x y (X:set T), x<>y -> In x X -> In x (set_remove' y X).
+Lemma set_remove'_3: forall x y (X:set T),
+  x <> y -> In x X -> In x (set_remove' y X).
 Proof.
 induction X; auto.
 simpl; intros.
@@ -577,7 +579,7 @@ apply set_remove'_3; auto.
 Qed.
 
 Lemma set_size_incl_le : forall (X Y:set T),
-  set_incl T_dec X Y -> set_size X <= set_size Y.
+  set_incl X Y -> set_size X <= set_size Y.
 Proof.
 intros X Y; revert X.
 induction Y.
@@ -608,6 +610,7 @@ Section Vectors.
 
 (** ** Equality.
     This is a specialization of a lemma from the standard library. *)
+
 Lemma eq_nth_iff' {A} {n} (v1 v2:t A n) :
   (forall (p:Fin.t n), v1[@p] = v2[@p]) <-> v1 = v2.
 Proof.
@@ -662,6 +665,7 @@ apply vector_2_inv.
 Qed.
 
 (** On heads and tails. *)
+
 Lemma nth_hd : forall {A} {n} (v:t A (S n)), v[@Fin.F1] = hd v.
 Proof.
 intros.
@@ -725,7 +729,8 @@ induction n; intros.
 apply H. eapply nth_In; eauto.
 Qed.
 
-Lemma shiftin_elim : forall {A} {n} (v:t A n) x y, In y (shiftin x v) -> x = y \/ In y v.
+Lemma shiftin_elim : forall {A} {n} (v:t A n) x y,
+  In y (shiftin x v) -> x = y \/ In y v.
 Proof.
 induction n; simpl; intros.
 + revert v H; refine (@case0 _ _ _); simpl; intros.
@@ -777,6 +782,7 @@ apply eq_nth_iff'; auto.
 Qed.
 
 (** Hopefully self-explanatory. *)
+
 Lemma map_shiftin : forall {A} {B} {n} (f:A->B) (v:t A n) x,
   map f (shiftin x v) = shiftin (f x) (map f v).
 Proof.
@@ -806,6 +812,7 @@ Qed.
 
 (** ** Alternative map function
     It maps a list of functions onto an argument, rather than the usual. *)
+
 Fixpoint map_inv {A} {B} {n} (f:t (A->B) n) (x:A) : t B n :=
   match f with
   | [] => []
@@ -821,6 +828,7 @@ Eval compute in (map_inv [f0; f1] 5).
 
 (** The results about map_inv are the same as those for map in the standard library, with analogous
     names. We add a specialization of nth_map. *)
+
 Lemma nth_map' {A B} (f: A -> B) {n} v (p: Fin.t n) : (map f v) [@p] = f (v [@p]).
 Proof.
 apply nth_map; auto.
@@ -841,6 +849,7 @@ apply nth_map_inv; auto.
 Qed.
 
 (** More about map. *)
+
 Lemma hd_map : forall {A B} (f:A->B) n (v:t A (S n)), hd (map f v) = f (hd v).
 Proof.
 intros.
@@ -857,6 +866,7 @@ rewrite nth_tl; auto.
 Qed.
 
 (** Two interesting induction principles. *)
+
 Lemma hd_tl_induction : forall {A} {n} (P:A -> Prop) (v:t A (S n)),
   P (hd v) -> (forall H, P (tl v)[@H]) -> forall H, P v[@H].
 Proof.
@@ -871,8 +881,7 @@ Qed.
 
 Definition vpair {A B n} (v:t A n) (v':t B n) := map2 (fun a b => (a,b)) v v'.
 
-Lemma vpair_fst : forall A B n (v:t A n) (v':t B n),
-  map fst (vpair v v') = v.
+Lemma vpair_fst : forall A B n (v:t A n) (v':t B n), map fst (vpair v v') = v.
 Proof.
 intros. unfold vpair.
 apply eq_nth_iff'; intros.
@@ -880,8 +889,7 @@ rewrite nth_map', (nth_map2 _ _ _ _ _ _ (eq_refl _) (eq_refl _)).
 auto.
 Qed.
 
-Lemma vpair_snd : forall A B n (v:t A n) (v':t B n),
-  map snd (vpair v v') = v'.
+Lemma vpair_snd : forall A B n (v:t A n) (v':t B n), map snd (vpair v v') = v'.
 Proof.
 intros. unfold vpair.
 apply eq_nth_iff'; intros.
@@ -901,9 +909,10 @@ rewrite surjective_pairing at 1.
 repeat rewrite nth_map'; auto.
 Qed.
 
-Lemma hd_tl_induction' : forall {A B} {n} (P:A -> B -> Prop)
-  (v:t A (S n)) (v':t B (S n)),
-  P (hd v) (hd v') -> (forall H, P (tl v)[@H] (tl v')[@H]) -> forall H, P v[@H] v'[@H].
+Lemma hd_tl_induction' :
+  forall {A B} {n} (P:A -> B -> Prop) (v:t A (S n)) (v':t B (S n)),
+  P (hd v) (hd v') -> (forall H, P (tl v)[@H] (tl v')[@H]) ->
+  forall H, P v[@H] v'[@H].
 Proof.
 intros.
 set (P' := fun X => P (fst X) (snd X)).
@@ -922,10 +931,13 @@ apply hd_tl_induction.
 Qed.
 
 (** Destruction of nth. *)
-Lemma eta_elim : forall {A} {n} (v:t A (S n)) x Hi, v[@Hi] = x -> hd v = x \/ exists Hi', (tl v)[@Hi'] = x.
+
+Lemma eta_elim : forall {A} {n} (v:t A (S n)) x Hi,
+  v[@Hi] = x -> hd v = x \/ exists Hi', (tl v)[@Hi'] = x.
 Proof. intros. revert H. apply hd_tl_induction; eauto. Qed.
 
 (** Maximum of a vector of natural numbers. *)
+
 Fixpoint vmax {n} (v:t nat n) :=
   match v with
   | [] => 0
@@ -965,6 +977,7 @@ induction n.
 Qed.
 
 (** Vector containing the numbers k to k+n. *)
+
 Fixpoint vec_k_to_n n k : t nat n :=
   match n with
   | 0 => []
@@ -973,8 +986,7 @@ Fixpoint vec_k_to_n n k : t nat n :=
 
 Definition vec_1_to_n n : t nat n := vec_k_to_n n 1.
 
-Lemma in_vec_k_to_n : forall n k m, In m (vec_k_to_n n k) ->
-  k <= m /\ m < k + n.
+Lemma in_vec_k_to_n : forall n k m, In m (vec_k_to_n n k) -> k <= m /\ m < k + n.
 Proof.
 induction n; simpl; intros. inversion H.
 elim (In_elim H); intros.
@@ -983,6 +995,7 @@ elim (In_elim H); intros.
 Qed.
 
 (** Vector of vectors with values [[m; ...; m+n-1] [m+n; ...; m+2n-1] ... [m+(k-1)n; ...; m+kn-1]]. *)
+
 Fixpoint vec_m_with_k m k n :=
   match k with
   | 0 => []
@@ -990,6 +1003,7 @@ Fixpoint vec_m_with_k m k n :=
   end.
 
 (** Sum of a vector of natural numbers. *)
+
 Fixpoint vsum {n} (v:t nat n) :=
   match v with
   | [] => 0
