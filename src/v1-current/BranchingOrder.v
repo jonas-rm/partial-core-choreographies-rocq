@@ -233,7 +233,7 @@ destroy H5. exists (Procs P1',x).
 repeat split; auto.
 rewrite (SP_eta _ P1').
 constructor; auto.
-replace Defs with (Procs P1); auto.
+replace D with (Procs P1); auto.
 rewrite <- H2; auto.
 intro. rewrite <- H0, <- H2; auto.
 Qed.

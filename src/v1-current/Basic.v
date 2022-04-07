@@ -1,3 +1,4 @@
+Require Import Unicode.Utf8.
 Require Export Bool.
 Require Export List.
 Require Export ListSet.
@@ -21,7 +22,7 @@ Lemma if_case : forall (t t':A),
 Proof. induction b; auto. Qed.
 
 Lemma if_case' : forall (t t' t'':A),
-  (if b then t' else t'') = t -> {t' = t } + {t'' = t}.
+  (if b then t' else t'') = t -> {t' = t} + {t'' = t}.
 Proof. induction b; auto. Qed.
 
 Lemma if_elim : forall (t t' t'':A),

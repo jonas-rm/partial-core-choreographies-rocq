@@ -685,77 +685,77 @@ Section Semantics.
 
 (** Same strategy as for CC. *)
 
-Inductive SP_To (Defs : DefSetB) :
+Inductive SP_To (D : DefSetB) :
   Network -> Store -> (RichLabel Pid Value Var RecVar) -> Network -> Store -> Prop :=
  | S_Com N p e a B q x a' B' N' s s' :
     N p = (q ! e @!a ; B) -> N q = (p ? x @? a'; B') ->
     let v := (eval_on_state Ev e s p) in
     N' (==) (N \ p \ q | p[B] | q[B']) -> s' [==] (s[[q,x => v]]) ->
-    SP_To Defs N s (RL_Com p v q x) N' s'
+    SP_To D N s (RL_Com p v q x) N' s'
  | S_LSel N p a B q a' Bl Br N' s s' :
     N p = (q (+) left @+ a ; B) -> N q = (p & Some (a',Bl) // Br) ->
     N' (==) (N \ p \ q | p[B] | q[Bl]) -> s [==] s' ->
-    SP_To Defs N s (RL_Sel p q left) N' s'
+    SP_To D N s (RL_Sel p q left) N' s'
  | S_RSel N p a B q a' Bl Br N' s s' :
     N p = (q (+) right @+ a ; B) -> N q = (p & Bl // Some (a',Br)) ->
     N' (==) (N \ p \ q | p[B] | q[Br]) -> s [==] s' ->
-    SP_To Defs N s (RL_Sel p q right) N' s'
+    SP_To D N s (RL_Sel p q right) N' s'
  | S_Then N p b B1 B2 N' s s' :
     N p = (If b Then B1 Else B2) ->
     eval_on_state BEv b s p = true ->
     N' (==) (N \ p | p[B1]) -> s [==] s' ->
-    SP_To Defs N s (RL_Cond p) N' s'
+    SP_To D N s (RL_Cond p) N' s'
  | S_Else N p b B1 B2 N' s s' :
     N p = (If b Then B1 Else B2) ->
     eval_on_state BEv b s p = false ->
     N' (==) (N \ p | p[B2]) -> s [==] s' ->
-    SP_To Defs N s (RL_Cond p) N' s'
+    SP_To D N s (RL_Cond p) N' s'
  | S_Call N p X N' s s' :
     N p = Call X ->
-    N' (==) (N \ p | p[Defs X]) -> s [==] s' ->
-    SP_To Defs N s (RL_Call X p) N' s'.
+    N' (==) (N \ p | p[D X]) -> s [==] s' ->
+    SP_To D N s (RL_Call X p) N' s'.
 
-Notation "<< N , s >> --[ tl , Defs ]--> << N' , s' >>" :=
-  (SP_To Defs N s tl N' s') (at level 100) : SP_scope.
+Notation "<< N , s >> --[ tl , D ]--> << N' , s' >>" :=
+  (SP_To D N s tl N' s') (at level 100) : SP_scope.
 
 (** Default reductions. *)
 
-Lemma S_Com' : forall Defs N p e a B q x a' B' s,
+Lemma S_Com' : forall D N p e a B q x a' B' s,
   N p = (q ! e @! a ; B) -> N q = (p ? x @? a' ; B') ->
   let v := (eval_on_state Ev e s p) in
-  <<N,s>> --[RL_Com p v q x,Defs]--> <<N \ p \ q | p[B] | q[B'],s[[q,x => v]]>>.
+  <<N,s>> --[RL_Com p v q x,D]--> <<N \ p \ q | p[B] | q[B'],s[[q,x => v]]>>.
 Proof. intros. apply S_Com with a B a' B'; auto. reflexivity. ESEr. Qed.
 
-Lemma S_LSel' : forall Defs N p a B q a' Bl Br s,
+Lemma S_LSel' : forall D N p a B q a' Bl Br s,
   N p = (q (+) left @+ a ; B) -> N q = (p & Some (a',Bl) // Br) ->
-  <<N,s>> --[RL_Sel p q left,Defs]--> <<N \ p \ q | p[B] | q[Bl],s>>.
+  <<N,s>> --[RL_Sel p q left,D]--> <<N \ p \ q | p[B] | q[Bl],s>>.
 Proof. intros. apply S_LSel with a B a' Bl Br; auto. reflexivity. ESEr. Qed.
 
-Lemma S_RSel' : forall Defs N p a B q a' Bl Br s,
+Lemma S_RSel' : forall D N p a B q a' Bl Br s,
   N p = (q (+) right @+ a ; B) -> N q = (p & Bl // Some (a',Br)) ->
-  <<N,s>> --[RL_Sel p q right,Defs]--> <<N \ p \ q | p[B] | q[Br], s>>.
+  <<N,s>> --[RL_Sel p q right,D]--> <<N \ p \ q | p[B] | q[Br], s>>.
 Proof. intros. apply S_RSel with a B a' Bl Br; auto. reflexivity. ESEr. Qed.
 
-Lemma S_Then' : forall Defs N p b B1 B2 s,
+Lemma S_Then' : forall D N p b B1 B2 s,
   N p = (If b Then B1 Else B2) -> eval_on_state BEv b s p = true ->
-  <<N,s>> --[RL_Cond p,Defs]--> <<N \ p | p[B1],s>>.
+  <<N,s>> --[RL_Cond p,D]--> <<N \ p | p[B1],s>>.
 Proof. intros. apply S_Then with b B1 B2; auto. reflexivity. ESEr. Qed.
 
-Lemma S_Else' : forall Defs N p b B1 B2 s,
+Lemma S_Else' : forall D N p b B1 B2 s,
   N p = (If b Then B1 Else B2) -> eval_on_state BEv b s p = false ->
-  <<N,s>> --[RL_Cond p,Defs]--> <<N \ p | p[B2],s>>.
+  <<N,s>> --[RL_Cond p,D]--> <<N \ p | p[B2],s>>.
 Proof. intros. apply S_Else with b B1 B2; auto. reflexivity. ESEr. Qed.
 
-Lemma S_Call' : forall Defs N p X s, N p = Call X ->
-  <<N,s>> --[RL_Call X p,Defs]--> <<N \ p | p[Defs X],s>>.
+Lemma S_Call' : forall D N p X s, N p = Call X ->
+  <<N,s>> --[RL_Call X p,D]--> <<N \ p | p[D X],s>>.
 Proof. intros. apply S_Call; auto. reflexivity. ESEr. Qed.
 
 Definition Configuration : Type := Program * Store.
 
 Inductive SPP_To :
   Configuration -> (TransitionLabel Pid Value) -> Configuration -> Prop :=
- | SPP_To_intro Defs N s t N' s' : SP_To Defs N s t N' s' ->
-     SPP_To (Defs,N,s) (forget t) (Defs,N',s').
+ | SPP_To_intro D N s t N' s' : SP_To D N s t N' s' ->
+     SPP_To (D,N,s) (forget t) (D,N',s').
 
 Inductive SPP_ToStar :
   Configuration -> list (TransitionLabel Pid Value) -> Configuration -> Prop :=
@@ -768,8 +768,8 @@ End Semantics.
 
 Bind Scope SP_scope with SP_To.
 
-Notation "<< N , s >> --[ tl , Defs ]--> << N' , s' >>" :=
-  (SP_To Defs N s tl N' s') (at level 100) : SP_scope.
+Notation "<< N , s >> --[ tl , D ]--> << N' , s' >>" :=
+  (SP_To D N s tl N' s') (at level 100) : SP_scope.
 Notation "C --[ l ]--> C'" := (SPP_To C l C')
   (at level 50, left associativity) : SP_scope.
 Notation "C --[ ls ]-->* C'" := (SPP_ToStar C ls C')
@@ -782,8 +782,8 @@ Section Determinism.
 
 (** Reductions are preserved by state equivalence... *)
 
-Lemma SP_To_eq : forall Defs N tl s1 N' s2 s1' s2', s1 [==] s1' -> s2 [==] s2' ->
-  <<N,s1>> --[tl,Defs]--> <<N',s2>> -> <<N,s1'>> --[tl,Defs]--> <<N',s2'>>.
+Lemma SP_To_eq : forall D N tl s1 N' s2 s1' s2', s1 [==] s1' -> s2 [==] s2' ->
+  <<N,s1>> --[tl,D]--> <<N',s2>> -> <<N,s1'>> --[tl,D]--> <<N',s2'>>.
 Proof.
 intros.
 induction H1.
@@ -834,8 +834,8 @@ Qed.
 
 (** ...by network equivalence... *)
 
-Lemma SP_To_Network_eq : forall N1 N' N2 Defs s s' tl, (N1 (==) N2) ->
-  <<N1,s>> --[tl,Defs]--> <<N',s'>> -> <<N2,s>> --[tl,Defs]--> <<N',s'>>.
+Lemma SP_To_Network_eq : forall N1 N' N2 D s s' tl, (N1 (==) N2) ->
+  <<N1,s>> --[tl,D]--> <<N',s'>> -> <<N2,s>> --[tl,D]--> <<N',s'>>.
 Proof.
 intros.
 inversion H0.
@@ -877,7 +877,7 @@ Lemma SPP_To_Network_eq : forall P1 P1' P2 s s' tl,
 Proof.
 intros.
 inversion H1.
-induction P1' as (Defs',N1'). simpl in H, H0.
+induction P1' as (D',N1'). simpl in H, H0.
 rewrite <- H0, <- H2; simpl. constructor.
 apply SP_To_Network_eq with N; auto.
 rewrite <- H, <- H2; simpl. reflexivity.
@@ -897,9 +897,9 @@ Qed.
 
 (** ... and by extensionally equal sets of procedure definitions. *)
 
-Lemma SP_To_Defs_wd : forall Defs Defs', (forall X, Defs X = Defs' X) ->
+Lemma SP_To_Defs_wd : forall D D', (forall X, D X = D' X) ->
   forall N s tl N' s',
-  <<N,s>> --[tl,Defs]--> <<N',s'>> -> <<N,s>> --[tl,Defs']--> <<N',s'>>.
+  <<N,s>> --[tl,D]--> <<N',s'>> -> <<N,s>> --[tl,D']--> <<N',s'>>.
 Proof.
 intros. inversion H0.
 + econstructor; eauto.
@@ -912,16 +912,16 @@ Qed.
 
 (** The set of procedure definitions never changes. *)
 
-Hypothesis Defs : DefSetB.
+Hypothesis D : DefSetB.
 
-Lemma SPP_To_Defs_stable : forall Defs' N N' tl s s',
-  (Defs,N,s) --[tl]--> (Defs',N',s') -> Defs = Defs'.
+Lemma SPP_To_Defs_stable : forall D' N N' tl s s',
+  (D,N,s) --[tl]--> (D',N',s') -> D = D'.
 Proof. intros. inversion H. inversion H; auto. Qed.
 
-Lemma SPP_ToStar_Defs_stable : forall Defs' N N' tl s s',
-  (Defs,N,s) --[tl]-->* (Defs',N',s') -> Defs = Defs'.
+Lemma SPP_ToStar_Defs_stable : forall D' N N' tl s s',
+  (D,N,s) --[tl]-->* (D',N',s') -> D = D'.
 Proof.
-intros Defs' N N' tl; revert N N'.
+intros D' N N' tl; revert N N'.
 induction tl; intros; inversion H; clear H; auto.
 clear c1 c3 H2 H4 t l H0 H1.
 induction c2. induction a0.
@@ -933,7 +933,7 @@ Qed.
 (** Reductions and state. *)
 
 Lemma SP_To_disjoint_eval : forall N s tl s' p e N',
-  disjoint_p_rl p tl -> <<N,s>> --[tl,Defs]--> <<N',s'>>  ->
+  disjoint_p_rl p tl -> <<N,s>> --[tl,D]--> <<N',s'>>  ->
   eval_on_state Ev e s p = eval_on_state Ev e s' p.
 Proof.
 intros.
@@ -945,7 +945,7 @@ apply eval_eq; ESEs.
 Qed.
 
 Lemma SP_To_disjoint_beval : forall N s tl s' p b N',
-  disjoint_p_rl p tl -> <<N,s>> --[tl,Defs]--> <<N',s'>> ->
+  disjoint_p_rl p tl -> <<N,s>> --[tl,D]--> <<N',s'>> ->
   eval_on_state BEv b s p = eval_on_state BEv b s' p.
 Proof.
 intros.
@@ -957,8 +957,8 @@ apply eval_eq; ESEs.
 Qed.
 
 Lemma SP_To_disjoint_update : forall N s tl s' p x v N',
-  disjoint_p_rl p tl -> <<N,s>> --[tl,Defs]--> <<N',s'>> ->
-  <<N,s[[p,x => v]]>> --[tl,Defs]--> <<N',s'[[p,x => v]]>>.
+  disjoint_p_rl p tl -> <<N,s>> --[tl,D]--> <<N',s'>> ->
+  <<N,s[[p,x => v]]>> --[tl,D]--> <<N',s'[[p,x => v]]>>.
 Proof.
 intros.
 induction H0; try (constructor; auto; try ESEc; auto; fail).
@@ -982,7 +982,7 @@ Qed.
 (** Determinism of reductions given the label. *)
 
 Lemma SP_To_deterministic_1 : forall N N1 N2 tl s s1 s2,
-  <<N,s>> --[tl,Defs]--> <<N1,s1>> -> <<N,s>> --[tl,Defs]--> <<N2,s2>> -> N1 (==) N2.
+  <<N,s>> --[tl,D]--> <<N1,s1>> -> <<N,s>> --[tl,D]--> <<N2,s2>> -> N1 (==) N2.
 Proof.
 induction tl; intros; inversion H; inversion H0.
 - rewrite H19 in H7; rewrite H22 in H10.
@@ -1013,7 +1013,7 @@ induction tl; intros; inversion H; inversion H0.
 Qed.
 
 Lemma SP_To_deterministic_2 : forall N N1 N2 tl s s1 s2,
-  <<N,s>> --[tl,Defs]--> <<N1,s1>> -> <<N,s>> --[tl,Defs]--> <<N2,s2>> -> s1 [==] s2.
+  <<N,s>> --[tl,D]--> <<N1,s1>> -> <<N,s>> --[tl,D]--> <<N2,s2>> -> s1 [==] s2.
 Proof.
 induction tl; intros; inversion H; inversion H0;
   try (ESEt s; auto; ESEs; fail).
@@ -1022,7 +1022,7 @@ induction tl; intros; inversion H; inversion H0;
 Qed.
 
 Lemma SP_To_deterministic : forall N N1 N2 tl1 tl2 s s1 s2,
-  <<N,s>> --[tl1,Defs]--> <<N1,s1>> -> <<N,s>> --[tl2,Defs]--> <<N2,s2>> ->
+  <<N,s>> --[tl1,D]--> <<N1,s1>> -> <<N,s>> --[tl2,D]--> <<N2,s2>> ->
   tl1 = tl2 -> (N1 (==) N2) /\ s1 [==] s2.
 Proof.
 intros.
@@ -1033,7 +1033,7 @@ Qed.
 
 (* This one does not hold...
 Lemma SP_To_deterministic_3 : forall N N' tl1 tl2 s s1 s2,
-  SP_To Defs N s tl1 N' s1 -> SP_To Defs N s tl2 N' s2 ->
+  SP_To D N s tl1 N' s1 -> SP_To D N s tl2 N' s2 ->
   tl1 = tl2.
 *)
 
@@ -1041,7 +1041,7 @@ Ltac diff_assert p q H1 H2 H3 := assert (p <> q) as H1;
   [intro H1; rewrite H1, H2 in H3; inversion H3 | idtac].
 
 Lemma SP_To_deterministic_4 : forall N N' tl1 tl2 s s1 s2,
-  <<N,s>> --[tl1,Defs]--> <<N',s1>> -> <<N,s>> --[tl2,Defs]--> <<N',s2>> ->
+  <<N,s>> --[tl1,D]--> <<N',s1>> -> <<N,s>> --[tl2,D]--> <<N',s2>> ->
   s1 [==] s2.
 Proof.
 induction tl1; induction tl2; intros; inversion H; inversion H0;
@@ -1157,7 +1157,7 @@ Qed.
 (** The label alone determines the resulting state. *)
 
 Lemma SP_To_rl_implies_state : forall N1 s tl N1' s1 N2 N2' s2,
-  <<N1,s>> --[tl,Defs]--> <<N1',s1>> -> <<N2,s>> --[tl,Defs]--> <<N2',s2>> ->
+  <<N1,s>> --[tl,D]--> <<N1',s1>> -> <<N2,s>> --[tl,D]--> <<N2',s2>> ->
   s1 [==] s2.
 Proof.
 induction tl; intros; inversion H; inversion H0;
@@ -1169,9 +1169,9 @@ Qed.
 (** ** Confluence *)
 
 Lemma diamond_SP : forall N s tl1 tl2 N1 N2 s1 s2,
-  <<N,s>> --[tl1,Defs]--> <<N1,s1>> -> <<N,s>> --[tl2,Defs]--> <<N2,s2>> ->
+  <<N,s>> --[tl1,D]--> <<N1,s1>> -> <<N,s>> --[tl2,D]--> <<N2,s2>> ->
   tl1 <> tl2 -> exists N' s',
-  <<N1,s1>> --[tl2,Defs]--> <<N',s'>> /\ <<N2,s2>> --[tl1,Defs]--> <<N',s'>>.
+  <<N1,s1>> --[tl2,D]--> <<N',s'>> /\ <<N2,s2>> --[tl1,D]--> <<N',s'>>.
 Proof.
 induction tl1, tl2; intros; inversion H; inversion H0.
 + (* Com / Com *)
@@ -1310,7 +1310,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p p0 Hpp0 H16 H8.
   diff_assert p0 q Hp0q H11 H16.
   diff_assert p q Hpq H11 H8.
-  exists (N1 \ p0 | p0[Defs X]), s1; split.
+  exists (N1 \ p0 | p0[D X]), s1; split.
   - apply S_Call'.
     rewrite (H12 p0). repeat rewrite Par_proj1; repeat rewrite Network_rm_out; auto.
       all:rewrite H16; discriminate.
@@ -1535,7 +1535,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p p0 Hpp0 H15 H5.
   diff_assert p0 q Hp0q H8 H15.
   diff_assert p q Hpq H8 H5.
-  exists (N1 \ p0 | p0[Defs X]), s1; split.
+  exists (N1 \ p0 | p0[D X]), s1; split.
   - apply S_Call'.
     rewrite (H11 p0). repeat rewrite Par_proj1; repeat rewrite Network_rm_out; auto.
     all:rewrite H15; discriminate.
@@ -1552,7 +1552,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p p0 Hpp0 H15 H5.
   diff_assert p0 q Hp0q H8 H15.
   diff_assert p q Hpq H8 H5.
-  exists (N1 \ p0 | p0[Defs X]), s1; split.
+  exists (N1 \ p0 | p0[D X]), s1; split.
   - apply S_Call'.
     rewrite (H11 p0). repeat rewrite Par_proj1; repeat rewrite Network_rm_out; auto.
     all: rewrite H15; discriminate.
@@ -1717,7 +1717,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
     * eESEt; ESEs.
 + (* Call / Then *)
   diff_assert p p0 Hpp0 H13 H3.
-  exists (N1 \ p0 | p0[Defs X]), s1; split.
+  exists (N1 \ p0 | p0[D X]), s1; split.
   - apply S_Call'; auto.
     * rewrite (H5 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H13; discriminate.
@@ -1729,7 +1729,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
     * eESEt; ESEs.
 + (* Call / Else *)
   diff_assert p p0 Hpp0 H13 H3.
-  exists (N1 \ p0 | p0[Defs X]), s1; split.
+  exists (N1 \ p0 | p0[D X]), s1; split.
   - apply S_Call'; auto.
     * rewrite (H5 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H13; discriminate.
@@ -1744,7 +1744,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p p0 Hpp0 H17 H4.
   diff_assert p q Hpq H20 H4.
   diff_assert p0 q Hp0q H20 H17.
-  exists (Network_rm N2 p | p[Defs X]), s2; split.
+  exists (Network_rm N2 p | p[D X]), s2; split.
   - rewrite (eval_eq _ e s s1); auto; apply S_Com with a B a' B'.
     * rewrite (H7 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H17; discriminate.
@@ -1759,7 +1759,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p p0 Hpp0 H14 H4.
   diff_assert p q Hpq H17 H4.
   diff_assert p0 q Hp0q H17 H14.
-  exists (Network_rm N2 p | p[Defs X]), s2; split.
+  exists (Network_rm N2 p | p[D X]), s2; split.
   - apply S_LSel with a B a' Bl Br; auto.
     * rewrite (H7 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H14; discriminate.
@@ -1774,7 +1774,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   diff_assert p p0 Hpp0 H14 H4.
   diff_assert p q Hpq H17 H4.
   diff_assert p0 q Hp0q H17 H14.
-  exists (Network_rm N2 p | p[Defs X]), s2; split.
+  exists (Network_rm N2 p | p[D X]), s2; split.
   - apply S_RSel with a B a' Bl Br; auto.
     * rewrite (H7 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H14; discriminate.
@@ -1787,7 +1787,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
       all: rewrite H4; discriminate.
 + (* Then / Call *)
   diff_assert p p0 Hpp0 H12 H4.
-  exists (Network_rm N2 p | p[Defs X]), s2; split.
+  exists (Network_rm N2 p | p[D X]), s2; split.
   - apply S_Then with b B1 B2; auto.
     * rewrite (H7 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H12; discriminate.
@@ -1799,7 +1799,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
       rewrite H4; discriminate.
 + (* Else / Call *)
   diff_assert p p0 Hpp0 H12 H4.
-  exists (Network_rm N2 p | p[Defs X]), s2; split.
+  exists (Network_rm N2 p | p[D X]), s2; split.
   - apply S_Else with b B1 B2; auto.
     * rewrite (H7 p0), Par_proj1; rewrite Network_rm_out; auto.
       rewrite H12; discriminate.
@@ -1814,7 +1814,7 @@ induction tl1, tl2; intros; inversion H; inversion H0.
   elim (eq_dec X X0); intro.
   1: apply H1; rewrite Hpp0, a; auto.
   apply b. rewrite <- Hpp0, H4 in H13; inversion H13; auto.
-  exists (Network_rm N1 p0 | p0[Defs X0]), s1; split.
+  exists (Network_rm N1 p0 | p0[D X0]), s1; split.
   - apply S_Call'; auto.
     rewrite (H7 p0), Par_proj1; rewrite Network_rm_out; auto.
     rewrite H13; discriminate.
@@ -1834,11 +1834,11 @@ Lemma SPP_To_deterministic_1 : forall P s tl P' s' P'' s'',
   Net P' (==) Net P''.
 Proof.
 intros.
-induction P as (Defs,N), P' as (Defs',N'), P'' as (Defs'',N'').
+induction P as (D,N), P' as (D',N'), P'' as (D'',N'').
 inversion H; inversion H0. simpl.
 assert (t = t0).
-+ clear s'1 H16 N'1 H15 s1 H12 N1 H11 Defs1 H9 s'0 H8 N'0 H7 s0 H4 N0 H3 Defs0 H1 H H0.
-  rewrite <- H14 in H13; rewrite <- H6 in H5. clear Defs' Defs'' H6 H14.
++ clear s'1 H16 N'1 H15 s1 H12 N1 H11 D1 H9 s'0 H8 N'0 H7 s0 H4 N0 H3 D0 H1 H H0.
+  rewrite <- H14 in H13; rewrite <- H6 in H5. clear D' D'' H6 H14.
   rewrite <- H10 in H2; clear tl H10. rename t0 into t'.
   induction H5; induction H13; try discriminate; inversion H2; auto.
   - rewrite <- H11, H0 in H5; inversion H5. auto.
@@ -1856,11 +1856,11 @@ Lemma SPP_To_deterministic_2 : forall P s tl P' s' P'' s'',
   (P,s) --[tl]--> (P',s') -> (P,s) --[tl]--> (P'',s'') -> s' [==] s''.
 Proof.
 intros.
-induction P as (Defs,N), P' as (Defs',N'), P'' as (Defs'',N'').
+induction P as (D,N), P' as (D',N'), P'' as (D'',N'').
 inversion H; inversion H0. simpl.
 assert (t = t0).
-+ clear s'1 H16 N'1 H15 s1 H12 N1 H11 Defs1 H9 s'0 H8 N'0 H7 s0 H4 N0 H3 Defs0 H1 H H0.
-  rewrite <- H14 in H13; rewrite <- H6 in H5. clear Defs' Defs'' H6 H14.
++ clear s'1 H16 N'1 H15 s1 H12 N1 H11 D1 H9 s'0 H8 N'0 H7 s0 H4 N0 H3 D0 H1 H H0.
+  rewrite <- H14 in H13; rewrite <- H6 in H5. clear D' D'' H6 H14.
   rewrite <- H10 in H2; clear tl H10. rename t0 into t'.
   induction H5; induction H13; try discriminate; inversion H2; auto.
   - rewrite <- H11, H0 in H5; inversion H5. auto.
@@ -1932,8 +1932,8 @@ Notation "'If' e 'Then' B1 'Else' B2" := (Cond _ e B1 B2)
 Notation "'bnil'" := (End _) : SP_scope.
 Notation "'nnil'" := (EmptyNet _) : SP_scope.
 
-Notation "<< N , s >> --[ tl , Defs ]--> << N' , s' >>" :=
-  (SP_To _ Defs N s tl N' s') (at level 100) : SP_scope.
+Notation "<< N , s >> --[ tl , D ]--> << N' , s' >>" :=
+  (SP_To _ D N s tl N' s') (at level 100) : SP_scope.
 Notation "C --[ l ]--> C'" := (SPP_To _ C l C')
   (at level 50, left associativity) : SP_scope.
 Notation "C --[ ls ]-->* C'" := (SPP_ToStar _ C ls C')
@@ -1996,14 +1996,14 @@ induction H4.
   assert (Choreography_WF C'); auto; clear IHMCC_To.
   inversion_clear H5. repeat split; simpl; auto.
   inversion_clear HC. inversion_clear H8; auto.
-+ change (Choreography_WF (Procs (Build_Program Defs (Call X)) X)).
++ change (Choreography_WF (Procs (Build_Program D (Call X)) X)).
   apply Program_WF_Proc with Xs; auto.
   apply (Program_WF_Vars_In _ _ H). red; simpl; auto.
 + elim (Program_WF_Proc _ _ H X); intros.
   2: apply (Program_WF_Vars_In _ _ H); red; simpl; auto.
   split; simpl; auto.
   split; auto.
-  revert H1; case (fst (Defs X)); intros.
+  revert H1; case (fst (D X)); intros.
   1: exfalso; inversion H1.
   intro.
   unfold set_size_pid in H1.
@@ -2042,9 +2042,9 @@ End BigStepSemantics.
 
 Section Confluence.
 
-Lemma diamond_Chor : forall Defs C s tl1 tl2 C1 C2 s1 s2,
-  MCC_To Defs C s tl1 C1 s1 -> MCC_To Defs C s tl2 C2 s2 ->
-  tl1 <> tl2 -> exists C' s', MCC_To Defs C1 s1 tl2 C' s' /\ MCC_To Defs C2 s2 tl1 C' s'.
+Lemma diamond_Chor : forall D C s tl1 tl2 C1 C2 s1 s2,
+  MCC_To D C s tl1 C1 s1 -> MCC_To D C s tl2 C2 s2 ->
+  tl1 <> tl2 -> exists C' s', MCC_To D C1 s1 tl2 C' s' /\ MCC_To D C2 s2 tl1 C' s'.
 Proof.
 induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
 + (* End *)
@@ -2061,18 +2061,18 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     clear HC' HC'' Htl s'1 H14 C'' H13 tl'' H12 s1 H11 X0 H7.
     clear s'0 H6 C' H5 tl' H4 s0 H3 X H.
     rename r into X.
-    elim (Nat.eq_dec (set_size_pid (fst (Defs X))) 2); intro HX.
-    * exists (snd (Defs X)), s.
+    elim (Nat.eq_dec (set_size_pid (fst (D X))) 2); intro HX.
+    * exists (snd (D X)), s.
       split; apply C_Call_Finish; try ESEs.
       ++ revert HX.
          unfold set_size_pid, set_remove_pid.
-         intro; rewrite (set_size_remove' eq_dec) with (fst (Defs X)) p in HX; auto.
+         intro; rewrite (set_size_remove' eq_dec) with (fst (D X)) p in HX; auto.
       ++ apply set_remove'_3; auto.
       ++ revert HX.
          unfold set_size_pid, set_remove_pid.
-         intro; rewrite (set_size_remove' eq_dec) with (fst (Defs X)) p0 in HX; auto.
+         intro; rewrite (set_size_remove' eq_dec) with (fst (D X)) p0 in HX; auto.
       ++ apply set_remove'_3; auto.
-    * exists (RT_Call X (set_remove_pid p (set_remove_pid p0 (fst (Defs X)))) (snd (Defs X))), s.
+    * exists (RT_Call X (set_remove_pid p (set_remove_pid p0 (fst (D X)))) (snd (D X))), s.
       unfold set_remove_pid.
       rewrite set_remove'_remove' at 1.
       split; (apply C_Call_Enter; try ESEs;
@@ -2129,7 +2129,7 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     rewrite <- H3.
     clear s'0 H4 C' H3 C0 H1 s0 H0 tl' H2.
     rename C'0 into C'.
-    generalize (C_Com' Defs p e0 q x C' s''); rewrite H; intro.
+    generalize (C_Com' D p e0 q x C' s''); rewrite H; intro.
     rewrite <- H in H8; inversion_clear H8.
     exists C', (update s'' q x v); split.
     * apply MCC_To_eq with (update s q x v) (update s'' q x v). ESEs. ESEr.
@@ -2138,12 +2138,12 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
       rewrite (MCC_To_disjoint_eval _ _ _ _ _ _ _ _ H1 H13); auto.
   - elim Htl. rewrite <- H9, <- H2, H14, H15, H16; auto.
   - rewrite <- H3.
-    generalize (C_Sel' Defs p q l C'0 s''); rewrite H; intro.
+    generalize (C_Sel' D p q l C'0 s''); rewrite H; intro.
     rewrite <- H in H8; inversion_clear H8.
     exists C'0, s''; split; auto.
     apply MCC_To_eq with s s''; auto. ESEr.
   - rewrite <- H11.
-    generalize (C_Com' Defs p e0 q x C'0 s'); rewrite H7; intro.
+    generalize (C_Com' D p e0 q x C'0 s'); rewrite H7; intro.
     rewrite <- H7 in H1; inversion_clear H1.
     exists C'0, (update s' q x v); split.
     * unfold v.
@@ -2151,7 +2151,7 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     * apply MCC_To_eq with (update s q x v) (update s' q x v). ESEs. ESEr.
       apply MCC_To_disjoint_update; auto.
   - rewrite <- H11.
-    generalize (C_Sel' Defs p q l C'0 s'); rewrite H7; intro.
+    generalize (C_Sel' D p q l C'0 s'); rewrite H7; intro.
     rewrite <- H7 in H1; inversion_clear H1.
     exists C'0, s'; split; auto.
     apply MCC_To_eq with s s'; auto. ESEr.
@@ -2165,22 +2165,22 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     exists C1', s''; split; auto.
     * apply MCC_To_eq with s s''; auto. ESEr.
     * apply C_Then'.
-      rewrite <- (MCC_To_disjoint_beval Defs C1 s tl'' s'' p b C1'); auto.
+      rewrite <- (MCC_To_disjoint_beval D C1 s tl'' s'' p b C1'); auto.
   - elim Htl. rewrite <- H14, <- H4; auto.
   - rewrite <- H5.
     exists C2', s''; split; auto.
     * apply MCC_To_eq with s s''; auto. ESEr.
     * apply C_Else'.
-      rewrite <- (MCC_To_disjoint_beval Defs C1 s tl'' s'' p b C1'); auto.
+      rewrite <- (MCC_To_disjoint_beval D C1 s tl'' s'' p b C1'); auto.
   - rewrite <- H16.
     exists C1', s'; split; auto.
     * apply C_Then'.
-      rewrite <- (MCC_To_disjoint_beval Defs C1 s tl' s' p b C1'); auto.
+      rewrite <- (MCC_To_disjoint_beval D C1 s tl' s' p b C1'); auto.
     * apply MCC_To_eq with s s'; auto. ESEr.
   - rewrite <- H16.
     exists C2', s'; split; auto.
     * apply C_Else'.
-      rewrite <- (MCC_To_disjoint_beval Defs C1 s tl' s' p b C1'); auto.
+      rewrite <- (MCC_To_disjoint_beval D C1 s tl' s' p b C1'); auto.
     * apply MCC_To_eq with s s'; auto. ESEr.
   - clear HC' HC'' s'1 H17 C'' H16 t0 H15 s1 H13 C5 H14 b1 H11 p1 H10.
     clear s'0 H6 C' H5 t H4 s0 H2 C3 H3 C0 H1 b0 H0 p0 H C4 H12.
@@ -2202,13 +2202,13 @@ Lemma diamond_1 : forall c tl1 tl2 c1 c2,
   tl1 <> tl2 -> exists c', c1 --[ tl2 ]--> c' /\ c2 --[ tl1 ]--> c'.
 Proof.
 induction c. induction a.
-rename Procedures0 into Defs, Main0 into C, b into s.
+rename Procedures0 into D, Main0 into C, b into s.
 intros.
 inversion H; inversion H0.
 elim (diamond_Chor _ _ _ _ _ _ _ _ _ H7 H13); intros.
 2: { intro; apply H1. rewrite <- H9, <- H3, H14. auto. }
 inversion_clear H14. inversion_clear H15.
-exists (Build_Program Defs x,x0); split; constructor; auto.
+exists (Build_Program D x,x0); split; constructor; auto.
 Qed.
 
 Lemma diamond_2 : forall c tl1 tl2 c1 c2,
@@ -2217,15 +2217,15 @@ Lemma diamond_2 : forall c tl1 tl2 c1 c2,
   + {exists c', c1 --[ tl2 ]--> c' /\ c2 --[ tl1 ]--> c'}.
 Proof.
 induction c, c1, c2. induction a, p, p0.
-rename Procedures1 into Defs', Main1 into C', s into s'.
-rename Procedures2 into Defs'', Main2 into C'', s0 into s''.
-rename Procedures0 into Defs, Main0 into C, b into s.
+rename Procedures1 into D', Main1 into C', s into s'.
+rename Procedures2 into D'', Main2 into C'', s0 into s''.
+rename Procedures0 into D, Main0 into C, b into s.
 intros.
 elim (chor_eq_dec C' C''); intro HC'C''; [left | right].
 + inversion H; inversion H0.
-  clear H H0 s'1 H16 C'1 H15 tl2 H10 s1 H12 C1 H11 Defs1 H9 s'0 H8.
-  clear C'0 H7 tl1 H2 s0 H4 C0 H3 Defs0 H1.
-  revert H5 H13; rewrite <- H6, <- H14, <- HC'C''; clear H6 H14 HC'C'' Defs' Defs'' C''.
+  clear H H0 s'1 H16 C'1 H15 tl2 H10 s1 H12 C1 H11 D1 H9 s'0 H8.
+  clear C'0 H7 tl1 H2 s0 H4 C0 H3 D0 H1.
+  revert H5 H13; rewrite <- H6, <- H14, <- HC'C''; clear H6 H14 HC'C'' D' D'' C''.
   intros HC HC'.
   split; auto.
   eapply MCC_To_deterministic_4; eauto.
@@ -2240,7 +2240,7 @@ elim (chor_eq_dec C' C''); intro HC'C''; [left | right].
   elim (diamond_Chor _ _ _ _ _ _ _ _ _ H5 H13); intros; auto.
   inversion_clear H17. inversion_clear H18.
   rewrite <- H6, <- H14.
-  exists (Build_Program Defs x,x0); split; constructor; auto.
+  exists (Build_Program D x,x0); split; constructor; auto.
 Qed.
 
 (** In this one we unfold the configuration because of the equivalence.
@@ -2251,15 +2251,15 @@ Lemma diamond_3a : forall P s tl1 tl2 P1 s1 P2 s2,
   \/ (exists P' s', (P1,s1) --[ tl2 ]--> (P',s') /\ (P2,s2) --[ tl1 ]-->* (P',s')).
 Proof.
 induction P, P1, P2.
-rename Procedures1 into Defs', Main1 into C1.
-rename Procedures2 into Defs'', Main2 into C2.
-rename Procedures0 into Defs, Main0 into C.
+rename Procedures1 into D', Main1 into C1.
+rename Procedures2 into D'', Main2 into C2.
+rename Procedures0 into D, Main0 into C.
 intros.
-rewrite <- (MCP_To_Defs_stable _ _ _ _ _ _ _ H0);
-rewrite <- (MCP_To_Defs_stable _ _ _ _ _ _ _ H0) in H0.
-rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H);
-rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H) in H.
-clear Defs' Defs''.
+rewrite <- (MCP_To_D_stable _ _ _ _ _ _ _ H0);
+rewrite <- (MCP_To_D_stable _ _ _ _ _ _ _ H0) in H0.
+rewrite <- (MCP_ToStar_D_stable _ _ _ _ _ _ _ H);
+rewrite <- (MCP_ToStar_D_stable _ _ _ _ _ _ _ H) in H.
+clear D' D''.
 revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
 + right.
   inversion H.
@@ -2268,7 +2268,7 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
   inversion H; clear H.
   clear t l H1 H2 c1 c3 H3 H5.
   induction c2, a0.
-  rewrite <- (MCP_To_Defs_stable _ _ _ _ _ _ _ H4) in H6, H4; clear Procedures0.
+  rewrite <- (MCP_To_D_stable _ _ _ _ _ _ _ H4) in H6, H4; clear Procedures0.
   elim (diamond_2 _ _ _ _ _ H0 H4); simpl; intros.
   - inversion_clear a0. inversion H.
     rewrite <- H3 in H, H4, H6; rewrite <- H3; clear H3 Main0.
@@ -2279,16 +2279,16 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
       apply MCP_ToStar_eq with b s1; auto. ESEs. ESEr. rewrite H2; discriminate.
   - inversion_clear b0.
     induction x, a0; inversion_clear H.
-    rewrite <- (MCP_To_Defs_stable _ _ _ _ _ _ _ H2) in H1, H2; clear Procedures0.
+    rewrite <- (MCP_To_D_stable _ _ _ _ _ _ _ H2) in H1, H2; clear Procedures0.
     rename Main1 into C', Main0 into C0.
     elim (IHtl1 _ _ _ _ _ _ _ H6 H2); intro.
     * destroy H.
       rename x into tl', x0 into s'.
       left; exists (a::tl'), s'; split; auto.
-      apply MCT_Step with (Build_Program Defs C',b0); auto.
+      apply MCT_Step with (Build_Program D C',b0); auto.
     * destroy H.
       right; exists x, x0; split; auto.
-      apply MCT_Step with (Build_Program Defs C',b0); auto.
+      apply MCT_Step with (Build_Program D C',b0); auto.
 Qed.
 
 Lemma diamond_3 : forall P s tl1 tl2 P1 s1 P2 s2,
@@ -2308,54 +2308,54 @@ Lemma diamond_4a : forall P s tl1 tl2 P1 s1 P2 s2,
     /\ eq_state_ext s1' s2' /\ length tl1 + length tl1' = length tl2 + length tl2').
 Proof.
 induction P, P1, P2.
-rename Procedures1 into Defs', Main1 into C1.
-rename Procedures2 into Defs'', Main2 into C2.
-rename Procedures0 into Defs, Main0 into C.
+rename Procedures1 into D', Main1 into C1.
+rename Procedures2 into D'', Main2 into C2.
+rename Procedures0 into D, Main0 into C.
 intros.
-rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0);
-rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0) in H0.
-rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H);
-rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H) in H.
-clear Defs' Defs''.
+rewrite <- (MCP_ToStar_D_stable _ _ _ _ _ _ _ H0);
+rewrite <- (MCP_ToStar_D_stable _ _ _ _ _ _ _ H0) in H0.
+rewrite <- (MCP_ToStar_D_stable _ _ _ _ _ _ _ H);
+rewrite <- (MCP_ToStar_D_stable _ _ _ _ _ _ _ H) in H.
+clear D' D''.
 revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
 + intros.
   inversion H0.
   rewrite <- H2, <- H4.
-  exists (Build_Program Defs C1), nil, tl1, s1, s1; repeat split; auto.
+  exists (Build_Program D C1), nil, tl1, s1, s1; repeat split; auto.
   constructor.
 + intros.
   inversion H0; clear H0.
   clear t l H1 H2 c1 c3 H3 H5.
   induction c2, a0.
-  rewrite <- (MCP_To_Defs_stable _ _ _ _ _ _ _ H4) in H6, H4; clear Procedures0.
+  rewrite <- (MCP_To_D_stable _ _ _ _ _ _ _ H4) in H6, H4; clear Procedures0.
   elim (diamond_3a _ _ _ _ _ _ _ _ H H4); intros.
   - destroy H0.
     rename x into tl', x0 into s', Main0 into C0.
     elim (IHtl2 _ _ _ _ _ _ _ H1 H6); intros.
     destroy H3.
     induction x.
-    rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H5) in H7, H5; clear Procedures0.
+    rewrite <- (MCP_ToStar_D_stable _ _ _ _ _ _ _ H5) in H7, H5; clear Procedures0.
     rename Main0 into C', x0 into tl1', x1 into tl2', x2 into s1', x3 into s2'.
     case_eq tl1'; intros.
     * rewrite H9 in H5. inversion H5.
       rewrite <- H11; rewrite <- H11 in H5, H7; rewrite H9 in H3; clear C' tl1' H11 H9.
       rewrite <- H13 in H5, H8. clear s1' H13 c H10.
-      exists (Build_Program Defs C1), nil, tl2', s1, s2'; repeat split; auto.
+      exists (Build_Program D C1), nil, tl2', s1, s2'; repeat split; auto.
       constructor. ESEt s'. simpl. rewrite <- H3, H0. auto.
-    * exists (Build_Program Defs C'), tl1', tl2', s1', s2'; repeat split; auto.
+    * exists (Build_Program D C'), tl1', tl2', s1', s2'; repeat split; auto.
       apply MCP_ToStar_eq with s' s1'; auto. ESEs. ESEr. rewrite H9; discriminate.
       simpl. rewrite <- H3, H0; auto.
   - destroy H0.
     induction x.
-    rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0) in H1, H0; clear Procedures0.
+    rewrite <- (MCP_ToStar_D_stable _ _ _ _ _ _ _ H0) in H1, H0; clear Procedures0.
     rename Main1 into C', x0 into s', Main0 into C0.
     elim (IHtl2 _ _ _ _ _ _ _ H0 H6); intros.
     destroy H2.
     induction x.
-    rewrite <- (MCP_ToStar_Defs_stable _ _ _ _ _ _ _ H3) in H5, H3; clear Procedures0.
+    rewrite <- (MCP_ToStar_D_stable _ _ _ _ _ _ _ H3) in H5, H3; clear Procedures0.
     rename Main0 into C'', x0 into tl1'', x1 into tl2'', x2 into s1'', x3 into s2''.
-    exists (Build_Program Defs C''), (a::tl1''), tl2'', s1'', s2''; repeat split; auto.
-    apply MCT_Step with (Build_Program Defs C',s'); auto.
+    exists (Build_Program D C''), (a::tl1''), tl2'', s1'', s2''; repeat split; auto.
+    apply MCT_Step with (Build_Program D C',s'); auto.
     simpl. rewrite <- H2. auto.
 Qed.
 

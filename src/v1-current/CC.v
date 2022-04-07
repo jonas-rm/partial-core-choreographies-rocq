@@ -82,6 +82,8 @@ Definition Main : Program -> Choreography := (@snd _ _ ).
 Definition Vars := fun P X => fst (Procedures P X).
 Definition Procs := fun P X => snd (Procedures P X).
 
+Definition Names (D:DefSet) := fun X => fst (D X).
+
 End Syntax.
 
 (** Pretty-printing rules for choreographies. *)
@@ -376,10 +378,10 @@ Qed.
 Fixpoint within_Xs (Xs:list RecVar) (C:Choreography) : Prop :=
 match C with
 | Interaction _ _ C' => within_Xs Xs C'
-| Cond _ _ C1 C2   => within_Xs Xs C1 /\ within_Xs Xs C2
-| Call X           => In X Xs
-| RT_Call X _ C'   => In X Xs /\ within_Xs Xs C'
-| End              => True
+| Cond _ _ C1 C2     => within_Xs Xs C1 /\ within_Xs Xs C2
+| Call X             => In X Xs
+| RT_Call X _ C'     => In X Xs /\ within_Xs Xs C'
+| End                => True
 end.
 
 Lemma within_Xs_dec : forall Xs C, {within_Xs Xs C} + {~within_Xs Xs C}.
@@ -421,10 +423,10 @@ Qed.
 Fixpoint consistent (Xs:RecVar -> list Pid) (C:Choreography) : Prop :=
 match C with
 | Interaction _ _ C' => consistent Xs C'
-| Cond _ _ C1 C2   => consistent Xs C1 /\ consistent Xs C2
-| Call X           => True
-| RT_Call X l C'   => l [C] Xs X /\ consistent Xs C'
-| End              => True
+| Cond _ _ C1 C2     => consistent Xs C1 /\ consistent Xs C2
+| Call X             => True
+| RT_Call X l C'     => l [C] Xs X /\ consistent Xs C'
+| End                => True
 end.
 
 Lemma consistent_dec : forall Xs C, {consistent Xs C} + {~consistent Xs C}.
@@ -513,7 +515,7 @@ Lemma Program_WF_Vars_In : forall P Xs, Program_WF Xs P ->
 Proof.
 intros.
 destroy H. clear H.
-induction P as (Defs,C).
+induction P as (D,C).
 simpl in H0, H2. clear H1.
 induction C; auto.
 + (* Cond *)
@@ -539,16 +541,16 @@ Proof. intros. destroy H. elim (H X); auto. intros. destroy H5; auto. Qed.
 
 (** Inversion results. *)
 
-Lemma Program_WF_Main_change : forall Xs Defs C C',
-  Choreography_WF C' -> within_Xs Xs C' -> consistent (fun X => fst (Defs X)) C' ->
-  Program_WF Xs (Defs,C) -> Program_WF Xs (Defs,C').
+Lemma Program_WF_Main_change : forall Xs D C C',
+  Choreography_WF C' -> within_Xs Xs C' -> consistent (Names D) C' ->
+  Program_WF Xs (D,C) -> Program_WF Xs (D,C').
 Proof.
 intros.
 destroy H2; repeat (split; auto).
 Qed.
 
-Lemma Program_WF_eta : forall Xs Defs C ann eta,
-  Program_WF Xs (Defs,eta @ ann;;C) -> Program_WF Xs (Defs,C).
+Lemma Program_WF_eta : forall Xs D C ann eta,
+  Program_WF Xs (D,eta @ ann;;C) -> Program_WF Xs (D,C).
 Proof.
 intros.
 elim (Program_WF_Main _ _ H); simpl; intros.
@@ -559,8 +561,8 @@ apply (Program_WF_Main_within_Xs _ _ H).
 destroy H; auto.
 Qed.
 
-Lemma Program_WF_Then : forall Xs Defs p b C1 C2,
-  Program_WF Xs (Defs,If p ?? b Then C1 Else C2) -> Program_WF Xs (Defs,C1).
+Lemma Program_WF_Then : forall Xs D p b C1 C2,
+  Program_WF Xs (D,If p ?? b Then C1 Else C2) -> Program_WF Xs (D,C1).
 Proof.
 intros.
 elim (Program_WF_Main _ _ H); simpl; intros.
@@ -571,8 +573,8 @@ apply (Program_WF_Main_within_Xs _ _ H).
 destroy H. inversion_clear H6; auto.
 Qed.
 
-Lemma Program_WF_Else : forall Xs Defs p b C1 C2,
-  Program_WF Xs (Defs,If p ?? b Then C1 Else C2) -> Program_WF Xs (Defs,C2).
+Lemma Program_WF_Else : forall Xs D p b C1 C2,
+  Program_WF Xs (D,If p ?? b Then C1 Else C2) -> Program_WF Xs (D,C2).
 Proof.
 intros.
 elim (Program_WF_Main _ _ H); simpl; intros.
@@ -583,8 +585,8 @@ apply (Program_WF_Main_within_Xs _ _ H).
 destroy H. inversion_clear H6; auto.
 Qed.
 
-Lemma Program_WF_Call : forall Xs Defs X ps C,
-  Program_WF Xs (Defs,RT_Call X ps C) -> Program_WF Xs (Defs,C).
+Lemma Program_WF_Call : forall Xs D X ps C,
+  Program_WF Xs (D,RT_Call X ps C) -> Program_WF Xs (D,C).
 Proof.
 intros.
 elim (Program_WF_Main _ _ H); simpl; intros.
@@ -600,8 +602,7 @@ Qed.
 Definition well_ann (P:Program) : Prop :=
   forall X, CCC_pn (Procs P X) (Vars P) [C] Vars P X.
 
-Lemma well_ann_Main_change : forall Defs C C',
-  well_ann (Defs,C) -> well_ann (Defs,C').
+Lemma well_ann_Main_change : forall D C C', well_ann (D,C) -> well_ann (D,C').
 Proof.
 intros.
 intro.
@@ -630,32 +631,30 @@ apply Program_WF_Vars with Xs; auto.
 apply Program_WF_Vars_In with P; auto.
 Qed.
 
-Lemma CCP_WF_eta : forall Defs C ann eta,
-  CCP_WF (Defs,eta @ ann;;C) -> CCP_WF (Defs,C).
+Lemma CCP_WF_eta : forall D C ann eta, CCP_WF (D,eta @ ann;;C) -> CCP_WF (D,C).
 Proof.
 intros.
 inversion_clear H; inversion_clear H1.
 split; auto. exists x; auto. eapply Program_WF_eta; eauto.
 Qed.
 
-Lemma CCP_WF_Then : forall Defs p b C1 C2,
-  CCP_WF (Defs,If p ?? b Then C1 Else C2) -> CCP_WF (Defs,C1).
+Lemma CCP_WF_Then : forall D p b C1 C2,
+  CCP_WF (D,If p ?? b Then C1 Else C2) -> CCP_WF (D,C1).
 Proof.
 intros.
 inversion_clear H; inversion_clear H1.
 split; auto. exists x; auto. eapply Program_WF_Then; eauto.
 Qed.
 
-Lemma CCP_WF_Else : forall Defs p b C1 C2,
-  CCP_WF (Defs,If p ?? b Then C1 Else C2) -> CCP_WF (Defs,C2).
+Lemma CCP_WF_Else : forall D p b C1 C2,
+  CCP_WF (D,If p ?? b Then C1 Else C2) -> CCP_WF (D,C2).
 Proof.
 intros.
 inversion_clear H; inversion_clear H1.
 split; auto. exists x; auto. eapply Program_WF_Else; eauto.
 Qed.
 
-Lemma CCP_WF_Call : forall Defs X ps C,
-  CCP_WF (Defs,RT_Call X ps C) -> CCP_WF (Defs,C).
+Lemma CCP_WF_Call : forall D X ps C, CCP_WF (D,RT_Call X ps C) -> CCP_WF (D,C).
 Proof.
 intros.
 inversion_clear H; inversion_clear H1.
@@ -714,109 +713,104 @@ Proof. intros. apply disjoint_Sel_Sel with l left; auto. Qed.
 
 (** One-step and multi-step reduction. Multi-step reduction is simply a reflexive and transitive closure. *)
 
-Inductive CCC_To (Defs : DefSet) :
+Inductive CCC_To (D : DefSet) :
   Choreography -> Store -> (RichLabel Pid Value Var RecVar)
                -> Choreography -> Store -> Prop :=
  | C_Com p e q x a C s s' : let v := eval_on_state Ev e s p in
         s' [==] (s[[q,x => v]]) ->
-        CCC_To Defs (p#e --> q$x @ a ;; C) s (RL_Com p v q x) C s'
+        CCC_To D (p#e --> q$x @ a ;; C) s (RL_Com p v q x) C s'
  | C_Sel p q l a C s s': s [==] s' ->
-        CCC_To Defs (p --> q [l] @ a ;; C) s (RL_Sel p q l) C s'
+        CCC_To D (p --> q [l] @ a ;; C) s (RL_Sel p q l) C s'
  | C_Then p b C1 C2 s s': s [==] s' ->
         eval_on_state BEv b s p = true ->
-        CCC_To Defs (If p ?? b Then C1 Else C2) s (RL_Cond p) C1 s'
+        CCC_To D (If p ?? b Then C1 Else C2) s (RL_Cond p) C1 s'
  | C_Else p b C1 C2 s s': s [==] s' ->
         eval_on_state BEv b s p = false ->
-        CCC_To Defs (If p ?? b Then C1 Else C2) s (RL_Cond p) C2 s'
+        CCC_To D (If p ?? b Then C1 Else C2) s (RL_Cond p) C2 s'
  | C_Delay_Eta eta ann C C' s s' t: disjoint_eta_rl eta t -> 
-        CCC_To Defs C s t C' s' ->
-        CCC_To Defs (eta @ ann;; C) s t (eta @ ann;; C') s'
+        CCC_To D C s t C' s' ->
+        CCC_To D (eta @ ann;; C) s t (eta @ ann;; C') s'
  | C_Delay_Cond p b C1 C2 C1' C2' s s' t: disjoint_p_rl p t -> 
-        CCC_To Defs C1 s t C1' s' ->
-        CCC_To Defs C2 s t C2' s' ->
-        CCC_To Defs (If p ?? b Then C1 Else C2) s t
+        CCC_To D C1 s t C1' s' ->
+        CCC_To D C2 s t C2' s' ->
+        CCC_To D (If p ?? b Then C1 Else C2) s t
                     (If p ?? b Then C1' Else C2') s'
  | C_Delay_Call ps X C C' s s' t:
-        disjoint_ps_rl ps t -> CCC_To Defs C s t C' s' ->
-        CCC_To Defs (RT_Call X ps C) s t (RT_Call X ps C') s'
+        disjoint_ps_rl ps t -> CCC_To D C s t C' s' ->
+        CCC_To D (RT_Call X ps C) s t (RT_Call X ps C') s'
  | C_Call_Local p X s s': s [==] s' ->
-        [#] (fst (Defs X)) = 1 -> In p (fst (Defs X)) ->
-        CCC_To Defs (Call X) s (RL_Call X p) (snd (Defs X)) s'
+        [#] (fst (D X)) = 1 -> In p (fst (D X)) ->
+        CCC_To D (Call X) s (RL_Call X p) (snd (D X)) s'
  | C_Call_Start p X s s': s [==] s' ->
-        [#] (fst (Defs X)) > 1 -> In p (fst (Defs X)) ->
-        CCC_To Defs
-               (Call X) s
-               (RL_Call X p)
-               (RT_Call X (fst (Defs X) [\] p) (snd (Defs X))) s'
+        [#] (fst (D X)) > 1 -> In p (fst (D X)) ->
+        CCC_To D (Call X) s (RL_Call X p)
+                 (RT_Call X (fst (D X) [\] p) (snd (D X))) s'
  | C_Call_Enter p ps X C s s': s [==] s' ->
         [#] ps > 1 -> In p ps ->
-        CCC_To Defs
-               (RT_Call X ps C) s
-               (RL_Call X p)
-               (RT_Call X (ps [\] p) C) s'
+        CCC_To D (RT_Call X ps C) s (RL_Call X p)
+                 (RT_Call X (ps [\] p) C) s'
  | C_Call_Finish p ps X C s s': s [==] s' ->
         [#] ps = 1 -> In p ps ->
-        CCC_To Defs
-               (RT_Call X ps C) s (RL_Call X p) C s'
+        CCC_To D (RT_Call X ps C) s (RL_Call X p) C s'
 .
 
-Notation "<< C , s >> --[ rl , Defs ]--> << C' , s' >>" :=
-  (CCC_To Defs C s rl C' s') (at level 100).
+Notation "<< C , s >> --[ rl , D ]--> << C' , s' >>" :=
+  (CCC_To D C s rl C' s') (at level 100).
 
 (** Useful for inferring a transition automatically. *)
 
-Lemma C_Com' : forall Defs p e q x a C s, let v := (eval_on_state Ev e s p) in
-        <<p#e --> q$x @ a;; C,s>> --[RL_Com p v q x,Defs]--> <<C,s[[q,x => v]]>>.
+Lemma C_Com' : forall D p e q x a C s, let v := (eval_on_state Ev e s p) in
+        <<p#e --> q$x @ a;; C,s>> --[RL_Com p v q x,D]--> <<C,s[[q,x => v]]>>.
 Proof. intros. apply C_Com. ESEr. Qed.
 
-Lemma C_Sel' : forall Defs p q l a C s,
-        <<p --> q[l] @ a;; C,s>> --[RL_Sel p q l,Defs]--> <<C,s>>.
+Lemma C_Sel' : forall D p q l a C s,
+        <<p --> q[l] @ a;; C,s>> --[RL_Sel p q l,D]--> <<C,s>>.
 Proof. intros. apply C_Sel. ESEr. Qed.
 
-Lemma C_Then' : forall Defs p b C1 C2 s, eval_on_state BEv b s p = true ->
-        <<If p ?? b Then C1 Else C2,s>> --[RL_Cond p,Defs]--> <<C1,s>>.
+Lemma C_Then' : forall D p b C1 C2 s, eval_on_state BEv b s p = true ->
+        <<If p ?? b Then C1 Else C2,s>> --[RL_Cond p,D]--> <<C1,s>>.
 Proof. intros. apply C_Then. ESEr. auto. Qed.
 
-Lemma C_Else' : forall Defs p b C1 C2 s, eval_on_state BEv b s p = false ->
-        <<If p ?? b Then C1 Else C2,s>> --[RL_Cond p,Defs]--> <<C2,s>>.
+Lemma C_Else' : forall D p b C1 C2 s, eval_on_state BEv b s p = false ->
+        <<If p ?? b Then C1 Else C2,s>> --[RL_Cond p,D]--> <<C2,s>>.
 Proof. intros. apply C_Else. ESEr. auto. Qed.
 
-Lemma C_Call_Local' : forall Defs p X s,
-        [#] (fst (Defs X)) = 1 -> In p (fst (Defs X)) ->
-        <<Call X,s>> --[RL_Call X p,Defs]--> <<snd (Defs X),s>>.
+Lemma C_Call_Local' : forall D p X s, [#] (fst (D X)) = 1 -> In p (fst (D X)) ->
+        <<Call X,s>> --[RL_Call X p,D]--> <<snd (D X),s>>.
 Proof. intros. apply C_Call_Local; auto. ESEr. Qed.
 
-Lemma C_Call_Start' : forall Defs p X s,
-        [#] (fst (Defs X)) > 1 -> In p (fst (Defs X)) ->
-        <<Call X,s>> --[RL_Call X p,Defs]-->
-               <<RT_Call X (fst (Defs X) [\] p) (snd (Defs X)),s>>.
+Lemma C_Call_Start' : forall D p X s, [#] (fst (D X)) > 1 -> In p (fst (D X)) ->
+        <<Call X,s>> --[RL_Call X p,D]-->
+               <<RT_Call X (fst (D X) [\] p) (snd (D X)),s>>.
 Proof. intros. apply C_Call_Start; auto. ESEr. Qed.
 
-Lemma C_Call_Enter' : forall Defs p ps X C s, [#] ps > 1 -> In p ps ->
-        <<RT_Call X ps C,s>> --[RL_Call X p,Defs]--> <<RT_Call X (ps [\] p) C,s>>.
+Lemma C_Call_Enter' : forall D p ps X C s, [#] ps > 1 -> In p ps ->
+        <<RT_Call X ps C,s>> --[RL_Call X p,D]--> <<RT_Call X (ps [\] p) C,s>>.
 Proof. intros. apply C_Call_Enter; auto. ESEr. Qed.
 
-Lemma C_Call_Finish' : forall Defs p ps X C s, [#] ps = 1 -> In p ps ->
-        <<RT_Call X ps C,s>> --[RL_Call X p,Defs]--> <<C,s>>.
+Lemma C_Call_Finish' : forall D p ps X C s, [#] ps = 1 -> In p ps ->
+        <<RT_Call X ps C,s>> --[RL_Call X p,D]--> <<C,s>>.
 Proof. intros. apply C_Call_Finish; auto. ESEr. Qed.
 
 Definition Configuration : Type := Program * Store.
 
 Inductive CCP_To : Configuration -> TransitionLabel _ _ -> Configuration -> Prop :=
- | CCP_To_intro Defs C s t C' s' : <<C,s>> --[t,Defs]--> <<C',s'>> ->
-     CCP_To (Defs,C,s) (forget t) (Defs,C',s').
+ | CCP_To_intro D C s t C' s' : <<C,s>> --[t,D]--> <<C',s'>> ->
+     CCP_To (D,C,s) (forget t) (D,C',s').
 
-Inductive CCP_ToStar : Configuration -> list (TransitionLabel _ _)-> Configuration -> Prop :=
+Inductive CCP_ToStar :
+  Configuration -> list (TransitionLabel _ _) -> Configuration -> Prop :=
  | CCT_Refl c : CCP_ToStar c nil c
- | CCT_Step c1 t c2 l c3 : CCP_To c1 t c2 -> CCP_ToStar c2 l c3 -> CCP_ToStar c1 (t::l) c3
+ | CCT_Step c1 t c2 l c3 : CCP_To c1 t c2 ->
+                           CCP_ToStar c2 l c3 -> CCP_ToStar c1 (t::l) c3
 .
 
 End Semantics_Definitions.
 
 (** Notations for reductions. *)
 
-Notation "<< C , s >> --[ rl , Defs ]--> << C' , s' >>" :=
-        (CCC_To Defs C s rl C' s') (at level 100) : CC_scope.
+Notation "<< C , s >> --[ rl , D ]--> << C' , s' >>" :=
+        (CCC_To D C s rl C' s') (at level 100) : CC_scope.
 Notation "c --[ tl ]--> c'" := (CCP_To c tl c') (at level 50) : CC_scope.
 Notation "c --[ ts ]-->* c'" := (CCP_ToStar c ts c') (at level 50) : CC_scope.
 
@@ -842,8 +836,8 @@ End Sanity_Checks.
 
 Section BigStepSemantics.
 
-Lemma RT_Call_reduce : forall Defs X ps C s, (ps <> List.nil) ->
-  exists tl, (Defs,RT_Call X ps C,s) --[tl]-->* (Defs,C,s).
+Lemma RT_Call_reduce : forall D X ps C s, (ps <> List.nil) ->
+  exists tl, (D,RT_Call X ps C,s) --[tl]-->* (D,C,s).
 Proof.
 intros.
 set (n := [#] ps).
@@ -869,44 +863,44 @@ induction n; intros.
     2: { intro. rewrite H3 in H1. simpl in H1; inversion H1. }
     rename x into tls, t into p.
     exists (TL_Tau p :: tls)%list.
-    eapply CCT_Step with (Defs,RT_Call X (ps [\] p) C,s); auto.
+    eapply CCT_Step with (D,RT_Call X (ps [\] p) C,s); auto.
     replace (TL_Tau p) with (Forget (RL_Call X p)); auto.
     constructor. rewrite H2; apply C_Call_Enter'.
     rewrite <- H2, <- H0; auto with arith.
     simpl; auto.
 Qed.
 
-Lemma Call_reduce : forall (Defs:DefSet) X s, (fst (Defs X) <> List.nil) ->
-  exists tl, (Defs,Call X,s) --[tl]-->* (Defs,snd (Defs X),s).
+Lemma Call_reduce : forall (D:DefSet) X s, (fst (D X) <> List.nil) ->
+  exists tl, (D,Call X,s) --[tl]-->* (D,snd (D X),s).
 Proof.
 intros.
-case_eq ([#] (fst (Defs X))); intros; [idtac | case_eq n]; intros.
+case_eq ([#] (fst (D X))); intros; [idtac | case_eq n]; intros.
 + exfalso; apply set_size_0 in H0; auto.
 + rewrite H1 in H0; clear n H1.
-  case_eq (fst (Defs X)); intros. exfalso; auto.
+  case_eq (fst (D X)); intros. exfalso; auto.
   rename t into p. exists (TL_Tau p::List.nil)%list.
   econstructor. 2: constructor.
   replace (TL_Tau p) with (Forget (RL_Call X p)); auto.
-  change (fst (A:=set Pid) (Defs X) = p::l)%list in H1.
+  change (fst (A:=set Pid) (D X) = p::l)%list in H1.
   constructor. apply C_Call_Local'; auto. rewrite H1; simpl; auto.
 + rewrite H1 in H0; clear n H1. rename n0 into n.
-  case_eq (fst (Defs X)); intros. exfalso; auto.
-  rename t into p. assert (fst (Defs X) [\] p <> List.nil).
+  case_eq (fst (D X)); intros. exfalso; auto.
+  rename t into p. assert (fst (D X) [\] p <> List.nil).
   1: {
     intro.
-    rewrite (set_size_remove' (@eq_dec _) (fst (Defs X)) p) in H0.
+    rewrite (set_size_remove' (@eq_dec _) (fst (D X)) p) in H0.
     2: rewrite H1; simpl; auto.
     rewrite H2 in H0. inversion H0.
   }
-  elim (RT_Call_reduce Defs X (fst (Defs X) [\] p) (snd (Defs X)) s); auto.
+  elim (RT_Call_reduce D X (fst (D X) [\] p) (snd (D X)) s); auto.
   intros.
   exists (TL_Tau p :: x)%list.
   eapply CCT_Step; eauto.
   replace (TL_Tau p) with (Forget (RL_Call X p)); auto.
   constructor. apply C_Call_Start'.
-  - change ([#] (fst (A:=set Pid) (Defs X)) = S (S n)) in H0.
+  - change ([#] (fst (A:=set Pid) (D X)) = S (S n)) in H0.
     rewrite H0; auto with arith.
-  - change (fst (A:=set Pid) (Defs X) = p::l)%list in H1.
+  - change (fst (A:=set Pid) (D X) = p::l)%list in H1.
     rewrite H1; simpl; auto.
 Qed.
 
@@ -926,20 +920,20 @@ Section Properties.
 (** ** Main properties of the semantics *)
 
 (** Determining the state from the label. *)
-Lemma CCC_To_Com_state : forall Defs C s p v q x C' s',
-  <<C,s>> --[RL_Com p v q x,Defs]--> <<C',s'>> -> s' [==] (s[[q,x => v]]).
+Lemma CCC_To_Com_state : forall D C s p v q x C' s',
+  <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> -> s' [==] (s[[q,x => v]]).
 Proof. induction C; intros; inversion H; eauto. Qed.
 
-Lemma CCC_To_Sel_state : forall Defs C s p v l C' s',
-  <<C,s>> --[RL_Sel p v l,Defs]--> <<C',s'>> -> s [==] s'.
+Lemma CCC_To_Sel_state : forall D C s p v l C' s',
+  <<C,s>> --[RL_Sel p v l,D]--> <<C',s'>> -> s [==] s'.
 Proof. induction C, l; intros; inversion H; eauto. Qed.
 
-Lemma CCC_To_Cond_state : forall Defs C s p C' s',
-  <<C,s>> --[RL_Cond p,Defs]--> <<C',s'>> -> s [==] s'.
+Lemma CCC_To_Cond_state : forall D C s p C' s',
+  <<C,s>> --[RL_Cond p,D]--> <<C',s'>> -> s [==] s'.
 Proof. induction C; intros; inversion H; eauto. Qed.
 
-Lemma CCC_To_Call_state : forall Defs C s p X C' s',
-  <<C,s>> --[RL_Call X p,Defs]--> <<C',s'>> -> s [==] s'.
+Lemma CCC_To_Call_state : forall D C s p X C' s',
+  <<C,s>> --[RL_Call X p,D]--> <<C',s'>> -> s [==] s'.
 Proof. induction C; intros; inversion H; eauto. Qed.
 
 (** Reductions preserve well-formedness. *)
@@ -959,8 +953,7 @@ induction H; simpl; try (inversion_clear H2); auto.
 Qed.
 
 Lemma CCC_To_consistent : forall P s l P' s' Xs,
-  Program_WF Xs P -> (P,s) --[l]--> (P',s') ->
-  consistent (Vars P') (Main P').
+  Program_WF Xs P -> (P,s) --[l]--> (P',s') -> consistent (Vars P') (Main P').
 Proof.
 intros.
 revert H.
@@ -1016,20 +1009,20 @@ induction H4.
   1: { inversion_clear HC. simpl in H1; inversion_clear H2; split; auto. }
   assert (within_Xs Xs C).
   1: { elim (Program_WF_Main_within_Xs _ _ H); auto. }
-  assert (consistent (fun X => fst (Defs X)) C).
+  assert (consistent (Names D) C).
   1: { elim (Program_WF_consistent _ _ H); auto. }
   generalize (Program_WF_Main_change _ _ _ _ H1 H2 H3 H); intro.
   assert (Choreography_WF C'); auto; clear IHCCC_To.
   inversion_clear H6. repeat split; simpl; auto.
   inversion_clear HC. inversion_clear H9; auto.
-+ change (Choreography_WF (Procs (Defs,Call X) X)).
++ change (Choreography_WF (Procs (D,Call X) X)).
   apply Program_WF_Proc with Xs; auto.
   apply (Program_WF_Vars_In _ _ H). red; simpl; auto.
 + elim (Program_WF_Proc _ _ H X); intros.
   2: apply (Program_WF_Vars_In _ _ H); red; simpl; auto.
   split; simpl; auto.
   split; auto.
-  revert H1; case (fst (Defs X)); intros.
+  revert H1; case (fst (D X)); intros.
   1: exfalso; inversion H1.
   intro.
   rewrite (set_size_remove' (@eq_dec _)) with (t::l) p in H1; auto.
@@ -1076,8 +1069,8 @@ induction l; intros; inversion H0.
   eapply CCC_To_CCP_WF; eauto.
 Qed.
 
-Lemma CCC_To_pn : forall Defs C s tl C' s', CCC_To Defs C s tl C' s' ->
-  forall p, In p (RL_pn _ _ _ _ tl) -> In p (CCC_pn C (fun X => fst (Defs X))).
+Lemma CCC_To_pn : forall D C s tl C' s', CCC_To D C s tl C' s' ->
+  forall p, In p (RL_pn _ _ _ _ tl) -> In p (CCC_pn C (Names D)).
 Proof.
 induction C; simpl; intros; inversion H; simpl.
 + rewrite <- H5 in H0; simpl in H0. sup.
@@ -1097,10 +1090,10 @@ induction C; simpl; intros; inversion H; simpl.
   inversion_clear H0. rewrite <- H11; auto. inversion H11.
 Qed.
 
-Lemma CCC_To_pn' : forall Defs C s tl C' s', CCC_To Defs C s tl C' s' ->
-  forall p, In p (CCC_pn C' (fun X => fst (Defs X))) ->
-    In p (CCC_pn C (fun X => fst (Defs X)))
-     \/ exists X, (In p (CCC_pn (snd (Defs X)) (fun X => fst (Defs X))) /\ X_Free X C).
+Lemma CCC_To_pn' : forall D C s tl C' s', CCC_To D C s tl C' s' ->
+  forall p, In p (CCC_pn C' (Names D)) ->
+    In p (CCC_pn C (Names D))
+     \/ exists X, (In p (CCC_pn (snd (D X)) (Names D)) /\ X_Free X C).
 Proof.
 induction C; intros; inversion H.
 + left. simpl. sup.
@@ -1135,10 +1128,8 @@ induction C; intros; inversion H.
 + simpl; sup.
 Qed.
 
-Lemma CCC_To_pn'' : forall P s tl P' s',
-  well_ann P -> (P,s) --[tl]--> (P',s') ->
-  forall p, In p (CCC_pn (Main P') (fun X => Vars P' X)) ->
-    In p (CCC_pn (Main P) (fun X => Vars P X)).
+Lemma CCC_To_pn'' : forall P s tl P' s',  well_ann P -> (P,s) --[tl]--> (P',s') ->
+  forall p, In p (CCC_pn (Main P') (Vars P')) -> In p (CCC_pn (Main P) (Vars P)).
 Proof.
 intros.
 revert H1. inversion H0. unfold Vars; simpl.
@@ -1165,8 +1156,8 @@ Qed.
 
 (** Some more specific properties. *)
 
-Lemma CCC_To_Com_neq : forall Defs C s p v q x C' s', Choreography_WF C ->
-  <<C,s>> --[RL_Com p v q x,Defs]--> <<C',s'>> -> p <> q.
+Lemma CCC_To_Com_neq : forall D C s p v q x C' s', Choreography_WF C ->
+  <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> -> p <> q.
 Proof.
 induction C; intros; inversion H0.
 + rewrite <- H3 in H; destroy H.
@@ -1176,8 +1167,8 @@ induction C; intros; inversion H0.
 + eapply IHC; eauto. eapply Choreography_WF_Call_1; eauto.
 Qed.
 
-Lemma CCC_To_Sel_neq : forall Defs C s p q l C' s', Choreography_WF C ->
-  <<C,s>> --[RL_Sel p q l,Defs]--> <<C',s'>> -> p <> q.
+Lemma CCC_To_Sel_neq : forall D C s p q l C' s', Choreography_WF C ->
+  <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> -> p <> q.
 Proof.
 induction C; intros; inversion H0.
 + rewrite <- H3 in H; destroy H.
@@ -1187,8 +1178,8 @@ induction C; intros; inversion H0.
 + eapply IHC; eauto. eapply Choreography_WF_Call_1; eauto.
 Qed.
 
-Lemma CCC_To_Xs : forall Defs C s p X C' s' Xs, within_Xs Xs C ->
-  <<C,s>> --[RL_Call X p,Defs]--> <<C',s'>> -> In X Xs.
+Lemma CCC_To_Xs : forall D C s p X C' s' Xs, within_Xs Xs C ->
+  <<C,s>> --[RL_Call X p,D]--> <<C',s'>> -> In X Xs.
 Proof.
 induction C; intros; inversion H0.
 + eapply IHC; eauto.
@@ -1290,8 +1281,8 @@ Section Uniqueness.
 
 (** Reductions are preserved by state equivalence. *)
 
-Lemma CCC_To_eq : forall Defs C s1 tl C' s2 s1' s2', s1 [==] s1' -> s2 [==] s2' ->
-  <<C,s1>> --[tl,Defs]--> <<C',s2>> -> <<C,s1'>> --[tl,Defs]--> <<C',s2'>>.
+Lemma CCC_To_eq : forall D C s1 tl C' s2 s1' s2', s1 [==] s1' -> s2 [==] s2' ->
+  <<C,s1>> --[tl,D]--> <<C',s2>> -> <<C,s1'>> --[tl,D]--> <<C',s2'>>.
 Proof.
 intros.
 induction H1.
@@ -1344,20 +1335,20 @@ Qed.
 
 (** The set of procedure definitions never changes. *)
 
-Hypothesis Defs : DefSet.
+Hypothesis D : DefSet.
 
-Lemma CCP_To_Defs_stable : forall Defs' C C' tl s s',
-  (Defs,C,s) --[tl]--> (Defs',C',s') -> Defs = Defs'.
+Lemma CCP_To_Defs_stable : forall D' C C' tl s s',
+  (D,C,s) --[tl]--> (D',C',s') -> D = D'.
 Proof.
 intros.
 inversion H.
 inversion H; auto.
 Qed.
 
-Lemma CCP_ToStar_Defs_stable : forall Defs' C C' tl s s',
-  (Defs,C,s) --[tl]-->* (Defs',C',s') -> Defs = Defs'.
+Lemma CCP_ToStar_Defs_stable : forall D' C C' tl s s',
+  (D,C,s) --[tl]-->* (D',C',s') -> D = D'.
 Proof.
-intros Defs' C C' tl; revert C C'.
+intros D' C C' tl; revert C C'.
 induction tl; intros; inversion H; clear H; auto.
 clear c1 c3 H2 H4 t l H0 H1.
 induction c2. induction a0.
@@ -1369,7 +1360,7 @@ Qed.
 (** Reductions and state. *)
 
 Lemma CCC_To_disjoint_eval : forall C s tl s' p e C', disjoint_p_rl p tl ->
-  <<C,s>> --[tl,Defs]--> <<C',s'>> -> eval_on_state Ev e s p = eval_on_state Ev e s' p.
+  <<C,s>> --[tl,D]--> <<C',s'>> -> eval_on_state Ev e s p = eval_on_state Ev e s' p.
 Proof.
 intros.
 induction H0; auto; try (apply eval_eq; auto; fail).
@@ -1380,7 +1371,7 @@ apply eval_eq; ESEs.
 Qed.
 
 Lemma CCC_To_disjoint_beval : forall C s tl s' p b C', disjoint_p_rl p tl ->
-  <<C,s>> --[tl,Defs]--> <<C',s'>> -> eval_on_state BEv b s p = eval_on_state BEv b s' p.
+  <<C,s>> --[tl,D]--> <<C',s'>> -> eval_on_state BEv b s p = eval_on_state BEv b s' p.
 Proof.
 intros.
 induction H0; auto; try (apply eval_eq; auto; fail).
@@ -1391,8 +1382,8 @@ apply eval_eq; ESEs.
 Qed.
 
 Lemma CCC_To_disjoint_update : forall C s tl s' p x v C', disjoint_p_rl p tl ->
-  <<C,s>> --[tl,Defs]--> <<C',s'>> ->
-  <<C,s[[p,x => v]]>> --[tl,Defs]--> <<C',s'[[p,x => v]]>>.
+  <<C,s>> --[tl,D]--> <<C',s'>> ->
+  <<C,s[[p,x => v]]>> --[tl,D]--> <<C',s'[[p,x => v]]>>.
 Proof.
 intros.
 induction H0; try (constructor; auto; try ESEc; auto; fail).
@@ -1411,7 +1402,7 @@ Qed.
 
 (** Determinism of reductions given the label. *)
 Lemma CCC_To_deterministic_1 : forall C C1 C2 tl s s1 s2,
-  <<C,s>> --[tl,Defs]--> <<C1,s1>> -> <<C,s>> --[tl,Defs]--> <<C2,s2>> -> C1 = C2.
+  <<C,s>> --[tl,D]--> <<C1,s1>> -> <<C,s>> --[tl,D]--> <<C2,s2>> -> C1 = C2.
 Proof.
 (* Might be simpler: induction tl *)
 induction C; intros; inversion H; inversion H0; 
@@ -1457,7 +1448,7 @@ induction C; intros; inversion H; inversion H0;
 Qed.
 
 Lemma CCC_To_deterministic_2 : forall C C1 C2 tl s s1 s2,
-  <<C,s>> --[tl,Defs]--> <<C1,s1>> -> <<C,s>> --[tl,Defs]--> <<C2,s2>> -> s1 [==] s2.
+  <<C,s>> --[tl,D]--> <<C1,s1>> -> <<C,s>> --[tl,D]--> <<C2,s2>> -> s1 [==] s2.
 Proof.
 induction C; intros; inversion H; inversion H0;
   try (ESEt s; ESEs; fail); eauto.
@@ -1493,7 +1484,7 @@ induction C; intros; inversion H; inversion H0;
 Qed.
 
 Lemma CCC_To_deterministic : forall C C1 C2 tl1 tl2 s s1 s2,
-  <<C,s>> --[tl1,Defs]--> <<C1,s1>> -> <<C,s>> --[tl2,Defs]--> <<C2,s2>> ->
+  <<C,s>> --[tl1,D]--> <<C1,s1>> -> <<C,s>> --[tl2,D]--> <<C2,s2>> ->
   tl1 = tl2 -> C1 = C2 /\ s1 [==] s2.
 Proof.
 intros.
@@ -1506,7 +1497,7 @@ Qed.
   and resulting state. *)
 
 Lemma CCC_To_eta_reduction : forall ann eta C s1 s2 tl,
-  <<eta @ ann;;C,s1>> --[tl,Defs]--> <<C,s2>> ->
+  <<eta @ ann;;C,s1>> --[tl,D]--> <<C,s2>> ->
   (forall p e q x, eta = (p#e --> q$x) -> tl = RL_Com p (eval_on_state Ev e s1 p) q x)
   /\ (forall p q l, eta = (p --> q[l]) -> tl = RL_Sel p q l).
 Proof.
@@ -1523,7 +1514,7 @@ induction C; intros; inversion H; split; intros;
 Qed.
 
 Lemma CCC_To_Then_reduction : forall p b C1 C2 s1 s2 tl,
-  <<If p ?? b Then C1 Else C2,s1>> --[tl,Defs]--> <<C1,s2>> -> tl = RL_Cond p.
+  <<If p ?? b Then C1 Else C2,s1>> --[tl,D]--> <<C1,s2>> -> tl = RL_Cond p.
 Proof.
 induction C1; intros; inversion H; auto.
 rewrite <- H7, <- H8 in H12; rewrite <- H7.
@@ -1531,7 +1522,7 @@ apply (IHC1_1 _ _ _ _ H12).
 Qed.
 
 Lemma CCC_To_Else_reduction : forall p b C1 C2 s1 s2 tl,
-  <<If p ?? b Then C1 Else C2,s1>> --[tl,Defs]--> <<C2,s2>> -> tl = RL_Cond p.
+  <<If p ?? b Then C1 Else C2,s1>> --[tl,D]--> <<C2,s2>> -> tl = RL_Cond p.
 Proof.
 intros p b C1 C2; revert C1.
 induction C2; intros; inversion H; auto.
@@ -1540,11 +1531,11 @@ apply (IHC2_2 _ _ _ _ H13).
 Qed.
 
 Lemma CCC_To_Call_reduction_1 : forall p X s1 s2 tl,
-  initial (snd (Defs X)) -> In p (fst (Defs X)) ->
-  <<Call X,s1>> --[tl,Defs]--> <<snd (Defs X),s2>> -> tl = RL_Call X p.
+  initial (snd (D X)) -> In p (fst (D X)) ->
+  <<Call X,s1>> --[tl,D]--> <<snd (D X),s2>> -> tl = RL_Call X p.
 Proof.
 intros.
-set (C:=snd (Defs X)). assert (C = snd (Defs X)); auto.
+set (C:=snd (D X)). assert (C = snd (D X)); auto.
 clearbody C. revert p X s1 s2 tl H H0 H1 H2.
 induction C; intros; inversion H1;
   try (rewrite (set_size_1 _ _ H5 _ _ H0 H6); auto; fail);
@@ -1552,12 +1543,12 @@ induction C; intros; inversion H1;
 Qed.
 
 Lemma CCC_To_Call_reduction_2 : forall p X s1 s2 tl,
-  initial (snd (Defs X)) -> In p (fst (Defs X)) ->
-  <<Call X,s1>> --[tl,Defs]--> <<RT_Call X (fst (Defs X)[\]p) (snd (Defs X)),s2>> ->
+  initial (snd (D X)) -> In p (fst (D X)) ->
+  <<Call X,s1>> --[tl,D]--> <<RT_Call X (fst (D X)[\]p) (snd (D X)),s2>> ->
   tl = RL_Call X p.
 Proof.
 intros.
-set (C:=snd (Defs X)). assert (C = snd (Defs X)); auto.
+set (C:=snd (D X)). assert (C = snd (D X)); auto.
 clearbody C. revert p X s1 s2 tl H H0 H1 H2.
 induction C; intros; inversion H1;
   try (rewrite H4 in H; simpl in H; inversion H);
@@ -1565,7 +1556,7 @@ induction C; intros; inversion H1;
 Qed.
 
 Lemma CCC_To_Call_reduction_3 : forall C p ps X s1 s2 tl, In p ps ->
-  <<RT_Call X ps C,s1>> --[tl,Defs]--> <<RT_Call X (ps[\]p) C,s2>> ->
+  <<RT_Call X ps C,s1>> --[tl,D]--> <<RT_Call X (ps[\]p) C,s2>> ->
   tl = RL_Call X p.
 Proof.
 induction C; intros; inversion H0;
@@ -1608,7 +1599,7 @@ apply (lt_irrefl _ H1).
 Qed.
 
 Lemma CCC_To_Call_reduction_4 : forall C p ps X s1 s2 tl,
-  In p ps -> <<RT_Call X ps C,s1>> --[tl,Defs]--> <<C,s2>> -> tl = RL_Call X p.
+  In p ps -> <<RT_Call X ps C,s1>> --[tl,D]--> <<C,s2>> -> tl = RL_Call X p.
 Proof.
 induction C; intros; inversion H0; auto;
   try (rewrite (set_size_1 _ _ H7 _ _ H H9); auto; fail);
@@ -1620,7 +1611,7 @@ induction C; intros; inversion H0; auto;
 Qed.
 
 Lemma CCC_To_deterministic_3 : forall C C' tl1 tl2 s s1 s2,
-  <<C,s>> --[tl1,Defs]--> <<C',s1>> -> <<C,s>> --[tl2,Defs]-->
+  <<C,s>> --[tl1,D]--> <<C',s1>> -> <<C,s>> --[tl2,D]-->
   <<C',s2>> -> tl1 = tl2.
 Proof.
 induction C; intros; inversion H; inversion H0; auto.
@@ -1680,8 +1671,7 @@ induction C; intros; inversion H; inversion H0; auto.
 Qed.
 
 Lemma CCC_To_deterministic_4 : forall C C' tl1 tl2 s s1 s2,
-  <<C,s>> --[tl1,Defs]--> <<C',s1>> -> <<C,s>> --[tl2,Defs]--> <<C',s2>> ->
-  s1 [==] s2.
+  <<C,s>> --[tl1,D]--> <<C',s1>> -> <<C,s>> --[tl2,D]--> <<C',s2>> -> s1 [==] s2.
 Proof.
 intros.
 rewrite (CCC_To_deterministic_3 _ _ _ _ _ _ _ H0 H) in H0.
@@ -1691,8 +1681,7 @@ Qed.
 (** The label alone determines the resulting state. *)
 
 Lemma CCC_To_rl_implies_state : forall C1 s tl C1' s1 C2 C2' s2,
-  <<C1,s>> --[tl,Defs]--> <<C1',s1>> -> <<C2,s>> --[tl,Defs]--> <<C2',s2>> ->
-  s1 [==] s2.
+  <<C1,s>> --[tl,D]--> <<C1',s1>> -> <<C2,s>> --[tl,D]--> <<C2',s2>> -> s1 [==] s2.
 Proof.
 induction C1; induction C2; intros; inversion H; inversion H0;
   try (ESEt s; ESEs; fail); eauto;
@@ -1710,10 +1699,9 @@ Qed.
 
 (** Currently not used, but might prove useful. *)
 
-Lemma RL_Com_reduce_eq : forall Defs p C v v' q q' x x' s C' s' C'' s'',
-  <<C,s>> --[RL_Com p v q x,Defs]--> <<C',s'>> ->
-  <<C,s>> --[RL_Com p v' q' x',Defs]--> <<C'',s''>> ->
-  v = v' /\ q = q' /\ x = x'.
+Lemma RL_Com_reduce_eq : forall D p C v v' q q' x x' s C' s' C'' s'',
+  <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> ->
+  <<C,s>> --[RL_Com p v' q' x',D]--> <<C'',s''>> -> v = v' /\ q = q' /\ x = x'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
 + rewrite <- H3 in H14; inversion H14.
@@ -1727,10 +1715,9 @@ induction C; intros; try (inversion H; inversion H0); eauto.
   destroy H21; exfalso; auto.
 Qed.
 
-Lemma L_Com_reduce_eq : forall Defs p C v v' q q' s C' s' C'' s'',
-  (Defs,C,s) --[TL_Com p v q]--> (Defs,C',s') ->
-  (Defs,C,s) --[TL_Com p v' q']--> (Defs,C'',s'') ->
-  v = v' /\ q = q'.
+Lemma L_Com_reduce_eq : forall D p C v v' q q' s C' s' C'' s'',
+  (D,C,s) --[TL_Com p v q]--> (D,C',s') ->
+  (D,C,s) --[TL_Com p v' q']--> (D,C'',s'') -> v = v' /\ q = q'.
 Proof.
 intros.
 inversion H; inversion H0.
@@ -1746,10 +1733,9 @@ split.
 + transitivity q0; auto; transitivity q1; auto.
 Qed.
 
-Lemma RL_Com_reduce_neq : forall Defs p p' C v v' q q' x x' s C' s' C'' s'',
-  <<C,s>> --[RL_Com p v q x,Defs]--> <<C',s'>> ->
-  <<C,s>> --[RL_Com p' v' q' x',Defs]--> <<C'',s''>> ->
-  p <> p' -> q <> q'.
+Lemma RL_Com_reduce_neq : forall D p p' C v v' q q' x x' s C' s' C'' s'',
+  <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> ->
+  <<C,s>> --[RL_Com p' v' q' x',D]--> <<C'',s''>> -> p <> p' -> q <> q'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
 + rewrite <- H4 in H15; inversion H15.
@@ -1761,10 +1747,9 @@ induction C; intros; try (inversion H; inversion H0); eauto.
   destroy H22; destroy H23. rewrite <- H18; auto.
 Qed.
 
-Lemma L_Com_reduce_neq : forall Defs p p' C v v' q q' s C' s' C'' s'',
-  (Defs,C,s) --[TL_Com p v q]--> (Defs,C',s') ->
-  (Defs,C,s) --[TL_Com p' v' q']--> (Defs,C'',s'') ->
-  p <> p' -> q <> q'.
+Lemma L_Com_reduce_neq : forall D p p' C v v' q q' s C' s' C'' s'',
+  (D,C,s) --[TL_Com p v q]--> (D,C',s') ->
+  (D,C,s) --[TL_Com p' v' q']--> (D,C'',s'') -> p <> p' -> q <> q'.
 Proof.
 intros.
 rename H1 into Hp.
@@ -1775,10 +1760,9 @@ rewrite H21, H20, H19 in H9; rewrite H18, H17, H16 in H2.
 apply (RL_Com_reduce_neq _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ H2 H9); auto.
 Qed.
 
-Lemma RL_Sel_reduce_eq : forall Defs p C q q' l l' s C' s' C'' s'',
-  <<C,s>> --[RL_Sel p q l,Defs]--> <<C',s'>> ->
-  <<C,s>> --[RL_Sel p q' l',Defs]--> <<C'',s''>> ->
-  q = q' /\ l = l'.
+Lemma RL_Sel_reduce_eq : forall D p C q q' l l' s C' s' C'' s'',
+  <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> ->
+  <<C,s>> --[RL_Sel p q' l',D]--> <<C'',s''>> -> q = q' /\ l = l'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
 + rewrite <- H3 in H13; inversion H13.
@@ -1791,10 +1775,9 @@ induction C; intros; try (inversion H; inversion H0); eauto.
   destroy H20; exfalso; auto.
 Qed.
 
-Lemma L_Sel_reduce_eq : forall Defs p C q q' l l' s C' s' C'' s'',
-  (Defs,C,s) --[TL_Sel p q l]--> (Defs,C',s') ->
-  (Defs,C,s) --[TL_Sel p q' l']--> (Defs,C'',s'') ->
-  q = q' /\ l = l'.
+Lemma L_Sel_reduce_eq : forall D p C q q' l l' s C' s' C'' s'',
+  (D,C,s) --[TL_Sel p q l]--> (D,C',s') ->
+  (D,C,s) --[TL_Sel p q' l']--> (D,C'',s'') -> q = q' /\ l = l'.
 Proof.
 intros.
 inversion H; inversion H0.
@@ -1808,10 +1791,9 @@ elim (RL_Sel_reduce_eq _ _ _ _ _ _ _ _ _ _ _ _ H2 H9); split.
 + transitivity l0; auto; transitivity l1; auto.
 Qed.
 
-Lemma RL_Sel_reduce_neq : forall Defs p p' C q q' l l' s C' s' C'' s'',
-  <<C,s>> --[RL_Sel p q l,Defs]--> <<C',s'>> ->
-  <<C,s>> --[RL_Sel p' q' l',Defs]--> <<C'',s''>> ->
-  p <> p' -> q <> q'.
+Lemma RL_Sel_reduce_neq : forall D p p' C q q' l l' s C' s' C'' s'',
+  <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> ->
+  <<C,s>> --[RL_Sel p' q' l',D]--> <<C'',s''>> -> p <> p' -> q <> q'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
 + rewrite <- H4 in H14; inversion H14.
@@ -1823,10 +1805,9 @@ induction C; intros; try (inversion H; inversion H0); eauto.
   destroy H21; destroy H22. rewrite <- H17; auto.
 Qed.
 
-Lemma L_Sel_reduce_neq : forall Defs p p' C q q' l l' s C' s' C'' s'',
-  (Defs,C,s) --[TL_Sel p q l]--> (Defs,C', s') ->
-  (Defs,C,s) --[TL_Sel p' q' l']--> (Defs,C'', s'') ->
-  p <> p' -> q <> q'.
+Lemma L_Sel_reduce_neq : forall D p p' C q q' l l' s C' s' C'' s'',
+  (D,C,s) --[TL_Sel p q l]--> (D,C', s') ->
+  (D,C,s) --[TL_Sel p' q' l']--> (D,C'', s'') -> p <> p' -> q <> q'.
 Proof.
 intros.
 rename H1 into Hp.
@@ -1843,10 +1824,9 @@ End Uniqueness.
 
 Section Confluence.
 
-Lemma diamond_Chor : forall Defs C s tl1 tl2 C1 C2 s1 s2,
-  <<C,s>> --[tl1,Defs]--> <<C1,s1>> -> <<C,s>> --[tl2,Defs]--> <<C2,s2>> ->
-  tl1 <> tl2 -> exists C' s', <<C1,s1>> --[tl2,Defs]--> <<C',s'>>
-                           /\ <<C2,s2>> --[tl1,Defs]--> <<C',s'>>.
+Lemma diamond_Chor : forall D C s tl1 tl2 C1 C2 s1 s2,
+  <<C,s>> --[tl1,D]--> <<C1,s1>> -> <<C,s>> --[tl2,D]--> <<C2,s2>> -> tl1 <> tl2 ->
+  exists C' s', <<C1,s1>> --[tl2,D]--> <<C',s'>> /\ <<C2,s2>> --[tl1,D]--> <<C',s'>>.
 Proof.
 induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
 + (* Eta *)
@@ -1856,7 +1836,7 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     rewrite <- H4.
     clear s'0 H5 C' H4 C0 H2 s0 H0 tl' H3.
     rename C'0 into C'.
-    generalize (C_Com' Defs p e0 q x t C' s''); rewrite H1; intro.
+    generalize (C_Com' D p e0 q x t C' s''); rewrite H1; intro.
     rewrite <- H1 in H14; inversion_clear H14.
     exists C', (s''[[q,x => v]]); split.
     * apply CCC_To_eq with (s[[q,x => v]]) (s''[[q,x => v]]). ESEs. ESEr.
@@ -1865,12 +1845,12 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
       rewrite (CCC_To_disjoint_eval _ _ _ _ _ _ _ _ H2 H15); auto.
   - elim Htl. rewrite <- H11, <- H3, H16, H17, H18; auto.
   - rewrite <- H4.
-    generalize (C_Sel' Defs p q l t C'0 s''); rewrite H1; intro.
+    generalize (C_Sel' D p q l t C'0 s''); rewrite H1; intro.
     rewrite <- H1 in H14; inversion_clear H14.
     exists C'0, s''; split; auto.
     apply CCC_To_eq with s s''; auto. ESEr.
   - rewrite <- H13.
-    generalize (C_Com' Defs p e0 q x t C'0 s'); rewrite H10; intro.
+    generalize (C_Com' D p e0 q x t C'0 s'); rewrite H10; intro.
     rewrite <- H10 in H6; inversion_clear H6.
     exists C'0, (s'[[q,x => v]]); split.
     * unfold v.
@@ -1878,7 +1858,7 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     * apply CCC_To_eq with (s[[q,x => v]]) (s'[[q,x => v]]). ESEs. ESEr.
       apply CCC_To_disjoint_update; auto.
   - rewrite <- H13.
-    generalize (C_Sel' Defs p q l t C'0 s'); rewrite H10; intro.
+    generalize (C_Sel' D p q l t C'0 s'); rewrite H10; intro.
     rewrite <- H10 in H6; inversion_clear H6.
     exists C'0, s'; split; auto.
     apply CCC_To_eq with s s'; auto. ESEr.
@@ -1892,22 +1872,22 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     exists C1', s''; split; auto.
     * apply CCC_To_eq with s s''; auto. ESEr.
     * apply C_Then'.
-      rewrite <- (CCC_To_disjoint_beval Defs C1 s tl'' s'' t t0 C1'); auto.
+      rewrite <- (CCC_To_disjoint_beval D C1 s tl'' s'' t t0 C1'); auto.
   - elim Htl. rewrite <- H14, <- H4; auto.
   - rewrite <- H5.
     exists C2', s''; split; auto.
     * apply CCC_To_eq with s s''; auto. ESEr.
     * apply C_Else'.
-      rewrite <- (CCC_To_disjoint_beval Defs C1 s tl'' s'' t t0 C1'); auto.
+      rewrite <- (CCC_To_disjoint_beval D C1 s tl'' s'' t t0 C1'); auto.
   - rewrite <- H16.
     exists C1', s'; split; auto.
     * apply C_Then'.
-      rewrite <- (CCC_To_disjoint_beval Defs C1 s tl' s' t t0 C1'); auto.
+      rewrite <- (CCC_To_disjoint_beval D C1 s tl' s' t t0 C1'); auto.
     * apply CCC_To_eq with s s'; auto. ESEr.
   - rewrite <- H16.
     exists C2', s'; split; auto.
     * apply C_Else'.
-      rewrite <- (CCC_To_disjoint_beval Defs C1 s tl' s' t t0 C1'); auto.
+      rewrite <- (CCC_To_disjoint_beval D C1 s tl' s' t t0 C1'); auto.
     * apply CCC_To_eq with s s'; auto. ESEr.
   - clear HC' HC'' s'1 H17 C'' H16 t2 H15 s1 H13 C5 H14 b0 H11 p0 H10.
     clear s'0 H6 C' H5 t1 H4 s0 H2 C3 H3 C0 H1 b H0 p H C4 H12.
@@ -1935,16 +1915,16 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
     clear HC' HC'' Htl s'1 H14 C'' H13 tl'' H12 s1 H11 X0 H7.
     clear s'0 H6 C' H5 tl' H4 s0 H3 X H.
     rename t into X.
-    elim (Nat.eq_dec ([#] (fst (Defs X))) 2); intro HX.
-    * exists (snd (Defs X)), s.
+    elim (Nat.eq_dec ([#] (fst (D X))) 2); intro HX.
+    * exists (snd (D X)), s.
       split; apply C_Call_Finish; try ESEs.
       ++ revert HX.
-         intro; rewrite (set_size_remove' (@eq_dec _)) with (fst (Defs X)) p in HX; auto.
+         intro; rewrite (set_size_remove' (@eq_dec _)) with (fst (D X)) p in HX; auto.
       ++ apply set_remove'_3; auto.
       ++ revert HX.
-         intro; rewrite (set_size_remove' (@eq_dec _)) with (fst (Defs X)) p0 in HX; auto.
+         intro; rewrite (set_size_remove' (@eq_dec _)) with (fst (D X)) p0 in HX; auto.
       ++ apply set_remove'_3; auto.
-    * exists (RT_Call X (fst (Defs X) [\] p0 [\] p) (snd (Defs X))), s.
+    * exists (RT_Call X (fst (D X) [\] p0 [\] p) (snd (D X))), s.
       rewrite set_remove'_remove' at 1.
       split; (apply C_Call_Enter; try ESEs;
         [eapply set_size_neq_2; eauto | apply set_remove'_3; auto]).
@@ -1994,33 +1974,31 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
   inversion HC'.
 Qed.
 
-Lemma diamond_1 : forall c tl1 tl2 c1 c2,
-  c --[ tl1 ]--> c1 -> c --[ tl2 ]--> c2 ->
+Lemma diamond_1 : forall c tl1 tl2 c1 c2, c --[ tl1 ]--> c1 -> c --[ tl2 ]--> c2 ->
   tl1 <> tl2 -> exists c', c1 --[ tl2 ]--> c' /\ c2 --[ tl1 ]--> c'.
 Proof.
-induction c as [a s]. induction a as [Defs C].
+induction c as [a s]. induction a as [D C].
 intros.
 inversion H; inversion H0.
 elim (diamond_Chor _ _ _ _ _ _ _ _ _ H7 H13); intros.
 2: { intro; apply H1. rewrite <- H9, <- H3, H14. auto. }
 inversion_clear H14. inversion_clear H15.
-exists (Defs,x,x0); split; constructor; auto.
+exists (D,x,x0); split; constructor; auto.
 Qed.
 
-Lemma diamond_2 : forall c tl1 tl2 c1 c2,
-  c --[ tl1 ]--> c1 -> c --[ tl2 ]--> c2 ->
+Lemma diamond_2 : forall c tl1 tl2 c1 c2, c --[ tl1 ]--> c1 -> c --[ tl2 ]--> c2 ->
   {fst c1 = fst c2 /\ snd c1 [==] snd c2}
   + {exists c', c1 --[ tl2 ]--> c' /\ c2 --[ tl1 ]--> c'}.
 Proof.
-induction c as [a s]. induction a as [Defs C].
-induction c1 as [a s']. induction a as [Defs' C'].
-induction c2 as [a s'']. induction a as [Defs'' C''].
+induction c as [a s]. induction a as [D C].
+induction c1 as [a s']. induction a as [D' C'].
+induction c2 as [a s'']. induction a as [D'' C''].
 intros.
 elim (chor_eq_dec C' C''); intro HC'C''; [left | right].
 + inversion H; inversion H0.
-  clear H H0 s'1 H16 C'1 H15 tl2 H10 s1 H12 C1 H11 Defs1 H9 s'0 H8.
-  clear C'0 H7 tl1 H2 s0 H4 C0 H3 Defs0 H1.
-  revert H5 H13; rewrite <- H6, <- H14, <- HC'C''; clear H6 H14 HC'C'' Defs' Defs'' C''.
+  clear H H0 s'1 H16 C'1 H15 tl2 H10 s1 H12 C1 H11 D1 H9 s'0 H8.
+  clear C'0 H7 tl1 H2 s0 H4 C0 H3 D0 H1.
+  revert H5 H13; rewrite <- H6, <- H14, <- HC'C''; clear H6 H14 HC'C'' D' D'' C''.
   intros HC HC'.
   split; auto.
   eapply CCC_To_deterministic_4; eauto.
@@ -2035,19 +2013,21 @@ elim (chor_eq_dec C' C''); intro HC'C''; [left | right].
   elim (diamond_Chor _ _ _ _ _ _ _ _ _ H5 H13); intros; auto.
   inversion_clear H17. inversion_clear H18.
   rewrite <- H6, <- H14.
-  exists (Defs,x,x0); split; constructor; auto.
+  exists (D,x,x0); split; constructor; auto.
 Qed.
 
 (** In this one we unfold the configuration because of the equivalence.
   Furthermore, we use logical disjunction - the labels are too weak... *)
+
 Lemma diamond_3a : forall P s tl1 tl2 P1 s1 P2 s2,
   (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]--> (P2,s2) ->
-  (exists tl' s1', (P2,s2) --[ tl' ]-->* (P1,s1') /\ s1 [==] s1' /\ length tl1 = S (length tl'))
+  (exists tl' s1', (P2,s2) --[ tl' ]-->* (P1,s1')
+                 /\ s1 [==] s1' /\ length tl1 = S (length tl'))
   \/ (exists P' s', (P1,s1) --[ tl2 ]--> (P',s') /\ (P2,s2) --[ tl1 ]-->* (P',s')).
 Proof.
-induction P as [Defs C].
-induction P1 as [Defs1 C1].
-induction P2 as [Defs2 C2].
+induction P as [D C].
+induction P1 as [D1 C1].
+induction P2 as [D2 C2].
 intros.
 rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H0);
 rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H0) in H0.
@@ -2060,7 +2040,7 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
 + intros.
   inversion H; clear H.
   clear t l H1 H2 c1 c3 H3 H5.
-  induction c2, a0 as [Defs' C'].
+  induction c2, a0 as [D' C'].
   rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4) in H6, H4.
   elim (diamond_2 _ _ _ _ _ H0 H4); simpl; intros.
   - inversion_clear a0. inversion H.
@@ -2071,16 +2051,16 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
     * rewrite <- H2. exists s1; split. 2: split; auto; ESEr.
       apply CCP_ToStar_eq with b s1; auto. ESEs. ESEr. rewrite H2; discriminate.
   - inversion_clear b0.
-    induction x, a0 as [Defs'' C'']; inversion_clear H.
+    induction x, a0 as [D'' C'']; inversion_clear H.
     rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H2) in H1, H2.
     elim (IHtl1 _ _ _ _ _ _ _ H6 H2); intro.
     * destroy H.
       rename x into tl', x0 into s'.
       left; exists (a::tl'), s'; split; auto.
-      apply CCT_Step with (Defs,C'',b0); auto.
+      apply CCT_Step with (D,C'',b0); auto.
     * destroy H.
       right; exists x, x0; split; auto.
-      apply CCT_Step with (Defs,C'',b0); auto.
+      apply CCT_Step with (D,C'',b0); auto.
 Qed.
 
 Lemma diamond_3 : forall P s tl1 tl2 P1 s1 P2 s2,
@@ -2099,23 +2079,23 @@ Lemma diamond_4a : forall P s tl1 tl2 P1 s1 P2 s2,
     (P1,s1) --[ tl1' ]-->* (P',s1') /\ (P2,s2) --[ tl2' ]-->* (P',s2')
     /\ s1' [==] s2' /\ length tl1 + length tl1' = length tl2 + length tl2').
 Proof.
-induction P as [Defs C], P1 as [Defs' C1], P2 as [Defs'' C2].
+induction P as [D C], P1 as [D' C1], P2 as [D'' C2].
 intros.
 rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0);
 rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0) in H0.
 rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H);
 rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H) in H.
-clear Defs' Defs''.
+clear D' D''.
 revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
 + intros.
   inversion H0.
   rewrite <- H2, <- H4.
-  exists (Defs,C1), nil, tl1, s1, s1; repeat split; auto.
+  exists (D,C1), nil, tl1, s1, s1; repeat split; auto.
   constructor.
 + intros.
   inversion H0; clear H0.
   clear t l H1 H2 c1 c3 H3 H5.
-  induction c2, a0 as [Defs0 C0].
+  induction c2, a0 as [D0 C0].
   rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4) in H6, H4.
   elim (diamond_3a _ _ _ _ _ _ _ _ H H4); intros.
   - destroy H0.
@@ -2129,29 +2109,29 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
     * rewrite H9 in H5. inversion H5.
       rewrite <- H11; rewrite <- H11 in H5, H7; rewrite H9 in H3; clear C' tl1' H11 H9.
       rewrite <- H13 in H5, H8. clear s1' H13 c H10.
-      exists (Defs,C1), nil, tl2', s1, s2'; repeat split; auto.
+      exists (D,C1), nil, tl2', s1, s2'; repeat split; auto.
       constructor. ESEt s'. simpl. rewrite <- H3, H0. auto.
-    * exists (Defs,C'), tl1', tl2', s1', s2'; repeat split; auto.
+    * exists (D,C'), tl1', tl2', s1', s2'; repeat split; auto.
       apply CCP_ToStar_eq with s' s1'; auto. ESEs. ESEr. rewrite H9; discriminate.
       simpl. rewrite <- H3, H0; auto.
   - destroy H0.
-    induction x as [Defs' C'].
+    induction x as [D' C'].
     rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0) in H1, H0.
     rename x0 into s'.
     elim (IHtl2 _ _ _ _ _ _ _ H0 H6); intros.
     destroy H2.
-    induction x as [Defs'' C''].
+    induction x as [D'' C''].
     rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H3) in H5, H3.
     rename x0 into tl1'', x1 into tl2'', x2 into s1'', x3 into s2''.
-    exists (Defs,C''), (a::tl1''), tl2'', s1'', s2''; repeat split; auto.
-    apply CCT_Step with (Defs,C',s'); auto.
+    exists (D,C''), (a::tl1''), tl2'', s1'', s2''; repeat split; auto.
+    apply CCT_Step with (D,C',s'); auto.
     simpl. rewrite <- H2. auto.
 Qed.
 
 Lemma diamond_4 : forall P s tl1 tl2 P1 s1 P2 s2,
   (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
-  (exists P' tl1' tl2' s1' s2',
-    (P1,s1) --[ tl1' ]-->* (P',s1') /\ (P2,s2) --[ tl2' ]-->* (P',s2') /\ s1' [==] s2').
+  (exists P' tl1' tl2' s1' s2', (P1,s1) --[ tl1' ]-->* (P',s1')
+                             /\ (P2,s2) --[ tl2' ]-->* (P',s2') /\ s1' [==] s2').
 Proof.
 intros.
 elim (diamond_4a _ _ _ _ _ _ _ _ H H0); auto.
@@ -2171,10 +2151,9 @@ inversion H1. inversion H11.
 Qed.
 
 Lemma diamond_5a : forall P s tl1 tl2 P1 s1 P2 s2,
-  (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
-  Main P2 = End -> 
-  (exists tl1' s1',
-    (P1,s1) --[ tl1' ]-->* (P2,s1') /\ s1' [==] s2 /\ length tl1 + length tl1' = length tl2).
+  (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) -> Main P2 = End -> 
+  (exists tl1' s1', (P1,s1) --[ tl1' ]-->* (P2,s1')
+                  /\ s1' [==] s2 /\ length tl1 + length tl1' = length tl2).
 Proof.
 intros.
 elim (diamond_4a _ _ _ _ _ _ _ _ H H0); intros.
@@ -2187,10 +2166,8 @@ rewrite H6, plus_0_r in H2; auto.
 Qed.
 
 Lemma diamond_5 : forall P s tl1 tl2 P1 s1 P2 s2,
-  (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
-  Main P2 = End -> 
-  (exists tl1' s1',
-    (P1,s1) --[ tl1' ]-->* (P2,s1') /\ s1' [==] s2).
+  (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) -> Main P2 = End -> 
+  (exists tl1' s1', (P1,s1) --[ tl1' ]-->* (P2,s1') /\ s1' [==] s2).
 Proof.
 intros.
 elim (diamond_5a _ _ _ _ _ _ _ _ H H0 H1).
@@ -2224,7 +2201,7 @@ Notation "p # e --> q $ x" := (Com _ p e q x) (at level 50, e at level 9) : CC_s
 Notation "p --> q [ l ]" := (Sel _ p q l) (at level 50) : CC_scope.
 Notation "eta '@' ann ';;' C" := (Interaction _ ann eta C) (at level 60, right associativity) : CC_scope.
 Notation "'If' p '??' b 'Then' C1 'Else' C2" := (Cond _ p b C1 C2) (at level 60) : CC_scope.
-Notation "<< C , s >> --[ rl , Defs ]--> << C' , s' >>" := (CCC_To _ Defs C s rl C' s') (at level 100) : CC_scope.
+Notation "<< C , s >> --[ rl , D ]--> << C' , s' >>" := (CCC_To _ D C s rl C' s') (at level 100) : CC_scope.
 Notation "c --[ tl ]--> c'" := (CCP_To _ c tl c') (at level 50, left associativity) : CC_scope.
 Notation "c --[ ts ]-->* c'" := (CCP_ToStar _ c ts c') (at level 50, left associativity) : CC_scope.
 
