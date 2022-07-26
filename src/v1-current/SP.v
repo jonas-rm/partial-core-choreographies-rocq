@@ -1952,6 +1952,7 @@ Ltac BInduction B := induction B using Behaviour_ind'.
 Ltac BDInduction B B' := induction B using Behaviour_ind'; induction B' using Behaviour_ind'.
 
 Ltac elim_as mB p := case mB; try induction p.
+Ltac opt_elim b p := case_eq b; repeat induction p.
 
 (** Tactics for network equality. *)
 Ltac NEQr := apply Network_eq_refl.

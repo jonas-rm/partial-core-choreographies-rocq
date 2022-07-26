@@ -1,4 +1,3 @@
-Require Import Unicode.Utf8.
 Require Export Bool.
 Require Export List.
 Require Export ListSet.

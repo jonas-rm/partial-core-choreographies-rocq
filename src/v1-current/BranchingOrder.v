@@ -1,4 +1,4 @@
-Require Export XBehaviour.
+Require Export SP.
 
 Section BranchingOrder.
 
