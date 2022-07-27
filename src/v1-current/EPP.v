@@ -7,11 +7,13 @@ Arguments Names [Sig].
 
 (** ** EndPoint projection *)
 
-Ltac sup := rewrite set_union_iff; auto.
-Ltac eq_elim t t' H := case (eq_dec t t'); intro H;
-  [ rewrite <- H in *; clear t' H | idtac].
-
 Section EndPointProjection.
+
+Local Ltac sup := rewrite set_union_iff; auto.
+Local Ltac eq_elim t t' H := case (eq_dec t t'); intro H;
+  [ rewrite <- H in *; clear t' H | idtac].
+Local Ltac fail_with H := right; intro H; induction H as [B HB];
+    inversion HB; eauto.
 
 Variable Sig : Signature.
 
@@ -34,37 +36,48 @@ Definition Sig' := Build_Signature Pid Var Value Expr BExpr PR Ann Ev BEv.
 Open Scope CC.
 
 (** First step: local projection. *)
+
 Inductive bproj : DefSet Sig -> Choreography Sig -> Pid -> Behaviour Sig' -> Prop :=
 | bproj_End D p : bproj D CC.End p (End _)
 | bproj_Send D p e q x a C B : bproj D C p B ->
-                               bproj D (p#e --> q$x @ a ;; C) p (@Send Sig' q e a B)
+                               bproj D (p#e --> q$x @ a ;; C) p
+                                       (@Send Sig' q e a B)
 | bproj_Recv D p e q x a C B : bproj D C q B -> p <> q ->
-                               bproj D (p#e --> q$x @ a ;; C) q (@Recv Sig' p x a B)
+                               bproj D (p#e --> q$x @ a ;; C) q
+                                       (@Recv Sig' p x a B)
 | bproj_Com D p e q x a C r B : bproj D C r B -> p <> r -> q <> r ->
                                 bproj D (p#e --> q$x @ a ;; C) r B
 | bproj_Pick D p l q a C B : bproj D C p B ->
-                             bproj D (p --> q[l] @ a ;; C) p (@Sel Sig' q l a B)
+                             bproj D (p --> q[l] @ a ;; C) p
+                                     (@Sel Sig' q l a B)
 | bproj_Left D p q a C B : bproj D C q B -> p <> q ->
-                           bproj D (p --> q[left] @ a ;; C) q (@Branching Sig' p (Some (a,B)) None)
+                           bproj D (p --> q[left] @ a ;; C) q
+                                   (@Branching Sig' p (Some (a,B)) None)
 | bproj_Right D p q a C B : bproj D C q B -> p <> q ->
-                            bproj D (p --> q[right] @ a ;; C) q (@Branching Sig' p None (Some (a,B)))
+                            bproj D (p --> q[right] @ a ;; C) q
+                                    (@Branching Sig' p None (Some (a,B)))
 | bproj_Sel D p l q a C r B : bproj D C r B -> p <> r -> q <> r ->
                               bproj D (p --> q[l] @ a ;; C) r B
 | bproj_Cond D p b C1 C2 B1 B2 : bproj D C1 p B1 -> bproj D C2 p B2 ->
-                                 bproj D (If p ?? b Then C1 Else C2) p (@Cond Sig' b B1 B2)
+                                 bproj D (If p ?? b Then C1 Else C2) p
+                                         (@Cond Sig' b B1 B2)
 | bproj_Cond' D p b C1 C2 r B1 B2 B : bproj D C1 r B1 -> bproj D C2 r B2 ->
-                                      p <> r -> merge B1 B2 B ->
+                                      p <> r -> B1 [V] B2 == B ->
                                       bproj D (If p ?? b Then C1 Else C2) r B
-| bproj_Call_in D X p : In p (fst (D X)) -> bproj D (CC.Call X) p (@Call Sig' (X,p))
+| bproj_Call_in D X p : In p (fst (D X)) -> bproj D (CC.Call X) p
+                                                    (@Call Sig' (X,p))
 | bproj_Call_out D X p : ~In p (fst (D X)) -> bproj D (CC.Call X) p (End _)
-| bproj_RT_Call_in D X ps C p : In p ps -> bproj D (RT_Call X ps C) p (@Call Sig' (X,p))
+| bproj_RT_Call_in D X ps C p : In p ps -> bproj D (RT_Call X ps C) p
+                                                   (@Call Sig' (X,p))
 | bproj_RT_Call_out D X ps C p B : ~In p ps -> bproj D C p B ->
                                    bproj D (RT_Call X ps C) p B.
 
-(** Again, this relation is functional. *)
+Notation "[[ D , C | p ]] == B" := (bproj D C p B) (at level 20).
+
+(** Again, this relation is functional... *)
 
 Lemma bproj_unique : forall D C p B B',
-  bproj D C p B -> bproj D C p B' -> B = B'.
+  [[D,C | p ]] == B -> [[D,C | p]] == B' -> B = B'.
 Proof.
 intros. revert dependent B'.
 induction H; intros.
@@ -92,15 +105,13 @@ induction H; intros.
 - inversion H1; auto. tauto.
 Qed.
 
-(** ...and computable. *)
+(** ...and computable. The decidability statement is a bit stronger than
+  usual because we will use it in later definitions. *)
 
-Ltac fail_with H := right; intro H; induction H as [B HB];
-     inversion HB; eauto.
-
-Definition projectable_B D C p := exists B, bproj D C p B.
+Definition projectable_B D C p := exists B, [[D,C | p]] == B.
 
 Lemma bproj_dec : forall D C p,
-  { B | bproj D C p B } + {~projectable_B D C p}.
+  { B | [[D,C | p]] == B } + {~projectable_B D C p}.
 Proof.
 unfold projectable_B.
 induction C. induction e. all: intros.
@@ -123,7 +134,7 @@ induction C. induction e. all: intros.
 + induction (IHC1 p) as [ [BT HT] | HC]; clear IHC1. 2: fail_with H.
   induction (IHC2 p) as [ [BE HE] | HC]; clear IHC2. 2: fail_with H.
   case (eq_dec p t); intro Hp. rewrite <- Hp in *; clear t Hp.
-  2: induction (merge_computable _ BT BE) as [ [B HB] | HB ].
+  2: induction (merge_dec _ BT BE) as [ [B HB] | HB ].
   1,2: left.
   - (* Cond *) exists (@Cond Sig' t0 BT BE); constructor; auto.
   - (* other *) exists B. apply bproj_Cond' with BT BE; auto.
@@ -142,6 +153,15 @@ induction C. induction e. all: intros.
   - (* In *) exists (Call Sig' (t,p)); constructor; auto.
   - (* Out *) exists B; constructor; auto.
 + left. exists (End _ ); constructor.
+Qed.
+
+(** Projections are always well-formed. *)
+
+Lemma bproj_WF : forall D C p B, no_self_comm _ C ->
+  [[D,C | p]] == B -> Behaviour_WF Sig' p B.
+Proof.
+intros. induction H0; try inversion H; simpl; auto.
+eapply merge_WF; eauto.
 Qed.
 
 Definition projectable_C D C ps :=
@@ -163,7 +183,7 @@ Definition projectable Xs ps P :=
 
 Definition Projectable P := exists Xs ps, projectable Xs ps P /\ Program_WF _ Xs P.
 
-(** For tackling contradictions. *)
+(** For tackling contradictions in the absurd cases of the definitions below. *)
 
 Ltac contr_aux H := red in H; rewrite Forall_forall in H; auto.
 Ltac contr H := intros; exfalso; contr_aux H.
@@ -205,11 +225,8 @@ Defined.
 
 (** Auxiliary results about behaviour projection. *)
 
-Lemma set_union_not_In : forall T T_dec (x:T) (X Y:set T),
-  ~In x (set_union T_dec X Y) -> ~In x X /\ ~In x Y.
-Proof. intros. rewrite set_union_iff in H. tauto. Qed.
-
-Lemma bproj_not_In : forall D r C, ~In r (CCC_pn C (Names D)) -> bproj D C r (End _).
+Lemma bproj_not_In : forall D r C, ~In r (CCC_pn C (Names D)) ->
+  [[D,C | r]] == End _.
 Proof.
 induction C; simpl; auto; intros. induction e.
 + simpl in H.
@@ -233,7 +250,7 @@ induction C; simpl; auto; intros. induction e.
 + constructor.
 Qed.
 
-Lemma bproj_Call_In : forall D C p X, bproj D C p (Call Sig' (X, p)) ->
+Lemma bproj_Call_In : forall D C p X, [[D,C | p]] == Call Sig' (X, p) ->
   consistent _ (Names D) C -> In p (fst (D X)).
 Proof.
 induction C; try induction e; simpl.
@@ -249,7 +266,7 @@ induction C; try induction e; simpl.
 Qed.
 
 Lemma bproj_disjoint : forall D e a C p, ~In p (eta_pn _ e) ->
-  forall B, bproj D (e @ a;; C) p B -> bproj D C p B.
+  forall B, [[D,e @ a;; C | p]] == B -> [[D,C | p]] == B.
 Proof.
 induction e; intros.
 all: simpl in H; inversion H0; tauto.
@@ -266,6 +283,8 @@ elim In_dec; auto.
 elim bproj_dec; auto.
 contr H.
 Qed.
+
+(** More about EPP. *)
 
 Lemma epp_C_out : forall D C ps H p, ~In p ps -> epp_C D ps C H p = End _.
 Proof. intros; unfold epp_C. elim In_dec; tauto. Qed.
@@ -297,7 +316,7 @@ apply epp_C_wd.
 Qed.
 
 Lemma epp_C_char' : forall Xs ps D C HP p, In p ps ->
-  bproj D C p (Net (epp Xs ps (D, C) HP) p).
+  [[D,C | p]] == Net (epp Xs ps (D, C) HP) p.
 Proof.
 intros; unfold epp.
 case HP; intros. case a; intros.
@@ -310,12 +329,21 @@ elim bproj_dec; simpl.
 Qed.
 
 Lemma epp_C_bproj : forall D ps C HC p, In p ps ->
-  bproj D C p (epp_C D ps C HC p).
+  [[D,C | p]] == epp_C D ps C HC p.
 Proof.
 intros. unfold epp_C; simpl.
 elim In_dec; simpl. 2: tauto.
 elim bproj_dec. induction a; auto.
 contr HC.
+Qed.
+
+Lemma epp_C_WF : forall D ps C HC, no_self_comm _ C ->
+  Network_WF _ (epp_C D ps C HC).
+Proof.
+intros; intro.
+elim (In_dec (@eq_dec Pid) p ps); intro Hp.
+apply bproj_WF with D C, epp_C_bproj; auto.
+rewrite epp_C_out; simpl; auto.
 Qed.
 
 Lemma epp_D_wd : forall Xs D H H' X, epp_D Xs D H X = epp_D Xs D H' X.
@@ -339,7 +367,7 @@ Qed.
 
 Lemma epp_D_char' : forall Xs ps D C HP X p,
   In X Xs -> (CCC_pn (snd (D X)) (Names D) [C] fst (D X)) ->
-  bproj D (snd (D X)) p (Procs (epp Xs ps (D,C) HP) (X,p)).
+  [[D,snd (D X) | p]] == Procs (epp Xs ps (D,C) HP) (X,p).
 Proof.
 intros.
 unfold epp.
@@ -382,8 +410,7 @@ Qed.
 (** Sanity checks: EPP works as defined informally in the paper. *)
 
 Lemma epp_C_Com_p : forall D ps C p e q x a HC HC', In p ps ->
-  epp_C D ps (p # e --> q $ x @ a;;C) HC p
-  = Send Sig' q e a (epp_C D ps C HC' p).
+  epp_C D ps (p # e --> q $ x @ a;;C) HC p = Send Sig' q e a (epp_C D ps C HC' p).
 Proof.
 intros. rename a into A. unfold epp_C.
 elim In_dec; intro; simpl. 2: tauto.
@@ -394,8 +421,7 @@ rewrite (bproj_unique _ _ _ _ _ p1 H0); auto.
 Qed.
 
 Lemma epp_C_Com_q : forall D ps C p e q x a HC HC', p <> q -> In q ps ->
-  epp_C D ps (p # e --> q $ x @ a;;C) HC q
-  = Recv Sig' p x a (epp_C D ps C HC' q).
+  epp_C D ps (p # e --> q $ x @ a;;C) HC q = Recv Sig' p x a (epp_C D ps C HC' q).
 Proof.
 intros. rename a into A. unfold epp_C.
 elim In_dec; intro; simpl. 2: tauto.
@@ -417,8 +443,7 @@ rewrite (bproj_unique _ _ _ _ _ p1 H10); auto.
 Qed.
 
 Lemma epp_C_Sel_p : forall D ps C p q l a HC HC', In p ps ->
-  epp_C D ps (p --> q[l] @ a;;C) HC p  
-  = Sel Sig' q l a (epp_C D ps C HC' p).
+  epp_C D ps (p --> q[l] @ a;;C) HC p = Sel Sig' q l a (epp_C D ps C HC' p).
 Proof.
 intros. rename a into A. unfold epp_C.
 elim In_dec; intro; simpl. 2: tauto.
@@ -477,8 +502,8 @@ rewrite (bproj_unique _ _ _ _ _ p1 H7), (bproj_unique _ _ _ _ _ p2 H8); auto.
 Qed.
 
 Lemma epp_C_Cond_r : forall D ps (p:Pid) b C1 C2 HC HC1 HC2 r, p <> r ->
-  merge (epp_C D ps C1 HC1 r) (epp_C D ps C2 HC2 r)
-        (epp_C D ps (If p ?? b Then C1 Else C2) HC r).
+  epp_C D ps C1 HC1 r [V] epp_C D ps C2 HC2 r
+  == epp_C D ps (If p ?? b Then C1 Else C2) HC r.
 Proof.
 intros. unfold epp_C.
 elim In_dec; intro; simpl. 2: constructor.
@@ -489,6 +514,7 @@ inversion p2; try tauto.
 rewrite (bproj_unique _ _ _ _ _ p0 H5), (bproj_unique _ _ _ _ _ p1 H8); auto.
 Qed.
 
+(*
 Lemma epp_C_Then_r : forall D ps (p:Pid) b C1 C2 HC HC1 HC2 r, p <> r ->
   epp_C D ps C1 HC1 r = epp_C D ps C2 HC2 r ->
   epp_C D ps (If p ?? b Then C1 Else C2) HC r = epp_C D ps C1 HC1 r.
@@ -506,6 +532,7 @@ Proof.
 intros.
 rewrite epp_C_Then_r with (HC1:=HC1) (HC2:=HC2); auto.
 Qed.
+*)
 
 Lemma epp_C_Call : forall D ps X p HC, In p ps -> In p (fst (D X)) ->
   epp_C D ps (CC.Call X) HC p = Call Sig' (X,p).
@@ -556,7 +583,7 @@ Qed.
 (** Characterizations lemmas for branching. *)
 
 Lemma bproj_not_Branching_None_None : forall D C r q,
-  ~bproj D C r (q & None // None).
+  ~ [[D,C | r]] == (q & None // None).
 Proof.
 intros; intro. induction C; simpl. induction e. 2: induction t2.
 all: inversion H; try tauto.
@@ -576,8 +603,8 @@ revert p0. apply bproj_not_Branching_None_None.
 Qed.
 
 Lemma bproj_Sel_Branching_l : forall D C p q a Bp Bl Br,
-  bproj D C p (@Sel Sig' q left a Bp) ->
-  bproj D C q (@Branching Sig' p Bl Br) -> Bl <> None /\ Br = None.
+  [[D,C | p]] == @Sel Sig' q left a Bp ->
+  [[D,C | q]] == @Branching Sig' p Bl Br -> Bl <> None /\ Br = None.
 Proof.
 induction C; simpl; intros.
 rename t into a'. induction e. 2: induction t1.
@@ -619,8 +646,8 @@ do 2 intro. exfalso. contr_aux HC.
 Qed.
 
 Lemma bproj_Sel_Branching_r : forall D C p q a Bp Bl Br,
-  bproj D C p (@Sel Sig' q right a Bp) ->
-  bproj D C q (@Branching Sig' p Bl Br) -> Bl = None /\ Br <> None.
+  [[D,C | p]] == @Sel Sig' q right a Bp ->
+  [[D,C | q]] == @Branching Sig' p Bl Br -> Bl = None /\ Br <> None.
 Proof.
 induction C; simpl; intros.
 rename t into a'. induction e. 2: induction t1.
@@ -666,7 +693,7 @@ Qed.
 Lemma epp_C_Cond_Send_inv : forall D ps p b C1 C2 HC HC1 HC2 r q e a B,
   epp_C D ps (If p ?? b Then C1 Else C2) HC r = Send Sig' q e a B ->
   exists B1 B2, epp_C D ps C1 HC1 r = Send Sig' q e a B1
-  /\ epp_C D ps C2 HC2 r = Send Sig' q e a B2 /\ merge B1 B2 B.
+  /\ epp_C D ps C2 HC2 r = Send Sig' q e a B2 /\ B1 [V] B2 == B.
 Proof.
 intros.
 assert (p <> r).
@@ -684,7 +711,7 @@ Qed.
 Lemma epp_C_Cond_Recv_inv : forall D ps p b C1 C2 HC HC1 HC2 r q x a B,
   epp_C D ps (If p ?? b Then C1 Else C2) HC r = Recv Sig' q x a B ->
   exists B1 B2, epp_C D ps C1 HC1 r = Recv Sig' q x a B1
-  /\ epp_C D ps C2 HC2 r = Recv Sig' q x a B2 /\ merge B1 B2 B.
+  /\ epp_C D ps C2 HC2 r = Recv Sig' q x a B2 /\ B1 [V] B2 == B.
 Proof.
 intros.
 assert (p <> r).
@@ -702,7 +729,7 @@ Qed.
 Lemma epp_C_Cond_Sel_inv : forall D ps p b C1 C2 HC HC1 HC2 r q l a B,
   epp_C D ps (If p ?? b Then C1 Else C2) HC r = Sel Sig' q l a B ->
   exists B1 B2, epp_C D ps C1 HC1 r = Sel Sig' q l a B1
-  /\ epp_C D ps C2 HC2 r = Sel Sig' q l a B2 /\ merge B1 B2 B.
+  /\ epp_C D ps C2 HC2 r = Sel Sig' q l a B2 /\ B1 [V] B2 == B.
 Proof.
 intros.
 assert (p <> r).
@@ -720,8 +747,7 @@ Qed.
 Lemma epp_C_Cond_Branching_l_inv : forall D ps p b C1 C2 HC HC1 HC2 r q a B,
   epp_C D ps (If p ?? b Then C1 Else C2) HC r = Branching Sig' q (Some (a,B)) None ->
   exists B1 B2, epp_C D ps C1 HC1 r = Branching Sig' q (Some (a,B1)) None
-  /\ epp_C D ps C2 HC2 r = Branching Sig' q (Some (a,B2)) None
-  /\ merge B1 B2 B.
+  /\ epp_C D ps C2 HC2 r = Branching Sig' q (Some (a,B2)) None /\ B1 [V] B2 == B.
 Proof.
 intros.
 assert (p <> r).
@@ -740,8 +766,7 @@ Qed.
 Lemma epp_C_Cond_Branching_r_inv : forall D ps p b C1 C2 HC HC1 HC2 r q a B,
   epp_C D ps (If p ?? b Then C1 Else C2) HC r = Branching Sig' q None (Some (a,B)) ->
   exists B1 B2, epp_C D ps C1 HC1 r = Branching Sig' q None (Some (a,B1))
-  /\ epp_C D ps C2 HC2 r = Branching Sig' q None (Some (a,B2))
-  /\ merge B1 B2 B.
+  /\ epp_C D ps C2 HC2 r = Branching Sig' q None (Some (a,B2)) /\ B1 [V] B2 == B.
 Proof.
 intros.
 assert (p <> r).
@@ -758,15 +783,14 @@ all: eelim epp_C_not_Branching_None_None; eauto.
 Qed.
 
 Lemma epp_C_Cond_Cond_inv : forall D ps p b b' C1 C2 HC HC1 HC2 r Bt Be,
-  epp_C D ps (If p ?? b Then C1 Else C2) HC r = Cond Sig' b' Bt Be ->
-  p <> r -> exists B1t B1e B2t B2e,
-    epp_C D ps C1 HC1 r = Cond Sig' b' B1t B1e
-    /\ epp_C D ps C2 HC2 r = Cond Sig' b' B2t B2e
-    /\ merge B1t B2t Bt /\ merge B1e B2e Be.
+  p <> r -> epp_C D ps (If p ?? b Then C1 Else C2) HC r = Cond Sig' b' Bt Be ->
+  exists B1t B1e B2t B2e, epp_C D ps C1 HC1 r = Cond Sig' b' B1t B1e
+                       /\ epp_C D ps C2 HC2 r = Cond Sig' b' B2t B2e
+                       /\ B1t [V] B2t == Bt /\ B1e [V] B2e == Be.
 Proof.
 intros.
-generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H0); intros.
-rewrite H in H1.
+generalize (epp_C_Cond_r _ _ _ _ _ _ HC HC1 HC2 _ H); intros.
+rewrite H0 in H1.
 inversion H1.
 exists Bt1, Be1, Bt2, Be2; auto.
 Qed.
@@ -778,12 +802,18 @@ Section Projectability.
 (** ** Properties of projectability
   All variants of parameterized projectability are decidable. *)
 
+Lemma projectable_B_dec : forall D C p,
+  { projectable_B D C p } + { ~projectable_B D C p }.
+Proof.
+intros. elim (bproj_dec D C p); auto.
+left. induction a. red. eauto.
+Qed.
+
 Lemma projectable_C_dec : forall D ps C,
   { projectable_C D C ps } + { ~projectable_C D C ps }.
 Proof.
 intros. apply Forall_dec; intro.
-elim (bproj_dec D C x); auto.
-left. induction a. red. eauto.
+elim (projectable_B_dec D C x); auto.
 Qed.
 
 Lemma projectable_D_dec : forall Xs D,
@@ -905,7 +935,7 @@ intros. apply H2; simpl. sup; sup.
 Qed.
 
 Lemma projectable_inv_RT_Call : forall Xs ps D X p ps' C,
-  projectable Xs ps (D,RT_Call X ps' C) -> (exists B, bproj D C p B) ->
+  projectable Xs ps (D,RT_Call X ps' C) -> (exists B, [[D,C | p]] == B) ->
   projectable Xs ps (D,RT_Call X (ps' [\] p) C).
 Proof.
 intros.
@@ -932,21 +962,18 @@ Qed.
 (** The corresponding lemmas for [RT_Call] do not hold, and indeed projectability
   is not preserved by reductions, so we need a stronger notion. *)
 
-Fixpoint strongly_projectable D (C:Choreography Sig) (r:Pid) : Prop :=
+Fixpoint str_proj D (C:Choreography Sig) (r:Pid) : Prop :=
 match C with
-| eta @ a;; C'              => strongly_projectable D C' r
-| If p ?? b Then C1 Else C2 => strongly_projectable D C1 r
-                               /\ strongly_projectable D C2 r
-                               /\ projectable_B D C r
-| RT_Call X ps C            => strongly_projectable D C r /\
-                               (forall p, In p ps -> In p (fst (D X))
-                                /\ forall B B', bproj D (snd (D X)) p B ->
-                                      bproj D C p B' -> B [>>] B')
+| eta @ a;; C' => str_proj D C' r
+| If p ?? b Then C1 Else C2 =>
+     str_proj D C1 r /\ str_proj D C2 r /\ projectable_B D C r
+| RT_Call X ps C =>
+     str_proj D C r /\ (forall p, In p ps -> In p (fst (D X))
+  /\ forall B B', [[D,snd (D X) | p]] == B -> [[D,C | p]] == B' -> B [>>] B')
 | _                         => True
 end.
 
-Lemma strongly_projectable_C : forall D C r,
-  strongly_projectable D C r -> projectable_B D C r.
+Lemma str_proj_C : forall D C r, str_proj D C r -> projectable_B D C r.
 Proof.
 induction C; simpl.
 + intros. induction (IHC _ H) as [B HB]; auto. clear H.
@@ -970,16 +997,15 @@ induction C; simpl.
 + exists (End _); constructor.
 Qed.
 
-Lemma strongly_projectable_C' : forall D C ps,
-  (forall r, In r ps -> strongly_projectable D C r) -> projectable_C D C ps.
+Lemma str_proj_C' : forall D C ps,
+  (forall r, In r ps -> str_proj D C r) -> projectable_C D C ps.
 Proof.
 intros; red; rewrite Forall_forall.
-intros. apply strongly_projectable_C; auto.
+intros. apply str_proj_C; auto.
 Qed.
 
-Lemma initial_strongly_projectable : forall C, initial C ->
-  forall D ps, projectable_C D C ps ->
-  forall r, In r ps -> strongly_projectable D C r.
+Lemma initial_str_proj : forall C, initial C ->
+  forall D ps, projectable_C D C ps -> forall r, In r ps -> str_proj D C r.
 Proof.
 induction C; auto; simpl; intros.
 + induction e.
@@ -992,8 +1018,8 @@ induction C; auto; simpl; intros.
 + inversion H.
 Qed.
 
-Lemma initial_strongly_projectable' : forall D C r, initial C ->
-  ~In r (CCC_pn C (Names D)) -> strongly_projectable D C r.
+Lemma initial_str_proj' : forall D C r, initial C ->
+  ~In r (CCC_pn C (Names D)) -> str_proj D C r.
 Proof.
 induction C; simpl; intros; auto.
 + apply IHC; auto. intro; apply H0. sup.
@@ -1007,46 +1033,43 @@ Qed.
 
 (** Inversion lemmas for strong projectability. *)
 
-Lemma strongly_projectable_inv_Eta : forall D eta C a p,
-  strongly_projectable D (eta@a;;C) p -> strongly_projectable D C p.
+Lemma str_proj_inv_Eta : forall D eta C a p,
+  str_proj D (eta@a;;C) p -> str_proj D C p.
 Proof. auto. Qed.
 
-Lemma strongly_projectable_inv_Then : forall D p b C1 C2 r,
-  strongly_projectable D (If p ?? b Then C1 Else C2) r ->
-  strongly_projectable D C1 r.
+Lemma str_proj_inv_Then : forall D p b C1 C2 r,
+  str_proj D (If p ?? b Then C1 Else C2) r -> str_proj D C1 r.
 Proof. intros. red in H. tauto. Qed.
 
-Lemma strongly_projectable_inv_Else : forall D p b C1 C2 r,
-  strongly_projectable D (If p ?? b Then C1 Else C2) r ->
-  strongly_projectable D C2 r.
+Lemma str_proj_inv_Else : forall D p b C1 C2 r,
+  str_proj D (If p ?? b Then C1 Else C2) r -> str_proj D C2 r.
 Proof. intros. red in H. tauto. Qed.
 
-Lemma strongly_projectable_inv_RT_Call : forall D ps X C p,
-  strongly_projectable D (RT_Call ps X C) p -> strongly_projectable D C p.
+Lemma str_proj_inv_RT_Call : forall D ps X C p,
+  str_proj D (RT_Call ps X C) p -> str_proj D C p.
 Proof. intros. red in H. tauto. Qed.
 
 (** Miscellaneous. *)
+
 Lemma CCC_To_Call_ann : forall D C s X p C' s',
-  <<C,s>> --[RL_Call X p,D]--> <<C',s'>> ->
-  strongly_projectable D C p -> In p (fst (D X)).
+  <<C,s>> --[RL_Call X p,D]--> <<C',s'>> -> str_proj D C p -> In p (fst (D X)).
 Proof.
 induction C; intros; inversion H; eauto; inversion H0; eauto.
 all: rewrite <- H4; specialize (H13 _ H11); tauto.
 Qed.
 
-Lemma Program_WF_D_strongly_projectable : forall Xs ps P,
+Lemma Program_WF_D_str_proj : forall Xs ps P,
   CC.Program_WF _ Xs P -> projectable Xs ps P -> well_ann _ P ->
-  forall X p, In X Xs -> In p ps ->
-  strongly_projectable (Procedures _ P) (CC.Procs P X) p.
+  forall X p, In X Xs -> In p ps -> str_proj (Procedures _ P) (CC.Procs P X) p.
 Proof.
 intros. destroy H.
 elim (H X); auto.
 intros. clear H; destroy H8.
 destroy H0.
 elim (In_dec (@eq_dec Pid) p (Vars P X)); intros.
-+ apply initial_strongly_projectable with (Vars P X); auto.
++ apply initial_str_proj with (Vars P X); auto.
   red in H11. rewrite Forall_forall in H11. apply H11; auto.
-+ apply initial_strongly_projectable'; auto.
++ apply initial_str_proj'; auto.
   intro; apply b, H1. auto.
 Qed.
 
@@ -1058,16 +1081,16 @@ Section EPP_Theorem.
   Lemmas about reduction and projection. *)
 
 Lemma CCC_To_bproj_Com_p : forall D C s C' s' p q v x,
-  strongly_projectable D C p -> <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> ->
-  exists e a Bp, bproj D C p (@Send Sig' q e a Bp) /\
-                 bproj D C' p Bp /\ v = eval_on_state Ev e s p.
+  str_proj D C p -> <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> ->
+  exists e a Bp, [[D,C | p]] == @Send Sig' q e a Bp /\ [[D,C' | p]] == Bp
+              /\ v = eval_on_state Ev e s p.
 Proof.
 intros.
 rename H into HC, H0 into H.
 revert C' HC H.
 induction C; intros; inversion H.
 + unfold v1. rename e0 into e', t into a'.
-  apply strongly_projectable_inv_Eta, strongly_projectable_C in HC.
+  apply str_proj_inv_Eta, str_proj_C in HC.
   induction HC as [B HB]. rewrite <- H4 in *.
   exists e', a', B; repeat split; auto.
   constructor; auto.
@@ -1085,7 +1108,7 @@ induction C; intros; inversion H.
   clear IHC1 IHC2 H9 H10; intros.
   destroy H1; destroy H2.
   rename x0 into e, x1 into e', x2 into a, x3 into B2, x4 into a', x5 into B1.
-  apply strongly_projectable_C in HC; auto.
+  apply str_proj_C in HC; auto.
   induction HC as [B HB]. inversion HB.
   rewrite H10 in *. exfalso; auto.
   clear B4 H14 r H13 C3 H10 C0 H9 b0 H8 p0 H7 D0 H11.
@@ -1106,15 +1129,15 @@ induction C; intros; inversion H.
 Qed.
 
 Lemma CCC_To_bproj_Com_q : forall D C s C' s' p q v x,
-  strongly_projectable D C q -> <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> ->
-  p <> q -> exists a Bq, bproj D C q (@Recv Sig' p x a Bq) /\ bproj D C' q Bq.
+  str_proj D C q -> <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> ->
+  p <> q -> exists a Bq, [[D,C | q]] == Recv Sig' p x a Bq /\ [[D,C' | q]] == Bq.
 Proof.
 intros.
 rename H into HC, H0 into H.
 revert C' HC H.
 induction C; intros; inversion H.
 + unfold v1. rename e0 into e', t into a'.
-  apply strongly_projectable_inv_Eta, strongly_projectable_C in HC.
+  apply str_proj_inv_Eta, str_proj_C in HC.
   induction HC as [B HB]. rewrite <- H5 in *.
   exists a', B; repeat split; auto.
   constructor; auto.
@@ -1132,7 +1155,7 @@ induction C; intros; inversion H.
   clear IHC1 IHC2 H11 H10; intros.
   induction H2 as [Bq [Hq1 Hq2] ].
   induction H3 as [Bq' [Hq'1 Hq'2] ].
-  apply strongly_projectable_C in HC; auto.
+  apply str_proj_C in HC; auto.
   induction HC as [B HB]. inversion HB.
   rewrite H5 in *. exfalso; auto.
   rewrite (bproj_unique _ _ _ _ _ H7 Hq'1) in H12.
@@ -1152,15 +1175,15 @@ induction C; intros; inversion H.
 Qed.
 
 Lemma CCC_To_bproj_Com_r : forall D C s C' s' p q v x r,
-  strongly_projectable D C r -> <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> ->
-  p <> r -> q <> r -> exists B, bproj D C r B /\ bproj D C' r B.
+  str_proj D C r -> <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> ->
+  p <> r -> q <> r -> exists B, [[D,C | r]] == B /\ [[D,C' | r]] == B.
 Proof.
 intros.
 rename H into HC, H1 into Hpr, H2 into Hqr, H0 into H.
 revert C' H.
 induction C; intros; inversion H.
 + rewrite <- H4. rewrite H5, H7, H8 in H2. rename e0 into e'.
-  apply strongly_projectable_inv_Eta, strongly_projectable_C in HC.
+  apply str_proj_inv_Eta, str_proj_C in HC.
   induction HC as [B HB]. rewrite <- H4 in *.
   exists B; repeat split; auto. constructor; auto.
 + simpl; elim IHC with C'0; auto.
@@ -1179,22 +1202,22 @@ induction C; intros; inversion H.
   1,2: erewrite bproj_unique; eauto.
 + elim IHC with C'0; auto.
   intros. inversion_clear H9.
-  2: apply strongly_projectable_inv_RT_Call with t l; auto.
+  2: apply str_proj_inv_RT_Call with t l; auto.
   elim (In_dec (@eq_dec Pid) r l); intro Hr.
   exists (Call Sig' (t,r)); split; constructor; auto.
   exists x0; split; constructor; auto.
 Qed.
 
 Lemma CCC_To_bproj_Sel_p : forall D C s C' s' p q l,
-  strongly_projectable D C p -> <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> ->
-  exists a Bp, bproj D C p (@Sel Sig' q l a Bp) /\ bproj D C' p Bp.
+  str_proj D C p -> <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> ->
+  exists a Bp, [[D,C | p]] == @Sel Sig' q l a Bp /\ [[D,C' | p]] == Bp.
 Proof.
 intros.
 rename H into HC, H0 into H.
 revert C' HC H.
 induction C; intros; inversion H.
 + rename l0 into l', t into a'.
-  apply strongly_projectable_inv_Eta, strongly_projectable_C in HC.
+  apply str_proj_inv_Eta, str_proj_C in HC.
   induction HC as [B HB]. rewrite <- H4 in *.
   exists a', B; repeat split; auto.
   constructor; auto.
@@ -1212,7 +1235,7 @@ induction C; intros; inversion H.
   clear IHC1 IHC2 H9 H10; intros.
   induction H1 as [B2 [HC2 HC2'] ].
   induction H2 as [B1 [HC1 HC1'] ].
-  apply strongly_projectable_C in HC; auto.
+  apply str_proj_C in HC; auto.
   induction HC as [B HB]. inversion HB.
   rewrite H4 in *. exfalso; auto.
   rewrite (bproj_unique _ _ _ _ _ H6 HC1) in H11.
@@ -1232,15 +1255,15 @@ induction C; intros; inversion H.
 Qed.
 
 Lemma CCC_To_bproj_Sel_ql : forall D C s C' s' p q,
-  strongly_projectable D C q -> <<C,s>> --[RL_Sel p q left,D]--> <<C',s'>> ->
-  p <> q -> exists a Bq, bproj D C q (@Branching Sig' p (Some (a,Bq)) None)
-            /\ bproj D C' q Bq.
+  str_proj D C q -> <<C,s>> --[RL_Sel p q left,D]--> <<C',s'>> ->
+  p <> q -> exists a Bq, [[D,C | q]] == @Branching Sig' p (Some (a,Bq)) None
+            /\ [[D,C' | q]] == Bq.
 Proof.
 intros.
 rename H into HC, H0 into H.
 revert C' HC H.
 induction C; intros; inversion H.
-+ apply strongly_projectable_inv_Eta, strongly_projectable_C in HC.
++ apply str_proj_inv_Eta, str_proj_C in HC.
   induction HC as [B HB]. rewrite <- H5 in *.
   exists t, B; repeat split; auto.
   constructor; auto.
@@ -1258,7 +1281,7 @@ induction C; intros; inversion H.
   clear IHC1 IHC2 H11 H10; intros.
   induction H2 as [Bq [Hq1 Hq2] ].
   induction H3 as [Bq' [Hq'1 Hq'2] ].
-  apply strongly_projectable_C in HC; auto.
+  apply str_proj_C in HC; auto.
   induction HC as [B HB]. inversion HB.
   rewrite H5 in *. exfalso; auto.
   rewrite (bproj_unique _ _ _ _ _ H7 Hq'1) in H12.
@@ -1279,15 +1302,15 @@ induction C; intros; inversion H.
 Qed.
 
 Lemma CCC_To_bproj_Sel_qr : forall D C s C' s' p q,
-  strongly_projectable D C q -> <<C,s>> --[RL_Sel p q right,D]--> <<C',s'>> ->
-  p <> q -> exists a Bq, bproj D C q (@Branching Sig' p None (Some (a,Bq)))
-            /\ bproj D C' q Bq.
+  str_proj D C q -> <<C,s>> --[RL_Sel p q right,D]--> <<C',s'>> ->
+  p <> q -> exists a Bq, [[D,C | q]] == @Branching Sig' p None (Some (a,Bq))
+            /\ [[D,C' | q]] == Bq.
 Proof.
 intros.
 rename H into HC, H0 into H.
 revert C' HC H.
 induction C; intros; inversion H.
-+ apply strongly_projectable_inv_Eta, strongly_projectable_C in HC.
++ apply str_proj_inv_Eta, str_proj_C in HC.
   induction HC as [B HB]. rewrite <- H5 in *.
   exists t, B; repeat split; auto.
   constructor; auto.
@@ -1305,7 +1328,7 @@ induction C; intros; inversion H.
   clear IHC1 IHC2 H11 H10; intros.
   induction H2 as [Bq [Hq1 Hq2] ].
   induction H3 as [Bq' [Hq'1 Hq'2] ].
-  apply strongly_projectable_C in HC; auto.
+  apply str_proj_C in HC; auto.
   induction HC as [B HB]. inversion HB.
   rewrite H5 in *. exfalso; auto.
   rewrite (bproj_unique _ _ _ _ _ H7 Hq'1) in H12.
@@ -1326,15 +1349,15 @@ induction C; intros; inversion H.
 Qed.
 
 Lemma CCC_To_bproj_Sel_r : forall D C s C' s' p q l r,
-  strongly_projectable D C r -> <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> ->
-  p <> r -> q <> r -> exists B, bproj D C r B /\ bproj D C' r B.
+  str_proj D C r -> <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> ->
+  p <> r -> q <> r -> exists B, [[D,C | r]] == B /\ [[D,C' | r]] == B.
 Proof.
 intros.
 rename H into HC, H1 into Hpr, H2 into Hqr, H0 into H.
 revert C' H.
 induction C; intros; inversion H.
 + rewrite <- H4. rewrite H7, H6, H5 in H2.
-  apply strongly_projectable_inv_Eta, strongly_projectable_C in HC.
+  apply str_proj_inv_Eta, str_proj_C in HC.
   induction HC as [B HB]. rewrite <- H4 in *.
   exists B; repeat split; auto. constructor; auto.
 + simpl; elim IHC with C'0; auto.
@@ -1353,17 +1376,17 @@ induction C; intros; inversion H.
   1,2: erewrite bproj_unique; eauto.
 + elim IHC with C'0; auto.
   intros. inversion_clear H9.
-  2: apply strongly_projectable_inv_RT_Call with t l0; auto.
+  2: apply str_proj_inv_RT_Call with t l0; auto.
   elim (In_dec (@eq_dec Pid) r l0); intro Hr.
   exists (Call Sig' (t,r)); split; constructor; auto.
   exists x; split; constructor; auto.
 Qed.
 
 Lemma CCC_To_bproj_Cond_p : forall D C s C' s' p,
-  strongly_projectable D C p -> <<C,s>> --[RL_Cond p,D]--> <<C',s'>> ->
-  exists b Bt Be, bproj D C p (@Cond Sig' b Bt Be)
-    /\ (eval_on_state BEv b s p = true -> bproj D C' p Bt)
-    /\ (eval_on_state BEv b s p = false -> bproj D C' p Be).
+  str_proj D C p -> <<C,s>> --[RL_Cond p,D]--> <<C',s'>> ->
+  exists b Bt Be, [[D,C | p]] == @Cond Sig' b Bt Be
+    /\ (eval_on_state BEv b s p = true -> [[D,C' | p]] == Bt)
+    /\ (eval_on_state BEv b s p = false -> [[D,C' | p]] == Be).
 Proof.
 intros.
 rename H into HC, H0 into H.
@@ -1378,14 +1401,14 @@ induction C; intros; inversion H.
   all: constructor; auto.
 + rewrite H6 in HC. rewrite <- H5.
   clear s'0 H7 C' H5 p0 H6 s0 H2 C3 H4 C0 H3 b H1 p0 H0 H IHC1 IHC2.
-  apply strongly_projectable_C in HC.
+  apply str_proj_C in HC.
   induction HC as [B HB]. inversion_clear HB. 2: tauto.
   exists t0, B1, B2. repeat split; auto.
   constructor; auto.
   intro. rewrite H9 in H1; inversion H1.
 + rewrite H6 in HC. rewrite <- H5.
   clear s'0 H7 C' H5 p0 H6 s0 H2 C3 H4 C0 H3 b H1 p0 H0 H IHC1 IHC2.
-  apply strongly_projectable_C in HC.
+  apply str_proj_C in HC.
   induction HC as [B HB]. inversion_clear HB. 2: tauto.
   exists t0, B1, B2. repeat split; auto.
   constructor; auto.
@@ -1396,7 +1419,7 @@ induction C; intros; inversion H.
   clear IHC1 IHC2 H9 H10. intros.
   induction H as [Bt2 [Be2 [H1 [H2 H] ] ] ]; rename x into b2.
   induction H0 as [Bt1 [Be1 [H3 [H4 H0] ] ] ]; rename x0 into b1.
-  apply strongly_projectable_C in HC. induction HC as [B HB].
+  apply str_proj_C in HC. induction HC as [B HB].
   revert H8. inversion_clear HB. intro; simpl in H8. tauto.
   simpl; intros.
   rewrite (bproj_unique _ _ _ _ _ H5 H3) in H8.
@@ -1412,15 +1435,15 @@ induction C; intros; inversion H.
   - intro. apply bproj_Cond' with Be1 Be2; auto.
 + elim IHC with C'0; auto.
   intros. induction H9 as [Bt [Be [H9 [Ht He] ] ] ]. rename x into b.
-  2: apply strongly_projectable_inv_RT_Call with t l; auto.
+  2: apply str_proj_inv_RT_Call with t l; auto.
   apply disjoint_ps_Cond in H7.
   exists b, Bt, Be. repeat split.
   all: constructor; auto.
 Qed.
 
 Lemma CCC_To_bproj_Cond_r : forall D C s C' s' p r,
-  strongly_projectable D C r -> <<C,s>> --[RL_Cond p,D]--> <<C',s'>> ->
-  p <> r -> exists B B', bproj D C r B /\ bproj D C' r B' /\ B [>>] B'.
+  str_proj D C r -> <<C,s>> --[RL_Cond p,D]--> <<C',s'>> ->
+  p <> r -> exists B B', [[D,C | r]] == B /\ [[D,C' | r]] == B' /\ B [>>] B'.
 Proof.
 intros.
 rename H into HC, H1 into Hpr, H0 into H.
@@ -1437,13 +1460,13 @@ induction C; intros; inversion H.
   all: constructor; auto.
 + rewrite H6 in HC. rewrite <- H5.
   clear s'0 H7 C' H5 p0 H6 s0 H2 C3 H4 C0 H3 b H1 p0 H0 H IHC1 IHC2.
-  apply strongly_projectable_C in HC; induction HC as [B HB].
+  apply str_proj_C in HC; induction HC as [B HB].
   inversion HB. tauto.
   exists B, B1; repeat split; auto.
   apply merge_is_upper_bound with B2; auto.
 + rewrite H6 in HC. rewrite <- H5.
   clear s'0 H7 C' H5 p0 H6 s0 H2 C3 H4 C0 H3 b H1 p0 H0 H IHC1 IHC2.
-  apply strongly_projectable_C in HC; induction HC as [B HB].
+  apply str_proj_C in HC; induction HC as [B HB].
   inversion HB. tauto.
   exists B, B2; repeat split; auto.
   apply merge_is_upper_bound' with B1; auto.
@@ -1453,13 +1476,13 @@ induction C; intros; inversion H.
   clear IHC1 IHC2 H9 H10. intros.
   induction H as [B2 [H1 [H2 H] ] ]; rename x into b2.
   induction H0 as [B1 [H3 [H4 H0] ] ]; rename x0 into b1.
-  apply strongly_projectable_C in HC. induction HC as [B HB].
+  apply str_proj_C in HC. induction HC as [B HB].
   inversion_clear HB.
   * exists (Cond Sig' t0 b1 b2), (Cond Sig' t0 B1 B2); simpl.
     repeat split; constructor; auto.
   * rewrite (bproj_unique _ _ _ _ _ H5 H3) in *; clear B0 H5.
     rewrite (bproj_unique _ _ _ _ _ H6 H1) in *; clear B3 H6.
-    induction (more_branches_merge_extend _ _ _ _ _ _ H0 H H9) as [B' [HB HB'] ].
+    induction (MB_yields_merge _ _ _ _ _ _ H0 H H9) as [B' [HB HB'] ].
     exists B, B'; repeat split; auto.
     apply bproj_Cond' with b1 b2; auto.
     apply bproj_Cond' with B1 B2; auto.
@@ -1473,12 +1496,12 @@ induction C; intros; inversion H.
 Qed.
 
 Lemma CCC_To_bproj_Call_p : forall D C s C' s' p X Xs,
-  strongly_projectable D C p ->
-  (forall Y, In Y Xs -> strongly_projectable D (snd (D Y)) p) ->
+  str_proj D C p ->
+  (forall Y, In Y Xs -> str_proj D (snd (D Y)) p) ->
   (forall Y, CCC_pn (snd (D Y)) (Names D) [C] fst (D Y)) ->
   In X Xs -> <<C,s>> --[RL_Call X p,D]--> <<C',s'>> ->
-  bproj D C p (Call Sig' (X,p)) /\ 
-  exists B B', bproj D (snd (D X)) p B /\ bproj D C' p B' /\ B [>>] B'.
+  [[D,C | p]] == Call Sig' (X,p) /\
+  exists B B', [[D,snd (D X) | p]] == B /\ [[D,C' | p]] == B' /\ B [>>] B'.
 Proof.
 intros.
 rename H into HC, H0 into HD, H2 into HX, H1 into Hnames, H3 into H.
@@ -1500,18 +1523,18 @@ induction C; intros; inversion H.
   induction H2 as [B1 [B1' [H11 [H12 H13] ] ] ].
   split. eapply bproj_Cond'; eauto. constructor.
   rewrite (bproj_unique _ _ _ _ _ H21 H11) in *; clear B2 H21.
-  induction (more_branches_has_lub _ _ _ _ H13 H23) as [B' [HB'1 HB'2] ].
+  induction (MB_has_lub _ _ _ _ H13 H23) as [B' [HB'1 HB'2] ].
   exists B1, B'; repeat split; auto.
   apply bproj_Cond' with B1' B2'; auto.
 + split. constructor; auto.
-  induction (strongly_projectable_C _ _ _ (HD X HX)) as [B HB].
+  induction (str_proj_C _ _ _ (HD X HX)) as [B HB].
   exists B, B; repeat split; auto.
-  apply more_branches_refl; auto.
+  apply MB_refl; auto.
 + simpl; split. constructor; auto.
-  induction (strongly_projectable_C _ _ _ (HD X HX)) as [B HB].
+  induction (str_proj_C _ _ _ (HD X HX)) as [B HB].
   exists B, B; repeat split; auto.
   constructor; auto. intro. apply set_remove'_2 in H9; auto.
-  apply more_branches_refl.
+  apply MB_refl.
 + apply disjoint_ps_Call in H7.
   elim IHC with C'0; auto. intros.
   split. constructor; auto.
@@ -1520,26 +1543,26 @@ induction C; intros; inversion H.
   constructor; auto.
   apply HC; auto.
 + split. constructor; auto.
-  induction (strongly_projectable_C _ _ _ (HD X HX)) as [B HB].
+  induction (str_proj_C _ _ _ (HD X HX)) as [B HB].
   inversion_clear HC.
-  induction (strongly_projectable_C _ _ _ H11) as [B' HB'].
+  induction (str_proj_C _ _ _ H11) as [B' HB'].
   exists B, B'; repeat split; auto.
   constructor; auto. intro. apply set_remove'_2 in H13; auto.
   apply (H12 p); auto. rewrite H3; auto.
 + simpl; split. constructor; auto.
   rewrite <- H5, <- H1, H3 in *; clear X0 H0 l H1 C0 H2 s0 H4 p0 H6 C' H5 s'0 H7 t H3.
-  induction (strongly_projectable_C _ _ _ (HD X HX)) as [B HB].
+  induction (str_proj_C _ _ _ (HD X HX)) as [B HB].
   inversion_clear HC.
-  induction (strongly_projectable_C _ _ _ H0) as [B' HB'].
+  induction (str_proj_C _ _ _ H0) as [B' HB'].
   exists B, B'; repeat split; auto.
   apply (H1 p); auto.
 Qed.
 
 Lemma CCC_To_bproj_Call_r : forall D C s C' s' p X r,
-  strongly_projectable D C r ->
+  str_proj D C r ->
   (forall X, CCC_pn (snd (D X)) (Names D) [C] fst (D X)) ->
   <<C,s>> --[RL_Call X p,D]--> <<C',s'>> ->
-  p <> r -> exists B, bproj D C r B /\ bproj D C' r B.
+  p <> r -> exists B, [[D,C | r]] == B /\ [[D,C' | r]] == B.
 Proof.
 intros.
 rename H into HC, H0 into HD, H2 into Hpr, H1 into H.
@@ -1562,14 +1585,14 @@ induction C; intros; inversion H.
   apply bproj_Cond' with B1 B2; auto.
   rewrite (bproj_unique _ _ _ _ _ HB1 H16), (bproj_unique _ _ _ _ _ HB2 H19); auto.
 + rewrite H1 in *; clear s'0 H7 p0 H2 t H1 s0 H4 X0 H0.
-  induction (strongly_projectable_C _ _ _ HC) as [B HB].
+  induction (str_proj_C _ _ _ HC) as [B HB].
   exists B; split; auto.
   inversion HB.
   elim Hpr. apply set_size_1 with (@eq_dec Pid) (fst (D X)); auto.
   apply bproj_not_In.
   intro. apply H2, HD; auto.
 + rewrite H1 in *; clear s'0 H7 p0 H2 t H1 s0 H4 X0 H0.
-  induction (strongly_projectable_C _ _ _ HC) as [B HB].
+  induction (str_proj_C _ _ _ HC) as [B HB].
   exists B; split; auto.
   inversion HB.
   constructor. apply set_remove'_3; auto.
@@ -1584,14 +1607,14 @@ induction C; intros; inversion H.
   eexists; split; constructor; auto.
   eexists; split; apply bproj_RT_Call_out; eauto.
 + rewrite H3, <- H1 in *; clear t H3 X0 H0 s'0 H7 p0 H6 s0 H4 C0 H2 l H1.
-  induction (strongly_projectable_C _ _ _ HC) as [B HB].
+  induction (str_proj_C _ _ _ HC) as [B HB].
   exists B; split; auto.
   inversion HB.
   constructor. apply set_remove'_3; auto.
   constructor; auto.
   intro. apply H7. eapply set_remove'_1; eauto.
 + rewrite <- H5, <- H3 in *.
-  induction (strongly_projectable_C _ _ _ HC) as [B HB].
+  induction (str_proj_C _ _ _ HC) as [B HB].
   exists B; split; auto.
   inversion HB; auto.
   elim Hpr. apply set_size_1 with (@eq_dec Pid) l; auto.
@@ -1599,36 +1622,36 @@ Qed.
 
 Lemma CCC_To_bproj_disjoint : forall D C s tl C' s' ps p,
   (forall X, CCC_pn (snd (D X)) (Names D) [C] fst (D X)) ->
-  (forall r, In r ps -> strongly_projectable D C r) -> In p ps ->
+  (forall r, In r ps -> str_proj D C r) -> In p ps ->
   disjoint_p_rl p tl -> <<C,s>> --[tl,D]--> <<C',s'>> ->
-  exists B B', bproj D C p B /\ bproj D C' p B' /\ B [>>] B'.
+  exists B B', [[D,C | p]] == B /\ [[D,C' | p]] == B' /\ B [>>] B'.
 Proof.
 do 7 intro. intros r HD.
 intros. induction tl.
 - destroy H1.
   induction (CCC_To_bproj_Com_r D C s C' s' p q v x r) as [B [HB1 HB2] ]; auto.
   exists B, B; repeat split; auto.
-  apply more_branches_refl.
+  apply MB_refl.
 - destroy H1.
   induction (CCC_To_bproj_Sel_r D C s C' s' p q l r) as [B [HB1 HB2] ]; auto.
   exists B, B; repeat split; auto.
-  apply more_branches_refl.
+  apply MB_refl.
 - apply (CCC_To_bproj_Cond_r D C s C' s' p r); auto.
 - induction (CCC_To_bproj_Call_r D C s C' s' p X r) as [B [HB1 HB2] ]; auto.
   exists B, B; repeat split; auto.
-  apply more_branches_refl.
+  apply MB_refl.
 Qed.
 
 (** Projectability of well-formed programs is preserved by reductions. *)
 
 Lemma CCC_To_projectable_C_Com : forall D ps C s C' s' p v q x,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+  (forall p, In p ps -> str_proj D C p) ->
   <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> -> projectable_C D C' ps.
 Proof.
 intros.
 red. rewrite Forall_forall; intro.
 rename x0 into r. intro Hr. specialize (H _ Hr); clear Hr.
-generalize (strongly_projectable_C _ _ _ H); intro.
+generalize (str_proj_C _ _ _ H); intro.
 eq_elim p r Hpr. 2: eq_elim q r Hqr.
 + elim (CCC_To_bproj_Com_p _ _ _ _ _ _ _ _ _ H H0).
   intros. destroy H2. red; eauto.
@@ -1639,13 +1662,13 @@ eq_elim p r Hpr. 2: eq_elim q r Hqr.
 Qed.
 
 Lemma CCC_To_projectable_C_Sel : forall D ps C s C' s' p q l,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+  (forall p, In p ps -> str_proj D C p) ->
   <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> -> projectable_C D C' ps.
 Proof.
 intros.
 red. rewrite Forall_forall; intro.
 rename x into r. intro Hr. specialize (H _ Hr); clear Hr.
-generalize (strongly_projectable_C _ _ _ H); intro.
+generalize (str_proj_C _ _ _ H); intro.
 eq_elim p r Hpr. 2: eq_elim q r Hqr.
 + elim (CCC_To_bproj_Sel_p _ _ _ _ _ _ _ _ H H0).
   intros. induction H2 as [Bp [H2 H2'] ]. red; eauto.
@@ -1659,13 +1682,13 @@ eq_elim p r Hpr. 2: eq_elim q r Hqr.
 Qed.
 
 Lemma CCC_To_projectable_C_Cond : forall D ps C s C' s' p,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+  (forall p, In p ps -> str_proj D C p) ->
   <<C,s>> --[RL_Cond p,D]--> <<C',s'>> -> projectable_C D C' ps.
 Proof.
 intros.
 red. rewrite Forall_forall; intro.
 rename x into r. intro Hr. specialize (H _ Hr); clear Hr.
-generalize (strongly_projectable_C _ _ _ H); intro.
+generalize (str_proj_C _ _ _ H); intro.
 eq_elim p r Hpr.
 + elim (CCC_To_bproj_Cond_p _ _ _ _ _ _ H H0).
   intros. destroy H2.
@@ -1675,14 +1698,14 @@ eq_elim p r Hpr.
 Qed.
 
 Lemma CCC_To_projectable_C_Call : forall D ps C s C' s' X p Xs,
-  (forall p, In p ps -> strongly_projectable D C p) ->
-  (forall p Y, In p ps -> In Y Xs -> strongly_projectable D (snd (D Y)) p) ->
+  (forall p, In p ps -> str_proj D C p) ->
+  (forall p Y, In p ps -> In Y Xs -> str_proj D (snd (D Y)) p) ->
   (forall Y, CCC_pn (snd (D Y)) (Names D) [C] fst (D Y)) ->
   In X Xs -> <<C,s>> --[RL_Call X p,D]--> <<C',s'>> -> projectable_C D C' ps.
 Proof.
 intros D ps C s C' s' X p Xs H H' H'' HX H0.
 red. rewrite Forall_forall; intros r Hr.
-generalize (strongly_projectable_C _ _ _ (H _ Hr)); intro.
+generalize (str_proj_C _ _ _ (H _ Hr)); intro.
 eq_elim p r Hpr.
 + elim (CCC_To_bproj_Call_p D C s C' s' p X Xs); auto.
   intros. induction H3 as [B [B' [HB [HB' H3] ] ] ].
@@ -1692,8 +1715,8 @@ eq_elim p r Hpr.
 Qed.
 
 Lemma CCC_To_projectable_C : forall D ps C s C' s' t Xs,
-  (forall p, In p ps -> strongly_projectable D C p) ->
-  (forall p Y, In p ps -> In Y Xs -> strongly_projectable D (snd (D Y)) p) ->
+  (forall p, In p ps -> str_proj D C p) ->
+  (forall p Y, In p ps -> In Y Xs -> str_proj D (snd (D Y)) p) ->
   (forall Y, CCC_pn (snd (D Y)) (Names D) [C] fst (D Y)) ->
   (forall p X, In X Xs -> In p (fst (D X)) -> In p ps) ->
   within_Xs Xs C -> <<C,s>> --[t,D]--> <<C',s'>> -> projectable_C D C' ps.
@@ -1708,7 +1731,7 @@ Qed.
 
 Lemma CCC_To_projectable : forall P Xs ps,
   Program_WF _ Xs P -> well_ann _ P -> projectable Xs ps P ->
-  (forall p, In p ps -> strongly_projectable (Procedures _ P) (Main P) p) ->
+  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
   forall s tl P' s', (P,s) --[tl]--> (P',s') -> projectable Xs ps P'.
@@ -1724,11 +1747,11 @@ destroy H0; intros. repeat split; auto.
   apply CCC_To_projectable_C with C s s' t Xs; auto.
   - simpl. intro r; intros.
     elim (In_dec (@eq_dec Pid) r (CCC_pn (snd (D Y)) (Names D))); intro.
-    * apply initial_strongly_projectable with (fst (D Y)); auto.
+    * apply initial_str_proj with (fst (D Y)); auto.
       destroy H. elim (H Y); tauto.
       red in H4; rewrite Forall_forall in H4; auto.
       apply H0; auto.
-    * apply initial_strongly_projectable'; auto.
+    * apply initial_str_proj'; auto.
       destroy H. elim (H Y); tauto.
   - destroy H; auto.
 + apply H1.
@@ -1741,14 +1764,14 @@ destroy H0; intros. repeat split; auto.
 + apply H1.
 Qed.
 
-(** Strong projectability of well-formed programs is preserved by reductions:
+(** Strong projectability of well-formed programs is also preserved by reductions:
   this is needed for chaining applications of the EPP theorem. *)
 
-Lemma CCC_To_strongly_projectable_Com : forall D C s C' s' ps p v q x r,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+Lemma CCC_To_str_proj_Com : forall D C s C' s' ps p v q x r,
+  (forall p, In p ps -> str_proj D C p) ->
   (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
   In r ps ->
-  <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> -> strongly_projectable D C' r.
+  <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> -> str_proj D C' r.
 Proof.
 intros.
 rename H into H0, H1 into Hr, H0 into Hnames, H2 into H.
@@ -1758,10 +1781,10 @@ induction C; intros; inversion H.
 + simpl; apply IHC; auto.
   intros. apply Hnames. simpl; sup.
 + elim (H0 r); auto; intros. inversion_clear H13.
-  assert (strongly_projectable D C1' r).
+  assert (str_proj D C1' r).
     apply IHC1; auto. intros; apply H0; auto.
     intros. apply Hnames. simpl; sup; sup.
-  assert (strongly_projectable D C2' r).
+  assert (str_proj D C2' r).
     apply IHC2; auto. intros; apply H0; auto.
     intros. apply Hnames. simpl; sup; sup.
   repeat split; auto.
@@ -1769,8 +1792,8 @@ induction C; intros; inversion H.
   simpl. case (eq_dec t r); intro.
   2: elim ((@eq_dec Pid) p r); intro Hpr.
   3: elim ((@eq_dec Pid) q r); intro Hqr.
-  - apply strongly_projectable_C in H13.
-    apply strongly_projectable_C in H16.
+  - apply str_proj_C in H13.
+    apply str_proj_C in H16.
     induction H13 as [B1 HB1]. induction H16 as [B2 HB2].
     induction H15 as [B HB].
     rewrite e. exists (Cond Sig' t0 B1 B2); constructor; auto.
@@ -1815,11 +1838,11 @@ induction C; intros; inversion H.
   apply H0. apply Hnames. simpl. sup.
 Qed.
 
-Lemma CCC_To_strongly_projectable_Sel : forall D C s C' s' ps p q l r,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+Lemma CCC_To_str_proj_Sel : forall D C s C' s' ps p q l r,
+  (forall p, In p ps -> str_proj D C p) ->
   (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
   In r ps ->
-  <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> -> strongly_projectable D C' r.
+  <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> -> str_proj D C' r.
 Proof.
 intros.
 rename H into H0, H1 into Hr, H0 into Hnames, H2 into H.
@@ -1829,10 +1852,10 @@ induction C; intros; inversion H.
 + simpl; apply IHC; auto.
   intros. apply Hnames. simpl; sup.
 + elim (H0 r); auto; intros. inversion_clear H13.
-  assert (strongly_projectable D C1' r).
+  assert (str_proj D C1' r).
     apply IHC1; auto. intros; apply H0; auto.
     intros. apply Hnames. simpl; sup; sup.
-  assert (strongly_projectable D C2' r).
+  assert (str_proj D C2' r).
     apply IHC2; auto. intros; apply H0; auto.
     intros. apply Hnames. simpl; sup; sup.
   repeat split; auto.
@@ -1840,8 +1863,8 @@ induction C; intros; inversion H.
   simpl. case (eq_dec t r); intro.
   2: elim ((@eq_dec Pid) p r); intro Hpr.
   3: elim ((@eq_dec Pid) q r); intro Hqr.
-  - apply strongly_projectable_C in H13.
-    apply strongly_projectable_C in H16.
+  - apply str_proj_C in H13.
+    apply str_proj_C in H16.
     induction H13 as [B1 HB1]. induction H16 as [B2 HB2].
     induction H15 as [B HB].
     rewrite e. exists (Cond Sig' t0 B1 B2); constructor; auto.
@@ -1895,11 +1918,11 @@ induction C; intros; inversion H.
   apply H0. apply Hnames. simpl. sup.
 Qed.
 
-Lemma CCC_To_strongly_projectable_Cond : forall D C s C' s' ps p r,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+Lemma CCC_To_str_proj_Cond : forall D C s C' s' ps p r,
+  (forall p, In p ps -> str_proj D C p) ->
   (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
   In r ps ->
-  <<C,s>> --[RL_Cond p,D]--> <<C',s'>> -> strongly_projectable D C' r.
+  <<C,s>> --[RL_Cond p,D]--> <<C',s'>> -> str_proj D C' r.
 Proof.
 intros.
 rename H into H0, H1 into Hr, H0 into Hnames, H2 into H.
@@ -1907,22 +1930,22 @@ revert C H0 Hnames r Hr C' H.
 induction C; intros; inversion H.
 + simpl; apply IHC; auto.
   intros. apply Hnames. simpl; sup.
-+ rewrite <- H6; eapply strongly_projectable_inv_Then; eauto.
-+ rewrite <- H6; eapply strongly_projectable_inv_Else; eauto.
++ rewrite <- H6; eapply str_proj_inv_Then; eauto.
++ rewrite <- H6; eapply str_proj_inv_Else; eauto.
 + rename p0 into q.
   rewrite <- H1, <- H2 in *.
   clear t H1 t0 H2 C0 H3 C3 H5 s0 H4 t1 H6 C' H7 H s'0 H8.
   elim (H0 r); auto; intros. inversion_clear H1.
-  assert (strongly_projectable D C1' r).
+  assert (str_proj D C1' r).
     apply IHC1; auto. intros; apply H0; auto.
     intros. apply Hnames. simpl; sup; sup.
-  assert (strongly_projectable D C2' r).
+  assert (str_proj D C2' r).
     apply IHC2; auto. intros; apply H0; auto.
     intros. apply Hnames. simpl; sup; sup.
   repeat split; auto.
   eq_elim q r Hqr. 2: eq_elim p r Hpr.
   - induction H3 as [B HB]. inversion_clear HB. 2: tauto.
-    apply strongly_projectable_C in H, H1, H2, H4.
+    apply str_proj_C in H, H1, H2, H4.
     induction H1 as [B1' HC1']. induction H4 as [B2' HC2'].
     exists (Cond Sig' b B1' B2'); constructor; auto.
   - induction (CCC_To_bproj_Cond_p _ _ _ _ _ _ H H10) as [b1 [B1t [B1e [HC1 [HB1t HB1e] ] ] ] ].
@@ -1940,7 +1963,7 @@ induction C; intros; inversion H.
     induction H3 as [B HB]. revert Hqr. inversion_clear HB. tauto.
     rewrite (bproj_unique _ _ _ _ _ H3 HB1) in *; clear B0 H3.
     rewrite (bproj_unique _ _ _ _ _ H5 HB2) in *; clear B3 H5.
-    induction (more_branches_merge_extend _ _ _ _ _ _ H' H'' H7) as [B' [HB' HB''] ].
+    induction (MB_yields_merge _ _ _ _ _ _ H' H'' H7) as [B' [HB' HB''] ].
     exists B'. apply bproj_Cond' with B1' B2'; auto.
 + rewrite <- H1 in *. clear t H1.
   repeat split; auto.
@@ -1951,18 +1974,18 @@ induction C; intros; inversion H.
   destroy H8; intros.
   induction (CCC_To_bproj_Cond_r D C s C'0 s' p p0) as [B1 [B2 [HB1 [HB2 H'] ] ] ]; auto.
   rewrite (bproj_unique _ _ _ _ _ H11 HB2) in *. clear B' H11.
-  apply more_branches_trans with B1; auto.
+  apply MB_trans with B1; auto.
   elim (H0 r); auto. intros. elim (H12 p0); auto.
   apply H0. apply Hnames. simpl. sup.
 Qed.
 
-Lemma CCC_To_strongly_projectable_Call : forall D C s C' s' ps p X r Xs,
-  (forall p, In p ps -> strongly_projectable D C p) ->
-  (forall p Y, In p ps -> In Y Xs -> strongly_projectable D (snd (D Y)) p) ->
+Lemma CCC_To_str_proj_Call : forall D C s C' s' ps p X r Xs,
+  (forall p, In p ps -> str_proj D C p) ->
+  (forall p Y, In p ps -> In Y Xs -> str_proj D (snd (D Y)) p) ->
   (forall Y, CCC_pn (snd (D Y)) (Names D) [C] fst (D Y)) ->
   (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
   In r ps -> In X Xs -> 
-  <<C,s>> --[RL_Call X p,D]--> <<C',s'>> -> strongly_projectable D C' r.
+  <<C,s>> --[RL_Call X p,D]--> <<C',s'>> -> str_proj D C' r.
 Proof.
 intros.
 rename H into H0, H3 into Hr, H2 into Hnames, H1 into HD, H4 into HX, H5 into H, H0 into Hsp.
@@ -1972,17 +1995,17 @@ induction C; intros; inversion H.
   intros. apply Hnames. simpl; sup.
 + rename p0 into q.
   elim (H0 r); auto; intros. inversion_clear H13.
-  assert (strongly_projectable D C1' r).
+  assert (str_proj D C1' r).
     apply IHC1; auto. intros; apply H0; auto.
     intros. apply Hnames. simpl; sup; sup.
-  assert (strongly_projectable D C2' r).
+  assert (str_proj D C2' r).
     apply IHC2; auto. intros; apply H0; auto.
     intros. apply Hnames. simpl; sup; sup.
   repeat split; auto.
   simpl in H9.
   eq_elim t r Htr. 2: eq_elim p r Hpr.
-  - apply strongly_projectable_C in H13.
-    apply strongly_projectable_C in H16.
+  - apply str_proj_C in H13.
+    apply str_proj_C in H16.
     induction H13 as [B1 HB1]. induction H16 as [B2 HB2].
     eexists; constructor; eauto.
   - elim (CCC_To_bproj_Call_p _ _ _ _ _ _ _ _ H12 (fun Y => Hsp _ Y Hr) HD HX H10); intros.
@@ -1990,7 +2013,7 @@ induction C; intros; inversion H.
     elim (CCC_To_bproj_Call_p _ _ _ _ _ _ _ _ H14 (fun Y => Hsp _ Y Hr) HD HX H11); intros.
     induction H20 as [B2 [B2' [HB2 [HB2' H20] ] ] ].
     rewrite (bproj_unique _ _ _ _ _ HB2 HB1) in *; clear B2 HB2.
-    elim (more_branches_has_lub _ _ _ _ H18 H20).
+    elim (MB_has_lub _ _ _ _ H18 H20).
     intros B' [HB' HB1''].
     eexists. apply bproj_Cond' with B1' B2'; eauto.
   - induction (H0 r) as [H01 [H02 H0'] ]; auto.
@@ -2005,8 +2028,8 @@ induction C; intros; inversion H.
 + repeat split; auto.
   eapply set_remove'_1; eauto.
   generalize (Hsp p1 X); intros.
-  apply strongly_projectable_C in H11; auto.
-  apply more_branches_refl'. eapply bproj_unique; eauto.
+  apply str_proj_C in H11; auto.
+  apply MB_refl'. eapply bproj_unique; eauto.
   apply Hnames; simpl. rewrite H2. eapply set_remove'_1; eauto.
 + repeat split.
   eapply IHC; eauto. apply H0.
@@ -2027,30 +2050,30 @@ induction C; intros; inversion H.
 + rewrite <- H6. apply H0; auto.
 Qed.
 
-Lemma CCC_To_strongly_projectable : forall D ps C s C' s' t Xs,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+Lemma CCC_To_str_proj : forall D ps C s C' s' t Xs,
+  (forall p, In p ps -> str_proj D C p) ->
   (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
-  (forall p Y, In p ps -> In Y Xs -> strongly_projectable D (snd (D Y)) p) ->
+  (forall p Y, In p ps -> In Y Xs -> str_proj D (snd (D Y)) p) ->
   (forall Y, CCC_pn (snd (D Y)) (Names D) [C] fst (D Y)) ->
   (forall p X, In X Xs -> In p (fst (D X)) -> In p ps) ->
   within_Xs Xs C -> <<C,s>> --[t,D]--> <<C',s'>> ->
-  forall p, In p ps -> strongly_projectable D C' p.
+  forall p, In p ps -> str_proj D C' p.
 Proof.
 induction t; intros.
-+ eapply CCC_To_strongly_projectable_Com; eauto.
-+ eapply CCC_To_strongly_projectable_Sel; eauto.
-+ eapply CCC_To_strongly_projectable_Cond; eauto.
-+ eapply CCC_To_strongly_projectable_Call; eauto.
++ eapply CCC_To_str_proj_Com; eauto.
++ eapply CCC_To_str_proj_Sel; eauto.
++ eapply CCC_To_str_proj_Cond; eauto.
++ eapply CCC_To_str_proj_Call; eauto.
   eapply CCC_To_Xs; eauto.
 Qed.
 
-Lemma CCP_To_strongly_projectable : forall P Xs ps,
+Lemma CCP_To_str_proj : forall P Xs ps,
   Program_WF _ Xs P -> well_ann _ P -> projectable Xs ps P ->
-  (forall p, In p ps -> strongly_projectable (Procedures _ P) (Main P) p) ->
+  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
   forall s tl P' s', (P,s) --[tl]--> (P',s') ->
-  forall p, In p ps -> strongly_projectable (Procedures _ P') (Main P') p.
+  forall p, In p ps -> str_proj (Procedures _ P') (Main P') p.
 Proof.
 intros. rename H2 into HSP, H3 into Hnames, H4 into HD, H5 into H2.
 induction P as (D,C). induction P' as (D', C').
@@ -2061,12 +2084,12 @@ rename H8 into Ht.
 destroy H0; intros.
 rename p into r.
 destroy H1.
-simpl. eapply CCC_To_strongly_projectable; eauto.
+simpl. eapply CCC_To_str_proj; eauto.
 + intros. red in H4; rewrite Forall_forall in H4.
   destroy H. elim (H Y); auto. clear H. simpl; intros; destroy H13.
   elim (In_dec (@eq_dec Pid) p (fst (D Y))); intro.
-  apply initial_strongly_projectable with (fst (D Y)); auto.
-  apply initial_strongly_projectable'; auto.
+  apply initial_str_proj with (fst (D Y)); auto.
+  apply initial_str_proj'; auto.
   intro. apply b, H0; auto.
 + apply Program_WF_Main_within_Xs; auto.
 Qed.
@@ -2076,7 +2099,7 @@ Qed.
 
 Lemma EPP_Complete : forall P Xs ps,
   Program_WF _ Xs P -> well_ann _ P -> forall (HP:projectable Xs ps P),
-  (forall p, In p ps -> strongly_projectable (Procedures _ P) (Main P) p) ->
+  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
   forall s tl P' s', (P,s) --[tl]--> (P',s') ->
@@ -2091,15 +2114,8 @@ rewrite <- H in HTo; rewrite <- H; clear D' H.
 simpl in Hsp, HMain.
 set (N' := epp _ _ _ HP). assert (N' = epp _ _ _ HP) as HN; auto.
 clearbody N'; induction N' as (D',N).
-(* assert (forall r, exists Br, bproj D C r Br) as Hout.
-1: { intro.
-  elim (In_dec (@eq_dec Pid) r ps); intro Hr.
-  elim (strongly_projectable_C _ _ _ (Hsp r Hr)); eauto.
-  exists (End _); apply bproj_not_In.
-  intro; apply Hr, HMain. auto.
-} *)
 assert (projectable_C D C ps) as HC.
-1: apply strongly_projectable_C'; auto.
+1: apply str_proj_C'; auto.
 induction tl; intros; inversion HTo; induction t; inversion H3.
 + rewrite H9, H8, H7 in H0.
   clear q0 v0 p0 s'0 C'0 s0 C0 D0 H9 H8 H7 H5 H4 H3 H2 H1 H.
@@ -2138,15 +2154,15 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
     2: elim eq_dec; intro H7.
     3: elim (In_dec (@eq_dec Pid) r ps); intro.
     * rewrite H6.
-      apply more_branches_refl'.
+      apply MB_refl'.
       eapply bproj_unique; eauto.
       apply epp_C_char'; auto.
     * rewrite H7.
-      apply more_branches_refl'.
+      apply MB_refl'.
       eapply bproj_unique; eauto.
       apply epp_C_char'; auto.
     * replace (Net (epp _ _ _ H5) r) with (N r).
-      apply more_branches_refl.
+      apply MB_refl.
       replace N with (Net (D',N)); auto.
       rewrite HN.
       elim (CCC_To_bproj_Com_r D C s C' s' p q v x r); auto.
@@ -2202,11 +2218,11 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
       [idtac | elim (In_dec (@eq_dec Pid) r ps); intro] ].
     all: try rewrite H4.
     all: try rewrite H6.
-    1,2,5,6: apply more_branches_refl'; eapply bproj_unique; eauto.
+    1,2,5,6: apply MB_refl'; eapply bproj_unique; eauto.
     1,2,3,4: apply epp_C_char'; auto.
     1: induction (CCC_To_bproj_Sel_r D C s C' s' p q left r) as [B [HB HB'] ]; auto.
     3: induction (CCC_To_bproj_Sel_r D C s C' s' p q right r) as [B [HB HB'] ]; auto.
-    1,3: apply more_branches_refl'; transitivity (N r); auto;
+    1,3: apply MB_refl'; transitivity (N r); auto;
         replace N with (Net (D',N)); auto; rewrite HN;
         etransitivity; eapply bproj_unique.
     1,4,5,8: apply epp_C_char'; auto. 1,2,3,4: eauto.
@@ -2251,7 +2267,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
   all: simpl; intros H5 r; replace N with (Net (D',N)); auto.
   all: case eq_dec; intro H3; [idtac | elim (In_dec (@eq_dec Pid) r ps); intro].
   all: try rewrite H3.
-  * apply more_branches_refl'.
+  * apply MB_refl'.
     eapply bproj_unique; eauto.
     apply epp_C_char'; auto.
   * rewrite HN. assert (p <> r) as Hpr; auto.
@@ -2269,7 +2285,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
       with s (TL_Tau p) (D,C') s'; intros; auto.
     rewrite epp_C_char with (HC:=H), epp_C_out; auto.
     eauto.
-  * apply more_branches_refl'.
+  * apply MB_refl'.
     eapply bproj_unique; eauto.
     apply epp_C_char'; auto.
   * rewrite HN. assert (p <> r) as Hpr; auto.
@@ -2296,7 +2312,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
   assert (In X Xs) as HX.
   1: { eapply CCC_To_Xs; eauto. destroy HWF; auto. }
   elim (CCC_To_bproj_Call_p D C s C' s' p X Xs); auto.
-  2: { intros; eapply Program_WF_D_strongly_projectable with (P:=(D,C)); eauto. }
+  2: { intros; eapply Program_WF_D_str_proj with (P:=(D,C)); eauto. }
   intros HX' [B [B' [HB [HB' H'] ] ] ].
   inversion_clear HP. destroy H1.
   red in H2; rewrite Forall_forall in H2.
@@ -2328,9 +2344,9 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
       rewrite (bproj_unique _ _ _ _ _ HB2 HB') in *; clear B2 HB2.
       erewrite bproj_unique; eauto.
       apply epp_C_char'; auto.
-      intros. eapply Program_WF_D_strongly_projectable with (P:=(D,C)); eauto.
+      intros. eapply Program_WF_D_str_proj with (P:=(D,C)); eauto.
     * elim (In_dec (@eq_dec Pid) r ps); intro Hr'.
-      apply more_branches_refl'. transitivity (N r); auto.
+      apply MB_refl'. transitivity (N r); auto.
       replace N with (Net (D',N)); auto.
       elim (CCC_To_bproj_Call_r D C s C' s' p X r); auto.
       intros B0 [HB0 HB0'].
@@ -2350,8 +2366,8 @@ Lemma EPP_Complete' : forall P Xs ps,
   /\ forall H, Net N (>>) Net (epp Xs ps P' H).
 Proof.
 intros P Xs ps HWF Hann HP Hinit HMain HXs s tl P' s' HTo.
-assert (forall p, In p ps -> strongly_projectable (Procedures _ P) (Main P) p) as Hsp.
-1: { intros. apply initial_strongly_projectable with ps; auto. apply HP. }
+assert (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) as Hsp.
+1: { intros. apply initial_str_proj with ps; auto. apply HP. }
 induction P as (D,C), P' as (D',C').
 generalize (CCP_ToStar_Defs_stable _ D D' C C' tl s s' HTo); intro.
 rewrite <- H in HTo; rewrite <- H; clear D' H.
@@ -2360,7 +2376,7 @@ revert dependent C'. revert dependent C. revert s s'. induction tl.
 + intros. inversion HTo.
   exists (epp _ _ _ HP), nil; repeat split.
   constructor; auto.
-  rewrite <- H0. intros; apply more_branches_N_refl'.
+  rewrite <- H0. intros; apply MBN_refl'.
   intro. inversion HP.
   rewrite epp_C_char with (HC:=H3). rewrite epp_C_char with (HC:=H3).
   auto.
@@ -2376,19 +2392,19 @@ revert dependent C'. revert dependent C. revert s s'. induction tl.
   1: {
     inversion HP. simpl in H5; destroy H5.
     repeat split; auto.
-    apply strongly_projectable_C'.
-    eapply CCP_To_strongly_projectable; eauto.
+    apply str_proj_C'.
+    eapply CCP_To_str_proj; eauto.
     intros. apply HMain. change C with (Main (D,C)).
     eapply CCC_To_pn''; eauto.
     eapply CCC_pn_mon. 2: apply H9. simpl; tauto.
   }
   elim IHtl with (s:=s'') (s':=s') (C:=C'') (C':=C') (HP:=HP''); auto.
   - intros. destroy H3. rename x into pP', x0 into tl'.
-    apply SPP_ToStar_more_branches_N with (P1':=pP) in H5.
+    apply SPP_ToStar_MBN with (P1':=pP) in H5.
     destroy H5.
     exists x, (t'::tl'). repeat split; auto.
     apply SPT_Step with (pP,s''); auto.
-    intro. apply more_branches_N_trans with (Net pP'); auto.
+    intro. apply MBN_trans with (Net pP'); auto.
     auto.
     intro. rewrite H1.
     inversion HP''. simpl in H7; clear H6; destroy H7.
@@ -2398,7 +2414,7 @@ revert dependent C'. revert dependent C. revert s s'. induction tl.
     eapply CCC_To_pn''; eauto.
   - change C'' with (Main (D,C'')).
     change D with (Procedures _ (D,C'')).
-    intros. eapply CCP_To_strongly_projectable; eauto.
+    intros. eapply CCP_To_str_proj; eauto.
 Qed.
 
 (** ** Soundness of EPP
@@ -2412,7 +2428,7 @@ Definition SP_eq (P P':Program Sig') : Prop :=
   forall X, Procs P X = Procs P' X /\ (Net P (==) Net P')%SP.
 
 Lemma SP_To_bproj_Com : forall D D' ps C HC s N' s' p x q v,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+  (forall p, In p ps -> str_proj D C p) ->
   (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
   <<epp_C D ps C HC,s>> --[RL_Com p v q x,D']--> <<N',s'>> ->
   exists C', (<<C,s>> --[RL_Com p v q x,D]--> <<C',s'>>)%CC
@@ -2606,9 +2622,9 @@ induction C; intros. induction e.
   rename t into p', t0 into b.
   generalize (projectable_C_inv_Then _ _ _ _ _ _ HC); intro HC1.
   generalize (projectable_C_inv_Else _ _ _ _ _ _ HC); intro HC2.
-  assert (forall p, In p ps -> strongly_projectable D C1 p) as Hsp1.
+  assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
   1: apply Hsp.
-  assert (forall p, In p ps -> strongly_projectable D C2 p) as Hsp2.
+  assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
   1: apply Hsp.
   clear Hsp.
   (* get the remaining equalities *)
@@ -2694,7 +2710,7 @@ induction C; intros. induction e.
   assert (projectable_C D C ps) as HC'.
   1: { red. rewrite Forall_forall. intros.
     elim (Hsp x0); auto; intros.
-    apply strongly_projectable_C; auto.
+    apply str_proj_C; auto.
   }
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
@@ -2707,7 +2723,7 @@ induction C; intros. induction e.
   1: intro. rewrite epp_C_RT_Call in H9; auto. inversion H9.
   assert (p <> q) as Hpq.
   1: { intro H'; rewrite H', H9 in H6; inversion H6. }
-  assert (forall p, In p ps -> strongly_projectable D C p) as Hsp'.
+  assert (forall p, In p ps -> str_proj D C p) as Hsp'.
   1: apply Hsp.
   assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
   1: intros. apply Hin. simpl; sup.
@@ -2719,7 +2735,7 @@ induction C; intros. induction e.
     intros r Hr. split; intro H'; rewrite H' in Hr; auto.
   * intros. eapply Network_eq_trans. apply H10. rewrite <- H4.
     assert (projectable_C D C' ps).
-    1: apply strongly_projectable_C'; intros. eapply CCC_To_strongly_projectable_Com; eauto.
+    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Com; eauto.
     intro r. elim ((@eq_dec Pid) p r); intro Hpr.
     2: elim ((@eq_dec Pid) q r); intro Hqr.
     3: rewrite Network_rm_add_2_out, H4; auto.
@@ -2747,7 +2763,7 @@ induction C; intros. induction e.
 Qed.
 
 Lemma SP_To_bproj_Sel_l : forall D D' ps C HC s N' s' p q,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+  (forall p, In p ps -> str_proj D C p) ->
   (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
   <<epp_C D ps C HC,s>> --[RL_Sel p q left,D']--> <<N',s'>> ->
   exists C', (<<C,s>> --[RL_Sel p q left,D]--> <<C',s'>>)%CC
@@ -2940,9 +2956,9 @@ induction C; intros. induction e.
   rename t into p', t0 into b.
   generalize (projectable_C_inv_Then _ _ _ _ _ _ HC); intro HC1.
   generalize (projectable_C_inv_Else _ _ _ _ _ _ HC); intro HC2.
-  assert (forall p, In p ps -> strongly_projectable D C1 p) as Hsp1.
+  assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
   1: apply Hsp.
-  assert (forall p, In p ps -> strongly_projectable D C2 p) as Hsp2.
+  assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
   1: apply Hsp.
   clear Hsp.
   (* get the remaining equalities *)
@@ -3026,7 +3042,7 @@ induction C; intros. induction e.
   assert (projectable_C D C ps) as HC'.
   1: { red. rewrite Forall_forall. intros.
     elim (Hsp x); auto; intros.
-    apply strongly_projectable_C; auto.
+    apply str_proj_C; auto.
   }
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
@@ -3039,7 +3055,7 @@ induction C; intros. induction e.
   1: intro. rewrite epp_C_RT_Call in H3; auto. inversion H3.
   assert (p <> q) as Hpq.
   1: { intro H'; rewrite H', H3 in H2; inversion H2. }
-  assert (forall p, In p ps -> strongly_projectable D C p) as Hsp'.
+  assert (forall p, In p ps -> str_proj D C p) as Hsp'.
   1: apply Hsp.
   assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
   1: intros. apply Hin. simpl; sup.
@@ -3051,7 +3067,7 @@ induction C; intros. induction e.
     intros r Hr. split; intro H'; rewrite H' in Hr; auto.
   * intros. eapply Network_eq_trans. apply H6. rewrite <- H4.
     assert (projectable_C D C' ps).
-    1: apply strongly_projectable_C'; intros. eapply CCC_To_strongly_projectable_Sel; eauto.
+    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Sel; eauto.
     intro r. elim ((@eq_dec Pid) p r); intro Hpr.
     2: elim ((@eq_dec Pid) q r); intro Hqr.
     3: rewrite Network_rm_add_2_out, H4; auto.
@@ -3079,7 +3095,7 @@ induction C; intros. induction e.
 Qed.
 
 Lemma SP_To_bproj_Sel_r : forall D D' ps C HC s N' s' p q,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+  (forall p, In p ps -> str_proj D C p) ->
   (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
   <<epp_C D ps C HC,s>> --[RL_Sel p q right,D']--> <<N',s'>> ->
   exists C', (<<C,s>> --[RL_Sel p q right,D]--> <<C',s'>>)%CC
@@ -3272,9 +3288,9 @@ induction C; intros. induction e.
   rename t into p', t0 into b.
   generalize (projectable_C_inv_Then _ _ _ _ _ _ HC); intro HC1.
   generalize (projectable_C_inv_Else _ _ _ _ _ _ HC); intro HC2.
-  assert (forall p, In p ps -> strongly_projectable D C1 p) as Hsp1.
+  assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
   1: apply Hsp.
-  assert (forall p, In p ps -> strongly_projectable D C2 p) as Hsp2.
+  assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
   1: apply Hsp.
   clear Hsp.
   (* get the remaining equalities *)
@@ -3358,7 +3374,7 @@ induction C; intros. induction e.
   assert (projectable_C D C ps) as HC'.
   1: { red. rewrite Forall_forall. intros.
     elim (Hsp x); auto; intros.
-    apply strongly_projectable_C; auto.
+    apply str_proj_C; auto.
   }
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
@@ -3371,7 +3387,7 @@ induction C; intros. induction e.
   1: intro. rewrite epp_C_RT_Call in H3; auto. inversion H3.
   assert (p <> q) as Hpq.
   1: { intro H'; rewrite H', H3 in H2; inversion H2. }
-  assert (forall p, In p ps -> strongly_projectable D C p) as Hsp'.
+  assert (forall p, In p ps -> str_proj D C p) as Hsp'.
   1: apply Hsp.
   assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
   1: intros. apply Hin. simpl; sup.
@@ -3383,7 +3399,7 @@ induction C; intros. induction e.
     intros r Hr. split; intro H'; rewrite H' in Hr; auto.
   * intros. eapply Network_eq_trans. apply H6. rewrite <- H4.
     assert (projectable_C D C' ps).
-    1: apply strongly_projectable_C'; intros. eapply CCC_To_strongly_projectable_Sel; eauto.
+    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Sel; eauto.
     intro r. elim ((@eq_dec Pid) p r); intro Hpr.
     2: elim ((@eq_dec Pid) q r); intro Hqr.
     3: rewrite Network_rm_add_2_out, H4; auto.
@@ -3411,7 +3427,7 @@ induction C; intros. induction e.
 Qed.
 
 Lemma SP_To_bproj_Cond : forall D D' ps C HC s N' s' p,
-  (forall p, In p ps -> strongly_projectable D C p) ->
+  (forall p, In p ps -> str_proj D C p) ->
   (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
   <<epp_C D ps C HC,s>> --[RL_Cond p,D']--> <<N',s'>> ->
   exists C', (<<C,s>> --[RL_Cond p,D]--> <<C',s'>>)%CC
@@ -3654,22 +3670,22 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     2: elim (In_dec (@eq_dec Pid) r ps); intro Hr.
     * rewrite Hpr, Par_proj2. 2: apply Network_rm_In.
       rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2) in H1; auto.
-      inversion H1. apply more_branches_refl'.
+      inversion H1. apply MB_refl'.
       rewrite Process_refl. apply epp_C_wd.
     * rewrite Par_proj1', Network_rm_out; auto.
       eapply merge_is_upper_bound, epp_C_Cond_r; eauto.
       apply Process_out; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
-      apply more_branches_refl'. repeat rewrite epp_C_out; auto.
+      apply MB_refl'. repeat rewrite epp_C_out; auto.
       apply Process_out; auto.
-  - assert (forall p, In p ps -> strongly_projectable D C1 p) as Hsp1.
+  - assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
     1: apply Hsp.
-    assert (forall p, In p ps -> strongly_projectable D C2 p) as Hsp2.
+    assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
     1: apply Hsp.
     clear Hsp.
     assert (p' <> p) as Hp'p. auto.
     (* get the remaining equalities *)
-    elim (epp_C_Cond_Cond_inv _ _ _ _ _ _ _ HC HC1 HC2 _ _ _ H1); auto.
+    elim (epp_C_Cond_Cond_inv _ _ _ _ _ _ _ HC HC1 HC2 _ _ _ Hp'p H1); auto.
     intros. destroy H. rename x into B1t, x0 into B1e, x1 into B2t, x2 into B2e, H0 into Hp1, H5 into Hp2, H7 into Ht, H into He.
     assert (forall p, In p (CCC_pn C1 (Names D)) -> In p ps) as Hin1.
     1: intros. apply Hin. simpl; sup; sup.
@@ -3693,10 +3709,10 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
          rewrite Hpr, Par_proj2, Par_proj2, Par_proj2; auto.
          2,3,4: apply Network_rm_In.
          repeat rewrite Process_refl. intros.
-         elim (more_branches_merge_extend _ _ _ _ _ _ H8 H9 Ht); auto.
+         elim (MB_yields_merge _ _ _ _ _ _ H8 H9 Ht); auto.
          intros B' [HB'1 HB1].
-         apply more_branches_trans with B'; auto.
-         apply more_branches_refl'. eapply merge_unique; eauto.
+         apply MB_trans with B'; auto.
+         apply MB_refl'. eapply merge_unique; eauto.
          apply epp_C_Cond_r; auto.
       ++ generalize (H HC1' r) (H5 HC2' r).
          rewrite <- Hp'r. rewrite <- Hp'r in Hr, Hpr. clear r Hp'r.
@@ -3711,7 +3727,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
          specialize (H5 HC2' r). specialize (H HC1' r).
          rewrite Par_proj1', Network_rm_out in H, H5; auto.
          eapply merge_is_lub; eauto.
-         1,2: eapply more_branches_trans; eauto.
+         1,2: eapply MB_trans; eauto.
          eapply merge_is_upper_bound; eauto.
          eapply merge_is_upper_bound'; eauto.
          all: apply Process_out; auto.
@@ -3743,22 +3759,22 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     2: elim (In_dec (@eq_dec Pid) r ps); intro Hr.
     * rewrite Hpr, Par_proj2. 2: apply Network_rm_In.
       rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2) in H1; auto.
-      inversion H1. apply more_branches_refl'.
+      inversion H1. apply MB_refl'.
       rewrite Process_refl. apply epp_C_wd.
     * rewrite Par_proj1', Network_rm_out; auto.
       eapply merge_is_upper_bound', epp_C_Cond_r; auto.
       apply Process_out; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
-      apply more_branches_refl'. repeat rewrite epp_C_out; auto.
+      apply MB_refl'. repeat rewrite epp_C_out; auto.
       apply Process_out; auto.
-  - assert (forall p, In p ps -> strongly_projectable D C1 p) as Hsp1.
+  - assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
     1: apply Hsp.
-    assert (forall p, In p ps -> strongly_projectable D C2 p) as Hsp2.
+    assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
     1: apply Hsp.
     clear Hsp.
     assert (p' <> p) as Hp'p. auto.
     (* get the remaining equalities *)
-    elim (epp_C_Cond_Cond_inv _ _ _ _ _ _ _ HC HC1 HC2 _ _ _ H1); auto.
+    elim (epp_C_Cond_Cond_inv _ _ _ _ _ _ _ HC HC1 HC2 _ _ _ Hp'p H1); auto.
     intros. destroy H. rename x into B1t, x0 into B1e, x1 into B2t, x2 into B2e, H0 into Hp1, H5 into Hp2, H7 into Ht, H into He.
     assert (forall p, In p (CCC_pn C1 (Names D)) -> In p ps) as Hin1.
     1: intros. apply Hin. simpl; sup; sup.
@@ -3782,10 +3798,10 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
          rewrite Hpr, Par_proj2, Par_proj2, Par_proj2; auto.
          2,3,4: apply Network_rm_In.
          repeat rewrite Process_refl. intros.
-         elim (more_branches_merge_extend _ _ _ _ _ _ H8 H9 He); auto.
+         elim (MB_yields_merge _ _ _ _ _ _ H8 H9 He); auto.
          intros B' [HB'1 HB1].
-         apply more_branches_trans with B'; auto.
-         apply more_branches_refl'. eapply merge_unique; eauto.
+         apply MB_trans with B'; auto.
+         apply MB_refl'. eapply merge_unique; eauto.
          apply epp_C_Cond_r; auto.
       ++ generalize (H HC1' r) (H5 HC2' r).
          rewrite <- Hp'r. rewrite <- Hp'r in Hr, Hpr. clear r Hp'r.
@@ -3800,7 +3816,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
          specialize (H5 HC2' r). specialize (H HC1' r).
          rewrite Par_proj1', Network_rm_out in H, H5; auto.
          eapply merge_is_lub; eauto.
-         1,2: eapply more_branches_trans; eauto.
+         1,2: eapply MB_trans; eauto.
          eapply merge_is_upper_bound; eauto.
          eapply merge_is_upper_bound'; eauto.
          all: apply Process_out; auto.
@@ -3815,7 +3831,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
 + clear s'0 H8 N'0 H7 p0 H0 s0 H5 H.
   rename t into X, l into ps'.
   assert (projectable_C D C ps) as HC'.
-  1: apply strongly_projectable_C'. apply Hsp.
+  1: apply str_proj_C'. apply Hsp.
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
   1: { revert H1. unfold epp_C. elim In_dec; simpl; auto. discriminate. }
@@ -3823,7 +3839,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
   1: intro. rewrite epp_C_RT_Call in H1; auto; inversion H1.
   assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
   1: intros. apply Hin. simpl; sup.
-  assert (forall p, In p ps -> strongly_projectable D C p) as Hsp'. apply Hsp.
+  assert (forall p, In p ps -> str_proj D C p) as Hsp'. apply Hsp.
   elim (IHC HC' Hsp' Hin' (Network_rm _ (epp_C D ps C HC') p | p[B1])); intros.
   rename x into C'. destroy H0.
   exists (RT_Call X ps' C'); repeat split.
@@ -3832,7 +3848,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     intros; intro. rewrite H8 in H7; auto.
   * intros; intro r. rewrite H3.
     assert (projectable_C D C' ps) as H'.
-    1: apply strongly_projectable_C'; intros. eapply CCC_To_strongly_projectable_Cond; eauto.
+    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Cond; eauto.
     specialize (H0 H' r).
     elim ((@eq_dec Pid) r p); intro Hpr.
     2: elim (In_dec (@eq_dec Pid) r ps'); intro Hr.
@@ -3841,7 +3857,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       rewrite epp_C_RT_Call_out with (HC':=H'); auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H0; auto.
-      apply more_branches_refl'.
+      apply MB_refl'.
       repeat rewrite epp_C_RT_Call; auto.
       1,2: apply Hin; simpl; sup.
       all: apply Process_out; auto.
@@ -3856,7 +3872,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
 + clear s'0 H8 N'0 H7 p0 H0 s0 H5 H.
   rename t into X, l into ps'.
   assert (projectable_C D C ps) as HC'.
-  1: apply strongly_projectable_C'. apply Hsp.
+  1: apply str_proj_C'. apply Hsp.
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
   1: { revert H1. unfold epp_C. elim In_dec; simpl; auto. discriminate. }
@@ -3864,7 +3880,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
   1: intro. rewrite epp_C_RT_Call in H1; auto; inversion H1.
   assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
   1: intros. apply Hin. simpl; sup.
-  assert (forall p, In p ps -> strongly_projectable D C p) as Hsp'. apply Hsp.
+  assert (forall p, In p ps -> str_proj D C p) as Hsp'. apply Hsp.
   elim (IHC HC' Hsp' Hin' (Network_rm _ (epp_C D ps C HC') p | p[B2])); intros.
   rename x into C'. destroy H0.
   exists (RT_Call X ps' C'); repeat split.
@@ -3873,7 +3889,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     intros; intro. rewrite H8 in H7; auto.
   * intros; intro r. rewrite H3.
     assert (projectable_C D C' ps) as H'.
-    1: apply strongly_projectable_C'; intros. eapply CCC_To_strongly_projectable_Cond; eauto.
+    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Cond; eauto.
     specialize (H0 H' r).
     elim ((@eq_dec Pid) r p); intro Hpr.
     2: elim (In_dec (@eq_dec Pid) r ps'); intro Hr.
@@ -3882,7 +3898,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       rewrite epp_C_RT_Call_out with (HC':=H'); auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H0; auto.
-      apply more_branches_refl'.
+      apply MB_refl'.
       repeat rewrite epp_C_RT_Call; auto.
       1,2: apply Hin; simpl; sup.
       all: apply Process_out; auto.
@@ -3910,7 +3926,7 @@ Qed.
 
 Lemma SP_To_bproj_Call : forall D (D':DefSetB Sig') ps C HC s N' s' p X Xs,
   Choreography_WF C -> within_Xs Xs C -> In X Xs ->
-  (forall p, In p ps -> strongly_projectable D C p) ->
+  (forall p, In p ps -> str_proj D C p) ->
   (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
   (forall p HX, D' (X,p) = epp_C D ps (snd (D X)) HX p) ->
   (forall p X, In p (CCC_pn (snd (D X)) (Names D))
@@ -3967,7 +3983,7 @@ induction C; intros. induction e.
     - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
       2,3: apply Process_out; auto.
       rewrite epp_C_Com_r with (HC':=H'), epp_C_Com_r with (HC':=HC'); auto.
-    - intro. apply more_branches_refl'.
+    - intro. apply MB_refl'.
       rewrite Par_proj1', Network_rm_out; auto.
       2: apply Process_out; auto.
       rewrite epp_C_out, epp_C_out; auto.
@@ -4023,7 +4039,7 @@ induction C; intros. induction e.
     - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
       2,3: apply Process_out; auto.
       rewrite epp_C_Sel_r with (HC':=H'), epp_C_Sel_r with (HC':=HC'); auto.
-    - intro. apply more_branches_refl'.
+    - intro. apply MB_refl'.
       rewrite Par_proj1', Network_rm_out; auto.
       2: apply Process_out; auto.
       rewrite epp_C_out, epp_C_out; auto.
@@ -4036,9 +4052,9 @@ induction C; intros. induction e.
   rename t into p', t0 into b.
   generalize (projectable_C_inv_Then _ _ _ _ _ _ HC); intro HC1.
   generalize (projectable_C_inv_Else _ _ _ _ _ _ HC); intro HC2.
-  assert (forall p, In p ps -> strongly_projectable D C1 p) as Hsp1.
+  assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
   1: apply Hsp.
-  assert (forall p, In p ps -> strongly_projectable D C2 p) as Hsp2.
+  assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
   1: apply Hsp.
   clear Hsp.
   (* get the remaining equalities *)
@@ -4081,10 +4097,10 @@ induction C; intros. induction e.
       2,3,4: apply Process_out; auto.
       intros. eapply merge_is_lub.
       3: apply epp_C_Cond_r; auto.
-      1,2: eapply more_branches_trans; eauto.
+      1,2: eapply MB_trans; eauto.
       eapply merge_is_upper_bound, epp_C_Cond_r; auto.
       eapply merge_is_upper_bound', epp_C_Cond_r; auto.
-    - intros. apply more_branches_refl'.
+    - intros. apply MB_refl'.
       rewrite Par_proj1', Network_rm_out; auto.
       2: apply Process_out; auto.
       rewrite epp_C_out, epp_C_out; auto.
@@ -4121,7 +4137,7 @@ induction C; intros. induction e.
   - exists (snd (D X)); split.
     apply C_Call_Local; auto.
     intro. intro r. rewrite H5.
-    apply more_branches_refl'.
+    apply MB_refl'.
     elim ((@eq_dec Pid) p r); intro Hpr.
     * rewrite <- Hpr, Par_proj2. 2: apply Network_rm_In.
       rewrite Process_refl; auto.
@@ -4140,16 +4156,16 @@ induction C; intros. induction e.
     2: elim (In_dec (@eq_dec Pid) r (fst (D X))); intro Hr.
     * rewrite <- Hpr, Par_proj2. 2: apply Network_rm_In.
       rewrite Process_refl.
-      apply more_branches_refl'.
+      apply MB_refl'.
       rewrite epp_C_RT_Call_out with (HC':=HD' X HXs); auto.
       intro Hp; apply set_remove'_2 in Hp; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
-      apply more_branches_refl'.
+      apply MB_refl'.
       rewrite epp_C_RT_Call, epp_C_Call; auto.
       apply set_remove'_3; auto.
       apply Process_out; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
-      apply more_branches_refl'.
+      apply MB_refl'.
       rewrite epp_C_out', epp_C_out'; auto.
       simpl. sup. intro; apply Hr.
       inversion_clear H6. eapply set_remove'_1; eauto.
@@ -4163,7 +4179,7 @@ induction C; intros. induction e.
   apply Choreography_WF_Call_1 in HWF.
   intro. destroy Hann. clear Hann.
   assert (projectable_C D C ps) as HCp.
-  1: apply strongly_projectable_C'; apply Hsp.
+  1: apply str_proj_C'; apply Hsp.
   elim (eq_dec r X); intro Hr. (* case 2 pending *)
   revert dependent HC. rewrite Hr.
   rewrite Hr in Hsp, Hin, HCXs; clear r Hr; intros.
@@ -4184,7 +4200,7 @@ induction C; intros. induction e.
       rewrite (HD _ (HD' _ HXs)); auto.
       apply H9; apply epp_C_bproj; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
-      rewrite epp_C_RT_Call_out with (HC':=HC'). apply more_branches_refl.
+      rewrite epp_C_RT_Call_out with (HC':=HC'). apply MB_refl.
       intro. apply Hpr. eapply set_size_1; eauto.
       apply Process_out; auto.
   - exists (RT_Call X (l [\] p) C).
@@ -4202,13 +4218,13 @@ induction C; intros. induction e.
       apply H7; apply epp_C_bproj; auto.
       intro Hp; apply set_remove'_2 in Hp; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
-      apply more_branches_refl'.
+      apply MB_refl'.
       rewrite epp_C_RT_Call, epp_C_RT_Call; auto.
       1,3: apply Hin; simpl; sup.
       apply set_remove'_3; auto.
       apply Process_out; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
-      apply more_branches_refl'.
+      apply MB_refl'.
       rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
       rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
       intro. apply Hr. eapply set_remove'_1; eauto.
@@ -4226,7 +4242,7 @@ induction C; intros. induction e.
       assert (projectable_C D C' ps).
       1: {
         eapply (CCC_To_projectable_C D ps C s C' s' (RL_Call X p) Xs); eauto.
-        apply Hsp. intros; eapply initial_strongly_projectable; eauto.
+        apply Hsp. intros; eapply initial_str_proj; eauto.
         apply Hinit; auto.
         intros. intro. apply Hnames.
         intros r Z. intros. elim (Hinit Z); auto.
@@ -4242,7 +4258,7 @@ induction C; intros. induction e.
          rewrite <- Hpr, Par_proj2 in H; auto.
          apply Network_rm_In.
       ++ repeat rewrite epp_C_RT_Call; auto.
-         apply more_branches_refl.
+         apply MB_refl.
          all: apply Hin; simpl; sup.
       ++ rewrite epp_C_RT_Call_out with (HC':=H7); auto.
          rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
@@ -4267,7 +4283,7 @@ induction C; intros. induction e.
       assert (projectable_C D C' ps).
       1: {
         eapply (CCC_To_projectable_C D ps C s C' s' (RL_Call X p) Xs); eauto.
-        apply Hsp. intros; eapply initial_strongly_projectable; eauto.
+        apply Hsp. intros; eapply initial_str_proj; eauto.
         apply Hinit; auto.
         intros. intro. apply Hnames.
         intros r Z. intros. elim (Hinit Z); auto.
@@ -4283,7 +4299,7 @@ induction C; intros. induction e.
          rewrite <- Hpr, Par_proj2 in H; auto.
          apply Network_rm_In.
       ++ repeat rewrite epp_C_RT_Call; auto.
-         apply more_branches_refl.
+         apply MB_refl.
          all: apply Hin; simpl; sup.
       ++ rewrite epp_C_RT_Call_out with (HC':=H6); auto.
          rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
@@ -4329,7 +4345,7 @@ Qed.
 
 Lemma EPP_Sound : forall P Xs ps,
   Program_WF _ Xs P -> well_ann _ P -> forall (HP:projectable Xs ps P),
-  (forall p, In p ps -> strongly_projectable (Procedures _ P) (Main P) p) ->
+  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
   forall s tl N' s', (epp Xs ps P HP,s) --[tl]--> (N',s') ->
@@ -4353,11 +4369,11 @@ destroy H. simpl in H6, H7, H9.
 inversion HP. simpl in H10, H11. destroy H11.
 simpl in H1, H2, H3.
 red in H12; rewrite Forall_forall in H12.
-assert (forall X p, In X Xs -> In p ps -> strongly_projectable D (snd (D X)) p).
+assert (forall X p, In X Xs -> In p ps -> str_proj D (snd (D X)) p).
 1: {
   intros. elim (In_dec (@eq_dec Pid) p (fst (D X))); intro.
-  eapply initial_strongly_projectable; eauto. apply (H X); auto.
-  eapply initial_strongly_projectable'; eauto. apply (H X); auto.
+  eapply initial_str_proj; eauto. apply (H X); auto.
+  eapply initial_str_proj'; eauto. apply (H X); auto.
   intro; apply b, H0; auto.
 }
 induction t. 2: induction l.
@@ -4368,7 +4384,7 @@ induction t. 2: induction l.
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Com p v q x)); repeat split; auto.
   - apply (@CCP_To_intro Sig); auto.
-  - simpl. intros. apply more_branches_N_refl'.
+  - simpl. intros. apply MBN_refl'.
     eapply Network_eq_trans. apply (H4 H17); auto.
     apply Network_eq_sym; apply epp_C_char.
   - apply H1.
@@ -4380,7 +4396,7 @@ induction t. 2: induction l.
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Sel p q left)); repeat split; auto.
   - apply (@CCP_To_intro Sig); auto.
-  - simpl. intros. apply more_branches_N_refl'.
+  - simpl. intros. apply MBN_refl'.
     eapply Network_eq_trans. apply (H4 H17); auto.
     apply Network_eq_sym; apply epp_C_char.
   - apply H1.
@@ -4392,7 +4408,7 @@ induction t. 2: induction l.
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Sel p q right)); repeat split; auto.
   - apply (@CCP_To_intro Sig); auto.
-  - simpl. intros. apply more_branches_N_refl'.
+  - simpl. intros. apply MBN_refl'.
     eapply Network_eq_trans. apply (H4 H17); auto.
     apply Network_eq_sym; apply epp_C_char.
   - apply H1.
@@ -4404,8 +4420,8 @@ induction t. 2: induction l.
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Cond p)); repeat split; auto.
   - apply (@CCP_To_intro Sig); auto.
-  - simpl. intros. eapply more_branches_N_trans. apply (H4 H17).
-    apply more_branches_N_refl'.
+  - simpl. intros. eapply MBN_trans. apply (H4 H17).
+    apply MBN_refl'.
     apply Network_eq_sym. apply epp_C_char.
   - apply H1.
   - apply H2.
@@ -4420,8 +4436,8 @@ induction t. 2: induction l.
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Call Y p)); repeat split; auto.
   - apply (@CCP_To_intro Sig); auto.
-  - simpl. intros. eapply more_branches_N_trans. apply (H4 H19).
-    apply more_branches_N_refl'.
+  - simpl. intros. eapply MBN_trans. apply (H4 H19).
+    apply MBN_refl'.
     apply Network_eq_sym. apply epp_C_char.
   - replace D' with (Procs (epp _ _ _ HP)).
     2: rewrite <- H5; auto.
@@ -4432,11 +4448,11 @@ induction t. 2: induction l.
     intro. apply Hr, H0; auto.
   - intros; apply H0; auto.
   - intros. apply Forall_forall; intros.
-    apply strongly_projectable_C; auto.
+    apply str_proj_C; auto.
   - split; eauto. apply H; auto.
 Qed.
 
-Lemma SP_To_more_branches_N_epp : forall D N1 s N2 s' tl D' ps C HC,
+Lemma SP_To_MBN_epp : forall D N1 s N2 s' tl D' ps C HC,
   N1 (>>) epp_C D' ps C HC -> <<N1,s>> --[tl,D]--> <<N2,s'>> ->
   exists N2', <<epp_C D' ps C HC,s>> --[tl,D]--> <<N2',s'>> /\ N2 (>>) N2'.
 Proof.
@@ -4457,7 +4473,7 @@ inversion HTo.
   exists (Network_rm _ (Network_rm _ (epp_C D' ps C HC) p) q | p[Bp] | q[Bq]).
   repeat split.
   1: apply S_Com with (a:ann Sig') Bp a' Bq; auto. apply Network_eq_refl.
-  eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
+  eapply MBN_trans. apply MBN_refl'; eauto.
   intro r. elim ((@eq_dec Pid) r p); intro Hp.
   2: elim ((@eq_dec Pid) r q); intro Hq.
   - rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
@@ -4478,7 +4494,7 @@ inversion HTo.
     exists (epp_C D' ps C HC \ p \ q | p[Bp] | q[Bl']).
     repeat split.
     1: apply S_LSel with (a:ann Sig') Bp a' Bl' None; auto. apply Network_eq_refl.
-    eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
+    eapply MBN_trans. apply MBN_refl'; eauto.
     intro r. elim ((@eq_dec Pid) r p); intro Hp.
     2: elim ((@eq_dec Pid) r q); intro Hq.
     * rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
@@ -4488,7 +4504,7 @@ inversion HTo.
     exists (epp_C D' ps C HC \ p \ q | p[Bp] | q[Bl']).
     repeat split.
     1: apply S_LSel with (a:ann Sig') Bp a' Bl' (Some (a'0,Br')); auto. apply Network_eq_refl.
-    eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
+    eapply MBN_trans. apply MBN_refl'; eauto.
     intro r. elim ((@eq_dec Pid) r p); intro Hp.
     2: elim ((@eq_dec Pid) r q); intro Hq.
     * rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
@@ -4508,7 +4524,7 @@ inversion HTo.
     exists (epp_C D' ps C HC \ p \ q | p[Bp] | q[Br']).
     repeat split.
     1: apply S_RSel with (a:ann Sig') Bp a' None Br'; auto. apply Network_eq_refl.
-    eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
+    eapply MBN_trans. apply MBN_refl'; eauto.
     intro r. elim ((@eq_dec Pid) r p); intro Hp.
     2: elim ((@eq_dec Pid) r q); intro Hq.
     * rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
@@ -4519,7 +4535,7 @@ inversion HTo.
     exists (epp_C D' ps C HC \ p \ q | p[Bp] | q[Br']).
     repeat split.
     1: apply S_RSel with (a:ann Sig') Bp a' (Some (a0,Bl')) Br'; auto. apply Network_eq_refl.
-    eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
+    eapply MBN_trans. apply MBN_refl'; eauto.
     intro r. elim ((@eq_dec Pid) r p); intro Hp.
     2: elim ((@eq_dec Pid) r q); intro Hq.
     * rewrite Hp, Network_rm_add_2_p, Network_rm_add_2_p; auto.
@@ -4532,7 +4548,7 @@ inversion HTo.
   exists (Network_rm _ (epp_C D' ps C HC) p | p[B1']).
   repeat split.
   1: apply (@S_Then Sig') with b B1' B2'; auto. apply Network_eq_refl.
-  eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
+  eapply MBN_trans. apply MBN_refl'; eauto.
   intro r. elim ((@eq_dec Pid) r p); intro Hp.
   - rewrite Hp, Par_proj2, Par_proj2, Process_refl, Process_refl; auto;
       apply Network_rm_In.
@@ -4545,7 +4561,7 @@ inversion HTo.
   exists (epp_C D' ps C HC \ p | p[B2']).
   repeat split. 
   1: apply (@S_Else Sig') with b B1' B2'; auto. apply Network_eq_refl.
-  eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
+  eapply MBN_trans. apply MBN_refl'; eauto.
   intro r. elim ((@eq_dec Pid) r p); intro Hp.
   - rewrite Hp, Par_proj2, Par_proj2, Process_refl, Process_refl; auto;
       apply Network_rm_In.
@@ -4558,15 +4574,15 @@ inversion HTo.
   exists (epp_C D' ps C HC \ p | p [D X]).
   repeat split.
   1: apply S_Call; auto. apply Network_eq_refl.
-  eapply more_branches_N_trans. apply more_branches_N_refl'; eauto.
+  eapply MBN_trans. apply MBN_refl'; eauto.
   intro r. elim ((@eq_dec Pid) r p); intro Hp.
   - rewrite Hp, Par_proj2, Par_proj2. 2,3: apply Network_rm_In.
-    apply more_branches_refl.
+    apply MB_refl.
   - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto;
       apply Process_out; auto.
 Qed.
 
-Lemma SPP_To_more_branches_N_epp : forall P1 s P2 s' tl Xs ps P HP,
+Lemma SPP_To_MBN_epp : forall P1 s P2 s' tl Xs ps P HP,
   (forall X, Procs P1 X = Procs (epp Xs ps P HP) X) ->
   Net P1 (>>) Net (epp Xs ps P HP) -> SPP_To _ (P1,s) tl (P2,s') ->
   exists P2', ((epp Xs ps P HP,s) --[tl]--> (P2',s')) /\ Net P2 (>>) Net P2'
@@ -4579,7 +4595,7 @@ rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H1) in H1; clear D2.
 induction P as (D',C).
 inversion HP. inversion_clear H3. clear H5. simpl in H2, H4.
 inversion H1. clear s'0 H10 N' H9 tl H5 s0 H7 N H6 D0 H3 H1.
-eapply SP_To_more_branches_N_epp with (HC:=H2) in H8; eauto.
+eapply SP_To_MBN_epp with (HC:=H2) in H8; eauto.
 2: intro r; rewrite <- epp_C_char with (HP:=HP); auto.
 destroy H8. rename x into N2'.
 exists (Procs (epp _ _ _ HP),N2'); repeat split; auto.
@@ -4591,9 +4607,9 @@ Qed.
 
 (** Generalizing the last result to -->* already requires the EPP Theorem. *)
 
-Lemma SPP_ToStar_more_branches_N : forall P1 s P2 s' tl Xs ps P,
+Lemma SPP_ToStar_MBN_epp : forall P1 s P2 s' tl Xs ps P,
   Program_WF _ Xs P -> well_ann _ P -> forall (HP:projectable Xs ps P),
-  (forall p, In p ps -> strongly_projectable (Procedures _ P) (Main P) p) ->
+  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
   (forall X, Procs P1 X = Procs (epp Xs ps P HP) X) ->
@@ -4612,7 +4628,7 @@ revert dependent C. revert s s' N1 N2 H6. induction tl; intros.
 + inversion H6. clear c3 H11 l H8 t H7 c1 H9 H6. rename a into t.
   induction c2 as ((D2,N3),s'').
   rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H10) in H12, H10. clear D2.
-  apply SPP_To_more_branches_N_epp with (HP:=HP) in H10; auto.
+  apply SPP_To_MBN_epp with (HP:=HP) in H10; auto.
   destroy H10. induction x as (D3,N3'). simpl in H7, H10.
   generalize H6 as H6'; intro.
   rewrite (SP_eta _ (epp _ _ _ HP)) in H6'.
@@ -4632,14 +4648,14 @@ revert dependent C. revert s s' N1 N2 H6. induction tl; intros.
   rewrite (SP_eta _ (epp _ _ _ H9)) in H11.
   rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H11) in H13, H12, H11.
   clear D2'. rewrite <- SP_eta in H11. simpl in H11, H12, H13.
-  apply SPP_ToStar_more_branches_N with (P1':=(Procs (epp _ _ _ HP),N3')) in H11; auto.
+  apply SPP_ToStar_MBN with (P1':=(Procs (epp _ _ _ HP),N3')) in H11; auto.
   destroy H11. rename x into P2'. simpl in H11, H15.
   exists P2'; repeat split; auto.
   - econstructor; eauto.
   - simpl.
-    apply SPP_ToStar_more_branches_N with (P1':=(D,N3)) in H14; auto.
-    destroy H14. apply more_branches_N_trans with (Net x); auto.
-    apply more_branches_N_refl'.
+    apply SPP_ToStar_MBN with (P1':=(D,N3)) in H14; auto.
+    destroy H14. apply MBN_trans with (Net x); auto.
+    apply MBN_refl'.
     change N2 with (Net (D,N2)).
     eapply SPP_ToStar_deterministic_1; eauto.
     simpl; intro.
@@ -4648,15 +4664,15 @@ revert dependent C. revert s s' N1 N2 H6. induction tl; intros.
     induction X. repeat rewrite epp_D_char with (HD:=HD); auto.
   - simpl; intro. induction X; repeat rewrite epp_D_char with (HD:=HD); auto.
   - eapply CCC_To_Program_WF; eauto.
-  - eapply CCP_To_strongly_projectable; eauto.
+  - eapply CCP_To_str_proj; eauto.
   - intros. apply H2. eapply CCC_To_pn''; eauto.
   - intro; rewrite H10. induction X; repeat rewrite epp_D_char with (HD:=HD); auto.
-  - apply more_branches_N_trans with N3'; auto.
+  - apply MBN_trans with N3'; auto.
 Qed.
 
 Lemma EPP_Sound' : forall P Xs ps,
   Program_WF _ Xs P -> well_ann _ P -> forall (HP:projectable Xs ps P),
-  (forall p, In p ps -> strongly_projectable (Procedures _ P) (Main P) p) ->
+  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
   forall s tl P' s', (epp Xs ps P HP,s) --[tl]-->* (P',s') ->
@@ -4668,14 +4684,14 @@ induction P as (D,C), P' as (D',N).
 revert dependent N. revert dependent C. revert D' s s'.
 induction tl; intros; inversion H4.
 + eexists; exists nil. repeat split. constructor.
-  intro. apply more_branches_N_refl'.
+  intro. apply MBN_refl'.
   inversion HP. simpl in H9.
   apply Network_eq_trans with (epp_C D ps C H9).
   2: apply Network_eq_sym. all: apply epp_C_char.
 + clear c3 H9 l H6 t H5 c1 H7 H4. rename a into t.
   induction c2 as (P'', s'').
-  eapply SPP_To_more_branches_N_epp in H8; eauto. destroy H8.
-  rename x into P'. 2: apply more_branches_N_refl.
+  eapply SPP_To_MBN_epp in H8; eauto. destroy H8.
+  rename x into P'. 2: apply MBN_refl.
   rewrite (SP_eta _ (epp _ _ _ HP)), (SP_eta _ P') in H4.
   generalize (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H4); intro H4'.
   rewrite <- SP_eta, <- SP_eta in H4.
@@ -4688,19 +4704,19 @@ induction tl; intros; inversion H4.
   generalize (H4 H7); clear H4; intro.
   assert (Program_WF _ Xs (D,C1)).
   1: eapply CCC_To_Program_WF; eauto.
-  assert (forall p, In p ps -> strongly_projectable D C1 p).
+  assert (forall p, In p ps -> str_proj D C1 p).
   1: {
     change D with (Procedures _ (D,C1)).
     change C1 with (Main (D,C1)) at 2.
     intros. inversion HP. destroy H13.
-    eapply CCP_To_strongly_projectable with (P:=(D,C)); eauto.
+    eapply CCP_To_str_proj with (P:=(D,C)); eauto.
   }
   assert (forall p, In p (CCC_pn C1 (Vars (D,C1))) -> In p ps).
   1:{
     change C1 with (Main (D,C1)) at 1.
     intros. apply H2. eapply CCC_To_pn''; eauto.
   }
-  apply SPP_ToStar_more_branches_N with (HP:=H7) in H10; auto.
+  apply SPP_ToStar_MBN_epp with (HP:=H7) in H10; auto.
   - destroy H10.
     rename x into P1. induction P1 as (D1,N1).
     eapply IHtl in H9; auto. 2: apply H13.
@@ -4708,11 +4724,11 @@ induction tl; intros; inversion H4.
     clear IHtl. exists P2, (t'::tl').
     repeat split.
     eapply CCT_Step; eauto.
-    intro. apply more_branches_N_trans with N1; auto.
+    intro. apply MBN_trans with N1; auto.
   - intro. rewrite H8, <- H4'.
     inversion HP. destroy H14. induction X.
     simpl in H15; repeat rewrite epp_D_char with (HD:=H15); auto.
-  - apply more_branches_N_trans with (Net P'); auto.
+  - apply MBN_trans with (Net P'); auto.
 Qed.
 
 End EPP_Theorem.

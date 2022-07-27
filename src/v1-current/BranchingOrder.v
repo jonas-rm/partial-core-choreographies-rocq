@@ -2,17 +2,9 @@ Require Export SP.
 
 Section BranchingOrder.
 
-Variable Sig : Signature.
+Local Ltac rew_inv H H' := rewrite <- H in H'; inversion H'.
 
-Notation Pid := (pid Sig).
-Notation Var := (var Sig).
-Notation Value := (value Sig).
-Notation Expr := (expr Sig).
-Notation BExpr := (bexpr Sig).
-Notation RecVar := (recvar Sig).
-Notation Ann := (ann Sig).
-Notation Ev := (ev Sig).
-Notation BEv := (bev Sig).
+Variable Sig : Signature.
 
 (** ** Branching order
   The branching order is defined as: B has more branches than B' if B' can be
@@ -44,15 +36,13 @@ Notation "B [>>] B'" := (more_branches B B') (at level 50).
 
 (** Order properties. *)
 
-Lemma more_branches_refl : forall B, B [>>] B.
+Lemma MB_refl : forall B, B [>>] B.
 Proof. BInduction B; try constructor; auto. Qed.
 
-Lemma more_branches_refl' : forall B B', B = B' -> B [>>] B'.
-Proof. intros. rewrite H. apply more_branches_refl. Qed.
+Lemma MB_refl' : forall B B', B = B' -> B [>>] B'.
+Proof. intros. rewrite H. apply MB_refl. Qed.
 
-Local Ltac rew_inv H H' := rewrite <- H in H'; inversion H'.
-
-Lemma more_branches_trans : forall B B' B'', B [>>] B' -> B' [>>] B'' -> B [>>] B''.
+Lemma MB_trans : forall B B' B'', B [>>] B' -> B' [>>] B'' -> B [>>] B''.
 Proof.
 BInduction B; intros; try (inversion H; rewrite <- H2 in H0; inversion H0; constructor; eauto).
 + inversion H. rew_inv H1 H0. constructor.
@@ -69,7 +59,7 @@ BInduction B; intros; try (inversion H; rewrite <- H2 in H0; inversion H0; const
 + inversion H. rew_inv H1 H0; constructor.
 Qed.
 
-Lemma more_branches_antisym : forall B B', B [>>] B' -> B' [>>] B -> B = B'.
+Lemma MB_antisym : forall B B', B [>>] B' -> B' [>>] B -> B = B'.
 Proof.
 BInduction B; intros.
 all: inversion H; inversion H0; auto.
@@ -100,17 +90,17 @@ Definition more_branches_N (N N':Network Sig) := forall p, N p [>>] N' p.
 Notation "N (>>) N'" := (more_branches_N N N') (at level 50).
 
 Open Scope SP.
- 
-Lemma more_branches_N_refl : forall N, N (>>) N.
-Proof. intros; intro. apply more_branches_refl. Qed.
 
-Lemma more_branches_N_refl' : forall N N', N (==) N' -> N (>>) N'.
-Proof. intros; intro. apply more_branches_refl'; auto. Qed.
+Lemma MBN_refl : forall N, N (>>) N.
+Proof. intros; intro. apply MB_refl. Qed.
 
-Lemma more_branches_N_trans : forall N N' N'', N (>>) N' -> N' (>>) N'' -> N (>>) N''.
-Proof. intros; intro. eapply more_branches_trans; eauto. Qed.
+Lemma MBN_refl' : forall N N', N (==) N' -> N (>>) N'.
+Proof. intros; intro. apply MB_refl'; auto. Qed.
 
-Lemma SP_To_more_branches_N : forall D N1 s N2 s' D' N1' tl,
+Lemma MBN_trans : forall N N' N'', N (>>) N' -> N' (>>) N'' -> N (>>) N''.
+Proof. intros; intro. eapply MB_trans; eauto. Qed.
+
+Lemma SP_To_MBN : forall D N1 s N2 s' D' N1' tl,
   <<N1,s>> --[tl,D]--> <<N2,s'>> -> N1' (>>) N1 -> (forall X, D X = D' X) ->
   exists N2', <<N1',s>> --[tl,D']--> <<N2',s'>> /\ N2' (>>) N2.
 Proof.
@@ -213,13 +203,13 @@ intros. rename H1 into HX. induction H.
   intro r. rewrite H1.
   elim (eq_dec r p); intro Hp.
   rewrite Hp, Par_proj2, Par_proj2; auto.
-  unfold Process. repeat rewrite DecType_eq. apply more_branches_refl.
+  unfold Process. repeat rewrite DecType_eq. apply MB_refl.
   1,2: apply Network_rm_In.
   rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
   all: unfold Process; repeat rewrite DecType_neq; auto.
 Qed.
 
-Lemma SPP_To_more_branches_N : forall P1 s P2 s' P1' tl,
+Lemma SPP_To_MBN : forall P1 s P2 s' P1' tl,
   Net P1' (>>) Net P1 -> (forall X, Procs P1 X = Procs P1' X) ->
   (P1,s) --[tl]--> (P2,s') ->
   exists P2', (P1',s) --[tl]--> (P2',s') /\ Net P2' (>>) Net P2
@@ -227,7 +217,7 @@ Lemma SPP_To_more_branches_N : forall P1 s P2 s' P1' tl,
 Proof.
 intros.
 inversion H1.
-apply SP_To_more_branches_N with (D':= Procs P1') (N1':=Net P1') in H5; auto.
+apply SP_To_MBN with (D':= Procs P1') (N1':=Net P1') in H5; auto.
 2: replace N with (Net P1); auto; rewrite <- H2; auto.
 destroy H5. exists (Procs P1',x).
 repeat split; auto.
@@ -238,7 +228,7 @@ rewrite <- H2; auto.
 intro. rewrite <- H0, <- H2; auto.
 Qed.
 
-Lemma SPP_ToStar_more_branches_N : forall P1 s P2 s' P1' tl,
+Lemma SPP_ToStar_MBN : forall P1 s P2 s' P1' tl,
   Net P1' (>>) Net P1 -> (forall X, Procs P1 X = Procs P1' X) ->
   (P1,s) --[tl]-->* (P2,s') ->
   exists P2', (P1',s) --[tl]-->* (P2',s') /\ Net P2' (>>) Net P2
@@ -248,7 +238,7 @@ intros. revert P1 s P2 s' P1' H H0 H1.
 induction tl; intros; inversion H1.
 + rewrite <- H3. exists P1'; repeat split; auto. constructor.
 + induction c2.
-  apply SPP_To_more_branches_N with (P1':=P1') in H5; auto.
+  apply SPP_To_MBN with (P1':=P1') in H5; auto.
   destroy H5.
   clear c1 H4 t H2 l H3 c3 H6.
   apply IHtl with (P1':=x) in H7; auto.

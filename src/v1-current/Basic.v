@@ -6,8 +6,7 @@ Require Export Arith.
 
 Ltac destroy H := repeat (elim H; intro; clear H; intro H).
 
-(** * Auxiliary logical results *)
-
+(* * * Auxiliary logical results
 Section Logic.
 
 Variable A:Type.
@@ -33,6 +32,7 @@ Lemma prove_if : forall (t t' t'':A),
 Proof. induction b; simpl; tauto. Qed.
 
 End Logic.
+*)
 
 (** * Natural numbers *)
 
@@ -365,7 +365,9 @@ end.
 
 Set Implicit Arguments.
 
-Lemma set_union_elim : forall T T_dec (x:T) (X Y:set T),
+Hypothesis T_dec : forall x y:T, {x=y}+{x<>y}.
+
+Lemma set_union_elim : forall (x:T) (X Y:set T),
   In x (set_union T_dec X Y) -> {In x X} + {In x Y}.
 Proof.
 induction Y.
@@ -379,9 +381,11 @@ induction Y.
     intros; elim b; auto.
 Qed.
 
-(** Equality and inclusion *)
+Lemma set_union_not_In : forall (x:T) (X Y:set T),
+  ~In x (set_union T_dec X Y) -> ~In x X /\ ~In x Y.
+Proof. intros. rewrite set_union_iff in H. tauto. Qed.
 
-Hypothesis T_dec : forall x y:T, {x=y}+{x<>y}.
+(** Equality and inclusion *)
 
 Definition set_equals (X Y:set T) := forall z, In z X <-> In z Y.
 

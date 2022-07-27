@@ -584,7 +584,7 @@ induction ps; intros.
 Qed.
 
 (** ** Well-formedness
-  Not really used, since this is guaranteed by EPP.
+  Not used too much, since this is guaranteed by EPP.
 *)
 
 Fixpoint Behaviour_WF (p:Pid) (B:Behaviour) : Prop :=
@@ -672,8 +672,8 @@ elim (Network_WF_par N N'); intros; auto.
 apply Par_WF; auto.
 Qed.
 
-(* WF program doesn't make sense, because procedures don't know the processes
-  that will execute them, so we do not know what to pass to Behaviour_WF.
+(** Program_WF doesn't make sense, because procedures don't know the processes
+   that will execute them, so we do not know what to pass to Behaviour_WF.
    But: program with WF network reduces to program with WF network is
    an interesting property that is guaranteed by EPP. *)
 

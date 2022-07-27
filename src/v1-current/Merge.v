@@ -11,50 +11,91 @@ Variable Sig : Signature.
 
 Inductive merge : Behaviour Sig -> Behaviour Sig -> Behaviour Sig -> Prop :=
 | merge_End : merge (End _) (End _) (End _)
-| merge_Send : forall p e a B1 B2 B, merge B1 B2 B -> merge (p ! e @! a; B1) (p ! e @! a;B2) (p ! e @! a;B)
-| merge_Recv : forall p x a B1 B2 B, merge B1 B2 B -> merge (p ? x @? a;B1) (p ? x @? a;B2) (p ? x @? a;B)
-| merge_Sel : forall p l a B1 B2 B, merge B1 B2 B -> merge (p (+) l @+ a;B1) (p (+) l @+ a;B2) (p (+) l @+ a;B)
+| merge_Send : forall p e a B1 B2 B, merge B1 B2 B ->
+               merge (p ! e @! a; B1) (p ! e @! a;B2) (p ! e @! a;B)
+| merge_Recv : forall p x a B1 B2 B, merge B1 B2 B ->
+               merge (p ? x @? a;B1) (p ? x @? a;B2) (p ? x @? a;B)
+| merge_Sel : forall p l a B1 B2 B, merge B1 B2 B ->
+              merge (p (+) l @+ a;B1) (p (+) l @+ a;B2) (p (+) l @+ a;B)
 | merge_Branching_NNNN : forall p,
-                          merge (p & None // None) (p & None // None) (p & None // None)
+                         merge (p & None // None)
+                               (p & None // None)
+                               (p & None // None)
 | merge_Branching_NNNS : forall p aR bR,
-                          merge (p & None // None) (p & None // Some (aR,bR)) (p & None // Some (aR,bR))
+                         merge (p & None // None)
+                               (p & None // Some (aR,bR))
+                               (p & None // Some (aR,bR))
 | merge_Branching_NNSN : forall p aL bL,
-                          merge (p & None // None) (p & Some (aL,bL) // None) (p & Some (aL,bL) // None)
+                         merge (p & None // None)
+                               (p & Some (aL,bL) // None)
+                               (p & Some (aL,bL) // None)
 | merge_Branching_NNSS : forall p aL bL aR bR,
-                          merge (p & None // None) (p & Some (aL,bL) // Some (aR,bR)) (p & Some (aL,bL) // Some (aR,bR))
+                         merge (p & None // None)
+                               (p & Some (aL,bL) // Some (aR,bR))
+                               (p & Some (aL,bL) // Some (aR,bR))
 | merge_Branching_NSNN : forall p aR bR,
-                          merge (p & None // Some (aR,bR)) (p & None // None) (p & None // Some (aR,bR))
+                         merge (p & None // Some (aR,bR))
+                               (p & None // None)
+                               (p & None // Some (aR,bR))
 | merge_Branching_NSNS : forall p aR bR1 bR2 bR, merge bR1 bR2 bR ->
-                          merge (p & None // Some (aR,bR1)) (p & None // Some (aR,bR2)) (p & None // Some (aR,bR))
+                         merge (p & None // Some (aR,bR1))
+                               (p & None // Some (aR,bR2))
+                               (p & None // Some (aR,bR))
 | merge_Branching_NSSN : forall p aL bL aR bR,
-                          merge (p & None // Some (aR,bR)) (p & Some (aL,bL) // None) (p & Some (aL,bL) // Some (aR,bR))
+                         merge (p & None // Some (aR,bR))
+                               (p & Some (aL,bL) // None)
+                               (p & Some (aL,bL) // Some (aR,bR))
 | merge_Branching_NSSS : forall p aL bL aR bR1 bR2 bR, merge bR1 bR2 bR ->
-                          merge (p & None // Some (aR,bR1)) (p & Some (aL,bL) // Some (aR,bR2)) (p & Some (aL,bL) // Some (aR,bR))
+                         merge (p & None // Some (aR,bR1))
+                               (p & Some (aL,bL) // Some (aR,bR2))
+                               (p & Some (aL,bL) // Some (aR,bR))
 | merge_Branching_SNNN : forall p aL bL,
-                          merge (p & Some (aL,bL) // None) (p & None // None) (p & Some (aL,bL) // None)
+                         merge (p & Some (aL,bL) // None)
+                               (p & None // None)
+                               (p & Some (aL,bL) // None)
 | merge_Branching_SNNS : forall p aL bL aR bR,
-                          merge (p & Some (aL,bL) // None) (p & None // Some (aR,bR)) (p & Some (aL,bL) // Some (aR,bR))
+                         merge (p & Some (aL,bL) // None)
+                               (p & None // Some (aR,bR))
+                               (p & Some (aL,bL) // Some (aR,bR))
 | merge_Branching_SNSN : forall p aL bL1 bL2 bL, merge bL1 bL2 bL ->
-                          merge (p & Some (aL,bL1) // None) (p & Some (aL,bL2) // None) (p & Some (aL,bL) // None)
+                         merge (p & Some (aL,bL1) // None)
+                               (p & Some (aL,bL2) // None)
+                               (p & Some (aL,bL) // None)
 | merge_Branching_SNSS : forall p aL bL1 bL2 bL aR bR, merge bL1 bL2 bL ->
-                          merge (p & Some (aL,bL1) // None) (p & Some (aL,bL2) // Some (aR,bR)) (p & Some (aL,bL) // Some (aR,bR))
+                         merge (p & Some (aL,bL1) // None)
+                               (p & Some (aL,bL2) // Some (aR,bR))
+                               (p & Some (aL,bL) // Some (aR,bR))
 | merge_Branching_SSNN : forall p aL bL aR bR,
-                          merge (p & Some (aL,bL) // Some (aR,bR)) (p & None // None) (p & Some (aL,bL) // Some (aR,bR))
+                         merge (p & Some (aL,bL) // Some (aR,bR))
+                               (p & None // None)
+                               (p & Some (aL,bL) // Some (aR,bR))
 | merge_Branching_SSNS : forall p aL bL aR bR1 bR2 bR, merge bR1 bR2 bR ->
-                          merge (p & Some (aL,bL) // Some (aR,bR1)) (p & None // Some (aR,bR2)) (p & Some (aL,bL) // Some (aR,bR))
+                         merge (p & Some (aL,bL) // Some (aR,bR1))
+                               (p & None // Some (aR,bR2))
+                               (p & Some (aL,bL) // Some (aR,bR))
 | merge_Branching_SSSN : forall p aL bL1 bL2 bL aR bR, merge bL1 bL2 bL ->
-                          merge (p & Some (aL,bL1) // Some (aR,bR)) (p & Some (aL,bL2) // None) (p & Some (aL,bL) // Some (aR,bR))
-| merge_Branching_SSSS : forall p aL bL1 bL2 bL aR bR1 bR2 bR, merge bL1 bL2 bL -> merge bR1 bR2 bR ->
-                          merge (p & Some (aL,bL1) // Some (aR,bR1)) (p & Some (aL,bL2) // Some (aR,bR2)) (p & Some (aL,bL) // Some (aR,bR))
-| merge_Cond           : forall b Bt1 Be1 Bt2 Be2 Bt Be, merge Bt1 Bt2 Bt -> merge Be1 Be2 Be ->
-                         merge (If b Then Bt1 Else Be1) (If b Then Bt2 Else Be2) (If b Then Bt Else Be)
-| merge_Call           : forall X, merge (Call _ X) (Call _ X) (Call _ X)
+                         merge (p & Some (aL,bL1) // Some (aR,bR))
+                               (p & Some (aL,bL2) // None)
+                               (p & Some (aL,bL) // Some (aR,bR))
+| merge_Branching_SSSS : forall p aL bL1 bL2 bL aR bR1 bR2 bR,
+                         merge bL1 bL2 bL -> merge bR1 bR2 bR ->
+                         merge (p & Some (aL,bL1) // Some (aR,bR1))
+                               (p & Some (aL,bL2) // Some (aR,bR2))
+                               (p & Some (aL,bL) // Some (aR,bR))
+| merge_Cond : forall b Bt1 Be1 Bt2 Be2 Bt Be,
+               merge Bt1 Bt2 Bt -> merge Be1 Be2 Be ->
+               merge (If b Then Bt1 Else Be1)
+                     (If b Then Bt2 Else Be2)
+                     (If b Then Bt Else Be)
+| merge_Call : forall X, merge (Call _ X) (Call _ X) (Call _ X)
 .
+
+Notation "B1 [V] B2 == B" := (merge B1 B2 B) (at level 20).
 
 (** We start by proving that this relation is functional. *)
 
 Lemma merge_unique : forall B1 B2 B B',
-  merge B1 B2 B -> merge B1 B2 B' -> B = B'.
+  B1 [V] B2 == B -> B1 [V] B2 == B' -> B = B'.
 Proof.
 intros. revert dependent B'.
 induction H; intros.
@@ -71,8 +112,8 @@ Qed.
 
 Ltac fail_with H := right; intro H; induction H as [B HB]; inversion HB; auto.
 
-Lemma merge_computable : forall B1 B2,
-  { B | merge B1 B2 B } + { ~exists B, merge B1 B2 B }.
+Lemma merge_dec : forall B1 B2,
+  { B | B1 [V] B2 == B } + { ~exists B, B1 [V] B2 == B }.
 Proof.
 induction B1 using Behaviour_rec'; induction B2 using Behaviour_rec'; simpl; auto.
 all: try (fail_with H; fail).
@@ -155,69 +196,77 @@ all: try (left; eexists; constructor; fail). (* a lot of merges *)
   fail_with HB. apply H. exists bL; auto.
 Qed.
 
+(** Merge preserves well-formedness. *)
+
+Lemma merge_WF : forall B1 B2 B p, B1 [V] B2 == B ->
+  Behaviour_WF _ p B1 -> Behaviour_WF _ p B2 -> Behaviour_WF _ p B.
+Proof.
+intros. induction H; simpl; auto.
+all: destroy H0; destroy H1; auto.
+Qed.
+
 (** ** Relationship with pruning
   We now look into the relationship between [merge] and [more_branches]. *)
 
-Lemma larger_is_merge : forall B1 B2, B1 [>>] B2 -> merge B1 B2 B1.
+Lemma larger_is_merge : forall B1 B2, B1 [>>] B2 -> B1 [V] B2 == B1.
 Proof.
 intros.
 induction H; try constructor; auto.
 all: try opt_elim mBl p0; try opt_elim mBr p0; try constructor; auto.
 Qed.
 
-Lemma merge_is_larger : forall B1 B2, merge B1 B2 B1 -> B1 [>>] B2.
+Lemma merge_is_larger : forall B1 B2, B1 [V] B2 == B1 -> B1 [>>] B2.
 Proof.
 intros.
 induction H; try constructor; auto.
-all: apply more_branches_refl.
+all: apply MB_refl.
 Qed.
 
 (** Summary of the previous two lemmas. *)
 
-Lemma more_branches_merge : forall B1 B2, B1 [>>] B2 <-> merge B1 B2 B1.
+Lemma MB_merge : forall B1 B2, B1 [>>] B2 <-> B1 [V] B2 == B1.
 Proof.
 split.
 + apply larger_is_merge.
 + apply merge_is_larger.
 Qed.
 
-(** Idempotence follows from this characterization. Commutativity is immediate from the definition. *)
-Lemma merge_idempotent : forall B, merge B B B.
-Proof. intro. apply more_branches_merge, more_branches_refl. Qed.
+(** Idempotence and commutativity follow directly from the definition. *)
 
-Lemma merge_comm : forall B1 B2 B, merge B1 B2 B -> merge B2 B1 B.
+Lemma merge_idempotent : forall B, B [V] B == B.
+Proof. intro. apply MB_merge, MB_refl. Qed.
+
+Lemma merge_comm : forall B1 B2 B, B1 [V] B2 == B -> B2 [V] B1 == B.
 Proof. intros. induction H; constructor; auto. Qed.
 
 (** We can now prove that [merge] is a partial lub. *)
 
-Lemma merge_is_upper_bound : forall B1 B2 B,
-  merge B1 B2 B -> B [>>] B1.
+Lemma merge_is_upper_bound : forall B1 B2 B, B1 [V] B2 == B -> B [>>] B1.
 Proof.
 intros. induction H; try constructor; auto.
-all: apply more_branches_refl.
+all: apply MB_refl.
 Qed.
 
-Lemma merge_is_upper_bound' : forall B1 B2 B,
-  merge B1 B2 B -> B [>>] B2.
+Lemma merge_is_upper_bound' : forall B1 B2 B, B1 [V] B2 == B -> B [>>] B2.
 Proof. intros. apply merge_is_upper_bound with B1, merge_comm; auto. Qed.
 
-Local Ltac mb_trans B B' := apply more_branches_trans with B;
+(** Useful characterization, with dedicated tactics for recurring goals.*)
+
+Local Ltac mb_trans B B' := apply MB_trans with B;
   [idtac | apply merge_is_upper_bound with B']; auto.
 
-Local Ltac mb_trans' B B' := apply more_branches_trans with B;
+Local Ltac mb_trans' B B' := apply MB_trans with B;
   [idtac | apply merge_is_upper_bound' with B']; auto.
 
-Local Ltac mb_trans'' B B' := apply more_branches_trans with B;
+Local Ltac mb_trans'' B B' := apply MB_trans with B;
   [apply merge_is_upper_bound with B' | idtac]; auto.
 
-Local Ltac mb_trans''' B B' := apply more_branches_trans with B;
+Local Ltac mb_trans''' B B' := apply MB_trans with B;
   [apply merge_is_upper_bound' with B' | idtac]; auto.
 
-(** Some kind of colimit. *)
-
-Lemma more_branches_merge_extend : forall B1 B2 B1' B2' B,
-  B1 [>>] B1' -> B2 [>>] B2' -> merge B1 B2 B ->
-  exists B', merge B1' B2' B' /\ B [>>] B'.
+Lemma MB_yields_merge : forall B1 B2 B1' B2' B,
+  B1 [>>] B1' -> B2 [>>] B2' -> B1 [V] B2 == B ->
+  exists B', B1' [V] B2' == B' /\ B [>>] B'.
 Proof.
 intros.
 revert dependent B2'. revert dependent B1'.
@@ -243,100 +292,100 @@ all: try (exists (p & None // Some (aR,Br'));
           split; constructor; auto; fail).
 all: try (exists (p & Some (aL,Bl') // Some (aR,Br'));
           split; constructor; auto; fail).
-all: try (induction (IHmerge _ (more_branches_refl _ _) _ H) as [BR [H' H''] ];
+all: try (induction (IHmerge _ (MB_refl _ _) _ H) as [BR [H' H''] ];
    exists (p & None // Some (aR,Br'));
    split; constructor; auto; mb_trans' BR bR1; fail).
-all: try (induction (IHmerge _ H2 _ (more_branches_refl _ _)) as [BR [H' H''] ];
+all: try (induction (IHmerge _ H2 _ (MB_refl _ _)) as [BR [H' H''] ];
    exists (p & None // Some (aR,Br'));
    split; constructor; auto; mb_trans BR bR2; fail).
 all: try (induction (IHmerge _ H2 _ H) as [BR [H' H''] ];
    exists (p & None // Some (aR,BR));
    split; constructor; auto; fail).
-all: try (induction (IHmerge _ (more_branches_refl _ _) _ H) as [BL [H' H''] ];
+all: try (induction (IHmerge _ (MB_refl _ _) _ H) as [BL [H' H''] ];
    exists (p & Some (aL,Bl') // None);
    split; constructor; auto; mb_trans' BL bL1; fail).
-all: try (induction (IHmerge _ H2 _ (more_branches_refl _ _)) as [BL [H' H''] ];
+all: try (induction (IHmerge _ H2 _ (MB_refl _ _)) as [BL [H' H''] ];
    exists (p & Some (aL,Bl') // None);
    split; constructor; auto; mb_trans BL bL2; fail).
 all: try (induction (IHmerge _ H2 _ H) as [BL [H' H''] ];
    exists (p & Some (aL,BL) // None);
    split; constructor; auto; fail).
-all: try (induction (IHmerge _ (more_branches_refl _ _) _ H) as [BL [H' H''] ];
+all: try (induction (IHmerge _ (MB_refl _ _) _ H) as [BL [H' H''] ];
    exists (p & Some (aL,Bl') // Some (aR,Br'));
    split; constructor; auto; mb_trans' BL bL1; fail).
-all: try (induction (IHmerge _ H2 _ (more_branches_refl _ _)) as [BL [H' H''] ];
+all: try (induction (IHmerge _ H2 _ (MB_refl _ _)) as [BL [H' H''] ];
    exists (p & Some (aL,Bl') // Some (aR,Br'));
    split; constructor; auto; mb_trans BL bL2; fail).
 all: try (induction (IHmerge _ H2 _ H) as [BL [H' H''] ];
   exists (p & Some (aL,BL) // Some (aR,Br'));
   split; constructor; auto; fail).
-+ induction (IHmerge _ (more_branches_refl _ _) _ H2) as [BR [H' H''] ];
++ induction (IHmerge _ (MB_refl _ _) _ H2) as [BR [H' H''] ];
   exists (p & Some (aL,Bl') // Some (aR,Br'));
   split; constructor; auto; mb_trans' BR bR1.
-+ induction (IHmerge _ H2 _ (more_branches_refl _ _)) as [BR [H' H''] ];
++ induction (IHmerge _ H2 _ (MB_refl _ _)) as [BR [H' H''] ];
   exists (p & Some (aL,Bl') // Some (aR,Br'));
   split; constructor; auto; mb_trans BR bR2.
 + induction (IHmerge _ H2 _ H3) as [BR [H' H''] ];
   exists (p & Some (aL,Bl') // Some (aR,BR));
   split; constructor; auto.
-+ induction (IHmerge _ (more_branches_refl _ _) _ H) as [BR [H' H''] ];
++ induction (IHmerge _ (MB_refl _ _) _ H) as [BR [H' H''] ];
   exists (p & Some (aL,Bl') // Some (aR,Br'));
   split; constructor; auto; mb_trans' BR bR1.
-+ induction (IHmerge _ H3 _ (more_branches_refl _ _)) as [BR [H' H''] ];
++ induction (IHmerge _ H3 _ (MB_refl _ _)) as [BR [H' H''] ];
   exists (p & Some (aL,Bl') // Some (aR,Br'));
   split; constructor; auto; mb_trans BR bR2.
 + induction (IHmerge _ H3 _ H) as [BR [H' H''] ];
   exists (p & Some (aL,Bl') // Some (aR,BR));
   split; constructor; auto.
-+ induction (IHmerge2 _ (more_branches_refl _ _) _ H) as [BR [H' H''] ];
++ induction (IHmerge2 _ (MB_refl _ _) _ H) as [BR [H' H''] ];
   exists (p & None // Some (aR,Br'));
   split; constructor; auto; mb_trans' BR bR1.
-+ induction (IHmerge1 _ (more_branches_refl _ _) _ H) as [BL [H' H''] ];
++ induction (IHmerge1 _ (MB_refl _ _) _ H) as [BL [H' H''] ];
   exists (p & Some (aL,Bl') // None);
   split; constructor; auto; mb_trans' BL bL1; auto.
-+ induction (IHmerge1 _ (more_branches_refl _ _) _ H) as [BL [Hl' Hl''] ];
-  induction (IHmerge2 _ (more_branches_refl _ _) _ H1) as [BR [Hr' Hr''] ];
++ induction (IHmerge1 _ (MB_refl _ _) _ H) as [BL [Hl' Hl''] ];
+  induction (IHmerge2 _ (MB_refl _ _) _ H1) as [BR [Hr' Hr''] ];
   exists (p & Some (aL,Bl') // Some (aR,Br'));
   split; constructor; auto.
   mb_trans' BL bL1. mb_trans' BR bR1.
-+ induction (IHmerge2 _ H1 _ (more_branches_refl _ _)) as [BR [H' H''] ];
++ induction (IHmerge2 _ H1 _ (MB_refl _ _)) as [BR [H' H''] ];
   exists (p & None // Some (aR,Br'));
   split; constructor; auto; mb_trans BR bR2.
 + induction (IHmerge2 _ H1 _ H) as [BR [H' H''] ];
   exists (p & None // Some (aR,BR));
   split; constructor; auto.
-+ induction (IHmerge1 _ (more_branches_refl _ _) _ H) as [BL [Hl' Hl''] ];
-  induction (IHmerge2 _ H1 _ (more_branches_refl _ _)) as [BR [Hr' Hr''] ];
++ induction (IHmerge1 _ (MB_refl _ _) _ H) as [BL [Hl' Hl''] ];
+  induction (IHmerge2 _ H1 _ (MB_refl _ _)) as [BR [Hr' Hr''] ];
   exists (p & Some (aL,Bl') // Some (aR,Br'));
   split; constructor; auto. mb_trans' BL bL1. mb_trans BR bR2.
-+ induction (IHmerge1 _ (more_branches_refl _ _) _ H) as [BL [Hl' Hl''] ];
++ induction (IHmerge1 _ (MB_refl _ _) _ H) as [BL [Hl' Hl''] ];
   induction (IHmerge2 _ H1 _ H2) as [BR [Hr' Hr''] ];
   exists (p & Some (aL,Bl') // Some (aR,BR));
   split; constructor; auto. mb_trans' BL bL1.
-+ induction (IHmerge1 _ H1 _ (more_branches_refl _ _)) as [BL [H' H''] ];
++ induction (IHmerge1 _ H1 _ (MB_refl _ _)) as [BL [H' H''] ];
   exists (p & Some (aL,Bl') // None);
   split; constructor; auto; mb_trans BL bL2; auto.
-+ induction (IHmerge1 _ H1 _ (more_branches_refl _ _)) as [BL [H' H''] ];
-  induction (IHmerge2 _ (more_branches_refl _ _) _ H) as [BR [Hr' Hr''] ];
++ induction (IHmerge1 _ H1 _ (MB_refl _ _)) as [BL [H' H''] ];
+  induction (IHmerge2 _ (MB_refl _ _) _ H) as [BR [Hr' Hr''] ];
   exists (p & Some (aL,Bl') // Some (aR,Br'));
   split; constructor; auto. mb_trans BL bL2. mb_trans' BR bR1.
 + induction (IHmerge1 _ H1 _ H) as [BL [H' H''] ];
   exists (p & Some (aL,BL) // None);
   split; constructor; auto.
 + induction (IHmerge1 _ H1 _ H) as [BL [H' H''] ];
-  induction (IHmerge2 _ (more_branches_refl _ _) _ H2) as [BR [Hr' Hr''] ];
+  induction (IHmerge2 _ (MB_refl _ _) _ H2) as [BR [Hr' Hr''] ];
   exists (p & Some (aL,BL) // Some (aR,Br'));
   split; constructor; auto. mb_trans' BR bR1.
-+ induction (IHmerge1 _ H1 _ (more_branches_refl _ _)) as [BL [H' H''] ];
-  induction (IHmerge2 _ H2 _ (more_branches_refl _ _)) as [BR [Hr' Hr''] ];
++ induction (IHmerge1 _ H1 _ (MB_refl _ _)) as [BL [H' H''] ];
+  induction (IHmerge2 _ H2 _ (MB_refl _ _)) as [BR [Hr' Hr''] ];
   exists (p & Some (aL,Bl') // Some (aR,Br'));
   split; constructor; auto. mb_trans BL bL2. mb_trans BR bR2.
-+ induction (IHmerge1 _ H1 _ (more_branches_refl _ _)) as [BL [H' H''] ];
++ induction (IHmerge1 _ H1 _ (MB_refl _ _)) as [BL [H' H''] ];
   induction (IHmerge2 _ H2 _ H) as [BR [Hr' Hr''] ];
   exists (p & Some (aL,Bl') // Some (aR,BR));
   split; constructor; auto. mb_trans BL bL2.
 + induction (IHmerge1 _ H1 _ H) as [BL [H' H''] ];
-  induction (IHmerge2 _ H2 _ (more_branches_refl _ _)) as [BR [Hr' Hr''] ];
+  induction (IHmerge2 _ H2 _ (MB_refl _ _)) as [BR [Hr' Hr''] ];
   exists (p & Some (aL,BL) // Some (aR,Br'));
   split; constructor; auto. mb_trans BR bR2.
 + induction (IHmerge1 _ H1 _ H) as [BL [H' H''] ];
@@ -347,19 +396,19 @@ Qed.
 
 (** Merge is an lub *)
 
-Lemma more_branches_has_lub : forall B B1 B2, B [>>] B1 -> B [>>] B2 ->
-  exists B', merge B1 B2 B' /\ B [>>] B'.
+Lemma MB_has_lub : forall B B1 B2, B [>>] B1 -> B [>>] B2 ->
+  exists B', B1 [V] B2 == B' /\ B [>>] B'.
 Proof.
 intros.
-elim (more_branches_merge_extend B B B1 B2 B); eauto.
+elim (MB_yields_merge B B B1 B2 B); eauto.
 apply merge_idempotent.
 Qed.
 
 Lemma merge_is_lub : forall B B1 B2, B [>>] B1 -> B [>>] B2 ->
-  forall B', merge B1 B2 B' -> B [>>] B'.
+  forall B', B1 [V] B2 == B' -> B [>>] B'.
 Proof.
 intros.
-elim (more_branches_has_lub B B1 B2); auto.
+elim (MB_has_lub B B1 B2); auto.
 intros b Hb; destroy Hb.
 rewrite (merge_unique _ _ _ _ H1 H2); auto.
 Qed.
@@ -367,12 +416,12 @@ Qed.
 (** Using these results we can prove associativity of merge. *)
 
 Lemma merge_assoc : forall B1 B2 B3 B12 B23 B,
-  merge B1 B2 B12 -> merge B12 B3 B -> merge B2 B3 B23 -> merge B1 B23 B.
+  B1 [V] B2 == B12 -> B12 [V] B3 == B -> B2 [V] B3 == B23 -> B1 [V] B23 == B.
 Proof.
 intros.
-induction (more_branches_has_lub B B1 B23) as [B' [HB' HB''] ].
+induction (MB_has_lub B B1 B23) as [B' [HB' HB''] ].
 replace B with B'; auto.
-apply more_branches_antisym; auto.
+apply MB_antisym; auto.
 - apply merge_is_lub with B12 B3; auto.
   apply merge_is_lub with B1 B2; auto.
   apply merge_is_upper_bound with B23; auto.
@@ -390,3 +439,4 @@ Qed.
 End SP_Merge.
 
 Arguments merge [Sig].
+Notation "B1 [V] B2 == B" := (merge B1 B2 B) (at level 20).

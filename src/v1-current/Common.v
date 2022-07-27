@@ -529,6 +529,7 @@ Definition eval_on_state (e:Expression) (s:CSt) (p:Pid) : Output := eval Ev e (s
 (* Notation "[[ e | s , p ]]" := (eval_on_state e s p) (at level 20). *)
 
 (** Consistency with state equivalence. *)
+
 Lemma eval_eq : forall e s s' p, s [==] s' ->
   eval_on_state e s p = eval_on_state e s' p.
 Proof.
