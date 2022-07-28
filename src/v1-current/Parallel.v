@@ -18,7 +18,7 @@ Definition copy_input {m} (ps qs:t Pid m) (X:RecVar) : Choreography IS.
 Proof.
 induction m.
 + apply (Call X).
-+ apply (Interaction _ eps (Send (hd ps) this (hd qs)) (IHm (tl ps) (tl qs))).
++ apply (Interaction _ (Send (hd ps) this (hd qs)) eps (IHm (tl ps) (tl qs))).
 Defined.
 
 Fixpoint copy_input_iter {m} (ps:t Pid m) {n} (qs: t (t Pid m) n) (X:RecVar) :

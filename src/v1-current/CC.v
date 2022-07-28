@@ -56,7 +56,7 @@ Proof. decide equality; apply eq_dec. Qed.
 (** Choreographies. *)
 
 Inductive Choreography : Type :=
- | Interaction : Ann -> Eta -> Choreography -> Choreography
+ | Interaction : Eta -> Ann -> Choreography -> Choreography
  | Cond        : Pid -> BExpr -> Choreography -> Choreography -> Choreography
  | Call        : RecVar -> Choreography
  | RT_Call     : RecVar -> (list Pid) -> Choreography -> Choreography
@@ -98,7 +98,7 @@ Notation "p # e --> q $ x" := (Com p e q x)
           (at level 50, e at level 9) : CC_scope.
 Notation "p --> q [ l ]" := (Sel p q l)
           (at level 50) : CC_scope.
-Notation "eta '@' ann ';;' C" := (Interaction ann eta C)
+Notation "eta '@' ann ';;' C" := (Interaction eta ann C)
           (at level 60, right associativity) : CC_scope.
 Notation "'If' p '??' b 'Then' C1 'Else' C2" := (Cond p b C1 C2)
           (at level 60) : CC_scope.
@@ -209,7 +209,7 @@ end.
 
 Fixpoint CCC_pn (C:Choreography) (Pids:RecVar -> list Pid) : list Pid :=
 match C with
-| Interaction _ eta C' => (eta_pn eta [U] CCC_pn C' Pids)
+| Interaction eta _ C' => (eta_pn eta [U] CCC_pn C' Pids)
 | Cond p _ C1 C2       => ((p::nil) [U] CCC_pn C1 Pids [U] CCC_pn C2 Pids)
 | Call X               => Pids X
 | RT_Call _ l C'       => l [U] CCC_pn C' Pids
@@ -237,7 +237,7 @@ Qed.
 
 Fixpoint no_self_comm (C:Choreography) : Prop :=
 match C with
-| Interaction _ eta C' => match eta with
+| Interaction eta _ C' => match eta with
                           | Com p _ q _ => p <> q
                           | Sel p q _   => p <> q
                           end /\ no_self_comm C'
@@ -276,7 +276,7 @@ Qed.
 
 Fixpoint no_empty_ann (C:Choreography) : Prop :=
 match C with
-| Interaction _ eta C' => no_empty_ann C'
+| Interaction eta _ C' => no_empty_ann C'
 | Cond _ _ C1 C2       => no_empty_ann C1 /\ no_empty_ann C2
 | Call _               => True
 | RT_Call _ l C'       => l <> nil /\ no_empty_ann C'
@@ -1160,7 +1160,7 @@ Lemma CCC_To_Com_neq : forall D C s p v q x C' s', Choreography_WF C ->
   <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> -> p <> q.
 Proof.
 induction C; intros; inversion H0.
-+ rewrite <- H3 in H; destroy H.
++ rewrite <- H1 in H; destroy H.
   simpl in H12. rewrite <- H6, <- H8; tauto.
 + eapply IHC; eauto. apply Choreography_WF_eta with t e; auto.
 + eapply IHC1; eauto. apply Choreography_WF_Then with p b C2; auto.
@@ -1171,7 +1171,7 @@ Lemma CCC_To_Sel_neq : forall D C s p q l C' s', Choreography_WF C ->
   <<C,s>> --[RL_Sel p q l,D]--> <<C',s'>> -> p <> q.
 Proof.
 induction C; intros; inversion H0.
-+ rewrite <- H3 in H; destroy H.
++ rewrite <- H1 in H; destroy H.
   simpl in H11. rewrite <- H6, <- H7; tauto.
 + eapply IHC; eauto. apply Choreography_WF_eta with t e; auto.
 + eapply IHC1; eauto. apply Choreography_WF_Then with p b C2; auto.
@@ -1408,13 +1408,13 @@ Proof.
 induction C; intros; inversion H; inversion H0; 
   try (transitivity C; auto; fail).
 (* Eta *)
-- exfalso. rewrite <- H3, <- H5 in H16.
+- exfalso. rewrite <- H1, <- H5 in H16.
   inversion_clear H16. inversion_clear H18. auto.
-- exfalso. rewrite <- H3, <- H5 in H16.
+- exfalso. rewrite <- H1, <- H5 in H16.
   inversion_clear H16. inversion_clear H18. auto.
-- exfalso. rewrite <- H12, <- H14 in H8.
+- exfalso. rewrite <- H10, <- H14 in H8.
   inversion_clear H8. inversion_clear H18. auto.
-- exfalso. rewrite <- H12, <- H14 in H8.
+- exfalso. rewrite <- H10, <- H14 in H8.
   inversion_clear H8. inversion_clear H18. auto.
 - elim (IHC _ _ _ _ _ _ H9 H18); auto.
 (* Cond *)
@@ -1455,17 +1455,17 @@ induction C; intros; inversion H; inversion H0;
 (* Eta *)
 - ESEt (s[[q,x => v]]).
   revert H16; unfold v, v0.
-  rewrite <- H3 in H11; inversion H11.
+  rewrite <- H1 in H9; inversion H9.
   ESEs.
-- rewrite <- H3 in H11; inversion H11.
-- rewrite <- H3, <- H5 in H16.
+- rewrite <- H1 in H9; inversion H9.
+- rewrite <- H1, <- H5 in H16.
   inversion_clear H16. inversion H18. elim H16; auto.
-- rewrite <- H3 in H11; inversion H11.
-- rewrite <- H3, <- H5 in H16.
+- rewrite <- H1 in H9; inversion H9.
+- rewrite <- H1, <- H5 in H16.
   inversion_clear H16. inversion H18. elim H16; auto.
-- rewrite <- H12, <- H14 in H8.
+- rewrite <- H10, <- H14 in H8.
   inversion_clear H8. inversion H18. elim H8; auto.
-- rewrite <- H12, <- H14 in H8.
+- rewrite <- H10, <- H14 in H8.
   inversion_clear H8. inversion H18. elim H8; auto.
 (* Cond *)
 - rewrite <- H6 in H19; elim H19; auto.
@@ -1507,7 +1507,7 @@ induction C; intros; inversion H; split; intros;
   rewrite H6, H7, H11 in *.
   clear e H9 H11 H.
   elim (IHC _ _ _ H10); auto.
-+ clear s' H5 C' H8 t0 H4 s H2 eta0 H1 C0 H3.
++ clear s' H5 C' H8 t0 H4 s H2 eta0 H0 C0 H3.
   rewrite H6, H7, H11 in *.
   clear e H9 H11 H.
   elim (IHC _ _ _ H10); auto.
@@ -1616,14 +1616,14 @@ Lemma CCC_To_deterministic_3 : forall C C' tl1 tl2 s s1 s2,
 Proof.
 induction C; intros; inversion H; inversion H0; auto.
 (* Eta *)
-+ unfold v, v0; rewrite <- H3 in H11; inversion H11; auto.
-+ rewrite <- H3 in H11; inversion H11; auto.
++ unfold v, v0; rewrite <- H1 in H9; inversion H9; auto.
++ rewrite <- H1 in H9; inversion H9; auto.
 + rewrite H6, <- H14 in H17.
 (*   clear H H0 C0 H3 s0 H2 H5 s' H6 C1 H9 eta H8 s3 H11 t H12 s'0 H14 C' H13. *)
   elim (CCC_To_eta_reduction _ _ _ _ _ _ H17); intros.
   symmetry; apply H18; auto.
-+ rewrite <- H3 in H11; inversion H11; auto.
-+ rewrite <- H3 in H11; inversion H11; auto.
++ rewrite <- H1 in H9; inversion H9; auto.
++ rewrite <- H1 in H9; inversion H9; auto.
 + rewrite H6, <- H14 in H17.
   elim (CCC_To_eta_reduction _ _ _ _ _ _ H17); intros.
   symmetry; apply H19; auto.
@@ -1704,14 +1704,14 @@ Lemma RL_Com_reduce_eq : forall D p C v v' q q' x x' s C' s' C'' s'',
   <<C,s>> --[RL_Com p v' q' x',D]--> <<C'',s''>> -> v = v' /\ q = q' /\ x = x'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H3 in H14; inversion H14.
++ rewrite <- H1 in H12; inversion H12.
   repeat split.
   * unfold v1, v2. rewrite H25; auto.
   * transitivity q1; auto; transitivity q0; auto.
   * transitivity x1; auto; transitivity x0; auto.
-+ rewrite <- H3 in H19; inversion H19.
++ rewrite <- H1 in H19; inversion H19.
   destroy H21; exfalso; auto.
-+ rewrite <- H12 in H8; inversion H8.
++ rewrite <- H10 in H8; inversion H8.
   destroy H21; exfalso; auto.
 Qed.
 
@@ -1738,12 +1738,12 @@ Lemma RL_Com_reduce_neq : forall D p p' C v v' q q' x x' s C' s' C'' s'',
   <<C,s>> --[RL_Com p' v' q' x',D]--> <<C'',s''>> -> p <> p' -> q <> q'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H4 in H15; inversion H15.
++ rewrite <- H2 in H13; inversion H13.
   exfalso. apply H1.
   transitivity p0; auto; transitivity p1; auto.
-+ rewrite <- H4 in H20; inversion H20.
++ rewrite <- H2 in H20; inversion H20.
   destroy H22; destroy H23. rewrite <- H9; auto.
-+ rewrite <- H13 in H9; inversion H9.
++ rewrite <- H11 in H9; inversion H9.
   destroy H22; destroy H23. rewrite <- H18; auto.
 Qed.
 
@@ -1765,13 +1765,13 @@ Lemma RL_Sel_reduce_eq : forall D p C q q' l l' s C' s' C'' s'',
   <<C,s>> --[RL_Sel p q' l',D]--> <<C'',s''>> -> q = q' /\ l = l'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H3 in H13; inversion H13.
++ rewrite <- H1 in H11; inversion H11.
   repeat split.
   * transitivity q1; auto; transitivity q0; auto.
   * transitivity l1; auto; transitivity l0; auto.
-+ rewrite <- H3 in H18; inversion H18.
++ rewrite <- H1 in H18; inversion H18.
   destroy H20; exfalso; auto.
-+ rewrite <- H12 in H8; inversion H8.
++ rewrite <- H10 in H8; inversion H8.
   destroy H20; exfalso; auto.
 Qed.
 
@@ -1796,12 +1796,12 @@ Lemma RL_Sel_reduce_neq : forall D p p' C q q' l l' s C' s' C'' s'',
   <<C,s>> --[RL_Sel p' q' l',D]--> <<C'',s''>> -> p <> p' -> q <> q'.
 Proof.
 induction C; intros; try (inversion H; inversion H0); eauto.
-+ rewrite <- H4 in H14; inversion H14.
++ rewrite <- H2 in H12; inversion H12.
   exfalso; apply H1.
   transitivity p0; auto; transitivity p1; auto.
-+ rewrite <- H4 in H19; inversion H19.
++ rewrite <- H2 in H19; inversion H19.
   destroy H21; destroy H22. rewrite <- H8; auto.
-+ rewrite <- H13 in H9; inversion H9.
++ rewrite <- H11 in H9; inversion H9.
   destroy H21; destroy H22. rewrite <- H17; auto.
 Qed.
 
@@ -1830,14 +1830,14 @@ Lemma diamond_Chor : forall D C s tl1 tl2 C1 C2 s1 s2,
 Proof.
 induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
 + (* Eta *)
-  inversion HC'; inversion HC''; try (rewrite <- H1 in H9; inversion H9).
+  inversion HC'; inversion HC''; try (rewrite <- H in H7; inversion H7).
   - elim Htl. unfold v, v0 in H11, H3. rewrite <- H11, <- H3, H16, H17, H18, H19; auto.
-  - clear HC' HC'' Htl s'1 H13 C'' H12 t0 H11 s1 H9 C1 H10 eta H8 ann0 H7.
+  - clear HC' HC'' Htl s'1 H13 C'' H12 t0 H11 s1 H9 C1 H10 eta H7 ann0 H8 H16.
     rewrite <- H4.
     clear s'0 H5 C' H4 C0 H2 s0 H0 tl' H3.
     rename C'0 into C'.
-    generalize (C_Com' D p e0 q x t C' s''); rewrite H1; intro.
-    rewrite <- H1 in H14; inversion_clear H14.
+    generalize (C_Com' D p e0 q x t C' s''); rewrite H; intro.
+    rewrite <- H in H14; inversion_clear H14.
     exists C', (s''[[q,x => v]]); split.
     * apply CCC_To_eq with (s[[q,x => v]]) (s''[[q,x => v]]). ESEs. ESEr.
       apply CCC_To_disjoint_update; auto.
@@ -1845,21 +1845,21 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
       rewrite (CCC_To_disjoint_eval _ _ _ _ _ _ _ _ H2 H15); auto.
   - elim Htl. rewrite <- H11, <- H3, H16, H17, H18; auto.
   - rewrite <- H4.
-    generalize (C_Sel' D p q l t C'0 s''); rewrite H1; intro.
-    rewrite <- H1 in H14; inversion_clear H14.
+    generalize (C_Sel' D p q l t C'0 s''); rewrite H; intro.
+    rewrite <- H in H14; inversion_clear H14.
     exists C'0, s''; split; auto.
     apply CCC_To_eq with s s''; auto. ESEr.
   - rewrite <- H13.
-    generalize (C_Com' D p e0 q x t C'0 s'); rewrite H10; intro.
-    rewrite <- H10 in H6; inversion_clear H6.
+    generalize (C_Com' D p e0 q x t C'0 s'); rewrite H8; intro.
+    rewrite <- H8 in H6; inversion_clear H6.
     exists C'0, (s'[[q,x => v]]); split.
     * unfold v.
-      rewrite (CCC_To_disjoint_eval _ _ _ _ _ _ _ _ H18 H7); auto.
+      rewrite (CCC_To_disjoint_eval _ _ _ _ _ _ _ _ H17 H7); auto.
     * apply CCC_To_eq with (s[[q,x => v]]) (s'[[q,x => v]]). ESEs. ESEr.
       apply CCC_To_disjoint_update; auto.
   - rewrite <- H13.
-    generalize (C_Sel' D p q l t C'0 s'); rewrite H10; intro.
-    rewrite <- H10 in H6; inversion_clear H6.
+    generalize (C_Sel' D p q l t C'0 s'); rewrite H8; intro.
+    rewrite <- H8 in H6; inversion_clear H6.
     exists C'0, s'; split; auto.
     apply CCC_To_eq with s s'; auto. ESEr.
   - elim (IHC _ _ _ _ _ _ _ H7 H16); intros; auto.
@@ -2199,7 +2199,7 @@ Bind Scope CC_scope with Eta.
 
 Notation "p # e --> q $ x" := (Com _ p e q x) (at level 50, e at level 9) : CC_scope.
 Notation "p --> q [ l ]" := (Sel _ p q l) (at level 50) : CC_scope.
-Notation "eta '@' ann ';;' C" := (Interaction _ ann eta C) (at level 60, right associativity) : CC_scope.
+Notation "eta '@' ann ';;' C" := (Interaction _ eta ann C) (at level 60, right associativity) : CC_scope.
 Notation "'If' p '??' b 'Then' C1 'Else' C2" := (Cond _ p b C1 C2) (at level 60) : CC_scope.
 Notation "<< C , s >> --[ rl , D ]--> << C' , s' >>" := (CCC_To _ D C s rl C' s') (at level 100) : CC_scope.
 Notation "c --[ tl ]--> c'" := (CCP_To _ c tl c') (at level 50, left associativity) : CC_scope.

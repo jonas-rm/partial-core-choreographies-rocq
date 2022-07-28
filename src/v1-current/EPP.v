@@ -1182,7 +1182,7 @@ intros.
 rename H into HC, H1 into Hpr, H2 into Hqr, H0 into H.
 revert C' H.
 induction C; intros; inversion H.
-+ rewrite <- H4. rewrite H5, H7, H8 in H2. rename e0 into e'.
++ rewrite <- H4. rewrite H5, H7, H8 in H0. rename e0 into e'.
   apply str_proj_inv_Eta, str_proj_C in HC.
   induction HC as [B HB]. rewrite <- H4 in *.
   exists B; repeat split; auto. constructor; auto.
@@ -1356,7 +1356,7 @@ intros.
 rename H into HC, H1 into Hpr, H2 into Hqr, H0 into H.
 revert C' H.
 induction C; intros; inversion H.
-+ rewrite <- H4. rewrite H7, H6, H5 in H2.
++ rewrite <- H4. rewrite H7, H6, H5 in H0.
   apply str_proj_inv_Eta, str_proj_C in HC.
   induction HC as [B HB]. rewrite <- H4 in *.
   exists B; repeat split; auto. constructor; auto.
