@@ -116,7 +116,7 @@ apply eta_eq_dec.
 apply list_eq_dec, eq_dec.
 Qed.
 
-(** An initial choreography is what a programmer should write. *)
+(** Programmers should only write initial choreographies. *)
 Fixpoint initial (C:Choreography) : Prop :=
 match C with
 | Interaction _ _ C' => initial C'
@@ -131,101 +131,6 @@ Proof.
 induction C; simpl; auto.
 inversion_clear IHC1; inversion_clear IHC2; auto;
   right; intro; inversion_clear H1; auto.
-Qed.
-
-(** Free procedure names in a choreography. *)
-Definition set_union_rv := set_union (@eq_dec RecVar).
-
-Fixpoint Free_RecVar (C:Choreography) : list RecVar :=
-match C with  
-| Interaction _ _ C' => Free_RecVar C'
-| Cond _ _ C1 C2     => set_union_rv (Free_RecVar C1) (Free_RecVar C2)
-| Call Y             => (Y::nil)
-| RT_Call Y _ C'     => set_union_rv (Y::nil) (Free_RecVar C')
-| End                => nil
-end.
-
-Definition X_Free (X:RecVar) (C:Choreography) : Prop := In X (Free_RecVar C).
-
-Lemma X_Free_dec : forall X C, {X_Free X C} + {~X_Free X C}.
-Proof.
-induction C; unfold X_Free; simpl; auto.
-+ (* Cond *)
-  inversion_clear IHC1; [idtac | inversion_clear IHC2].
-  - left. apply set_union_intro1; auto.
-  - left. apply set_union_intro2; auto.
-  - right; intro.
-    elim (set_union_elim _ _ _ _ H1); auto.
-+ (* Call *)
-  elim (eq_dec X t); simpl; auto.
-  right; intro. inversion_clear H; auto.
-+ (* RT_Call *)
-  unfold set_union_rv. simpl.
-  inversion_clear IHC.
-  - left. apply set_union_intro2; auto.
-  - elim (eq_dec X t); simpl; intro.
-    * left. rewrite a. apply set_union_intro1; simpl; auto.
-    * right; intro.
-      elim (set_union_elim _ _ _ _ H0); auto.
-      simpl. intro. inversion_clear a; auto.
-Qed.
-
-(** Inversion results for bound variables. *)
-
-Lemma X_Free_Eta : forall X ann eta C, X_Free X (eta @ ann;;C) -> X_Free X C.
-Proof. intros. apply H. Qed.
-
-Lemma X_Free_Cond : forall X p b C1 C2,
-  X_Free X (If p ?? b Then C1 Else C2) -> {X_Free X C1} + {X_Free X C2}.
-Proof.
-intros. red in H. simpl in H.
-elim (set_union_elim _ _ _ _ H); auto.
-Qed.
-
-Lemma Not_X_Free_Eta : forall X ann eta C, ~X_Free X (eta @ ann;;C) -> ~X_Free X C.
-Proof.
-intros. intro. apply H. red. simpl. auto.
-Qed.
-
-Lemma Not_X_Free_Then : forall X p b C1 C2,
-  ~X_Free X (If p ?? b Then C1 Else C2) -> ~X_Free X C1.
-Proof.
-intros. intro. apply H. red. simpl. apply set_union_intro1. auto.
-Qed.
-
-Lemma Not_X_Free_Else : forall X p b C1 C2,
-  ~X_Free X (If p ?? b Then C1 Else C2) -> ~X_Free X C2.
-Proof.
-intros. intro. apply H. red. simpl. apply set_union_intro2. auto.
-Qed.
-
-(** The set of process names in a choreography. *)
-
-Definition eta_pn (e:Eta) : list Pid :=
-match e with
-| Com p _ q _ => (p::q::nil)
-| Sel p q _   => (p::q::nil)
-end.
-
-Fixpoint CCC_pn (C:Choreography) (Pids:RecVar -> list Pid) : list Pid :=
-match C with
-| Interaction eta _ C' => (eta_pn eta [U] CCC_pn C' Pids)
-| Cond p _ C1 C2       => ((p::nil) [U] CCC_pn C1 Pids [U] CCC_pn C2 Pids)
-| Call X               => Pids X
-| RT_Call _ l C'       => l [U] CCC_pn C' Pids
-| End                  => nil
-end.
-
-Ltac sup := rewrite set_union_iff; auto.
-
-Lemma CCC_pn_mon : forall X Y, (forall Z p, In p (X Z) -> In p (Y Z)) ->
-  forall C p, In p (CCC_pn C X) -> In p (CCC_pn C Y).
-Proof.
-induction C; simpl; auto.
-+ intro. sup; sup. intro. elim H0; auto.
-+ intro. sup; sup; sup; sup. intro. elim H0; auto.
-  intro. elim H1; auto.
-+ intro. sup; sup. intro. elim H0; auto.
 Qed.
 
 (** A choreography is well-formed if:
@@ -373,7 +278,75 @@ Qed.
     - all procedures in Xs are initial
     - main and all procedures in Xs only call procedures in Xs
     - annotations in main are consistent
-*)
+
+  We first define the free procedure names in a choreography. *)
+
+Definition set_union_rv := set_union (@eq_dec RecVar).
+
+Fixpoint Free_RecVar (C:Choreography) : list RecVar :=
+match C with  
+| Interaction _ _ C' => Free_RecVar C'
+| Cond _ _ C1 C2     => set_union_rv (Free_RecVar C1) (Free_RecVar C2)
+| Call Y             => (Y::nil)
+| RT_Call Y _ C'     => set_union_rv (Y::nil) (Free_RecVar C')
+| End                => nil
+end.
+
+Definition X_Free (X:RecVar) (C:Choreography) : Prop := In X (Free_RecVar C).
+
+Lemma X_Free_dec : forall X C, {X_Free X C} + {~X_Free X C}.
+Proof.
+induction C; unfold X_Free; simpl; auto.
++ (* Cond *)
+  inversion_clear IHC1; [idtac | inversion_clear IHC2].
+  - left. apply set_union_intro1; auto.
+  - left. apply set_union_intro2; auto.
+  - right; intro.
+    elim (set_union_elim _ _ _ _ H1); auto.
++ (* Call *)
+  elim (eq_dec X t); simpl; auto.
+  right; intro. inversion_clear H; auto.
++ (* RT_Call *)
+  unfold set_union_rv. simpl.
+  inversion_clear IHC.
+  - left. apply set_union_intro2; auto.
+  - elim (eq_dec X t); simpl; intro.
+    * left. rewrite a. apply set_union_intro1; simpl; auto.
+    * right; intro.
+      elim (set_union_elim _ _ _ _ H0); auto.
+      simpl. intro. inversion_clear a; auto.
+Qed.
+
+(** Inversion results for bound variables. *)
+
+Lemma X_Free_Eta : forall X ann eta C, X_Free X (eta @ ann;;C) -> X_Free X C.
+Proof. intros. apply H. Qed.
+
+Lemma X_Free_Cond : forall X p b C1 C2,
+  X_Free X (If p ?? b Then C1 Else C2) -> {X_Free X C1} + {X_Free X C2}.
+Proof.
+intros. red in H. simpl in H.
+elim (set_union_elim _ _ _ _ H); auto.
+Qed.
+
+Lemma Not_X_Free_Eta : forall X ann eta C, ~X_Free X (eta @ ann;;C) -> ~X_Free X C.
+Proof.
+intros. intro. apply H. red. simpl. auto.
+Qed.
+
+Lemma Not_X_Free_Then : forall X p b C1 C2,
+  ~X_Free X (If p ?? b Then C1 Else C2) -> ~X_Free X C1.
+Proof.
+intros. intro. apply H. red. simpl. apply set_union_intro1. auto.
+Qed.
+
+Lemma Not_X_Free_Else : forall X p b C1 C2,
+  ~X_Free X (If p ?? b Then C1 Else C2) -> ~X_Free X C2.
+Proof.
+intros. intro. apply H. red. simpl. apply set_union_intro2. auto.
+Qed.
+
+(** Now we move to well-formedness. *)
 
 Fixpoint within_Xs (Xs:list RecVar) (C:Choreography) : Prop :=
 match C with
@@ -595,6 +568,35 @@ eapply Program_WF_Main_change; eauto.
 split; auto.
 apply (Program_WF_Main_within_Xs _ _ H).
 destroy H. inversion_clear H5; auto.
+Qed.
+
+(** The set of process names in a choreography. *)
+
+Definition eta_pn (e:Eta) : list Pid :=
+match e with
+| Com p _ q _ => (p::q::nil)
+| Sel p q _   => (p::q::nil)
+end.
+
+Fixpoint CCC_pn (C:Choreography) (Pids:RecVar -> list Pid) : list Pid :=
+match C with
+| Interaction eta _ C' => (eta_pn eta [U] CCC_pn C' Pids)
+| Cond p _ C1 C2       => ((p::nil) [U] CCC_pn C1 Pids [U] CCC_pn C2 Pids)
+| Call X               => Pids X
+| RT_Call _ l C'       => l [U] CCC_pn C' Pids
+| End                  => nil
+end.
+
+Ltac sup := rewrite set_union_iff; auto.
+
+Lemma CCC_pn_mon : forall X Y, (forall Z p, In p (X Z) -> In p (Y Z)) ->
+  forall C p, In p (CCC_pn C X) -> In p (CCC_pn C Y).
+Proof.
+induction C; simpl; auto.
++ intro. sup; sup. intro. elim H0; auto.
++ intro. sup; sup; sup; sup. intro. elim H0; auto.
+  intro. elim H1; auto.
++ intro. sup; sup. intro. elim H0; auto.
 Qed.
 
 (** A program is well-annotated if every process used by a procedure is in its annotation. *)
