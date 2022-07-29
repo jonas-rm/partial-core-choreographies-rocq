@@ -203,6 +203,13 @@ induction C; simpl; auto.
     inversion_clear H0; auto.
 Qed.
 
+Lemma initial_no_empty_ann : forall C, initial C -> no_empty_ann C.
+Proof.
+induction C; auto.
+all: intros; inversion_clear H.
+split; auto.
+Qed.
+
 (** A choreography is well-formed if:
     - it does not contain self-communications;
     - annotations of runtime terms are not empty.
@@ -273,8 +280,8 @@ elim (In_dec (@eq_dec Pid) p ps); intro.
 Qed.
 
 (** A program is well-formed if there is a finite set of procedures Xs such that:
-    - main and all procedures in Xs are well-formed
-    - all procedures in Xs are initial
+    - main is well-formed
+    - all procedures in Xs are initial and have no self-communications
     - main and all procedures in Xs only call procedures in Xs
     - annotations in main are consistent
 
@@ -423,7 +430,7 @@ Qed.
 Definition Program_WF (Xs:list RecVar) (P:Program) : Prop :=
   Choreography_WF (Main P) /\ within_Xs Xs (Main P) /\
   consistent (Vars P) (Main P) /\
-  forall X, In X Xs -> Choreography_WF (Procs P X) /\ initial (Procs P X) /\
+  forall X, In X Xs -> no_self_comm (Procs P X) /\ initial (Procs P X) /\
             (Vars P X) <> nil /\ within_Xs Xs (Procs P X).
 
 Lemma Program_WF_dec : forall Xs P, {Program_WF Xs P} + {~Program_WF Xs P}.
@@ -435,9 +442,9 @@ elim (within_Xs_dec Xs (Main P)); intros.
 2: right; intro; destroy H; auto.
 elim (consistent_dec (Vars P) (Main P)); intros.
 2: right; intro; destroy H; auto.
-assert (forall (Ys:list RecVar), {forall X, In X Ys -> Choreography_WF (Procs P X) /\ initial (Procs P X) /\
+assert (forall (Ys:list RecVar), {forall X, In X Ys -> no_self_comm (Procs P X) /\ initial (Procs P X) /\
             (Vars P X) <> nil /\ within_Xs Xs (Procs P X)} +
-        {~forall X, In X Ys -> Choreography_WF (Procs P X) /\ initial (Procs P X) /\
+        {~forall X, In X Ys -> no_self_comm (Procs P X) /\ initial (Procs P X) /\
             (Vars P X) <> nil /\ within_Xs Xs (Procs P X)}); intros.
 2: { elim (X Xs); clear X; intros.
   left; repeat (split; auto).
@@ -449,7 +456,7 @@ induction Ys; simpl; intros.
 + elim IHYs; intros.
   2: right; intro; destroy H; auto.
   clear IHYs.
-  elim (Choreography_WF_dec (Procs P a)); intros.
+  elim (no_self_comm_dec (Procs P a)); intros.
   2: right; intro; elim (H a); auto.
   elim (initial_dec (Procs P a)); intros.
   2: right; intro; elim (H a); intros; destroy H1; auto.
@@ -465,7 +472,11 @@ Qed.
 
 Lemma Program_WF_Proc : forall P Xs, Program_WF Xs P ->
   forall X, In X Xs -> Choreography_WF (Procs P X).
-Proof. intros. destroy H. elim (H X); auto. Qed.
+Proof.
+intros. destroy H. induction (H X H0); destroy H4.
+repeat split; auto.
+apply initial_no_empty_ann; tauto.
+Qed.
 
 Lemma Program_WF_Main : forall P Xs, Program_WF Xs P -> Choreography_WF (Main P).
 Proof. intros. destroy H; auto. Qed.
