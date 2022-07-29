@@ -623,14 +623,14 @@ Lemma Recursion_reduce_1_true : forall m Defs X Y n (ps:t Pid (S m)) q s,
   /\ s' q xx = s n xx /\ forall p, p <> q -> s' p xx = s p xx.
 Proof.
 intros. unfold IfEq.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (hd ps) this (S n) yy eps (Cond IS (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y)) s)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (hd ps) this (S n) yy eps (Cond IS (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y)) s)).
 simpl; intro.
 assert (beval_on_state compare (Update s (S n) yy (s (hd ps) xx)) (S n) = true).
 1: { unfold beval_on_state; simpl; unfold beval. rewrite update_read, update_read'', Nat.eqb_eq; auto. discriminate. }
 unfold Update in H1.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Then' IS Defs (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y) _ H1)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Then' IS Defs (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y) _ H1)).
 simpl; intro.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs n this q xx eps (@Call IS X) (Update s (S n) yy (s (hd ps) xx)))).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs n this q xx eps (@Call IS X) (Update s (S n) yy (s (hd ps) xx)))).
 simpl; intro.
 do 2 eexists; split. 2: split.
 + do 3 (eapply (CCT_Step IS); eauto). constructor.
@@ -644,11 +644,11 @@ Lemma Recursion_reduce_1_false : forall m Defs X Y n (ps:t Pid (S m)) q s,
     --[t]-->* (Defs,@Call IS Y, Update s (S n) yy (s (hd ps) xx)).
 Proof.
 intros. unfold IfEq.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (hd ps) this (S n) yy eps (Cond IS (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y)) s)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (hd ps) this (S n) yy eps (Cond IS (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y)) s)).
 simpl; intro.
 assert (beval_on_state compare (Update s (S n) yy (s (hd ps) xx)) (S n) = false).
 1: { unfold beval_on_state; simpl; unfold beval. rewrite update_read, update_read'', Nat.eqb_neq; auto. discriminate. }
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Else' IS Defs (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y) _ H1)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Else' IS Defs (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y) _ H1)).
 simpl; intro.
 eexists. do 2 (eapply (CCT_Step IS); eauto). constructor.
 Qed.
@@ -661,13 +661,13 @@ Lemma Recursion_reduce_2 : forall Defs X n s, exists t s',
     /\ s' (S n) xx = S (s (S n) xx) /\ s' (n+2) xx = s (S n) xx.
 Proof.
 intros.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) this n xx eps (Send (S n) this (n+2) @ eps;; Send (n+2) succ_this (S n) @ eps;; @Call IS X) s)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) this n xx eps (Send (S n) this (n+2) @ eps;; Send (n+2) succ_this (S n) @ eps;; @Call IS X) s)).
 simpl. set (s1 := Update s n xx (s (n+2) xx)).
 fold xx s1; intro.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (S n) this (n+2) xx eps (Send (n+2) succ_this (S n) @ eps;; @Call IS X) s1)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (S n) this (n+2) xx eps (Send (n+2) succ_this (S n) @ eps;; @Call IS X) s1)).
 simpl. set (s2 := s1[[n+2,xx => (s1 (S n) xx)]]).
 fold xx s2; intro.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) succ_this (S n) xx eps (@Call IS X) s2)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) succ_this (S n) xx eps (@Call IS X) s2)).
 simpl. set (s3 := s2[[S n,xx => (S (s2 (n+2) xx))]]).
 fold xx s3; intro.
 do 2 eexists. split. do 3 (eapply (CCT_Step IS); eauto); constructor.
@@ -693,10 +693,10 @@ Lemma Minimization_reduce_1_true : forall Defs X Y n s q, q < n -> s n xx = 0 ->
   /\ s' n xx = s n xx /\ s' (n+1) xx = s (n+1) xx /\ s' (n+2) xx = 0.
 Proof.
 intros. unfold IfEq.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+1) zero (n+2) xx eps (Com IS n this (n + 2) yy @ eps;; Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (n+1) zero (n+2) xx eps (Com IS n this (n + 2) yy @ eps;; Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s)).
 simpl. set (s1 := Update s (n+2) xx 0).
 fold s1; intro.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs n this (n+2) yy eps (Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s1)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs n this (n+2) yy eps (Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s1)).
 simpl. set (s2 := Update s1 (n+2) yy (s1 n xx)).
 fold xx s2; intro.
 assert (beval_on_state compare s2 (n+2) = true).
@@ -705,9 +705,9 @@ assert (beval_on_state compare s2 (n+2) = true).
   rewrite update_read, update_read'', update_read, update_read', Nat.eqb_eq; auto.
   rewrite plus_comm; simpl; apply gt_neq; auto. discriminate.
 }
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Then' IS Defs (n+2) compare (Send (n + 1) this q @ eps;; @Call IS X) (Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y) s2 H3)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Then' IS Defs (n+2) compare (Send (n + 1) this q @ eps;; @Call IS X) (Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y) s2 H3)).
 simpl; intro.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n + 1) this q xx eps (@Call IS X) s2)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (n + 1) this q xx eps (@Call IS X) s2)).
 simpl; intro.
 do 2 eexists; split. do 4 (eapply (CCT_Step IS); eauto). constructor.
 assert (n+2 <> n+1). apply gt_neq; red; do 2 rewrite (plus_comm n); simpl; auto.
@@ -730,10 +730,10 @@ Lemma Minimization_reduce_1_false : forall Defs X Y n s q, q < n -> s n xx <> 0 
   /\ s' (n+1) xx = S (s (n+1) xx) /\ s' (n+2) xx = s (n+1) xx.
 Proof.
 intros. unfold IfEq.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+1) zero (n+2) xx eps (Com IS n this (n + 2) yy @ eps;; Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (n+1) zero (n+2) xx eps (Com IS n this (n + 2) yy @ eps;; Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s)).
 simpl. set (s1 := Update s (n+2) xx 0).
 fold s1; intro.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs n this (n+2) yy eps (Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s1)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs n this (n+2) yy eps (Cond IS (n + 2) compare (Send (n + 1) this q @ eps;; @Call IS X) ((Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y))) s1)).
 simpl. set (s2 := Update s1 (n+2) yy (s1 n xx)).
 fold xx s2; intro.
 assert (beval_on_state compare s2 (n+2) = false).
@@ -742,12 +742,12 @@ assert (beval_on_state compare s2 (n+2) = false).
   rewrite update_read, update_read'', update_read, update_read', Nat.eqb_neq; auto.
   rewrite plus_comm; simpl; apply gt_neq; auto. discriminate.
 }
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Else' IS Defs (n+2) compare (Send (n + 1) this q @ eps;; @Call IS X) (Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y) s2 H3)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Else' IS Defs (n+2) compare (Send (n + 1) this q @ eps;; @Call IS X) (Send (n + 1) this (n + 2) @ eps;; Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y) s2 H3)).
 simpl; intro.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+1) this (n+2) xx eps (Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y) s2)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (n+1) this (n+2) xx eps (Send (n + 2) succ_this (n + 1) @ eps;; @Call IS Y) s2)).
 simpl. set (s3 := s2[[n+2,xx => (s2 (n+1) xx)]]).
 fold xx s3; intro.
-generalize (CCP_To_intro _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) succ_this (n+1) xx eps (@Call IS Y) s3)).
+generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) succ_this (n+1) xx eps (@Call IS Y) s3)).
 simpl; intro.
 do 2 eexists; split. do 5 (eapply (CCT_Step IS); eauto). constructor.
 assert (n+2 <> n+1). apply gt_neq; red; do 2 rewrite (plus_comm n); simpl; auto.

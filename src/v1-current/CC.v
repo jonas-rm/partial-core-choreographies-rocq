@@ -797,7 +797,7 @@ Proof. intros. apply C_Call_Finish; auto. ESEr. Qed.
 Definition Configuration : Type := Program * Store.
 
 Inductive CCP_To : Configuration -> TransitionLabel _ _ -> Configuration -> Prop :=
- | CCP_To_intro D C s t C' s' : <<C,s>> --[t,D]--> <<C',s'>> ->
+ | CCP_Base D C s t C' s' : <<C,s>> --[t,D]--> <<C',s'>> ->
      CCP_To (D,C,s) (forget t) (D,C',s').
 
 Inductive CCP_ToStar :

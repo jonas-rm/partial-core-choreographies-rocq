@@ -4383,7 +4383,7 @@ induction t. 2: induction l.
   1: { eapply CCC_To_projectable_C; eauto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Com p v q x)); repeat split; auto.
-  - apply (@CCP_To_intro Sig); auto.
+  - apply (@CCP_Base Sig); auto.
   - simpl. intros. apply MBN_refl'.
     eapply Network_eq_trans. apply (H4 H17); auto.
     apply Network_eq_sym; apply epp_C_char.
@@ -4395,7 +4395,7 @@ induction t. 2: induction l.
   1: { eapply CCC_To_projectable_C; eauto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Sel p q left)); repeat split; auto.
-  - apply (@CCP_To_intro Sig); auto.
+  - apply (@CCP_Base Sig); auto.
   - simpl. intros. apply MBN_refl'.
     eapply Network_eq_trans. apply (H4 H17); auto.
     apply Network_eq_sym; apply epp_C_char.
@@ -4407,7 +4407,7 @@ induction t. 2: induction l.
   1: { eapply CCC_To_projectable_C; eauto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Sel p q right)); repeat split; auto.
-  - apply (@CCP_To_intro Sig); auto.
+  - apply (@CCP_Base Sig); auto.
   - simpl. intros. apply MBN_refl'.
     eapply Network_eq_trans. apply (H4 H17); auto.
     apply Network_eq_sym; apply epp_C_char.
@@ -4419,7 +4419,7 @@ induction t. 2: induction l.
   1: { eapply CCC_To_projectable_C; eauto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Cond p)); repeat split; auto.
-  - apply (@CCP_To_intro Sig); auto.
+  - apply (@CCP_Base Sig); auto.
   - simpl. intros. eapply MBN_trans. apply (H4 H17).
     apply MBN_refl'.
     apply Network_eq_sym. apply epp_C_char.
@@ -4435,7 +4435,7 @@ induction t. 2: induction l.
   1: { eapply CCC_To_projectable_C; eauto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Call Y p)); repeat split; auto.
-  - apply (@CCP_To_intro Sig); auto.
+  - apply (@CCP_Base Sig); auto.
   - simpl. intros. eapply MBN_trans. apply (H4 H19).
     apply MBN_refl'.
     apply Network_eq_sym. apply epp_C_char.

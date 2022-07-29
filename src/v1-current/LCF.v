@@ -1,57 +1,205 @@
 Require Import EPP.
 
-Module Amend (P X V E B R:DecType) (Ev:Eval E X V V) (BEv:Eval B X V Bool).
+Section Amendmend.
 
-Module PR := DecProd R P.
+Variable Sig : Signature.
 
-Module Export EPPBase := EPPBase P X V E B R Ev BEv.
+Notation Pid := (pid Sig).
+Notation Var := (var Sig).
+Notation Value := (value Sig).
+Notation Expr := (expr Sig).
+Notation BExpr := (bexpr Sig).
+Notation RecVar := (recvar Sig).
+Notation Ann := (ann Sig).
+Notation Ev := (ev Sig).
+Notation BEv := (bev Sig).
 
-Section Amend.
+Notation Sig' := (Sig' Sig).
+
+Local Ltac eq_elim t t' H := case (eq_dec t t'); intro H;
+  [ rewrite <- H in *; clear t' H | idtac].
 
 Open Scope CC_scope.
 
-Fixpoint amend Defs (C:Choreography) (p:Pid) := 
+(* Clean me *)
+Fixpoint amend Defs (C:Choreography Sig) (p:Pid) (a:Ann) :=
 match C with
-| eta;; C' => eta;; (amend Defs C' p)
+| eta@a';; C' => eta@a';; (amend Defs C' p a)
 | If q ?? b Then C1 Else C2 =>
-    let C1' := amend Defs C1 p in let C2' := amend Defs C2 p in
-    match (collapse (bproj Defs (If q ?? b Then C1' Else C2') p)) with
-    | XUndefined => If q ?? b Then (q --> p[left];; C1') Else (q --> p[right];; C2')
-    | _ => If q ?? b Then C1' Else C2'
-    end
-| RT_Call X ps C' => RT_Call X ps (amend Defs C' p)
+    let C1' := amend Defs C1 p a in let C2' := amend Defs C2 p a in
+    if (p =? q)
+    then If q ?? b Then C1' Else C2'
+    else if projectable_B_dec _ Defs (If q ?? b Then C1' Else C2') p
+         then If q ?? b Then C1' Else C2'
+         else If q ?? b Then (q --> p[left]@a;; C1') Else (q --> p[right]@a;; C2')
+| RT_Call X ps C' => RT_Call X ps (amend Defs C' p a)
 | _ => C
 end.
 
-Lemma amend_proj : forall Defs C p,
-  collapse (bproj Defs (amend Defs C p) p) <> XUndefined.
+Lemma amend_proj : forall Defs C p a,
+  projectable_B Sig Defs (amend Defs C p a) p.
 Proof.
 induction C; intros.
 + simpl.
-  induction e. 2: case l. all: elim Pid_dec; simpl.
-  1,3,5: rewrite Xmatch_elim; auto; discriminate.
-  all: elim Pid_dec; simpl; auto;
-    rewrite Xmatch_elim; auto; discriminate.
-+ rename p0 into p, p into q.
-change (amend Defs (If q ?? b Then C1 Else C2) p) with
-    match (collapse (bproj Defs (If q ?? b Then (amend Defs C1 p) Else (amend Defs C2 p)) p)) with
-    | XUndefined => If q ?? b Then (q --> p[left];; amend Defs C1 p) Else (q --> p[right];; amend Defs C2 p)
-    | _ => If q ?? b Then (amend Defs C1 p) Else (amend Defs C2 p)
-    end.
-  elim (XUndefined_dec (collapse (bproj Defs (If q ?? b Then (amend Defs C1 p) Else (amend Defs C2 p)) p))); intros.
-  - rewrite a; simpl. case Pid_dec; simpl.
-    * rewrite Xmatch_elim; auto. 2: rewrite Xmatch_elim; auto; discriminate.
-      rewrite Xmatch_elim; auto. 2: rewrite Xmatch_elim; auto; discriminate.
-      discriminate.
-    * Peq. Peq. repeat rewrite Xmatch_elim; auto.
-      simpl. repeat rewrite Xmatch_elim; auto. discriminate.
-      intro H; eapply IHC2; rewrite H; auto.
-      intro H; eapply IHC1; rewrite H; auto.
-  - rewrite Xmatch_elim; auto.
-+ simpl. elim in_dec; discriminate.
-+ simpl. elim in_dec; auto. discriminate.
-+ discriminate.
+  induction (IHC p a) as [B HB].
+  induction e. all: eq_elim p t0 Hp.
+  2: eq_elim p t2 Hp'. 5: eq_elim p t1 Hp'. 5: induction t2.
+  all: try (eexists; econstructor; eauto; fail).
+  exists (@Branching Sig' t0 (Some (t,B)) None). constructor; auto.
+  exists (@Branching Sig' t0 None (Some (t,B))). constructor; auto.
++ induction (IHC1 p a) as [B1 HB1]. induction (IHC2 p a) as [B2 HB2].
+  simpl. case_eq (p =? t); intro.
+  2: elim projectable_B_dec; intros.
+  - rewrite eqb_eq in H. rewrite <- H.
+    eexists; econstructor; eauto.
+  - rewrite eqb_neq in H.
+    induction a0 as [B HB]. inversion HB. symmetry in H3; tauto.
+    exists B. apply bproj_Cond' with B0 B3; auto.
+  - rewrite eqb_neq in H.
+    exists (@Branching Sig' t (Some (a,B1)) (Some (a,B2))).
+    apply bproj_Cond' with (@Branching Sig' t (Some (a,B1)) None) (@Branching Sig' t None (Some (a,B2)));
+      try constructor; auto.
+    apply (merge_Branching_SNNS Sig').
++ elim (in_dec (@eq_dec Pid) p (fst (Defs t))).
+  all: eexists. constructor; auto. apply bproj_Call_out; auto.
++ elim (in_dec (@eq_dec Pid) p l).
+  eexists. constructor; auto.
+  induction (IHC p a) as [B HB].
+  eexists. apply bproj_RT_Call_out; eauto.
++ simpl. eexists; constructor.
 Qed.
+
+Inductive sel_subtrace : list (TransitionLabel Pid Value) -> list (TransitionLabel Pid Value) -> Prop :=
+| ss_refl ts : sel_subtrace ts ts
+| ss_cons t ts ts' : sel_subtrace ts ts' -> sel_subtrace (t::ts) (t::ts')
+| ss_extra p q l ts ts' : sel_subtrace ts ts' -> sel_subtrace ts (TL_Sel p q l::ts')
+.
+
+Lemma amend_sound : forall Defs C s tl C' s',
+  (Defs,C,s) --[tl]--> (Defs,C',s') ->
+  forall r a, exists tl' tl'' C'' s'',
+       sel_subtrace tl' tl''
+    /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
+    /\ (Defs,amend Defs C r a,s) --[tl::tl'']-->* (Defs,amend Defs C'' r a,s'').
+Proof.
+intros. revert C s tl C' s' H.
+induction C; intros. induction e.
++ inversion H. clear s'0 H6 C'0 H5 tl H1 H s0 H3 C0 H2 D H0.
+  rename t0 into p, t1 into e, t2 into q, t3 into x, t into a', t4 into tl.
+  inversion H4.
+  - (* Com *)
+    rewrite <- H8 in *.
+    clear s'0 H9 C' H8 tl H7 s0 H0 C0 H6 a0 H5 x0 H3 q0 H2 e0 H1 p0 H H4.
+    simpl. exists nil, nil, C, s'.
+    repeat split; auto; econstructor. 2: constructor.
+    rewrite <- forget_Com with (RecVar := RecVar) (x:=x).
+    constructor. apply C_Com; auto.
+  - (* Delay *)
+    rewrite <- H5 in *.
+    clear s'0 H6 t H3 s0 H1 C0 H2 ann H0 eta H H4 H5.
+
+(* needs some non-trivial rewritings on H8
+
+    induction (IHC _ _ _ _ (CCP_To_intro _ _ _ _ _ _ _ H8)) as [tlF [tlF' [CF [sF [HF1 [HF2 HF3] ] ] ] ] ].
+    simpl. set (v := eval_on_state Ev e s p); set (tl' := @RL_Com _ _ _ RecVar p v q x).
+    exists (forget tl'::tlF), (forget tl'::tlF'), CF, sF.
+    repeat split; auto. econstructor; eauto.
+    econstructor; eauto. unfold tl'; apply
+    * inversion HF1.
+ repeat constructor; auto.
+*)
+  admit.
+
++ inversion H. clear s'0 H6 C'0 H5 tl H1 H s0 H3 C0 H2 D H0.
+  rename t0 into p, t1 into q, t2 into l, t into a', t3 into tl.
+  inversion H4.
+  - (* Sel *)
+    rewrite <- H7 in *.
+    clear s'0 H8 C' H7 tl H6 s0 H0 C0 H5 a0 H3 l0 H2 q0 H1 p0 H H4.
+    simpl. exists nil, nil, C, s'.
+    repeat split; auto; econstructor. 2: constructor.
+    rewrite <- forget_Sel with (RecVar := RecVar) (Var := Var).
+    constructor. apply C_Sel; auto.
+  - (* Delay *)
+    rewrite <- H5 in *.
+    clear s'0 H6 t H3 s0 H1 C0 H2 ann H0 eta H H4 H5. rename C'0 into C0.
+    induction (IHC _ _ _ _ (CCP_To_intro _ _ _ _ _ _ _ H8)) as [tlF [tlF' [CF [sF [HF1 [HF2 HF3] ] ] ] ] ].
+    simpl. set (tl' := @RL_Sel _ Value Var RecVar p q l).
+    exists (forget tl'::tlF), (forget tl'::tlF'), CF, sF.
+    repeat split; auto. econstructor; eauto.
+    econstructor; eauto.
+    unfold tl'; constructor; constructor; ESEr.
+    inversion_clear HF3.
+    induction c2 as [ [Defs' C'' ] s''].
+    generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H) as HDefs; intro.
+    rewrite <- HDefs in *; clear Defs' HDefs.
+    econstructor; eauto.
+    * inversion H. constructor. apply C_Delay_Eta; eauto.
+      induction t; induction tl; inversion H5; auto.
+    * econstructor; eauto.
+      constructor. unfold tl'; constructor; ESEr.
++ inversion H. clear s'0 H6 C'0 H5 tl H1 s0 H3 C H2 D H0 H.
+  rename t into p, t0 into b, t1 into tl.
+  inversion H4.
+  - (* Then *)
+    rewrite <- H6 in *.
+    clear s'0 H7 C' H6 tl H5 s0 H1 C3 H3 C0 H2 b0 H0 p0 H H4.
+    simpl.
+    (* did we amend? *)
+    case_eq (r =? p); intro Hr.
+    2: case projectable_B_dec; intro HC.
+    1,2: exists nil, nil, C1, s'.
+    1,2: repeat split; auto; econstructor. 2,4: constructor.
+    1,2: rewrite <- forget_Cond with (RecVar := RecVar) (Var := Var).
+    1,2: constructor; apply C_Then; auto.
+    exists nil, (@forget Pid Value Var RecVar (RL_Sel p r left)::nil), C1, s'.
+    repeat split; auto; repeat constructor.
+    econstructor. 2: econstructor. 3: constructor.
+    * rewrite <- (@forget_Cond Pid Value Var RecVar).
+      constructor. constructor; eauto.
+    * constructor. constructor; ESEr.
+  - (* Else *)
+    rewrite <- H6 in *.
+    clear s'0 H7 C' H6 tl H5 s0 H1 C3 H3 C0 H2 b0 H0 p0 H H4.
+    simpl.
+    (* did we amend? *)
+    case_eq (r =? p); intro Hr.
+    2: case projectable_B_dec; intro HC.
+    1,2: exists nil, nil, C2, s'.
+    1,2: repeat split; auto; econstructor. 2,4: constructor.
+    1,2: rewrite <- forget_Cond with (RecVar := RecVar) (Var := Var).
+    1,2: constructor; apply C_Else; auto.
+    exists nil, (@forget Pid Value Var RecVar (RL_Sel p r right)::nil), C2, s'.
+    repeat split; auto; repeat constructor.
+    econstructor. 2: econstructor. 3: constructor.
+    * rewrite <- (@forget_Cond Pid Value Var RecVar).
+      constructor. apply C_Else; eauto.
+    * constructor. constructor; ESEr.
+  - (* Delay *)
+    rewrite <- H6 in *.
+    clear s'0 H7 t H5 s0 H2 C3 H3 C0 H1 b0 H0 p0 H H6 H4.
+    induction (IHC1 _ _ _ _ (CCP_To_intro _ _ _ _ _ _ _ H9)) as [tl1F [tl1F' [C1F [s1F [HF1 [HF2 HF3] ] ] ] ] ].
+    induction (IHC2 _ _ _ _ (CCP_To_intro _ _ _ _ _ _ _ H10)) as [tl2F [tl2F' [C2F [s2F [HF4 [HF5 HF6] ] ] ] ] ].
+    simpl. 
+
+    (* problems here also *)
+    set (tl' := @RL_Sel _ Value Var RecVar p q l).
+    exists (forget tl'::tlF), (forget tl'::tlF'), CF, sF.
+    repeat split; auto. econstructor; eauto.
+    econstructor; eauto.
+    unfold tl'; constructor; constructor; ESEr.
+    inversion_clear HF3.
+    induction c2 as [ [Defs' C'' ] s''].
+    generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H) as HDefs; intro.
+    rewrite <- HDefs in *; clear Defs' HDefs.
+    econstructor; eauto.
+    * inversion H. constructor. apply C_Delay_Eta; eauto.
+      induction t; induction tl; inversion H5; auto.
+    * econstructor; eauto.
+      constructor. unfold tl'; constructor; ESEr.
+
+
+
 
 (* Lemma : P --[tl]-->* P' iff amend(P) --[tl']-->* amend(P')
 
@@ -141,64 +289,10 @@ intros C1 C2 H. induction H; intros.
     * left. constructor; auto.
     * 
 
-
+Abort.
 
 (** MOVE ME *)
 
-Section Soundness.
-
-
-(*
-Fixpoint seq_compose {m} {k} (fs:t (PRFunction m) k) (ps:t Pid m) (target init:nat) (X:RecVar)
-  (Implement : forall (H:Fin.t k) (ps':t Pid m) (q' i':nat) (k':RecVar), RecVar -> Choreography) {struct fs} : RecVar -> Choreography.
-(*
-  match fs with
-  | [] => End
-  | f :: fs' => Implement m f d (Hd Fin.F1) ps target init ;; compose_args fs' ps (S target) (init + Pi f) Implement
-  end.
-*)
-Proof.
-destruct fs.
-- apply (fun _ => End).
-- pose (Implement (Fin.F1) ps target init X) as Ph.
-  pose (seq_compose _ _ fs ps (S target) (init + Pi h) (X + Gamma h) (fun H => Implement (Fin.FS H))) as Pfs.
-  apply (fun Y => if Y <? X + Gamma h then (Ph Y) else (Pfs Y)).
-Defined.
-
-Definition Implementation_aux {m} (f:PRFunction m) :
-  t Pid m -> Pid -> nat -> RecVar -> RecVar -> Choreography
-  :=
-  PRFunction_recursion (fun m f => t Pid m -> Pid -> nat -> RecVar -> RecVar -> Choreography)
-  (fun ps q _ X => Pack1 X (Send ps[@Fin.F1] zero q;; Call (S X)))
-  (fun ps q _ X => Pack1 X (Send ps[@Fin.F1] succ_this q;; Call (S X)))
-  (fun i j Hp ps q _ X => Pack1 X (Send ps[@Fin.of_nat_lt Hp] this q;; Call (S X)))
-  (fun k m g fs Hfs Hg ps q init X => 
-    (fun Y => if Y <? X + vsum (map Gamma fs)
-      then seq_compose fs ps init (init+m) X Hfs Y
-      else Hg (seq_labels init fs) q (init + m) (X + (vsum (map Gamma fs))) Y))
-  (fun k g h Hg Hh ps q init X => 
-    (fun Y =>
-      if (Y <? X + Gamma g) then Hg (tl ps) init (init+3) X Y
-      else if (RecVar_dec Y (X + Gamma g)) then
-         Send (init+2) zero (S init);; Call (X + Gamma g + 1)
-      else if (RecVar_dec Y (X + Gamma g + 1)) then 
-         IfEq (S init) ps[@Fin.F1] (Send init this q;; Call (X + Gamma g + Gamma h + 3)) (Call (X + Gamma g + 2))
-      else if (RecVar_dec Y (X + Gamma g + Gamma h + 2)) then
-         Send (init+2) this init;; Send (S init) this (init+2);; Send (init+2) succ_this (S init);; Call (X + Gamma g + 1)
-      else Hh (S init :: init :: tl ps) (init+2) (init+3 + Pi g) (X + Gamma g + 2) Y))
-  (fun k h Hh ps q init X => 
-    (fun Y =>
-      if (RecVar_dec Y X) then
-         Send (init+2) zero (init+1);; Call (X + 1)
-      else if (RecVar_dec Y (X + Gamma h + 1)) then
-         Send (init+1) zero (init+2);; IfEq (init+2) init
-            (Send (init+1) this q;; Call (X + Gamma h + 2))
-            (Send (init+1) this (init+2);; Send (init+2) succ_this (init+1);; Call (X + 1))
-        else Hh (shiftin (init+1) ps) init (init+3) (X + 1) Y))
-  m f.
-*)
-
-End Soundness.
 
 Section ComputableReduction.
 
