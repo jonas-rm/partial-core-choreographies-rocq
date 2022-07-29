@@ -21,6 +21,18 @@ Local Ltac eq_elim t t' H := case (eq_dec t t'); intro H;
 
 Open Scope CC_scope.
 
+Lemma update_idempotent : forall (s:(State Pid Var Value)) p x,
+  s[[p,x=>s p x]] [==] s.
+Proof.
+red; red; intros.
+unfold update, Lupdate. case_eq (p =? p0).
+2: intros; ESEr.
+intro. rewrite eqb_eq in H; rewrite <- H; clear p0 H.
+case_eq (x =? x0).
+2: intros; ESEr.
+intro. rewrite eqb_eq in H; rewrite <- H; auto.
+Qed.
+
 (* Clean me *)
 Fixpoint amend Defs (C:Choreography Sig) (p:Pid) (a:Ann) :=
 match C with
@@ -95,19 +107,45 @@ induction C; intros. induction e.
     rewrite <- forget_Com with (RecVar := RecVar) (x:=x).
     constructor. apply C_Com; auto.
   - (* Delay *)
-    rewrite <- H5 in *.
+(*     rewrite <- H5 in *.
     clear s'0 H6 t H3 s0 H1 C0 H2 ann H0 eta H H4 H5.
-
-(* needs some non-trivial rewritings on H8
-
-    induction (IHC _ _ _ _ (CCP_To_intro _ _ _ _ _ _ _ H8)) as [tlF [tlF' [CF [sF [HF1 [HF2 HF3] ] ] ] ] ].
-    simpl. set (v := eval_on_state Ev e s p); set (tl' := @RL_Com _ _ _ RecVar p v q x).
+    set (v := eval_on_state Ev e s p).
+    destroy H7.
+    assert (v = eval_on_state Ev e s' p) as Hv.
+    1: unfold v. eapply CCC_To_disjoint_eval; eauto.
+    apply CCC_To_disjoint_update with (p:=q) (v:=v) (x:=x) in H8; auto.
+    induction (IHC _ _ _ _ (CCP_Base _ _ _ _ _ _ _ H8)) as [tlF [tlF' [CF [sF [HF1 [HF2 HF3] ] ] ] ] ].
+    simpl. fold v in H8, HF2, HF3.
+    set (tl' := @RL_Com _ Value Var RecVar p v q x).
     exists (forget tl'::tlF), (forget tl'::tlF'), CF, sF.
     repeat split; auto. econstructor; eauto.
-    econstructor; eauto. unfold tl'; apply
-    * inversion HF1.
- repeat constructor; auto.
-*)
+    econstructor; eauto.
+    unfold tl'; constructor. rewrite Hv. apply C_Com; ESEr.
+    inversion_clear HF3.
+    induction c2 as [ [Defs' C'' ] s''].
+    generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H0) as HDefs; intro.
+    rewrite <- HDefs in *; clear Defs' HDefs.
+    change (forget tl :: forget tl' :: tlF') with ((forget tl :: forget tl' :: nil) ++ tlF').
+    eapply CCT_Trans; eauto.
+    inversion H0. clear s'0 H10 C'1 H9 C0 H4 D H2 H0.
+    assert (v = eval_on_state Ev e s'' p) as Hv'.
+    1: { unfold v. transitivity (eval_on_state Ev e (s[[q,x=>v]]) p).
+         apply eval_neq; auto.
+         unfold eval_on_state. admit. (* really? *)
+         eapply CCC_To_disjoint_eval. 2: apply H3. induction t, tl; inversion H6; auto.
+    }
+    apply CCC_To_disjoint_update with (p:=q) (v:= s q x) (x:=x) in H3; auto.
+    2: induction t, tl; inversion H6; auto.
+    econstructor; eauto.
+    * eapply CCP_To_eq with (s1:=s[[q,x=>v]][[q,x=>s q x]]).
+      eESEt. apply update_update_ext. apply update_idempotent. ESEr.
+      constructor. apply C_Delay_Eta; eauto.
+      simpl. induction t, tl; inversion H6; auto.
+    * econstructor; eauto. 2: constructor.
+      eapply CCP_To_eq with (s2:=s''[[q,x=>s q x]][[q,x=>v]]).
+      ESEr. eESEt. apply update_update_ext.
+      rewrite 
+ *)
   admit.
 
 + inversion H. clear s'0 H6 C'0 H5 tl H1 H s0 H3 C0 H2 D H0.
@@ -123,7 +161,7 @@ induction C; intros. induction e.
   - (* Delay *)
     rewrite <- H5 in *.
     clear s'0 H6 t H3 s0 H1 C0 H2 ann H0 eta H H4 H5. rename C'0 into C0.
-    induction (IHC _ _ _ _ (CCP_To_intro _ _ _ _ _ _ _ H8)) as [tlF [tlF' [CF [sF [HF1 [HF2 HF3] ] ] ] ] ].
+    induction (IHC _ _ _ _ (CCP_Base _ _ _ _ _ _ _ H8)) as [tlF [tlF' [CF [sF [HF1 [HF2 HF3] ] ] ] ] ].
     simpl. set (tl' := @RL_Sel _ Value Var RecVar p q l).
     exists (forget tl'::tlF), (forget tl'::tlF'), CF, sF.
     repeat split; auto. econstructor; eauto.

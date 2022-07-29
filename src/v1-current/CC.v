@@ -116,7 +116,8 @@ apply eta_eq_dec.
 apply list_eq_dec, eq_dec.
 Qed.
 
-(** Programmers should only write initial choreographies. *)
+(** Initial choreographies do not contain runtime terms - these are
+    the choreographies that programmers should write. *)
 Fixpoint initial (C:Choreography) : Prop :=
 match C with
 | Interaction _ _ C' => initial C'
@@ -132,11 +133,6 @@ induction C; simpl; auto.
 inversion_clear IHC1; inversion_clear IHC2; auto;
   right; intro; inversion_clear H1; auto.
 Qed.
-
-(** A choreography is well-formed if:
-    - it does not contain self-communications;
-    - annotations of runtime terms are not empty.
-*)
 
 (** No process attempts to communicate with itself. *)
 
@@ -207,7 +203,10 @@ induction C; simpl; auto.
     inversion_clear H0; auto.
 Qed.
 
-(** Choreography well-formedness. *)
+(** A choreography is well-formed if:
+    - it does not contain self-communications;
+    - annotations of runtime terms are not empty.
+*)
 
 Definition Choreography_WF (C:Choreography) : Prop :=
   no_self_comm C /\ no_empty_ann C.
