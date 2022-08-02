@@ -754,7 +754,7 @@ Definition Configuration : Type := Program * Store.
 
 Inductive SPP_To :
   Configuration -> (TransitionLabel Pid Value) -> Configuration -> Prop :=
- | SPP_To_intro D N s t N' s' : SP_To D N s t N' s' ->
+ | SPP_Base D N s t N' s' : SP_To D N s t N' s' ->
      SPP_To (D,N,s) (forget t) (D,N',s').
 
 Inductive SPP_ToStar :

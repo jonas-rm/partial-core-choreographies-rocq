@@ -2134,7 +2134,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
   exists (D',fun r => if (eq_dec r p) then Bp else if (eq_dec r q) then Bq else N r),
   (@forget Pid Value Var PR (RL_Com p v q x)).
   repeat split; auto.
-  - apply (@SPP_To_intro Sig'). rewrite Hv. apply S_Com with (a:ann Sig') Bp a' Bq.
+  - apply (@SPP_Base Sig'). rewrite Hv. apply S_Com with (a:ann Sig') Bp a' Bq.
     * replace N with (Net (D',N)); auto.
       rewrite HN. eapply bproj_unique; eauto.
       apply epp_C_char'; auto.
@@ -2198,7 +2198,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
   2: exists (D',fun r => if (eq_dec r p) then Bp else if (eq_dec r q) then Bq else N r),
   (@forget Pid Value Var PR (RL_Sel p q right)).
   all: repeat split; auto.
-  1,3: apply (@SPP_To_intro Sig').
+  1,3: apply (@SPP_Base Sig').
   2: apply S_RSel with (a:ann Sig') Bp a' None Bq.
   1: apply S_LSel with (a:ann Sig') Bp a' Bq None.
   1,2,5,6: replace N with (Net (D',N)); auto.
@@ -2251,7 +2251,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
   2: exists (D',fun r => if (eq_dec r p) then Be else N r),
     (@forget Pid Value Var PR (RL_Cond p)).
   1,2: repeat split; auto.
-  1,3: apply (@SPP_To_intro Sig').
+  1,3: apply (@SPP_Base Sig').
   1: apply (@S_Then Sig') with b Bt Be; auto.
   4: apply (@S_Else Sig') with b Bt Be; auto.
   1,4: replace N with (Net (D',N)); auto;
@@ -2320,7 +2320,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
   exists (D',fun r => if (eq_dec r p) then B else N r),
     (forget (@RL_Call Pid Value Var PR (X,p) p)).
   repeat split.
-  - apply (@SPP_To_intro Sig'), (@S_Call Sig').
+  - apply (@SPP_Base Sig'), (@S_Call Sig').
     * replace N with (Net (D',N)); auto.
       eapply bproj_unique; eauto.
       rewrite HN. apply epp_C_char'; auto.
