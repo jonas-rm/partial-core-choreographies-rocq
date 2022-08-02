@@ -18,13 +18,13 @@ Inductive more_branches : Behaviour Sig -> Behaviour Sig -> Prop :=
     more_branches (p ? x @? a; B) (p ? x @? a; B')
 | MB_Sel p l a B B': more_branches B B' ->
     more_branches (p (+) l @+ a; B) (p (+) l @+ a; B')
-| MB_Branching_None_None p mBl mBr :
+| MB_Branching_NN p mBl mBr :
     more_branches (p & mBl // mBr) (p & None // None)
-| MB_Branching_None_Some p mBl a Br Br' : more_branches Br Br' ->
+| MB_Branching_NS p mBl a Br Br' : more_branches Br Br' ->
     more_branches (p & mBl // Some (a,Br)) (p & None // Some (a,Br'))
-| MB_Branching_Some_None p a Bl Bl' mBr : more_branches Bl Bl' ->
+| MB_Branching_SN p a Bl Bl' mBr : more_branches Bl Bl' ->
     more_branches (p & Some (a,Bl) // mBr) (p & Some (a,Bl') // None)
-| MB_Branching_Some_Some p a Bl Bl' a' Br Br' :
+| MB_Branching_SS p a Bl Bl' a' Br Br' :
     more_branches Bl Bl' -> more_branches Br Br' ->
     more_branches (p & Some (a,Bl) // Some (a',Br)) (p & Some (a,Bl') // Some (a',Br'))
 | MB_Cond b B1 B1' B2 B2' : more_branches B1 B1' -> more_branches B2 B2' ->
@@ -99,6 +99,9 @@ Proof. intros; intro. apply MB_refl'; auto. Qed.
 
 Lemma MBN_trans : forall N N' N'', N (>>) N' -> N' (>>) N'' -> N (>>) N''.
 Proof. intros; intro. eapply MB_trans; eauto. Qed.
+
+Lemma MBN_antisym : forall N N', N (>>) N' -> N' (>>) N -> N (==) N'.
+Proof. red; intros. apply MB_antisym; auto. Qed.
 
 Lemma SP_To_MBN : forall D N1 s N2 s' D' N1' tl,
   <<N1,s>> --[tl,D]--> <<N2,s'>> -> N1' (>>) N1 -> (forall X, D X = D' X) ->

@@ -3577,8 +3577,8 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       induction l.
       rewrite epp_C_Sel_ql with (HC':=H'), epp_C_Sel_ql with (HC':=HC'); auto.
       6: rewrite epp_C_Sel_qr with (HC':=H'), epp_C_Sel_qr with (HC':=HC'); auto.
-      1: apply MB_Branching_Some_None with (Sig:=Sig'); auto.
-      5: apply MB_Branching_None_Some with (Sig:=Sig'); auto.
+      1: apply MB_Branching_SN with (Sig:=Sig'); auto.
+      5: apply MB_Branching_NS with (Sig:=Sig'); auto.
       all: rewrite Hq'r; auto.
       all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
@@ -3633,8 +3633,8 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
       induction l.
       rewrite epp_C_Sel_ql with (HC':=H'), epp_C_Sel_ql with (HC':=HC'); auto.
       6: rewrite epp_C_Sel_qr with (HC':=H'), epp_C_Sel_qr with (HC':=HC'); auto.
-      1: apply MB_Branching_Some_None with (Sig:=Sig'); auto.
-      5: apply MB_Branching_None_Some with (Sig:=Sig'); auto.
+      1: apply MB_Branching_SN with (Sig:=Sig'); auto.
+      5: apply MB_Branching_NS with (Sig:=Sig'); auto.
       all: rewrite Hq'r; auto.
       all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
@@ -4031,10 +4031,10 @@ induction C; intros. induction e.
       2,3: apply Process_out; auto.
       induction l.
       rewrite epp_C_Sel_ql with (HC':=H'), epp_C_Sel_ql with (HC':=HC'); auto.
-      apply MB_Branching_Some_None with (Sig := Sig'); auto.
+      apply MB_Branching_SN with (Sig := Sig'); auto.
       1,2,3,4: rewrite Hq'r; auto.
       rewrite epp_C_Sel_qr with (HC':=H'), epp_C_Sel_qr with (HC':=HC'); auto.
-      apply MB_Branching_None_Some with (Sig := Sig'); auto.
+      apply MB_Branching_NS with (Sig := Sig'); auto.
       1,2,3,4: rewrite Hq'r; auto.
     - rewrite Par_proj1', Par_proj1', Network_rm_out, Network_rm_out; auto.
       2,3: apply Process_out; auto.
