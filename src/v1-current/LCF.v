@@ -39,10 +39,9 @@ match C with
 | eta@a';; C' => eta@a';; (amend Defs C' p a)
 | If q ?? b Then C1 Else C2 =>
     let C1' := amend Defs C1 p a in let C2' := amend Defs C2 p a in
-    if (p =? q)
-    then If q ?? b Then C1' Else C2'
-    else if projectable_B_dec _ Defs (If q ?? b Then C1' Else C2') p
-         then If q ?? b Then C1' Else C2'
+    let C' := If q ?? b Then C1' Else C2' in
+    if (p =? q) then C'
+    else if projectable_B_dec _ Defs (If q ?? b Then C1' Else C2') p then C'
          else If q ?? b Then (q --> p[left]@a;; C1') Else (q --> p[right]@a;; C2')
 | RT_Call X ps C' => RT_Call X ps (amend Defs C' p a)
 | _ => C
@@ -87,10 +86,27 @@ Inductive sel_subtrace : list (TransitionLabel Pid Value) -> list (TransitionLab
 | ss_extra p q l ts ts' : sel_subtrace ts ts' -> sel_subtrace ts (TL_Sel p q l::ts')
 .
 
+Definition sel_subtrace' ts ts' :=
+  exists ts'', sel_subtrace ts ts'' /\ Permutation ts' ts''.
+
+Lemma sel_subtrace'_refl : forall ts, sel_subtrace' ts ts.
+Proof. intros. exists ts; split; auto. constructor. Qed.
+
+Lemma sel_subtrace'_base : forall ts ts',
+  sel_subtrace ts ts' -> sel_subtrace' ts ts'.
+Proof. intros. exists ts'; split; auto. Qed.
+
+Lemma sel_subtrace'_cons : forall t ts ts',
+  sel_subtrace' ts ts' -> sel_subtrace' (t::ts) (t::ts').
+Proof.
+intros. induction H as [ts'' [H' H''] ].
+exists (t::ts''). split; econstructor; eauto.
+Qed.
+
 Lemma amend_sound : forall Defs C s tl C' s',
   (Defs,C,s) --[tl]--> (Defs,C',s') ->
   forall r a, exists tl' tl'' C'' s'',
-       sel_subtrace tl' tl''
+       sel_subtrace' tl' tl''
     /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
     /\ (Defs,amend Defs C r a,s) --[tl::tl'']-->* (Defs,amend Defs C'' r a,s'').
 Proof.
@@ -103,7 +119,8 @@ induction C; intros. induction e.
     rewrite <- H8 in *.
     clear s'0 H9 C' H8 tl H7 s0 H0 C0 H6 a0 H5 x0 H3 q0 H2 e0 H1 p0 H H4.
     simpl. exists nil, nil, C, s'.
-    repeat split; auto; econstructor. 2: constructor.
+    repeat split; auto. apply sel_subtrace'_refl.
+    all: econstructor. 2: constructor.
     rewrite <- forget_Com with (RecVar := RecVar) (x:=x).
     constructor. apply C_Com; auto.
   - (* Delay *)
@@ -155,7 +172,8 @@ induction C; intros. induction e.
     rewrite <- H7 in *.
     clear s'0 H8 C' H7 tl H6 s0 H0 C0 H5 a0 H3 l0 H2 q0 H1 p0 H H4.
     simpl. exists nil, nil, C, s'.
-    repeat split; auto; econstructor. 2: constructor.
+    repeat split; auto. apply sel_subtrace'_refl.
+    all: econstructor. 2: constructor.
     rewrite <- forget_Sel with (RecVar := RecVar) (Var := Var).
     constructor. apply C_Sel; auto.
   - (* Delay *)
@@ -164,7 +182,7 @@ induction C; intros. induction e.
     induction (IHC _ _ _ _ (CCP_Base _ _ _ _ _ _ _ H8)) as [tlF [tlF' [CF [sF [HF1 [HF2 HF3] ] ] ] ] ].
     simpl. set (tl' := @RL_Sel _ Value Var RecVar p q l).
     exists (forget tl'::tlF), (forget tl'::tlF'), CF, sF.
-    repeat split; auto. econstructor; eauto.
+    repeat split; auto. apply sel_subtrace'_cons; auto.
     econstructor; eauto.
     unfold tl'; constructor; constructor; ESEr.
     inversion_clear HF3.
@@ -187,11 +205,13 @@ induction C; intros. induction e.
     case_eq (r =? p); intro Hr.
     2: case projectable_B_dec; intro HC.
     1,2: exists nil, nil, C1, s'.
-    1,2: repeat split; auto; econstructor. 2,4: constructor.
+    1,2: repeat split; auto. 1,4: apply sel_subtrace'_refl.
+    1,2,3,4: econstructor. 2,4: constructor.
     1,2: rewrite <- forget_Cond with (RecVar := RecVar) (Var := Var).
     1,2: constructor; apply C_Then; auto.
     exists nil, (@forget Pid Value Var RecVar (RL_Sel p r left)::nil), C1, s'.
     repeat split; auto; repeat constructor.
+    apply sel_subtrace'_base; repeat constructor.
     econstructor. 2: econstructor. 3: constructor.
     * rewrite <- (@forget_Cond Pid Value Var RecVar).
       constructor. constructor; eauto.
@@ -204,11 +224,13 @@ induction C; intros. induction e.
     case_eq (r =? p); intro Hr.
     2: case projectable_B_dec; intro HC.
     1,2: exists nil, nil, C2, s'.
-    1,2: repeat split; auto; econstructor. 2,4: constructor.
+    1,2: repeat split; auto. 1,4: apply sel_subtrace'_refl.
+    1,2,3,4: econstructor. 2,4: constructor.
     1,2: rewrite <- forget_Cond with (RecVar := RecVar) (Var := Var).
     1,2: constructor; apply C_Else; auto.
     exists nil, (@forget Pid Value Var RecVar (RL_Sel p r right)::nil), C2, s'.
     repeat split; auto; repeat constructor.
+    apply sel_subtrace'_base; repeat constructor.
     econstructor. 2: econstructor. 3: constructor.
     * rewrite <- (@forget_Cond Pid Value Var RecVar).
       constructor. apply C_Else; eauto.
@@ -216,8 +238,8 @@ induction C; intros. induction e.
   - (* Delay *)
     rewrite <- H6 in *.
     clear s'0 H7 t H5 s0 H2 C3 H3 C0 H1 b0 H0 p0 H H6 H4.
-    induction (IHC1 _ _ _ _ (CCP_To_intro _ _ _ _ _ _ _ H9)) as [tl1F [tl1F' [C1F [s1F [HF1 [HF2 HF3] ] ] ] ] ].
-    induction (IHC2 _ _ _ _ (CCP_To_intro _ _ _ _ _ _ _ H10)) as [tl2F [tl2F' [C2F [s2F [HF4 [HF5 HF6] ] ] ] ] ].
+    induction (IHC1 _ _ _ _ (CCP_Base _ _ _ _ _ _ _ H9)) as [tl1F [tl1F' [C1F [s1F [HF1 [HF2 HF3] ] ] ] ] ].
+    induction (IHC2 _ _ _ _ (CCP_Base _ _ _ _ _ _ _ H10)) as [tl2F [tl2F' [C2F [s2F [HF4 [HF5 HF6] ] ] ] ] ].
     simpl. 
 
     (* problems here also *)
