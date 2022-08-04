@@ -33,22 +33,31 @@ case_eq (x =? x0).
 intro. rewrite eqb_eq in H; rewrite <- H; auto.
 Qed.
 
+Variable Defs:DefSet Sig.
+
 (* Clean me *)
-Fixpoint amend Defs (C:Choreography Sig) (p:Pid) (a:Ann) :=
+Fixpoint amend (C:Choreography Sig) (p:Pid) (a:Ann) :=
 match C with
-| eta@a';; C' => eta@a';; (amend Defs C' p a)
+| eta@a';; C' => eta@a';; (amend C' p a)
 | If q ?? b Then C1 Else C2 =>
-    let C1' := amend Defs C1 p a in let C2' := amend Defs C2 p a in
+    let C1' := amend C1 p a in let C2' := amend C2 p a in
     let C' := If q ?? b Then C1' Else C2' in
     if (p =? q) then C'
     else if projectable_B_dec _ Defs (If q ?? b Then C1' Else C2') p then C'
          else If q ?? b Then (q --> p[left]@a;; C1') Else (q --> p[right]@a;; C2')
-| RT_Call X ps C' => RT_Call X ps (amend Defs C' p a)
+| RT_Call X ps C' => RT_Call X ps (amend C' p a)
 | _ => C
 end.
 
-Lemma amend_proj : forall Defs C p a,
-  projectable_B Sig Defs (amend Defs C p a) p.
+(** To avoid duplication of cases - I'd love an or... *)
+Lemma amend_If : forall q b C1 C2 p a,
+  let C1' := amend C1 p a in let C2' := amend C2 p a in
+  { amend (If q ?? b Then C1 Else C2) p a = If q ?? b Then C1' Else C2' }
+  + { amend (If q ?? b Then C1 Else C2) p a = If q ?? b Then (q --> p[left]@a;; C1') Else (q --> p[right]@a;; C2') }.
+Proof. intros; simpl. elim (p =? q); auto. elim projectable_B_dec; auto. Qed.
+
+Lemma amend_proj : forall C p a,
+  projectable_B Sig Defs (amend C p a) p.
 Proof.
 induction C; intros.
 + simpl.
@@ -80,11 +89,36 @@ induction C; intros.
 + simpl. eexists; constructor.
 Qed.
 
+Definition amend_D (p:Pid) (a:Ann) : DefSet Sig :=
+  fun X => (fst (Defs X),amend (snd (Defs X)) p a).
+
+Notation Forget := (@forget Pid Value Var RecVar).
+
+Lemma disjoint_p_rl_eq : forall p t t', Forget t = Forget t' ->
+  disjoint_p_rl p t -> disjoint_p_rl p t'.
+Proof.
+intros. induction t, t'; inversion H; auto.
+all: rewrite H2 in *; auto.
+all: rewrite H3, H4 in *; auto.
+Qed.
+
+Lemma disjoint_eta_rl_eq : forall eta t t', Forget t = Forget t' ->
+  disjoint_eta_rl _ eta t -> disjoint_eta_rl _ eta t'.
+Proof.
+intros. induction eta, t, t'; inversion H; auto.
+all: rewrite H2 in *; auto.
+all: rewrite H3, H4 in *; auto.
+Qed.
+
 Inductive sel_subtrace : list (TransitionLabel Pid Value) -> list (TransitionLabel Pid Value) -> Prop :=
 | ss_refl ts : sel_subtrace ts ts
 | ss_cons t ts ts' : sel_subtrace ts ts' -> sel_subtrace (t::ts) (t::ts')
 | ss_extra p q l ts ts' : sel_subtrace ts ts' -> sel_subtrace ts (TL_Sel p q l::ts')
 .
+
+Lemma sel_subtrace_app : forall ts ts' ts'',
+  sel_subtrace ts ts' -> sel_subtrace (ts''++ts) (ts''++ts').
+Proof. induction ts''; simpl; auto. constructor; auto. Qed.
 
 Definition sel_subtrace' ts ts' :=
   exists ts'', sel_subtrace ts ts'' /\ Permutation ts' ts''.
@@ -103,162 +137,465 @@ intros. induction H as [ts'' [H' H''] ].
 exists (t::ts''). split; econstructor; eauto.
 Qed.
 
-Lemma amend_sound : forall Defs C s tl C' s',
-  (Defs,C,s) --[tl]--> (Defs,C',s') ->
-  forall r a, exists tl' tl'' C'' s'',
-       sel_subtrace' tl' tl''
-    /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
-    /\ (Defs,amend Defs C r a,s) --[tl::tl'']-->* (Defs,amend Defs C'' r a,s'').
+Lemma sel_subtrace'_extra : forall p q l ts ts',
+  sel_subtrace' ts ts' -> sel_subtrace' ts (TL_Sel p q l::ts').
 Proof.
-intros. revert C s tl C' s' H.
+intros. induction H as [ts'' [H' H''] ].
+exists (TL_Sel p q l::ts'').
+split; constructor; auto.
+Qed.
+
+Lemma sel_subtrace'_app : forall ts ts' ts'',
+  sel_subtrace' ts' ts'' -> sel_subtrace' (ts++ts') (ts++ts'').
+Proof.
+intros. induction H as [ts_ [H' H''] ].
+exists (ts ++ ts_); split.
++ apply sel_subtrace_app; auto.
++ apply Permutation_app_head; auto.
+Qed.
+
+Lemma sel_subtrace'_perm : forall t t' ts ts',
+  sel_subtrace' ts (t :: ts') -> sel_subtrace' (t' :: ts) (t :: t' :: ts').
+Proof.
+intros.
+induction H as [ts0 [H1 H2] ].
+exists (t' :: ts0); split.
+repeat constructor; auto.
+eapply Permutation_trans. apply perm_swap.
+constructor; auto.
+Qed.
+
+Lemma sel_subtrace'_perm_extra : forall t t' ts ts' p q l,
+  sel_subtrace' ts (t :: ts') -> sel_subtrace' (t' :: ts) (t :: t' :: (TL_Sel p q l) :: ts').
+Proof.
+intros.
+induction H as [ts0 [H1 H2] ].
+exists (t' :: TL_Sel p q l :: ts0); split.
+repeat constructor; auto.
+eapply Permutation_trans. apply perm_swap. constructor.
+eapply Permutation_trans. apply perm_swap.
+constructor; auto.
+Qed.
+
+Lemma sel_subtrace'_app' : forall t ts ts' ts'',
+  sel_subtrace' ts (t::ts') -> sel_subtrace' (ts''++ts) (t::ts''++ts').
+Proof.
+intros. induction H as [ts0 [H' H''] ].
+exists (ts''++ts0).
+split.
++ apply sel_subtrace_app; auto.
++ eapply Permutation_trans.
+  apply Permutation_middle.
+  apply Permutation_app_head; auto.
+Qed.
+
+Lemma amend_1_complete_1 : forall C s tl C' s', Choreography_WF C ->
+  (Defs,C,s) --[tl]--> (Defs,C',s') ->
+  forall r a, exists tl' tlI tlF C'' s'',
+       sel_subtrace' tl' (tlI++tlF)
+    /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
+    /\ (amend_D r a,amend C r a,s) --[tlI ++ tl::tlF]-->* (amend_D r a,amend C'' r a,s'').
+Proof.
+Local Ltac IHElim IHC HC H tl' tlI CI sI tl0 C0 s0 tlF CF sF H1 H2 H3 H4 H5 H6 := 
+    induction (IHC _ _ _ _ HC H) as
+    [tl' [tlI [CI [sI [tl0 [C0 [s0 [tlF [CF [sF [H1 [H2 [H3 [H4 [H5 H6] ] ] ] ] ] ] ] ] ] ] ] ] ] ]; clear IHC.
+intros. rename H into HC, H0 into H.
+assert (exists tl' tlI CI sI tl0 C0 s0 tlF CF sF,
+       sel_subtrace' tl' (tlI++tlF)
+    /\ tl = forget tl0
+    /\ (Defs,C',s') --[tl']-->* (Defs,CF,sF)
+    /\ (amend_D r a,amend C r a,s) --[tlI]-->* (amend_D r a,CI,sI)
+    /\ <<CI,sI>> --[tl0,amend_D r a]--> <<C0,s0>>
+    /\ (amend_D r a,C0,s0) --[tlF]-->* (amend_D r a,amend CF r a,sF)).
+2: { destroy H0. do 5 eexists. repeat split; eauto.
+     eapply CCT_Trans; eauto. econstructor; eauto.
+     rewrite H2; constructor; eauto. }
+inversion_clear H. clear tl; rename H0 into H, t into tl.
+revert C s tl C' s' HC H.
 induction C; intros. induction e.
-+ inversion H. clear s'0 H6 C'0 H5 tl H1 H s0 H3 C0 H2 D H0.
-  rename t0 into p, t1 into e, t2 into q, t3 into x, t into a', t4 into tl.
-  inversion H4.
++ rename t0 into p, t1 into e, t2 into q, t3 into x, t into a'.
+  inversion H.
   - (* Com *)
     rewrite <- H8 in *.
-    clear s'0 H9 C' H8 tl H7 s0 H0 C0 H6 a0 H5 x0 H3 q0 H2 e0 H1 p0 H H4.
-    simpl. exists nil, nil, C, s'.
-    repeat split; auto. apply sel_subtrace'_refl.
-    all: econstructor. 2: constructor.
-    rewrite <- forget_Com with (RecVar := RecVar) (x:=x).
-    constructor. apply C_Com; auto.
+    clear s'0 H9 C' H8 tl H7 s0 H1 C0 H6 a0 H5 x0 H4 q0 H3 e0 H2 p0 H0 H.
+    simpl. exists nil, nil; do 2 eexists.
+    exists (RL_Com p v q x), (amend C r a), s'.
+    exists nil, C, s'.
+    repeat split; eauto. apply sel_subtrace'_refl.
+    all: constructor. auto.
   - (* Delay *)
-(*     rewrite <- H5 in *.
-    clear s'0 H6 t H3 s0 H1 C0 H2 ann H0 eta H H4 H5.
-    set (v := eval_on_state Ev e s p).
-    destroy H7.
+    rewrite <- H5 in *.
+    clear s'0 H6 t H4 s0 H2 C0 H3 ann H1 eta H0 H H5.
+    rename C' into Cc, C'0 into C'. simpl. induction H7 as [Hp Hq].
+    set (v := eval_on_state Ev e s p). set (tlS := RL_Com (RecVar:=RecVar) p v q x).
     assert (v = eval_on_state Ev e s' p) as Hv.
     1: unfold v. eapply CCC_To_disjoint_eval; eauto.
     apply CCC_To_disjoint_update with (p:=q) (v:=v) (x:=x) in H8; auto.
-    induction (IHC _ _ _ _ (CCP_Base _ _ _ _ _ _ _ H8)) as [tlF [tlF' [CF [sF [HF1 [HF2 HF3] ] ] ] ] ].
-    simpl. fold v in H8, HF2, HF3.
-    set (tl' := @RL_Com _ Value Var RecVar p v q x).
-    exists (forget tl'::tlF), (forget tl'::tlF'), CF, sF.
-    repeat split; auto. econstructor; eauto.
-    econstructor; eauto.
-    unfold tl'; constructor. rewrite Hv. apply C_Com; ESEr.
-    inversion_clear HF3.
-    induction c2 as [ [Defs' C'' ] s''].
-    generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H0) as HDefs; intro.
-    rewrite <- HDefs in *; clear Defs' HDefs.
-    change (forget tl :: forget tl' :: tlF') with ((forget tl :: forget tl' :: nil) ++ tlF').
-    eapply CCT_Trans; eauto.
-    inversion H0. clear s'0 H10 C'1 H9 C0 H4 D H2 H0.
-    assert (v = eval_on_state Ev e s'' p) as Hv'.
-    1: { unfold v. transitivity (eval_on_state Ev e (s[[q,x=>v]]) p).
-         apply eval_neq; auto.
-         unfold eval_on_state. admit. (* really? *)
-         eapply CCC_To_disjoint_eval. 2: apply H3. induction t, tl; inversion H6; auto.
-    }
-    apply CCC_To_disjoint_update with (p:=q) (v:= s q x) (x:=x) in H3; auto.
-    2: induction t, tl; inversion H6; auto.
-    econstructor; eauto.
-    * eapply CCP_To_eq with (s1:=s[[q,x=>v]][[q,x=>s q x]]).
-      eESEt. apply update_update_ext. apply update_idempotent. ESEr.
-      constructor. apply C_Delay_Eta; eauto.
-      simpl. induction t, tl; inversion H6; auto.
-    * econstructor; eauto. 2: constructor.
-      eapply CCP_To_eq with (s2:=s''[[q,x=>s q x]][[q,x=>v]]).
-      ESEr. eESEt. apply update_update_ext.
-      rewrite 
- *)
-  admit.
-
-+ inversion H. clear s'0 H6 C'0 H5 tl H1 H s0 H3 C0 H2 D H0.
-  rename t0 into p, t1 into q, t2 into l, t into a', t3 into tl.
-  inversion H4.
+    IHElim IHC (Choreography_WF_eta _ _ _ _ HC) H8 tl' tlI CI sI tl0 C0 s0 tlF CF sF Htrace Hforget H' HI H0 HF.
+    exists (forget tlS::tl'). exists (forget tlS::tlI), CI, sI.
+    exists tl0, C0, s0. exists tlF, CF, sF.
+    repeat split; auto.
+    * apply sel_subtrace'_cons; auto.
+    * econstructor; eauto. unfold tlS; rewrite Hv.
+      repeat constructor; auto.
+    * econstructor; eauto. repeat constructor; auto.
++ rename t0 into p, t1 into q, t2 into l, t into a'.
+  inversion H.
   - (* Sel *)
     rewrite <- H7 in *.
     clear s'0 H8 C' H7 tl H6 s0 H0 C0 H5 a0 H3 l0 H2 q0 H1 p0 H H4.
-    simpl. exists nil, nil, C, s'.
-    repeat split; auto. apply sel_subtrace'_refl.
-    all: econstructor. 2: constructor.
-    rewrite <- forget_Sel with (RecVar := RecVar) (Var := Var).
-    constructor. apply C_Sel; auto.
+    simpl. exists nil, nil; do 2 eexists.
+    exists (RL_Sel p q l), (amend C r a), s'.
+    exists nil, C, s'.
+    repeat split; eauto. apply sel_subtrace'_refl.
+    all: constructor. auto.
   - (* Delay *)
     rewrite <- H5 in *.
-    clear s'0 H6 t H3 s0 H1 C0 H2 ann H0 eta H H4 H5. rename C'0 into C0.
-    induction (IHC _ _ _ _ (CCP_Base _ _ _ _ _ _ _ H8)) as [tlF [tlF' [CF [sF [HF1 [HF2 HF3] ] ] ] ] ].
-    simpl. set (tl' := @RL_Sel _ Value Var RecVar p q l).
-    exists (forget tl'::tlF), (forget tl'::tlF'), CF, sF.
-    repeat split; auto. apply sel_subtrace'_cons; auto.
-    econstructor; eauto.
-    unfold tl'; constructor; constructor; ESEr.
-    inversion_clear HF3.
-    induction c2 as [ [Defs' C'' ] s''].
-    generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H) as HDefs; intro.
-    rewrite <- HDefs in *; clear Defs' HDefs.
-    econstructor; eauto.
-    * inversion H. constructor. apply C_Delay_Eta; eauto.
-      induction t; induction tl; inversion H5; auto.
-    * econstructor; eauto.
-      constructor. unfold tl'; constructor; ESEr.
-+ inversion H. clear s'0 H6 C'0 H5 tl H1 s0 H3 C H2 D H0 H.
-  rename t into p, t0 into b, t1 into tl.
-  inversion H4.
+    clear s'0 H6 t H3 s0 H1 C0 H2 ann H0 eta H H4 H5.
+    rename C' into Cc, C'0 into C'.
+    IHElim IHC (Choreography_WF_eta _ _ _ _ HC) H8 tl' tlI CI sI tl0 C0 s0 tlF CF sF Htrace Hforget H' HI H0 HF.
+    simpl. set (tlS := @RL_Sel _ Value Var RecVar p q l).
+    exists (forget tlS::tl'). exists (forget tlS::tlI), CI, sI.
+    exists tl0, C0, s0. exists tlF, CF, sF.
+    repeat split; auto.
+    * apply sel_subtrace'_cons; auto.
+    * econstructor; eauto. repeat constructor; auto.
+    * econstructor; eauto. repeat constructor; auto.
++ rename t into p, t0 into b.
+  inversion H.
   - (* Then *)
     rewrite <- H6 in *.
     clear s'0 H7 C' H6 tl H5 s0 H1 C3 H3 C0 H2 b0 H0 p0 H H4.
-    simpl.
     (* did we amend? *)
-    case_eq (r =? p); intro Hr.
-    2: case projectable_B_dec; intro HC.
-    1,2: exists nil, nil, C1, s'.
-    1,2: repeat split; auto. 1,4: apply sel_subtrace'_refl.
-    1,2,3,4: econstructor. 2,4: constructor.
-    1,2: rewrite <- forget_Cond with (RecVar := RecVar) (Var := Var).
-    1,2: constructor; apply C_Then; auto.
-    exists nil, (@forget Pid Value Var RecVar (RL_Sel p r left)::nil), C1, s'.
-    repeat split; auto; repeat constructor.
-    apply sel_subtrace'_base; repeat constructor.
-    econstructor. 2: econstructor. 3: constructor.
-    * rewrite <- (@forget_Cond Pid Value Var RecVar).
-      constructor. constructor; eauto.
-    * constructor. constructor; ESEr.
+    elim (amend_If p b C1 C2 r a); intro HA; rewrite HA.
+    * exists nil, nil; do 2 eexists.
+      exists (@RL_Cond Pid Value Var RecVar p), (amend C1 r a), s'.
+      exists nil, C1, s'.
+      repeat split; try constructor; auto.
+      apply sel_subtrace'_refl.
+    * exists nil, nil; do 2 eexists.
+      exists (@RL_Cond Pid Value Var RecVar p), (p-->r[left]@a;; amend C1 r a), s'.
+      exists (@Forget (RL_Sel p r left)::nil), C1, s'.
+      repeat split; repeat constructor; auto.
+      apply sel_subtrace'_base; repeat constructor.
+      repeat econstructor.
   - (* Else *)
     rewrite <- H6 in *.
     clear s'0 H7 C' H6 tl H5 s0 H1 C3 H3 C0 H2 b0 H0 p0 H H4.
-    simpl.
     (* did we amend? *)
-    case_eq (r =? p); intro Hr.
-    2: case projectable_B_dec; intro HC.
-    1,2: exists nil, nil, C2, s'.
-    1,2: repeat split; auto. 1,4: apply sel_subtrace'_refl.
-    1,2,3,4: econstructor. 2,4: constructor.
-    1,2: rewrite <- forget_Cond with (RecVar := RecVar) (Var := Var).
-    1,2: constructor; apply C_Else; auto.
-    exists nil, (@forget Pid Value Var RecVar (RL_Sel p r right)::nil), C2, s'.
-    repeat split; auto; repeat constructor.
-    apply sel_subtrace'_base; repeat constructor.
-    econstructor. 2: econstructor. 3: constructor.
-    * rewrite <- (@forget_Cond Pid Value Var RecVar).
-      constructor. apply C_Else; eauto.
-    * constructor. constructor; ESEr.
+    elim (amend_If p b C1 C2 r a); intro HA; rewrite HA.
+    * exists nil, nil; do 2 eexists.
+      exists (@RL_Cond Pid Value Var RecVar p), (amend C2 r a), s'.
+      exists nil, C2, s'.
+      repeat split; try constructor; auto.
+      apply sel_subtrace'_refl.
+    * exists nil, nil; do 2 eexists.
+      exists (@RL_Cond Pid Value Var RecVar p), (p-->r[right]@a;; amend C2 r a), s'.
+      exists (@Forget (RL_Sel p r right)::nil), C2, s'.
+      repeat split; repeat constructor; auto.
+      apply sel_subtrace'_base; repeat constructor.
+      repeat econstructor.
   - (* Delay *)
     rewrite <- H6 in *.
     clear s'0 H7 t H5 s0 H2 C3 H3 C0 H1 b0 H0 p0 H H6 H4.
-    induction (IHC1 _ _ _ _ (CCP_Base _ _ _ _ _ _ _ H9)) as [tl1F [tl1F' [C1F [s1F [HF1 [HF2 HF3] ] ] ] ] ].
-    induction (IHC2 _ _ _ _ (CCP_Base _ _ _ _ _ _ _ H10)) as [tl2F [tl2F' [C2F [s2F [HF4 [HF5 HF6] ] ] ] ] ].
-    simpl. 
+    IHElim IHC1 (Choreography_WF_Then _ _ _ _ _ HC) H9 tl'1 tl1I C1I s1I tl01 C01 s01 tl1F C1F s1F Htrace1 Hforget1 H1' H1I H01 H1F.
+    IHElim IHC2 (Choreography_WF_Else _ _ _ _ _ HC) H10 tl'2 tl2I C2I s2I tl02 C02 s02 tl2F C2F s2F Htrace2 Hforget2 H2' H2I H02 H2F.
+    generalize (CCC_To_disjoint_beval _ _ _ _ _ _ _ b _ H8 H9); intro Hb.
+    case_eq (eval_on_state BEv b s p); intro Hb'.
+    all: elim (amend_If p b C1 C2 r a); intro HA.
+    all: rewrite HA in *; clear HA.
+    * (* Then, no amend *)
+      set (tl0 := @RL_Cond Pid Value Var RecVar p).
+      exists (Forget tl0::tl'1).
+      exists (Forget tl0::tl1I), C1I, s1I.
+      exists tl01, C01, s01.
+      exists tl1F, C1F, s1F.
+      repeat split; auto.
+      simpl. apply sel_subtrace'_cons; auto.
+      econstructor; eauto. repeat constructor. rewrite <- Hb; auto.
+      econstructor; eauto. repeat constructor; auto.
+    * (* Then, amend *)
+      set (tl0 := @RL_Cond Pid Value Var RecVar p).
+      set (tl0' := @RL_Sel Pid Value Var RecVar p r left).
+      exists (Forget tl0::tl'1).
+      exists (Forget tl0::Forget tl0'::tl1I), C1I, s1I.
+      exists tl01, C01, s01.
+      exists tl1F, C1F, s1F.
+      repeat split; auto.
+      simpl. apply sel_subtrace'_cons, sel_subtrace'_extra; auto.
+      econstructor; eauto. repeat constructor. rewrite <- Hb; auto.
+      econstructor; eauto. repeat constructor; auto.
+      econstructor; eauto. repeat constructor; auto.
+    * (* Else, no amend *)
+      set (tl0 := @RL_Cond Pid Value Var RecVar p).
+      exists (Forget tl0::tl'2).
+      exists (Forget tl0::tl2I), C2I, s2I.
+      exists tl02, C02, s02.
+      exists tl2F, C2F, s2F.
+      repeat split; auto.
+      simpl. apply sel_subtrace'_cons; auto.
+      econstructor; eauto. repeat constructor. rewrite <- Hb; auto.
+      econstructor; eauto. repeat constructor; auto.
+    * (* Else, no amend *)
+      set (tl0 := @RL_Cond Pid Value Var RecVar p).
+      set (tl0' := @RL_Sel Pid Value Var RecVar p r right).
+      exists (Forget tl0::tl'2).
+      exists (Forget tl0::Forget tl0'::tl2I), C2I, s2I.
+      exists tl02, C02, s02.
+      exists tl2F, C2F, s2F.
+      repeat split; auto.
+      simpl. apply sel_subtrace'_cons, sel_subtrace'_extra; auto.
+      econstructor; eauto. repeat constructor. rewrite <- Hb; auto.
+      econstructor; eauto. 2: econstructor; eauto.
+      2: repeat constructor; auto. repeat constructor; auto.
++ rename t into X. inversion H.
+  - (* Local *)
+    rewrite <- H6 in *.
+    clear s'0 H7 C' H6 tl H5 s0 H4 X0 H0 H.
+    simpl. exists nil, nil; do 2 eexists.
+    exists (RL_Call X p), (amend (snd (Defs X)) r a), s'.
+    exists nil, (snd (Defs X)), s'.
+    repeat split; eauto. apply sel_subtrace'_refl.
+    all: constructor; simpl; auto.
+  - (* Call *)
+    rewrite <- H5 in *.
+    clear s'0 H7 C' H6 tl H5 s0 H4 X0 H0 H.
+    simpl. exists nil, nil; do 2 eexists.
+    exists (RL_Call X p); eexists; exists s'.
+    exists nil; eexists; exists s'.
+    repeat split; eauto. apply sel_subtrace'_refl.
+    all: constructor; simpl; auto.
++ rename t into X. inversion H.
+  - (* Delay *)
+    rewrite <- H5, <- H1 in *.
+    clear s'0 H6 C' H5 t H4 s0 H2 C0 H3 H X0 H0 l H1. rename C'0 into C'.
+    IHElim IHC (Choreography_WF_Call_1 _ _ _ _ HC) H8 tl' tlI CI sI tl0 C0 s0 tlF CF sF Htrace Hforget H' HI H0 HF.
+    induction HC as [HC [Hps HA] ]. clear HC HA.
+    induction (RT_Call_reduce _ ps Hps) as [tlR HR].
+    exists (tlR++tl'). exists (tlR++tlI), CI, sI.
+    exists tl0, C0, s0. exists tlF, CF, sF.
+    repeat split; auto.
+    * rewrite <- app_assoc. apply sel_subtrace'_app; auto.
+    * eapply CCT_Trans; eauto.
+    * eapply CCT_Trans; eauto.
+  - (* Enter *)
+    rewrite <- H6, <- H1 in *.
+    clear s'0 H7 C' H6 tl H5 s0 H4 C0 H2 H X0 H0 l H1.
+    simpl. exists nil, nil; do 2 eexists.
+    exists (RL_Call X p), (RT_Call X (ps[\]p) (amend C r a)), s'.
+    exists nil; eexists; exists s'.
+    repeat split; eauto. apply sel_subtrace'_refl.
+    all: constructor; auto.
+  - (* Finish *)
+    rewrite <- H6, <- H1 in *.
+    clear s'0 H7 C' H6 tl H5 s0 H4 C0 H2 H X0 H0 l H1.
+    simpl. exists nil, nil; do 2 eexists.
+    exists (RL_Call X p), (amend C r a), s'.
+    exists nil, C, s'.
+    repeat split; eauto. apply sel_subtrace'_refl.
+    all: constructor; auto.
++ inversion H.
+Qed.
 
-    (* problems here also *)
-    set (tl' := @RL_Sel _ Value Var RecVar p q l).
-    exists (forget tl'::tlF), (forget tl'::tlF'), CF, sF.
-    repeat split; auto. econstructor; eauto.
-    econstructor; eauto.
-    unfold tl'; constructor; constructor; ESEr.
-    inversion_clear HF3.
-    induction c2 as [ [Defs' C'' ] s''].
-    generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H) as HDefs; intro.
-    rewrite <- HDefs in *; clear Defs' HDefs.
-    econstructor; eauto.
-    * inversion H. constructor. apply C_Delay_Eta; eauto.
-      induction t; induction tl; inversion H5; auto.
-    * econstructor; eauto.
-      constructor. unfold tl'; constructor; ESEr.
+Lemma amend_1_complete_many : forall C s tl C' s' Xs, Program_WF _ Xs (Defs,C) ->
+  (Defs,C,s) --[tl]-->* (Defs,C',s') ->
+  forall r a, exists tl' tlI tlF C'' s'',
+       sel_subtrace' tl' (tlI++tlF)
+    /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
+    /\ (amend_D r a,amend C r a,s) --[tlI ++ tl ++ tlF]-->* (amend_D r a,amend C'' r a,s'').
+Proof.
+intros. revert C s C' s' H H0.
+induction tl; intros.
++ inversion_clear H0.
+  exists nil, nil, nil, C', s'.
+  repeat split; simpl; try constructor.
+  apply sel_subtrace'_refl.
++ inversion_clear H0. rename a0 into t.
+  induction c2 as [ [D C''] s''].
+  generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H1). intro H'; rewrite <- H' in *; clear D H'.
+  generalize (CCC_To_Program_WF _ _ _ _ _ _ _ H H1). intro HP'.
+  elim (amend_1_complete_1 C s t C'' s'') with r a; auto.
+  2: elim H; auto.
+  intros tl0 [tl0I [tl0F [C0 [s0 [Hsub0 [Htl0 Htl0IF] ] ] ] ] ].
+  set (t0 := tl0I ++ t :: tl0F).
+  elim (IHtl C'' s'' C' s'); auto.
+  intros tl1 [tl1I [tl1F [C1 [s1 [Hsub1 [Htl1 Htl1IF] ] ] ] ] ].
+  
 
 
+
+
+
+
+Lemma amend_1_sound_1 : forall C r a s tl C' s', Choreography_WF C ->
+  (amend_D r a, amend C r a,s) --[tl]--> (amend_D r a, C',s') ->
+  exists tl' tl'' C'' s'',
+  (amend_D r a,C',s') --[tl']-->* (amend_D r a, amend C'' r a,s'')
+  /\ (Defs,C,s) --[tl'']-->* (Defs,C'',s'') /\ sel_subtrace' tl'' (tl::tl').
+Proof.
+Local Ltac IHElim' IHC HC H tl' tl'' C'' s'' Htl' Htl'' Hsub :=
+   induction (IHC HC _ _ _ H) as [tl' [tl'' [C'' [s'' [Htl' [Htl'' Hsub] ] ] ] ] ]; clear IHC.
+intros. rename H into HC. inversion_clear H0.
+clear tl. revert C HC s C' s' H.
+induction C; intros. induction e.
++ rename t1 into p, t2 into e, t3 into q, t4 into x, t0 into a'.
+  inversion H.
+  - (* Com *)
+    rewrite <- H7 in *.
+    clear s'0 H9 C' H8 t H7 s0 H1 C0 H6 a0 H5 x0 H4 q0 H3 e0 H2 p0 H H0.
+    exists nil, (Forget (RL_Com p v q x) :: nil), C, s'. repeat split.
+    * repeat constructor.
+    * econstructor; eauto. 2: constructor. repeat constructor; auto.
+    * apply sel_subtrace'_refl.
+  - (* Delay *)
+    clear s'0 H6 C' H5 t0 H4 s0 H2 C0 H3 ann H1 eta H H0.
+    induction H7 as [Hp Hq].
+    set (v := eval_on_state Ev e s' p). set (tlS := RL_Com (RecVar:=RecVar) p v q x).
+    assert (v = eval_on_state Ev e s p) as Hv.
+    1: unfold v. symmetry; eapply CCC_To_disjoint_eval; eauto.
+    apply CCC_To_disjoint_update with (p:=q) (v:=v) (x:=x) in H8; auto.
+    IHElim' IHC (Choreography_WF_eta _ _ _ _ HC) H8 tl' tl'' C'' s'' Htl' Htl'' Hsub.
+    exists (Forget tlS::tl'), (Forget tlS::tl''), C'', s''.
+    repeat split; auto.
+    * econstructor; eauto. unfold v; repeat constructor.
+    * econstructor; eauto. unfold tlS; rewrite Hv; repeat constructor.
+    * apply sel_subtrace'_perm; auto.
++ rename t1 into p, t2 into q, t3 into l, t0 into a'.
+  inversion H.
+  - (* Sel *)
+    rewrite <- H6 in *.
+    clear s'0 H8 C' H7 t H6 s0 H1 C0 H5 a0 H4 l0 H3 q0 H2 p0 H H0.
+    exists nil, (Forget (RL_Sel p q l) :: nil), C, s'. repeat split.
+    * repeat constructor.
+    * econstructor; eauto. 2: constructor. repeat constructor; auto.
+    * apply sel_subtrace'_refl.
+  - (* Delay *)
+    clear s'0 H6 C' H5 t0 H4 s0 H2 C0 H3 ann H1 eta H H0.
+    induction H7 as [Hp Hq].
+    IHElim' IHC (Choreography_WF_eta _ _ _ _ HC) H8 tl' tl'' C'' s'' Htl' Htl'' Hsub.
+    set (tlS := @RL_Sel Pid Value Var RecVar p q l).
+    exists (Forget tlS::tl'), (Forget tlS::tl''), C'', s''.
+    repeat split; auto.
+    * econstructor; eauto. repeat constructor.
+    * econstructor; eauto. repeat constructor.
+    * apply sel_subtrace'_perm; auto.
++ rename t0 into p, t1 into b.
+  elim (amend_If p b C1 C2 r a); intro HA; rewrite HA in *; clear HA.
+  all: inversion H.
+  - (* Then *)
+    rewrite <- H5, <- H6 in *.
+    clear s'0 H7 C' H6 t H5 s0 H2 C3 H4 C0 H3 b0 H1 p0 H0.
+    exists nil, (Forget (RL_Cond p)::nil), C1, s'. repeat split; auto.
+    * constructor.
+    * econstructor. 2: constructor. repeat constructor; eauto.
+    * apply sel_subtrace'_refl.
+  - (* Else *)
+    rewrite <- H5, <- H6 in *.
+    clear s'0 H7 C' H6 t H5 s0 H2 C3 H4 C0 H3 b0 H1 p0 H0.
+    exists nil, (Forget (RL_Cond p)::nil), C2, s'. repeat split; auto.
+    * constructor.
+    * econstructor. 2: constructor. repeat constructor; eauto.
+    * apply sel_subtrace'_refl.
+  - (* Delay *)
+    rewrite <- H6 in *.
+    clear s'0 H7 C' H6 t0 H5 s0 H3 C3 H4 C0 H2 b0 H1 p0 H0.
+    generalize (CCC_To_disjoint_beval _ _ _ _ _ _ _ b _ H8 H9); intro Hb.
+    case_eq (eval_on_state BEv b s p); intro Hb'.
+    * IHElim' IHC1 (Choreography_WF_Then _ _ _ _ _ HC) H9 tl' tl'' C'' s'' Htl' Htl'' Hsub.
+      exists (Forget (RL_Cond p)::tl'), (Forget (RL_Cond p)::tl''), C'', s''.
+      repeat split.
+      econstructor; eauto. repeat constructor; auto. rewrite <- Hb; auto.
+      econstructor; eauto. repeat constructor; auto.
+      apply sel_subtrace'_perm; auto.
+    * IHElim' IHC2 (Choreography_WF_Else _ _ _ _ _ HC) H10 tl' tl'' C'' s'' Htl' Htl'' Hsub.
+      exists (Forget (RL_Cond p)::tl'), (Forget (RL_Cond p)::tl''), C'', s''.
+      repeat split.
+      econstructor; eauto. repeat constructor; auto. rewrite <- Hb; auto.
+      econstructor; eauto. repeat constructor; auto.
+      apply sel_subtrace'_perm; auto.
+  - (* Then + Amend *)
+    rewrite <- H5, <- H6 in *.
+    clear s'0 H7 C' H6 t H5 s0 H2 C3 H4 C0 H3 b0 H1 p0 H0.
+    exists (Forget (RL_Sel p r left)::nil), (Forget (RL_Cond p)::nil), C1, s'. repeat split; auto.
+    * econstructor; repeat constructor.
+    * econstructor. 2: constructor. repeat constructor; auto.
+    * eexists; split. 2: apply Permutation_refl. repeat constructor.
+  - (* Else + Amend *)
+    rewrite <- H5, <- H6 in *.
+    clear s'0 H7 C' H6 t H5 s0 H2 C3 H4 C0 H3 b0 H1 p0 H0.
+    exists (Forget (RL_Sel p r right)::nil), (Forget (RL_Cond p)::nil), C2, s'. repeat split; auto.
+    * econstructor; repeat constructor.
+    * econstructor. 2: constructor. repeat constructor; auto.
+    * eexists; split. 2: apply Permutation_refl. repeat constructor.
+  - (* Delay + Amend *)
+    rewrite <- H6 in *.
+    clear s'0 H7 C' H6 t0 H5 s0 H3 C3 H4 C0 H2 b0 H1 p0 H0.
+    generalize (CCC_To_disjoint_beval _ _ _ _ _ _ _ b _ H8 H9); intro Hb.
+    inversion H9; inversion H10.
+    1: rewrite <- H6 in H19; inversion H19.
+    1: rewrite <- H6 in H20; simpl in H20; tauto.
+    1: rewrite <- H18 in H7; simpl in H7; tauto.
+    rewrite <- H17, <- H5 in *; rename C' into C'1, C'0 into C'2.
+    clear s'1 H18 C2' H17 t1 H16 s1 H14 C0 H15 ann0 H13 eta0 H12.
+    clear s'0 H6 C1' H5 t0 H4 s0 H2 C H3 ann H1 eta H0.
+    case_eq (eval_on_state BEv b s p); intro Hb'.
+    * IHElim' IHC1 (Choreography_WF_Then _ _ _ _ _ HC) H11 tl' tl'' C'' s'' Htl' Htl'' Hsub.
+      exists (Forget (RL_Cond p)::Forget (RL_Sel p r left)::tl'), (Forget (RL_Cond p)::tl''), C'', s''.
+      repeat split.
+      econstructor; eauto. repeat constructor; auto. rewrite <- Hb; auto.
+      econstructor; eauto. repeat constructor; auto.
+      econstructor; eauto. repeat constructor; auto.
+      apply sel_subtrace'_perm_extra; auto.
+    * IHElim' IHC2 (Choreography_WF_Else _ _ _ _ _ HC) H20 tl' tl'' C'' s'' Htl' Htl'' Hsub.
+      exists (Forget (RL_Cond p)::Forget (RL_Sel p r right)::tl'), (Forget (RL_Cond p)::tl''), C'', s''.
+      repeat split.
+      econstructor; eauto. constructor. apply C_Else'. rewrite <- Hb; auto.
+      econstructor; eauto. repeat constructor; auto.
+      econstructor; eauto. repeat constructor; auto.
+      apply sel_subtrace'_perm_extra; auto.
++ rename t0 into X. inversion H.
+  - (* Local *)
+    rewrite <- H6 in *.
+    clear s'0 H7 C' H6 t H5 s0 H4 X0 H0 H.
+    simpl. exists nil, (Forget (RL_Call X p)::nil), (snd (Defs X)), s'.
+    repeat split; repeat constructor.
+    econstructor; constructor. constructor; auto.
+    apply sel_subtrace'_refl.
+  - (* Call *)
+    rewrite <- H5 in *.
+    clear s'0 H7 C' H6 t H5 s0 H4 X0 H0 H.
+    simpl. exists nil, (Forget (RL_Call X p)::nil), (RT_Call X (fst (Defs X) [\] p) (snd (Defs X))), s'.
+    repeat split; eauto. 3: apply sel_subtrace'_refl.
+    constructor.
+    econstructor; constructor. constructor; auto.
++ rename t0 into X. inversion H.
+  - (* Delay *)
+    rewrite <- H5, <- H1 in *.
+    clear s'0 H6 C' H5 t0 H4 s0 H2 C0 H3 H X0 H0 l H1. rename C'0 into C'.
+    IHElim' IHC (Choreography_WF_Call_1 _ _ _ _ HC) H8 tl' tl'' C'' s'' Htl' Htl'' Hsub.
+    induction HC as [HC [Hps HA] ]; clear HC HA.
+    induction (RT_Call_reduce _ ps Hps) as [tlR HR].
+    exists (tlR++tl'), (tlR++tl''), C'', s''.
+    repeat split; auto.
+    * eapply CCT_Trans; eauto.
+    * eapply CCT_Trans; eauto.
+    * apply sel_subtrace'_app'; auto.
+  - (* Enter *)
+    rewrite <- H5, <- H1 in *.
+    clear s'0 H7 C' H6 t H5 s0 H4 C0 H2 H X0 H0 l H1.
+    exists nil, (Forget (RL_Call X p)::nil), (RT_Call X (ps[\]p) C), s'.
+    repeat split; eauto. 3: apply sel_subtrace'_refl.
+    constructor.
+    econstructor; constructor. constructor; auto.
+  - (* Finish *)
+    rewrite <- H5, <- H1 in *.
+    clear s'0 H7 C' H6 t H5 s0 H4 C0 H2 H X0 H0 l H1.
+    exists nil, (Forget (RL_Call X p)::nil), C, s'.
+    repeat split; eauto. 3: apply sel_subtrace'_refl.
+    constructor.
+    econstructor; constructor. constructor; auto.
++ inversion H.
+Qed.
 
 
 (* Lemma : P --[tl]-->* P' iff amend(P) --[tl']-->* amend(P')

@@ -848,8 +848,8 @@ End Sanity_Checks.
 
 Section BigStepSemantics.
 
-Lemma RT_Call_reduce : forall D X ps C s, (ps <> List.nil) ->
-  exists tl, (D,RT_Call X ps C,s) --[tl]-->* (D,C,s).
+Lemma RT_Call_reduce : forall ps, (ps <> List.nil) ->
+  exists tl, forall D X C s, (D,RT_Call X ps C,s) --[tl]-->* (D,C,s).
 Proof.
 intros.
 set (n := [#] ps).
@@ -874,7 +874,7 @@ induction n; intros.
     elim (IHn (ps [\] t)); intros; auto.
     2: { intro. rewrite H3 in H1. simpl in H1; inversion H1. }
     rename x into tls, t into p.
-    exists (TL_Tau p :: tls)%list.
+    exists (TL_Tau p :: tls)%list; intros.
     eapply CCT_Step with (D,RT_Call X (ps [\] p) C,s); auto.
     replace (TL_Tau p) with (Forget (RL_Call X p)); auto.
     constructor. rewrite H2; apply C_Call_Enter'.
@@ -882,8 +882,8 @@ induction n; intros.
     simpl; auto.
 Qed.
 
-Lemma Call_reduce : forall (D:DefSet) X s, (fst (D X) <> List.nil) ->
-  exists tl, (D,Call X,s) --[tl]-->* (D,snd (D X),s).
+Lemma Call_reduce : forall (D:DefSet) X, (fst (D X) <> List.nil) ->
+  exists tl, forall s, (D,Call X,s) --[tl]-->* (D,snd (D X),s).
 Proof.
 intros.
 case_eq ([#] (fst (D X))); intros; [idtac | case_eq n]; intros.
@@ -904,9 +904,9 @@ case_eq ([#] (fst (D X))); intros; [idtac | case_eq n]; intros.
     2: rewrite H1; simpl; auto.
     rewrite H2 in H0. inversion H0.
   }
-  elim (RT_Call_reduce D X (fst (D X) [\] p) (snd (D X)) s); auto.
+  elim (RT_Call_reduce (fst (D X) [\] p)); auto.
   intros.
-  exists (TL_Tau p :: x)%list.
+  exists (TL_Tau p :: x)%list; intros.
   eapply CCT_Step; eauto.
   replace (TL_Tau p) with (Forget (RL_Call X p)); auto.
   constructor. apply C_Call_Start'.
