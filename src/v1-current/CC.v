@@ -1057,6 +1057,17 @@ induction H4.
 + destroy HC. repeat split; auto.
 Qed.
 
+Lemma CCC_ToStar_Program_WF : forall P s l P' s' Xs,
+  Program_WF Xs P -> (P,s) --[l]-->* (P',s') -> Program_WF Xs P'.
+Proof.
+intros P s l; revert P s.
+induction l; intros; inversion H0.
++ rewrite <- H2; auto.
++ induction c2. rename a0 into P'', b into s''.
+  apply (IHl P'' s'' P' s'); auto.
+  eapply CCC_To_Program_WF; eauto.
+Qed.
+
 Lemma CCC_To_CCP_WF : forall P s l P' s',
   CCP_WF P -> (P,s) --[l]--> (P',s') -> CCP_WF P'.
 Proof.
@@ -2034,7 +2045,7 @@ Qed.
 Lemma diamond_3a : forall P s tl1 tl2 P1 s1 P2 s2,
   (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]--> (P2,s2) ->
   (exists tl' s1', (P2,s2) --[ tl' ]-->* (P1,s1')
-                 /\ s1 [==] s1' /\ length tl1 = S (length tl'))
+                 /\ s1 [==] s1' /\ Permutation tl1 (tl2::tl'))
   \/ (exists P' s', (P1,s1) --[ tl2 ]--> (P',s') /\ (P2,s2) --[ tl1 ]-->* (P',s')).
 Proof.
 induction P as [D C].
@@ -2057,19 +2068,22 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
   elim (diamond_2 _ _ _ _ _ H0 H4); simpl; intros.
   - inversion_clear a0. inversion H.
     rewrite <- H3 in H, H4, H6; rewrite <- H3; clear H3.
+    inversion_clear H0. inversion_clear H4.
+    rewrite (CCC_To_deterministic_3 _ _ _ _ _ _ _ _ H2 H0); auto.
     left; exists tl1. case_eq tl1; intros.
-    * rewrite H2 in H6. inversion H6. exists s2; split. constructor.
+    * rewrite H3 in H6. inversion H6. exists s2; split. constructor.
       split. rewrite <- H8; ESEs. auto.
-    * rewrite <- H2. exists s1; split. 2: split; auto; ESEr.
-      apply CCP_ToStar_eq with b s1; auto. ESEs. ESEr. rewrite H2; discriminate.
+    * rewrite <- H3. exists s1; split. 2: split; auto; ESEr.
+      apply CCP_ToStar_eq with b s1; auto. ESEs. ESEr. rewrite H3; discriminate.
   - inversion_clear b0.
     induction x, a0 as [D'' C'']; inversion_clear H.
     rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H2) in H1, H2.
     elim (IHtl1 _ _ _ _ _ _ _ H6 H2); intro.
     * destroy H.
       rename x into tl', x0 into s'.
-      left; exists (a::tl'), s'; split; auto.
+      left; exists (a::tl'), s'; repeat split; auto.
       apply CCT_Step with (D,C'',b0); auto.
+      eapply Permutation_trans. 2: apply perm_swap. auto.
     * destroy H.
       right; exists x, x0; split; auto.
       apply CCT_Step with (D,C'',b0); auto.
@@ -2085,11 +2099,12 @@ elim (diamond_3a _ _ _ _ _ _ _ _ H H0); intros; auto.
 destroy H1; eauto.
 Qed.
 
-Lemma diamond_4a : forall P s tl1 tl2 P1 s1 P2 s2,
+Lemma diamond_4' : forall P s tl1 tl2 P1 s1 P2 s2,
   (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
-  (exists P' tl1' tl2' s1' s2',
+  (exists P' tl1' tl2' s1' s2' n,
     (P1,s1) --[ tl1' ]-->* (P',s1') /\ (P2,s2) --[ tl2' ]-->* (P',s2')
-    /\ s1' [==] s2' /\ length tl1 + length tl1' = length tl2 + length tl2').
+    /\ s1' [==] s2' /\ Permutation (tl1 ++ tl1') (tl2 ++ tl2')
+    /\ length tl1 = length tl2' + n /\ length tl2 = length tl1' + n).
 Proof.
 induction P as [D C], P1 as [D' C1], P2 as [D'' C2].
 intros.
@@ -2102,8 +2117,8 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
 + intros.
   inversion H0.
   rewrite <- H2, <- H4.
-  exists (D,C1), nil, tl1, s1, s1; repeat split; auto.
-  constructor.
+  exists (D,C1), nil, tl1, s1, s1, 0; repeat split; auto.
+  constructor. apply Permutation_app_comm.
 + intros.
   inversion H0; clear H0.
   clear t l H1 H2 c1 c3 H3 H5.
@@ -2111,6 +2126,8 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
   rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4) in H6, H4.
   elim (diamond_3a _ _ _ _ _ _ _ _ H H4); intros.
   - destroy H0.
+    assert (length tl1 = length (a::x)) as H0'.
+    1: apply Permutation_length; auto.
     rename x into tl', x0 into s'.
     elim (IHtl2 _ _ _ _ _ _ _ H1 H6); intros.
     destroy H3.
@@ -2118,14 +2135,23 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
     rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H5) in H7, H5.
     rename b0 into C', x0 into tl1', x1 into tl2', x2 into s1', x3 into s2'.
     case_eq tl1'; intros.
-    * rewrite H9 in H5. inversion H5.
-      rewrite <- H11; rewrite <- H11 in H5, H7; rewrite H9 in H3; clear C' tl1' H11 H9.
-      rewrite <- H13 in H5, H8. clear s1' H13 c H10.
-      exists (D,C1), nil, tl2', s1, s2'; repeat split; auto.
-      constructor. ESEt s'. simpl. rewrite <- H3, H0. auto.
-    * exists (D,C'), tl1', tl2', s1', s2'; repeat split; auto.
-      apply CCP_ToStar_eq with s' s1'; auto. ESEs. ESEr. rewrite H9; discriminate.
-      simpl. rewrite <- H3, H0; auto.
+    * rewrite H11 in *. inversion H5.
+      rewrite <- H13 in *; clear C' tl1' H13 H11.
+      rewrite <- H15 in *. clear s1' H15 c H12.
+      exists (D,C1), nil, tl2', s1, s2', (S x4); repeat split; auto.
+      constructor. ESEt s'. all: simpl in *.
+      rewrite app_nil_r in *. eapply Permutation_trans; eauto.
+      rewrite H0', H10. auto with arith.
+      rewrite H3. auto with arith.
+    * exists (D,C'), tl1', tl2', s1', s2', (S x4); repeat split; auto.
+      apply CCP_ToStar_eq with s' s1'; auto. ESEs. ESEr. rewrite H11; discriminate.
+      all: simpl in *.
+      eapply Permutation_trans. 2: apply Permutation_sym, Permutation_middle.
+      eapply Permutation_trans. apply Permutation_app; eauto.
+      simpl. eapply Permutation_trans. apply Permutation_middle.
+      apply Permutation_elt; auto.
+      rewrite H0', H10; auto with arith.
+      rewrite H3. auto with arith.
   - destroy H0.
     induction x as [D' C'].
     rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0) in H1, H0.
@@ -2135,9 +2161,44 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
     induction x as [D'' C''].
     rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H3) in H5, H3.
     rename x0 into tl1'', x1 into tl2'', x2 into s1'', x3 into s2''.
-    exists (D,C''), (a::tl1''), tl2'', s1'', s2''; repeat split; auto.
+    exists (D,C''), (a::tl1''), tl2'', s1'', s2'', x4; repeat split; auto.
     apply CCT_Step with (D,C',s'); auto.
-    simpl. rewrite <- H2. auto.
+    eapply Permutation_trans. apply Permutation_elt; eauto. apply Permutation_sym, Permutation_middle.
+    simpl; auto with arith.
+Qed.
+
+Lemma diamond_4a : forall P s tl1 tl2 P1 s1 P2 s2,
+  (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
+  (exists P' tl1' tl2' s1' s2',
+    (P1,s1) --[ tl1' ]-->* (P',s1') /\ (P2,s2) --[ tl2' ]-->* (P',s2')
+    /\ s1' [==] s2' /\ length tl1 + length tl1' = length tl2 + length tl2').
+Proof.
+intros.
+elim (diamond_4' _ _ _ _ _ _ _ _ H H0); intros.
+destroy H1.
+exists x, x0, x1, x2, x3.
+repeat split; auto.
+rewrite H6, H1.
+repeat rewrite <- plus_assoc.
+rewrite plus_comm, (plus_comm (length x0)).
+repeat rewrite <- plus_assoc.
+auto with arith.
+Qed.
+
+Lemma diamond_4b : forall P s tl1 tl2 P1 s1 P2 s2,
+  (P,s) --[ tl1 ]-->* (P1,s1) -> (P,s) --[ tl2 ]-->* (P2,s2) ->
+  (exists P' tl1' tl2' s1' s2',
+    (P1,s1) --[ tl1' ]-->* (P',s1') /\ (P2,s2) --[ tl2' ]-->* (P',s2')
+    /\ s1' [==] s2' /\ Permutation (tl1 ++ tl1') (tl2 ++ tl2')
+    /\ length tl1' <= length tl2 /\ length tl2' <= length tl1).
+Proof.
+intros.
+elim (diamond_4' _ _ _ _ _ _ _ _ H H0); intros.
+destroy H1.
+exists x, x0, x1, x2, x3.
+repeat split; auto.
+rewrite H1. auto with arith.
+rewrite H6. auto with arith.
 Qed.
 
 Lemma diamond_4 : forall P s tl1 tl2 P1 s1 P2 s2,

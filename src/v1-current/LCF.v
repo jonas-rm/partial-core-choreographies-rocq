@@ -120,6 +120,17 @@ Lemma sel_subtrace_app : forall ts ts' ts'',
   sel_subtrace ts ts' -> sel_subtrace (ts''++ts) (ts''++ts').
 Proof. induction ts''; simpl; auto. constructor; auto. Qed.
 
+Lemma sel_subtrace_trans : forall ts ts' ts'',
+  sel_subtrace ts ts' -> sel_subtrace ts' ts'' -> sel_subtrace ts ts''.
+Proof.
+intros. revert ts H. induction H0; auto.
++ intros. inversion H; constructor; auto.
++ intros. inversion H.
+  - constructor; auto.
+  - constructor. rewrite H2; auto.
+  - constructor; auto.
+Qed.
+
 Definition sel_subtrace' ts ts' :=
   exists ts'', sel_subtrace ts ts'' /\ Permutation ts' ts''.
 
@@ -188,6 +199,112 @@ split.
   apply Permutation_middle.
   apply Permutation_app_head; auto.
 Qed.
+
+Lemma sel_subtrace'_app'' : forall t ts ts' ts'',
+  sel_subtrace' ts (ts' ++ ts'') -> sel_subtrace' (t :: ts) (ts' ++ t :: ts'').
+Proof.
+intros. induction H as [ts0 [H' H''] ].
+exists (t :: ts0); split.
++ constructor; auto.
++ eapply Permutation_trans.
+  2: apply Permutation_cons; eauto.
+  apply Permutation_sym, Permutation_middle.
+Qed.
+
+Lemma sel_subtrace'_Perm : forall ts ts' ts'',
+  sel_subtrace' ts ts' -> Permutation ts' ts'' -> sel_subtrace' ts ts''.
+Proof.
+intros. induction H as [ts0 [H' H''] ].
+exists ts0; split; auto.
+eapply Permutation_trans.
+apply Permutation_sym. all: eauto.
+Qed.
+
+(* Missing induction principle. *)
+Lemma sel_subtrace_app_inv : forall ts ts' ts'',
+  sel_subtrace (ts ++ ts') ts'' ->
+  exists ts1 ts2, ts'' = ts1 ++ ts2 /\ sel_subtrace ts ts1 /\ sel_subtrace ts' ts2.
+Proof.
+intros. induction H.
++ exists ts, ts'. repeat split; auto.
+
+
+intros ts ts' ts''. revert ts ts'.
+induction ts''; intros.
++ exists nil, nil.
+  inversion H. apply app_eq_nil in H2; inversion_clear H2.
+  rewrite H1, H3; repeat split; auto; constructor.
++ inversion H.
+  - 
+
+
+
++ exists nil, ts''; repeat split; auto. constructor.
++ inversion H.
+  - rewrite <- H1 in *. clear ts'' H1 ts0 H0.
+    exists (a::ts), ts'; repeat split; auto; constructor.
+  - rewrite <- H1 in *; clear ts'' H1 ts0 H2 t H0.
+    induction (IHts _ _ H3) as [ts1 [ts2 [H1 [H2 H0] ] ] ].
+    exists (a::ts1), ts2; repeat split; auto.
+    rewrite H1; auto. constructor; auto.
+  - simpl in *. 
+
+
+
+
+
+Lemma sel_subtrace'_Perm' : forall ts ts' ts'',
+  sel_subtrace' ts ts' -> Permutation ts'' ts -> sel_subtrace' ts'' ts'.
+Proof.
+intros.
+revert H0 ts' H.
+apply (Permutation_ind_transp
+  (fun l1 l2 => forall l, sel_subtrace' l2 l -> sel_subtrace' l1 l)).
++ auto.
++ intros.
+  induction H as [l0 [H' H''] ].
+
+  induction l1; simpl in *.
+  - induction H as [l1 [H' H''] ].
+    inversion H'.
+    * rewrite <- H0 in *; clear ts0 l1 H H0.
+      inversion H''. clear l' H2 x0 H l H0 H''.
+      inversion H1.
+
++ eauto.
+
+
+revert ts' H. induction H0; auto; intros.
+- induction H as [ts0 [H' H''] ].
+  inversion H'.
+  + rewrite <- H1 in *; clear H H1 ts ts0.
+    exists (x::l); split. constructor.
+    eapply Permutation_trans; eauto. constructor; auto.
+    apply Permutation_sym; auto.
+  + rewrite <- H1 in *; clear t H ts H2 ts0 H1.
+Search Permutation.
+    exists (x :: ts'0); split. constructor; auto. auto.
+
+Admitted.
+(* intros. induction H as [ts0 [H' H''] ].
+exists ts; split; auto.
+eapply Permutation_trans.
+apply Permutation_sym. all: eauto.
+Qed.
+ *)
+
+
+Lemma sel_subtrace'_trans : forall ts ts' ts'',
+  sel_subtrace' ts ts' -> sel_subtrace' ts' ts'' -> sel_subtrace' ts ts''.
+Proof.
+intros.
+induction H as [t [H1 H2] ].
+generalize (sel_subtrace'_Perm' _ _ _ H0 (Permutation_sym H2)); intros.
+induction H as [t' [H3 H4] ].
+exists t'; split; auto.
+eapply sel_subtrace_trans; eauto.
+Qed.
+
 
 Lemma amend_1_complete_1 : forall C s tl C' s', Choreography_WF C ->
   (Defs,C,s) --[tl]--> (Defs,C',s') ->
@@ -397,32 +514,71 @@ induction C; intros. induction e.
 + inversion H.
 Qed.
 
+Lemma amend_1_complete_1' : forall C s tl C' s', Choreography_WF C ->
+  (Defs,C,s) --[tl]--> (Defs,C',s') ->
+  forall r a, exists tl' tl'' C'' s'',
+       sel_subtrace' (tl::tl') tl''
+    /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
+    /\ (amend_D r a,amend C r a,s) --[tl'']-->* (amend_D r a,amend C'' r a,s'').
+Proof.
+intros.
+elim (amend_1_complete_1 C s tl C' s') with r a; auto.
+intros. destroy H1.
+do 4 eexists. repeat split; eauto.
+apply sel_subtrace'_app''; auto.
+Qed.
+
 Lemma amend_1_complete_many : forall C s tl C' s' Xs, Program_WF _ Xs (Defs,C) ->
   (Defs,C,s) --[tl]-->* (Defs,C',s') ->
-  forall r a, exists tl' tlI tlF C'' s'',
-       sel_subtrace' tl' (tlI++tlF)
+  forall r a, exists tl' tl'' C'' s'',
+       sel_subtrace' (tl ++ tl') tl''
     /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
-    /\ (amend_D r a,amend C r a,s) --[tlI ++ tl ++ tlF]-->* (amend_D r a,amend C'' r a,s'').
+    /\ (amend_D r a,amend C r a,s) --[tl'']-->* (amend_D r a,amend C'' r a,s'').
 Proof.
-intros. revert C s C' s' H H0.
-induction tl; intros.
-+ inversion_clear H0.
-  exists nil, nil, nil, C', s'.
+intros.
+set (n := length tl). assert (length tl <= n) as Hn; auto.
+clearbody n. revert C s tl C' s' Hn H H0.
+induction n; intros.
++ case_eq tl; intros.
+  2: rewrite H1 in Hn; inversion Hn.
+  rewrite H1 in *; clear tl H1.
+  inversion_clear H0.
+  exists nil, nil, C', s'.
   repeat split; simpl; try constructor.
   apply sel_subtrace'_refl.
-+ inversion_clear H0. rename a0 into t.
-  induction c2 as [ [D C''] s''].
++ case_eq tl; intros.
+  1: { (* repeat... *)
+    rewrite H1 in *; clear tl H1.
+    inversion_clear H0.
+    exists nil, nil, C', s'.
+    repeat split; simpl; try constructor.
+    apply sel_subtrace'_refl.
+  }
+  rewrite H1 in *; clear tl H1.
+  simpl in Hn. apply le_S_n in Hn. rename l into tl.
+  inversion_clear H0. induction c2 as [ [D C''] s''].
   generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H1). intro H'; rewrite <- H' in *; clear D H'.
-  generalize (CCC_To_Program_WF _ _ _ _ _ _ _ H H1). intro HP'.
-  elim (amend_1_complete_1 C s t C'' s'') with r a; auto.
+  elim (amend_1_complete_1' C s t C'' s'') with r a; auto.
   2: elim H; auto.
-  intros tl0 [tl0I [tl0F [C0 [s0 [Hsub0 [Htl0 Htl0IF] ] ] ] ] ].
-  set (t0 := tl0I ++ t :: tl0F).
-  elim (IHtl C'' s'' C' s'); auto.
-  intros tl1 [tl1I [tl1F [C1 [s1 [Hsub1 [Htl1 Htl1IF] ] ] ] ] ].
-  
+  intros tl0 [t0 [C0 [s0 [Hsub0 [Htl0 Htl0IF] ] ] ] ].
+  induction (diamond_4b _ _ _ _ _ _ _ _ _ H2 Htl0) as [ [D C2] [tl' [tl0' [s2a [s2b [HC' [HC0 [Hs [Hperm [Hlen1 Hlen2] ] ] ] ] ] ] ] ] ].
+  generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ HC'). intro H'; rewrite <- H' in *; clear D H'.
+  generalize (CCC_To_Program_WF _ _ _ _ _ _ _ H H1). intro HP''.
+  generalize (CCC_ToStar_Program_WF _ _ _ _ _ _ _ HP'' H2). intro HP'.
+  generalize (CCC_ToStar_Program_WF _ _ _ _ _ _ _ HP' HC'). intro HP2.
+  generalize (CCC_ToStar_Program_WF _ _ _ _ _ _ _ HP'' Htl0). intro HP0.
+  elim (IHn C0 s0 tl0' C2 s2b); auto.
+  intros tl1 [t1 [C1 [s1 [Hsub1 [Htl1 Htl1IF] ] ] ] ].
+  2: etransitivity; eauto.
+  exists (tl' ++ tl1), (t0 ++ t1), C1, s1.
+  repeat split.
+  - simpl. 
 
 
+
+admit. (* needs more stuff on confluence *)
+  - eapply CCT_Trans; eauto. admit. (* needs state equality on CCT_refl *)
+  - eapply CCT_Trans; eauto.
 
 
 
