@@ -21,6 +21,7 @@ Local Ltac eq_elim t t' H := case (eq_dec t t'); intro H;
 
 Open Scope CC_scope.
 
+(** Move me. *)
 Lemma update_idempotent : forall (s:(State Pid Var Value)) p x,
   s[[p,x=>s p x]] [==] s.
 Proof.
@@ -31,6 +32,125 @@ intro. rewrite eqb_eq in H; rewrite <- H; clear p0 H.
 case_eq (x =? x0).
 2: intros; ESEr.
 intro. rewrite eqb_eq in H; rewrite <- H; auto.
+Qed.
+
+Notation Forget := (@forget Pid Value Var RecVar).
+
+Lemma disjoint_p_rl_eq : forall p t t', Forget t = Forget t' ->
+  disjoint_p_rl p t -> disjoint_p_rl p t'.
+Proof.
+intros. induction t, t'; inversion H; auto.
+all: rewrite H2 in *; auto.
+all: rewrite H3, H4 in *; auto.
+Qed.
+
+Lemma disjoint_eta_rl_eq : forall eta t t', Forget t = Forget t' ->
+  disjoint_eta_rl _ eta t -> disjoint_eta_rl _ eta t'.
+Proof.
+intros. induction eta, t, t'; inversion H; auto.
+all: rewrite H2 in *; auto.
+all: rewrite H3, H4 in *; auto.
+Qed.
+
+(** For characterising traces created by amendment. *)
+
+Inductive sel_subtrace : list (TransitionLabel Pid Value) -> list (TransitionLabel Pid Value) -> Prop :=
+| ss_base l l' : Permutation l l' -> sel_subtrace l l'
+| ss_cons t l l' l'' : sel_subtrace l l' -> Permutation (t::l') l'' -> sel_subtrace l l''
+| ss_extra p q la l l' l'' : sel_subtrace l l' -> Permutation (TL_Sel p q la::l') l'' -> sel_subtrace l l''.
+
+Lemma sel_subtrace_refl : forall ts, sel_subtrace ts ts.
+Proof. constructor. auto. Qed.
+
+Lemma sel_subtrace_cons : forall t ts ts',
+  sel_subtrace ts ts' -> sel_subtrace (t::ts) (t::ts').
+Proof.
+intros. induction H.
+- apply ss_base; auto.
+- apply ss_cons with t0 (t::l'); auto.
+  eapply Permutation_trans. apply perm_swap. auto.
+- apply ss_extra with p q la (t::l'); auto.
+  eapply Permutation_trans. apply perm_swap. auto.
+Qed.
+
+Lemma sel_subtrace_extra : forall p q l ts ts',
+  sel_subtrace ts ts' -> sel_subtrace ts (TL_Sel p q l::ts').
+Proof.
+intros.
+apply ss_extra with p q l ts'; auto.
+Qed.
+
+Lemma sel_subtrace_app : forall ts ts' ts'',
+  sel_subtrace ts' ts'' -> sel_subtrace (ts++ts') (ts++ts'').
+Proof.
+induction ts; intros; auto.
+apply sel_subtrace_cons; auto.
+Qed.
+
+Lemma sel_subtrace_perm' : forall ts ts' ts'',
+  sel_subtrace ts ts' -> Permutation ts' ts'' -> sel_subtrace ts ts''.
+Proof.
+intros. induction H.
+- apply ss_base. eapply perm_trans; eauto.
+- apply ss_cons with t l'; auto.
+  eapply Permutation_trans; eauto.
+- apply ss_extra with p q la l'; auto.
+  eapply Permutation_trans; eauto.
+Qed.
+
+Lemma sel_subtrace_perm : forall ts ts' ts'',
+  sel_subtrace ts ts' -> Permutation ts'' ts -> sel_subtrace ts'' ts'.
+Proof.
+intros. induction H.
+- apply ss_base. eapply perm_trans; eauto.
+- apply ss_cons with t l'; auto.
+- apply ss_extra with p q la l'; auto.
+Qed.
+
+Lemma sel_subtrace_trans : forall ts ts' ts'',
+  sel_subtrace ts ts' -> sel_subtrace ts' ts'' -> sel_subtrace ts ts''.
+Proof.
+intros. induction H0.
+- apply sel_subtrace_perm' with l; auto.
+- apply ss_cons with t l'; auto.
+- apply ss_extra with p q la l'; auto.
+Qed.
+
+Lemma sel_subtrace_swap : forall t t' ts ts',
+  sel_subtrace ts (t :: ts') -> sel_subtrace (t' :: ts) (t :: t' :: ts').
+Proof.
+intros.
+eapply sel_subtrace_perm'.
+2: apply perm_swap.
+apply sel_subtrace_cons; auto.
+Qed.
+
+Lemma sel_subtrace_perm_extra : forall t t' ts ts' p q l,
+  sel_subtrace ts (t :: ts') -> sel_subtrace (t' :: ts) (t :: t' :: (TL_Sel p q l) :: ts').
+Proof.
+intros.
+eapply sel_subtrace_trans. 2: apply sel_subtrace_swap.
+apply sel_subtrace_cons; eauto.
+apply sel_subtrace_cons, sel_subtrace_extra.
+apply sel_subtrace_refl.
+Qed.
+
+Lemma sel_subtrace_app' : forall t ts ts' ts'',
+  sel_subtrace ts (t::ts') -> sel_subtrace (ts''++ts) (t::ts''++ts').
+Proof.
+intros.
+apply sel_subtrace_perm' with (ts''++t::ts').
+apply sel_subtrace_app; auto.
+apply Permutation_sym, Permutation_middle.
+Qed.
+
+Lemma sel_subtrace_app'' : forall t ts ts' ts'',
+  sel_subtrace ts (ts' ++ ts'') -> sel_subtrace (t :: ts) (ts' ++ t :: ts'').
+Proof.
+intros.
+eapply sel_subtrace_trans.
+apply sel_subtrace_cons; eauto.
+constructor. apply Permutation_middle.
 Qed.
 
 Variable Defs:DefSet Sig.
@@ -92,24 +212,7 @@ Qed.
 Definition amend_D (p:Pid) (a:Ann) : DefSet Sig :=
   fun X => (fst (Defs X),amend (snd (Defs X)) p a).
 
-Notation Forget := (@forget Pid Value Var RecVar).
-
-Lemma disjoint_p_rl_eq : forall p t t', Forget t = Forget t' ->
-  disjoint_p_rl p t -> disjoint_p_rl p t'.
-Proof.
-intros. induction t, t'; inversion H; auto.
-all: rewrite H2 in *; auto.
-all: rewrite H3, H4 in *; auto.
-Qed.
-
-Lemma disjoint_eta_rl_eq : forall eta t t', Forget t = Forget t' ->
-  disjoint_eta_rl _ eta t -> disjoint_eta_rl _ eta t'.
-Proof.
-intros. induction eta, t, t'; inversion H; auto.
-all: rewrite H2 in *; auto.
-all: rewrite H3, H4 in *; auto.
-Qed.
-
+(*
 Inductive sel_subtrace : list (TransitionLabel Pid Value) -> list (TransitionLabel Pid Value) -> Prop :=
 | ss_refl ts : sel_subtrace ts ts
 | ss_cons t ts ts' : sel_subtrace ts ts' -> sel_subtrace (t::ts) (t::ts')
@@ -304,12 +407,12 @@ induction H as [t' [H3 H4] ].
 exists t'; split; auto.
 eapply sel_subtrace_trans; eauto.
 Qed.
-
+*)
 
 Lemma amend_1_complete_1 : forall C s tl C' s', Choreography_WF C ->
   (Defs,C,s) --[tl]--> (Defs,C',s') ->
   forall r a, exists tl' tlI tlF C'' s'',
-       sel_subtrace' tl' (tlI++tlF)
+       sel_subtrace tl' (tlI++tlF)
     /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
     /\ (amend_D r a,amend C r a,s) --[tlI ++ tl::tlF]-->* (amend_D r a,amend C'' r a,s'').
 Proof.
@@ -318,7 +421,7 @@ Local Ltac IHElim IHC HC H tl' tlI CI sI tl0 C0 s0 tlF CF sF H1 H2 H3 H4 H5 H6 :
     [tl' [tlI [CI [sI [tl0 [C0 [s0 [tlF [CF [sF [H1 [H2 [H3 [H4 [H5 H6] ] ] ] ] ] ] ] ] ] ] ] ] ] ]; clear IHC.
 intros. rename H into HC, H0 into H.
 assert (exists tl' tlI CI sI tl0 C0 s0 tlF CF sF,
-       sel_subtrace' tl' (tlI++tlF)
+       sel_subtrace tl' (tlI++tlF)
     /\ tl = forget tl0
     /\ (Defs,C',s') --[tl']-->* (Defs,CF,sF)
     /\ (amend_D r a,amend C r a,s) --[tlI]-->* (amend_D r a,CI,sI)
@@ -338,7 +441,7 @@ induction C; intros. induction e.
     simpl. exists nil, nil; do 2 eexists.
     exists (RL_Com p v q x), (amend C r a), s'.
     exists nil, C, s'.
-    repeat split; eauto. apply sel_subtrace'_refl.
+    repeat split; eauto. apply sel_subtrace_refl.
     all: constructor. auto.
   - (* Delay *)
     rewrite <- H5 in *.
@@ -352,7 +455,7 @@ induction C; intros. induction e.
     exists (forget tlS::tl'). exists (forget tlS::tlI), CI, sI.
     exists tl0, C0, s0. exists tlF, CF, sF.
     repeat split; auto.
-    * apply sel_subtrace'_cons; auto.
+    * apply sel_subtrace_cons; auto.
     * econstructor; eauto. unfold tlS; rewrite Hv.
       repeat constructor; auto.
     * econstructor; eauto. repeat constructor; auto.
@@ -364,7 +467,7 @@ induction C; intros. induction e.
     simpl. exists nil, nil; do 2 eexists.
     exists (RL_Sel p q l), (amend C r a), s'.
     exists nil, C, s'.
-    repeat split; eauto. apply sel_subtrace'_refl.
+    repeat split; eauto. apply sel_subtrace_refl.
     all: constructor. auto.
   - (* Delay *)
     rewrite <- H5 in *.
@@ -375,7 +478,7 @@ induction C; intros. induction e.
     exists (forget tlS::tl'). exists (forget tlS::tlI), CI, sI.
     exists tl0, C0, s0. exists tlF, CF, sF.
     repeat split; auto.
-    * apply sel_subtrace'_cons; auto.
+    * apply sel_subtrace_cons; auto.
     * econstructor; eauto. repeat constructor; auto.
     * econstructor; eauto. repeat constructor; auto.
 + rename t into p, t0 into b.
@@ -389,12 +492,11 @@ induction C; intros. induction e.
       exists (@RL_Cond Pid Value Var RecVar p), (amend C1 r a), s'.
       exists nil, C1, s'.
       repeat split; try constructor; auto.
-      apply sel_subtrace'_refl.
     * exists nil, nil; do 2 eexists.
       exists (@RL_Cond Pid Value Var RecVar p), (p-->r[left]@a;; amend C1 r a), s'.
       exists (@Forget (RL_Sel p r left)::nil), C1, s'.
-      repeat split; repeat constructor; auto.
-      apply sel_subtrace'_base; repeat constructor.
+      repeat split. apply sel_subtrace_extra, sel_subtrace_refl.
+      all: repeat constructor; auto.
       repeat econstructor.
   - (* Else *)
     rewrite <- H6 in *.
@@ -405,12 +507,11 @@ induction C; intros. induction e.
       exists (@RL_Cond Pid Value Var RecVar p), (amend C2 r a), s'.
       exists nil, C2, s'.
       repeat split; try constructor; auto.
-      apply sel_subtrace'_refl.
     * exists nil, nil; do 2 eexists.
       exists (@RL_Cond Pid Value Var RecVar p), (p-->r[right]@a;; amend C2 r a), s'.
       exists (@Forget (RL_Sel p r right)::nil), C2, s'.
-      repeat split; repeat constructor; auto.
-      apply sel_subtrace'_base; repeat constructor.
+      repeat split. apply sel_subtrace_extra, sel_subtrace_refl.
+      all: repeat constructor; auto.
       repeat econstructor.
   - (* Delay *)
     rewrite <- H6 in *.
@@ -428,7 +529,7 @@ induction C; intros. induction e.
       exists tl01, C01, s01.
       exists tl1F, C1F, s1F.
       repeat split; auto.
-      simpl. apply sel_subtrace'_cons; auto.
+      simpl. apply sel_subtrace_cons; auto.
       econstructor; eauto. repeat constructor. rewrite <- Hb; auto.
       econstructor; eauto. repeat constructor; auto.
     * (* Then, amend *)
@@ -439,7 +540,7 @@ induction C; intros. induction e.
       exists tl01, C01, s01.
       exists tl1F, C1F, s1F.
       repeat split; auto.
-      simpl. apply sel_subtrace'_cons, sel_subtrace'_extra; auto.
+      simpl. apply sel_subtrace_cons, sel_subtrace_extra; auto.
       econstructor; eauto. repeat constructor. rewrite <- Hb; auto.
       econstructor; eauto. repeat constructor; auto.
       econstructor; eauto. repeat constructor; auto.
@@ -450,7 +551,7 @@ induction C; intros. induction e.
       exists tl02, C02, s02.
       exists tl2F, C2F, s2F.
       repeat split; auto.
-      simpl. apply sel_subtrace'_cons; auto.
+      simpl. apply sel_subtrace_cons; auto.
       econstructor; eauto. repeat constructor. rewrite <- Hb; auto.
       econstructor; eauto. repeat constructor; auto.
     * (* Else, no amend *)
@@ -461,7 +562,7 @@ induction C; intros. induction e.
       exists tl02, C02, s02.
       exists tl2F, C2F, s2F.
       repeat split; auto.
-      simpl. apply sel_subtrace'_cons, sel_subtrace'_extra; auto.
+      simpl. apply sel_subtrace_cons, sel_subtrace_extra; auto.
       econstructor; eauto. repeat constructor. rewrite <- Hb; auto.
       econstructor; eauto. 2: econstructor; eauto.
       2: repeat constructor; auto. repeat constructor; auto.
@@ -472,7 +573,7 @@ induction C; intros. induction e.
     simpl. exists nil, nil; do 2 eexists.
     exists (RL_Call X p), (amend (snd (Defs X)) r a), s'.
     exists nil, (snd (Defs X)), s'.
-    repeat split; eauto. apply sel_subtrace'_refl.
+    repeat split; eauto. apply sel_subtrace_refl.
     all: constructor; simpl; auto.
   - (* Call *)
     rewrite <- H5 in *.
@@ -480,7 +581,7 @@ induction C; intros. induction e.
     simpl. exists nil, nil; do 2 eexists.
     exists (RL_Call X p); eexists; exists s'.
     exists nil; eexists; exists s'.
-    repeat split; eauto. apply sel_subtrace'_refl.
+    repeat split; eauto. apply sel_subtrace_refl.
     all: constructor; simpl; auto.
 + rename t into X. inversion H.
   - (* Delay *)
@@ -492,7 +593,7 @@ induction C; intros. induction e.
     exists (tlR++tl'). exists (tlR++tlI), CI, sI.
     exists tl0, C0, s0. exists tlF, CF, sF.
     repeat split; auto.
-    * rewrite <- app_assoc. apply sel_subtrace'_app; auto.
+    * rewrite <- app_assoc. apply sel_subtrace_app; auto.
     * eapply CCT_Trans; eauto.
     * eapply CCT_Trans; eauto.
   - (* Enter *)
@@ -501,7 +602,7 @@ induction C; intros. induction e.
     simpl. exists nil, nil; do 2 eexists.
     exists (RL_Call X p), (RT_Call X (ps[\]p) (amend C r a)), s'.
     exists nil; eexists; exists s'.
-    repeat split; eauto. apply sel_subtrace'_refl.
+    repeat split; eauto. apply sel_subtrace_refl.
     all: constructor; auto.
   - (* Finish *)
     rewrite <- H6, <- H1 in *.
@@ -509,7 +610,7 @@ induction C; intros. induction e.
     simpl. exists nil, nil; do 2 eexists.
     exists (RL_Call X p), (amend C r a), s'.
     exists nil, C, s'.
-    repeat split; eauto. apply sel_subtrace'_refl.
+    repeat split; eauto. apply sel_subtrace_refl.
     all: constructor; auto.
 + inversion H.
 Qed.
@@ -517,7 +618,7 @@ Qed.
 Lemma amend_1_complete_1' : forall C s tl C' s', Choreography_WF C ->
   (Defs,C,s) --[tl]--> (Defs,C',s') ->
   forall r a, exists tl' tl'' C'' s'',
-       sel_subtrace' (tl::tl') tl''
+       sel_subtrace (tl::tl') tl''
     /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
     /\ (amend_D r a,amend C r a,s) --[tl'']-->* (amend_D r a,amend C'' r a,s'').
 Proof.
@@ -525,13 +626,26 @@ intros.
 elim (amend_1_complete_1 C s tl C' s') with r a; auto.
 intros. destroy H1.
 do 4 eexists. repeat split; eauto.
-apply sel_subtrace'_app''; auto.
+apply sel_subtrace_app''; auto.
+Qed.
+
+Lemma sel_subtrace_app_both : forall ts1 ts1' ts2 ts2',
+  sel_subtrace ts1 ts1' -> sel_subtrace ts2 ts2' -> sel_subtrace (ts1++ts2) (ts1'++ts2').
+Proof.
+intros.
+eapply sel_subtrace_trans.
+apply sel_subtrace_app; eauto.
+eapply sel_subtrace_perm.
+2: apply Permutation_app_comm.
+eapply sel_subtrace_perm'.
+2: apply Permutation_app_comm.
+apply sel_subtrace_app; auto.
 Qed.
 
 Lemma amend_1_complete_many : forall C s tl C' s' Xs, Program_WF _ Xs (Defs,C) ->
   (Defs,C,s) --[tl]-->* (Defs,C',s') ->
   forall r a, exists tl' tl'' C'' s'',
-       sel_subtrace' (tl ++ tl') tl''
+       sel_subtrace (tl ++ tl') tl''
     /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
     /\ (amend_D r a,amend C r a,s) --[tl'']-->* (amend_D r a,amend C'' r a,s'').
 Proof.
@@ -544,15 +658,13 @@ induction n; intros.
   rewrite H1 in *; clear tl H1.
   inversion_clear H0.
   exists nil, nil, C', s'.
-  repeat split; simpl; try constructor.
-  apply sel_subtrace'_refl.
+  repeat split; simpl; constructor; auto.
 + case_eq tl; intros.
   1: { (* repeat... *)
     rewrite H1 in *; clear tl H1.
     inversion_clear H0.
     exists nil, nil, C', s'.
-    repeat split; simpl; try constructor.
-    apply sel_subtrace'_refl.
+    repeat split; simpl; constructor; auto.
   }
   rewrite H1 in *; clear tl H1.
   simpl in Hn. apply le_S_n in Hn. rename l into tl.
@@ -572,11 +684,11 @@ induction n; intros.
   2: etransitivity; eauto.
   exists (tl' ++ tl1), (t0 ++ t1), C1, s1.
   repeat split.
-  - simpl. 
-
-
-
-admit. (* needs more stuff on confluence *)
+  - simpl. eapply sel_subtrace_trans.
+    2: apply sel_subtrace_app_both; eauto.
+    simpl. apply sel_subtrace_cons.
+    repeat rewrite app_assoc.
+    constructor. apply Permutation_app; auto.
   - eapply CCT_Trans; eauto. admit. (* needs state equality on CCT_refl *)
   - eapply CCT_Trans; eauto.
 
