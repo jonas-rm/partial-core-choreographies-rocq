@@ -114,7 +114,7 @@ exists s'', (eval_on_state (ev IS) e s1 p); split.
   1: rewrite <- forget_Com with (RecVar := recvar IS) (x := xx). constructor. apply H. ESEr.
   eapply CCT_Step.
   1: rewrite <- forget_Com with (RecVar := recvar IS) (x := xx). constructor. apply H0. ESEr.
-  constructor.
+  apply CCT_Refl.
 + unfold s'', s'.
   apply update_update_ext.
 Qed.
@@ -633,7 +633,7 @@ simpl; intro.
 generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs n this q xx eps (@Call IS X) (Update s (S n) yy (s (hd ps) xx)))).
 simpl; intro.
 do 2 eexists; split. 2: split.
-+ do 3 (eapply (CCT_Step IS); eauto). constructor.
++ do 3 (eapply (CCT_Step IS); eauto). apply CCT_Refl.
 + rewrite update_read, update_read'; auto.
 + intros. rewrite update_read', update_read''; auto. discriminate.
 Qed.
@@ -650,7 +650,7 @@ assert (beval_on_state compare (Update s (S n) yy (s (hd ps) xx)) (S n) = false)
 1: { unfold beval_on_state; simpl; unfold beval. rewrite update_read, update_read'', Nat.eqb_neq; auto. discriminate. }
 generalize (CCP_Base _ _ _ _ _ _ _ (C_Else' IS Defs (S n) compare (Send n this q @ eps;; @Call IS X) (@Call IS Y) _ H1)).
 simpl; intro.
-eexists. do 2 (eapply (CCT_Step IS); eauto). constructor.
+eexists. do 2 (eapply (CCT_Step IS); eauto). apply CCT_Refl.
 Qed.
 
 Lemma Recursion_reduce_2 : forall Defs X n s, exists t s',
@@ -670,9 +670,9 @@ fold xx s2; intro.
 generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) succ_this (S n) xx eps (@Call IS X) s2)).
 simpl. set (s3 := s2[[S n,xx => (S (s2 (n+2) xx))]]).
 fold xx s3; intro.
-do 2 eexists. split. do 3 (eapply (CCT_Step IS); eauto); constructor.
+do 2 eexists. split. do 3 (eapply (CCT_Step IS); eauto); apply CCT_Refl.
 assert (n+2<>n). apply gt_neq; red; rewrite plus_comm; simpl; auto.
-unfold s3, s2, s1. repeat split. 
+unfold s3, s2, s1. repeat split.
 + intros. repeat rewrite update_read'; auto; apply gt_neq; red; auto. rewrite plus_comm; simpl; auto.
 + rewrite update_read, update_read', update_read', update_read; auto.
 + rewrite update_read, update_read, update_read'; auto.
@@ -709,7 +709,7 @@ generalize (CCP_Base _ _ _ _ _ _ _ (C_Then' IS Defs (n+2) compare (Send (n + 1) 
 simpl; intro.
 generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (n + 1) this q xx eps (@Call IS X) s2)).
 simpl; intro.
-do 2 eexists; split. do 4 (eapply (CCT_Step IS); eauto). constructor.
+do 2 eexists; split. do 4 (eapply (CCT_Step IS); eauto). apply CCT_Refl.
 assert (n+2 <> n+1). apply gt_neq; red; do 2 rewrite (plus_comm n); simpl; auto.
 assert (n+2 <> n). apply gt_neq; red; rewrite (plus_comm n); simpl; auto.
 unfold s2, s1; repeat split.
@@ -749,7 +749,7 @@ simpl. set (s3 := s2[[n+2,xx => (s2 (n+1) xx)]]).
 fold xx s3; intro.
 generalize (CCP_Base _ _ _ _ _ _ _ (C_Com' IS Defs (n+2) succ_this (n+1) xx eps (@Call IS Y) s3)).
 simpl; intro.
-do 2 eexists; split. do 5 (eapply (CCT_Step IS); eauto). constructor.
+do 2 eexists; split. do 5 (eapply (CCT_Step IS); eauto). apply CCT_Refl.
 assert (n+2 <> n+1). apply gt_neq; red; do 2 rewrite (plus_comm n); simpl; auto.
 assert (n+2 <> n). apply gt_neq; red; rewrite (plus_comm n); simpl; auto.
 assert (n+1 <> n). apply gt_neq; red; rewrite (plus_comm n); simpl; auto.
@@ -833,7 +833,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   simpl in Htl; rewrite HX' in Htl.
   elim (Zero_reduce Defs ps q (S X) s); intros tl' Htl'.
   do 2 eexists.
-  split. eapply CCT_Trans; eauto. econstructor; eauto. rewrite plus_comm; constructor.
+  split. eapply CCT_Trans; eauto. econstructor; eauto. rewrite plus_comm; apply CCT_Refl.
   split. rewrite (converges_Zero _ _ Hf).
   rewrite update_read; auto.
   intros; rewrite update_read'; auto.
@@ -847,7 +847,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   simpl in Htl; rewrite HX' in Htl.
   elim (Successor_reduce Defs ps q (S X) s); intros tl' Htl'.
   do 2 eexists.
-  split. eapply CCT_Trans; eauto. econstructor; eauto. rewrite plus_comm; constructor.
+  split. eapply CCT_Trans; eauto. econstructor; eauto. rewrite plus_comm; apply CCT_Refl.
   split. rewrite (converges_Successor _ _ Hf).
   rewrite <- nth_hd, Hinput, nth_hd, update_read; auto.
   intros; rewrite update_read'; auto.
@@ -860,7 +860,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   simpl in Htl; rewrite HX' in Htl.
   elim (Projection_reduce _ _ l Defs ps q (S X) s); intro tl'.
   do 2 eexists.
-  split. eapply CCT_Trans; eauto. econstructor; eauto. rewrite plus_comm; constructor.
+  split. eapply CCT_Trans; eauto. econstructor; eauto. rewrite plus_comm; apply CCT_Refl.
   split. rewrite (converges_Projection _ _ _ _ _ Hf).
   rewrite <- Hinput, update_read; auto.
   intros; rewrite update_read'; auto.
@@ -893,7 +893,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
     induction m.
     * intros. exists List.nil, s.
       rewrite <- (vector_0_inv fs). repeat split; auto.
-      simpl. rewrite plus_comm; constructor.
+      simpl. rewrite plus_comm; apply CCT_Refl.
       intros. inversion H.
     * intros.
       revert dependent ms. revert IHm.
@@ -1042,7 +1042,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   assert (forall m, m <= hd ns -> exists t' s' y', (P,s0) --[ t' ]-->* (P,s')
     /\ converges (Recursion g h) (m::tl ns) y' /\ s' i xx = y' /\ s' (S i) xx = m /\ forall j, j < i -> s' j xx = s0 j xx).
   - induction m; intros.
-    * exists List.nil, s0, g0; repeat split; auto. constructor.
+    * exists List.nil, s0, g0; repeat split; auto. apply CCT_Refl.
     * elim IHm; auto with arith; clear IHm.
       intros tlI H'; destroy H'.
       rename x into sI, x0 into yI, H1 into HI.
@@ -1243,7 +1243,7 @@ intros n f; case f; intros; rename H into Hqps, H0 into Hps, H1 into Hqn, H2 int
   assert (forall m, m <= y -> exists t' s' y', (P,sI) --[ t' ]-->* (P,s')
     /\ converges h (shiftin m ns) y' /\ s' i xx = y' /\ s' (i+1) xx = m /\ forall j, j < i -> s' j xx = s0 j xx).
   - induction m; intros.
-    * exists List.nil, sI, x; repeat split; auto. constructor.
+    * exists List.nil, sI, x; repeat split; auto. apply CCT_Refl.
       rewrite H4; auto with arith. unfold s0. rewrite plus_comm, update_read; auto.
       apply gt_neq. red; rewrite plus_comm; auto.
       intros; apply H4. transitivity i; auto. apply lt_neq; auto.
@@ -1358,7 +1358,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
   set (s'' := s[[q,xx => 0]]); intros tl0 H0.
   generalize (CCT_Trans _ _ _ _ _ _ (Htl' s) (CCT_Step _ _ _ _ _ _ H0 (CCT_Refl _ _))); intros.
   exists (tl' ++ tl0 :: List.nil)%list, s''; repeat split.
-  - eapply CCT_Trans; eauto. eapply CCT_Step; eauto. rewrite plus_comm; constructor.
+  - eapply CCT_Trans; eauto. eapply CCT_Step; eauto. rewrite plus_comm; apply CCT_Refl.
   - intros. unfold s''. rewrite update_read'; auto.
   - exists 0. unfold s'', Kleene.eval; simpl. rewrite update_read, hd_map; auto.
 + (* Successor *)
@@ -1372,7 +1372,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
   elim (Successor_reduce Defs ps q (S X) s).
   fold x; set (s'' := Update s q xx (S x)); intros tl0 H0.
   exists (tl' ++ tl0 :: List.nil)%list, s''; repeat split.
-  - eapply CCT_Trans; eauto. eapply CCT_Step; eauto. rewrite plus_comm; constructor.
+  - eapply CCT_Trans; eauto. eapply CCT_Step; eauto. rewrite plus_comm; apply CCT_Refl.
   - intros. unfold s''. rewrite update_read'; auto.
   - exists 0. unfold s'', Kleene.eval, x; simpl.
     rewrite update_read, hd_map, <- nth_hd, <- Hinput, nth_hd, plus_comm; auto.
@@ -1387,7 +1387,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
   elim (Projection_reduce _ _ l Defs ps q (S X) s).
   fold x; set (s'' := s[[q,xx => x]]); intros tl0 H0.
   exists (tl' ++ tl0 :: List.nil)%list, s''; repeat split.
-  - eapply CCT_Trans; eauto. eapply CCT_Step; eauto. rewrite plus_comm; constructor.
+  - eapply CCT_Trans; eauto. eapply CCT_Step; eauto. rewrite plus_comm; apply CCT_Refl.
   - intros. unfold s''. rewrite update_read'; auto.
   - exists 0. unfold s'', Kleene.eval, x; simpl.
     rewrite all_defined_map_Some, update_read, nth_map'; auto.
@@ -1417,7 +1417,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
     revert t s'; induction m.
     * intros. exists s, List.nil.
       rewrite <- (vector_0_inv fs).
-      simpl. repeat split; auto. rewrite plus_comm; constructor. intros. inversion H.
+      simpl. repeat split; auto. rewrite plus_comm; apply CCT_Refl. intros. inversion H.
     * intros.
       revert IHm.
       revert dependent fs. revert m. refine (@caseS _ _ _); intros.
@@ -1541,7 +1541,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
   assert (forall m, m <= s0 (hd ps) xx -> exists t' s', (P,s0) --[ t' ]-->* (P,s')
     /\ s' (S i) xx = m /\ (forall p, p < i -> s' p xx = s0 p xx) /\ converges (Recursion g h) (m::tl ns) (s' i xx)).
   - induction m; intros.
-    * exists List.nil, s0; repeat split; auto. constructor. apply update_read.
+    * exists List.nil, s0; repeat split; auto. apply CCT_Refl. apply update_read.
       unfold s0. rewrite update_read'; auto.
     * elim IHm; auto with arith; clear IHm.
       intros tlI H'; do 4 (elim H'; intro; clear H'; intro H'). rename H' into H3', H3 into H'.
@@ -1780,7 +1780,7 @@ intros n f; case f; intros; rename H into HDefs, H0 into HDefs', H1 into Hps, H2
       induction N; intros.
       1: { exfalso. inversion H3. rewrite length_zero_iff_nil in H6; rewrite H6 in H4; inversion H4. }
       case_eq (sI i xx); intros.
-      1: { exists List.nil, sI. repeat split; auto. constructor. rewrite <- H5; auto. }
+      1: { exists List.nil, sI. repeat split; auto. apply CCT_Refl. rewrite <- H5; auto. }
       elim H2 with sI tlP' sP'; intros; auto.
       2: rewrite H5; discriminate.
       do 6 (elim H6; intro; clear H6; intro H6). rename x into tlF, x0 into sF.
@@ -1831,8 +1831,8 @@ elim (Encoding_rec_End f _ Hd ps q i 0 (Procedures IS (Encoding f ps q))) with n
   2: reflexivity. 
   rewrite (Encoding_rec_ge f _ Hd ps q i 0 (0 + Gamma f)) in H6; auto.
   elim (diamond_5 _ _ _ _ _ _ _ _ _ H2 (CCT_Trans _ _ _ _ _ _ H4 (H6 x0))); auto. intros.
-  destroy H7. elim (CCP_ToStar_End _ _ _ _ H8); auto; intros. inversion H10. clear H12.
-  rewrite H7; auto.
+  destroy H7. elim (CCP_ToStar_End _ _ _ _ _ _ H8); auto; intros.
+  rewrite H3. rewrite H10, <- H7. auto.
 + apply all_pids_not_nil.
 + apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
 + apply le_n_S. apply Nat.le_max_l.

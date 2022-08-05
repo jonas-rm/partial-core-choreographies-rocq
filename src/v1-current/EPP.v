@@ -2375,10 +2375,10 @@ simpl in Hsp, HMain. clear Hinit.
 revert dependent C'. revert dependent C. revert s s'. induction tl.
 + intros. inversion HTo.
   exists (epp _ _ _ HP), nil; repeat split.
-  constructor; auto.
+  apply (SPT_Base Sig'). auto.
   rewrite <- H0. intros; apply MBN_refl'.
   intro. inversion HP.
-  rewrite epp_C_char with (HC:=H3). rewrite epp_C_char with (HC:=H3).
+  rewrite epp_C_char with (HC:=H5). rewrite epp_C_char with (HC:=H5).
   auto.
 + intros. inversion HTo. clear HTo.
   rewrite <- H in H2; clear a H l H0 c1 H1 c3 H3.
@@ -4624,7 +4624,7 @@ rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H6) in H6; clear D2.
 induction P as (D',C).
 revert dependent C. revert s s' N1 N2 H6. induction tl; intros.
 + inversion H6. rewrite <- H8.
-  exists (epp _ _ _ HP); repeat split; auto. constructor.
+  exists (epp _ _ _ HP); repeat split; auto. apply (SPT_Base Sig'); auto.
 + inversion H6. clear c3 H11 l H8 t H7 c1 H9 H6. rename a into t.
   induction c2 as ((D2,N3),s'').
   rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H10) in H12, H10. clear D2.
@@ -4683,10 +4683,10 @@ intros.
 induction P as (D,C), P' as (D',N).
 revert dependent N. revert dependent C. revert D' s s'.
 induction tl; intros; inversion H4.
-+ eexists; exists nil. repeat split. constructor.
++ eexists; exists nil. repeat split. apply (CCT_Base Sig); auto.
   intro. apply MBN_refl'.
   inversion HP. simpl in H9.
-  apply Network_eq_trans with (epp_C D ps C H9).
+  apply Network_eq_trans with (epp_C D ps C H11).
   2: apply Network_eq_sym. all: apply epp_C_char.
 + clear c3 H9 l H6 t H5 c1 H7 H4. rename a into t.
   induction c2 as (P'', s'').

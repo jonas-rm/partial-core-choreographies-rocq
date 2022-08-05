@@ -759,10 +759,13 @@ Inductive SPP_To :
 
 Inductive SPP_ToStar :
   Configuration -> list (TransitionLabel Pid Value) -> Configuration -> Prop :=
- | SPT_Refl c : SPP_ToStar c nil c
+ | SPT_Base P s s' : s [==] s' -> SPP_ToStar (P,s) nil (P,s')
  | SPT_Step c1 t c2 l c3 : SPP_To c1 t c2 ->
                            SPP_ToStar c2 l c3 -> SPP_ToStar c1 (t::l) c3
 .
+
+Lemma SPT_Refl : forall c, SPP_ToStar c nil c.
+Proof. induction c. constructor. ESEr. Qed.
 
 End Semantics.
 
@@ -814,22 +817,18 @@ apply SP_To_eq with s1 s2; auto.
 Qed.
 
 Lemma SPP_ToStar_eq : forall P s1 tl P' s2 s1' s2',
-  s1 [==] s1' -> s2 [==] s2' -> tl <> nil ->
+  s1 [==] s1' -> s2 [==] s2' ->
   (P,s1) --[tl]-->* (P',s2) -> (P,s1') --[tl]-->* (P',s2').
 Proof.
 intros P s1 tl; revert P s1.
-induction tl; intros. elim H1; auto.
-case_eq tl; intros.
-+ rewrite H3 in H2; inversion H2.
-  inversion H9. rewrite H12 in H7.
-  apply SPT_Step with (P',s2'). 2: constructor.
-  apply SPP_To_eq with s1 s2; auto.
-+ inversion H2.
+induction tl; intros.
++ inversion H1. constructor.
+  ESEt s2. ESEt s1. ESEs.
++ inversion H1.
   induction c2.
   apply SPT_Step with (a0,b).
   - apply SPP_To_eq with s1 b; auto. ESEr.
-  - rewrite <- H3. eapply IHtl; eauto. ESEr.
-    rewrite H3; discriminate.
+  - eapply IHtl; eauto. ESEr.
 Qed.
 
 (** ...by network equivalence... *)
@@ -1892,14 +1891,14 @@ Lemma SPP_ToStar_deterministic_1 : forall P s tl P' s' P'' s'',
 Proof.
 intros P s tl; revert P s.
 induction tl; intros; inversion H; inversion H0.
-+ rewrite <- H2, H5; reflexivity.
++ rewrite <- H2, H7; reflexivity.
 + induction c2; induction c4.
   generalize (SPP_To_deterministic_1 _ _ _ _ _ _ _ H4 H10); intro.
   generalize (SPP_To_deterministic_2 _ _ _ _ _ _ _ H4 H10); intro.
   apply SPP_To_eq with (s1':=s) (s2':=b) in H10. 2: ESEr. 2: ESEs.
   case_eq tl.
   - intro. rewrite H15 in H12, H6; inversion H6; inversion H12.
-    rewrite <- H20, <- H17; auto.
+    rewrite <- H22, <- H17; auto.
   - intros. apply IHtl with a1 b s' s''; auto.
     apply SPP_ToStar_Network_eq with a0; auto.
     rewrite (SP_eta P), (SP_eta a0) in H4.
@@ -1908,7 +1907,7 @@ induction tl; intros; inversion H; inversion H0.
     rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ H10); auto.
     rewrite H15; discriminate.
     apply SPP_ToStar_eq with b0 s''; auto.
-    ESEs. ESEr. rewrite H15; discriminate.
+    ESEs. ESEr.
 Qed.
 
 End SPBase.

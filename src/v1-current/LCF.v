@@ -689,7 +689,7 @@ induction n; intros.
     simpl. apply sel_subtrace_cons.
     repeat rewrite app_assoc.
     constructor. apply Permutation_app; auto.
-  - eapply CCT_Trans; eauto. admit. (* needs state equality on CCT_refl *)
+  - eapply CCT_Trans; eauto. apply CCP_ToStar_eq with s2b; auto.
   - eapply CCT_Trans; eauto.
 
 
