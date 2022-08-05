@@ -427,9 +427,11 @@ assert (exists tl' tlI CI sI tl0 C0 s0 tlF CF sF,
     /\ (amend_D r a,amend C r a,s) --[tlI]-->* (amend_D r a,CI,sI)
     /\ <<CI,sI>> --[tl0,amend_D r a]--> <<C0,s0>>
     /\ (amend_D r a,C0,s0) --[tlF]-->* (amend_D r a,amend CF r a,sF)).
-2: { destroy H0. do 5 eexists. repeat split; eauto.
+2: { induction H0 as [tl' [tlI [CI [sI [tl0 [C0 [s0 [tlF [CF [sF H0] ] ] ] ] ] ] ] ] ].
+     induction H0 as (H0,(H1,(H2,(H3,(H4,H5))))).
+     do 5 eexists. repeat split; eauto.
      eapply CCT_Trans; eauto. econstructor; eauto.
-     rewrite H2; constructor; eauto. }
+     rewrite H1; constructor; eauto. }
 inversion_clear H. clear tl; rename H0 into H, t into tl.
 revert C s tl C' s' HC H.
 induction C; intros. induction e.
@@ -442,7 +444,7 @@ induction C; intros. induction e.
     exists (RL_Com p v q x), (amend C r a), s'.
     exists nil, C, s'.
     repeat split; eauto. apply sel_subtrace_refl.
-    all: constructor. auto.
+    all: constructor; auto; ESEr.
   - (* Delay *)
     rewrite <- H5 in *.
     clear s'0 H6 t H4 s0 H2 C0 H3 ann H1 eta H0 H H5.
@@ -468,7 +470,7 @@ induction C; intros. induction e.
     exists (RL_Sel p q l), (amend C r a), s'.
     exists nil, C, s'.
     repeat split; eauto. apply sel_subtrace_refl.
-    all: constructor. auto.
+    all: constructor; eauto; try ESEr.
   - (* Delay *)
     rewrite <- H5 in *.
     clear s'0 H6 t H3 s0 H1 C0 H2 ann H0 eta H H4 H5.
@@ -491,7 +493,8 @@ induction C; intros. induction e.
     * exists nil, nil; do 2 eexists.
       exists (@RL_Cond Pid Value Var RecVar p), (amend C1 r a), s'.
       exists nil, C1, s'.
-      repeat split; try constructor; auto.
+      repeat split; try constructor; eauto.
+      all: try ESEr. erewrite eval_eq; eauto. ESEs.
     * exists nil, nil; do 2 eexists.
       exists (@RL_Cond Pid Value Var RecVar p), (p-->r[left]@a;; amend C1 r a), s'.
       exists (@Forget (RL_Sel p r left)::nil), C1, s'.
@@ -506,7 +509,8 @@ induction C; intros. induction e.
     * exists nil, nil; do 2 eexists.
       exists (@RL_Cond Pid Value Var RecVar p), (amend C2 r a), s'.
       exists nil, C2, s'.
-      repeat split; try constructor; auto.
+      repeat split; try constructor; eauto.
+      all: try ESEr. erewrite eval_eq; eauto. ESEs.
     * exists nil, nil; do 2 eexists.
       exists (@RL_Cond Pid Value Var RecVar p), (p-->r[right]@a;; amend C2 r a), s'.
       exists (@Forget (RL_Sel p r right)::nil), C2, s'.
@@ -574,7 +578,7 @@ induction C; intros. induction e.
     exists (RL_Call X p), (amend (snd (Defs X)) r a), s'.
     exists nil, (snd (Defs X)), s'.
     repeat split; eauto. apply sel_subtrace_refl.
-    all: constructor; simpl; auto.
+    all: constructor; simpl; eauto; ESEr.
   - (* Call *)
     rewrite <- H5 in *.
     clear s'0 H7 C' H6 tl H5 s0 H4 X0 H0 H.
@@ -582,7 +586,7 @@ induction C; intros. induction e.
     exists (RL_Call X p); eexists; exists s'.
     exists nil; eexists; exists s'.
     repeat split; eauto. apply sel_subtrace_refl.
-    all: constructor; simpl; auto.
+    all: constructor; simpl; eauto; ESEr.
 + rename t into X. inversion H.
   - (* Delay *)
     rewrite <- H5, <- H1 in *.
@@ -603,7 +607,7 @@ induction C; intros. induction e.
     exists (RL_Call X p), (RT_Call X (ps[\]p) (amend C r a)), s'.
     exists nil; eexists; exists s'.
     repeat split; eauto. apply sel_subtrace_refl.
-    all: constructor; auto.
+    all: constructor; eauto; ESEr.
   - (* Finish *)
     rewrite <- H6, <- H1 in *.
     clear s'0 H7 C' H6 tl H5 s0 H4 C0 H2 H X0 H0 l H1.
@@ -611,7 +615,7 @@ induction C; intros. induction e.
     exists (RL_Call X p), (amend C r a), s'.
     exists nil, C, s'.
     repeat split; eauto. apply sel_subtrace_refl.
-    all: constructor; auto.
+    all: constructor; eauto; ESEr.
 + inversion H.
 Qed.
 
@@ -624,7 +628,7 @@ Lemma amend_1_complete_1' : forall C s tl C' s', Choreography_WF C ->
 Proof.
 intros.
 elim (amend_1_complete_1 C s tl C' s') with r a; auto.
-intros. destroy H1.
+intros. induction H1 as (tlI,(tlF,(C'',(s'',(H1,(H2,H3)))))).
 do 4 eexists. repeat split; eauto.
 apply sel_subtrace_app''; auto.
 Qed.
@@ -658,13 +662,13 @@ induction n; intros.
   rewrite H1 in *; clear tl H1.
   inversion_clear H0.
   exists nil, nil, C', s'.
-  repeat split; simpl; constructor; auto.
+  repeat split; simpl; constructor; auto; ESEr.
 + case_eq tl; intros.
   1: { (* repeat... *)
     rewrite H1 in *; clear tl H1.
     inversion_clear H0.
     exists nil, nil, C', s'.
-    repeat split; simpl; constructor; auto.
+    repeat split; simpl; constructor; auto; ESEr.
   }
   rewrite H1 in *; clear tl H1.
   simpl in Hn. apply le_S_n in Hn. rename l into tl.
@@ -689,10 +693,12 @@ induction n; intros.
     simpl. apply sel_subtrace_cons.
     repeat rewrite app_assoc.
     constructor. apply Permutation_app; auto.
-  - eapply CCT_Trans; eauto. apply CCP_ToStar_eq with s2b; auto.
   - eapply CCT_Trans; eauto.
+    apply CCP_ToStar_eq with s2b s1. ESEs. ESEr. auto.
+  - eapply CCT_Trans; eauto.
+Qed.
 
-
+(* YAY *)
 
 
 Lemma amend_1_sound_1 : forall C r a s tl C' s', Choreography_WF C ->
