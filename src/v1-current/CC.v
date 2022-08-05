@@ -1360,9 +1360,7 @@ Section Uniqueness.
 
 (** The set of procedure definitions never changes. *)
 
-Hypothesis D : DefSet.
-
-Lemma CCP_To_Defs_stable : forall D' C C' tl s s',
+Lemma CCP_To_Defs_stable : forall D D' C C' tl s s',
   (D,C,s) --[tl]--> (D',C',s') -> D = D'.
 Proof.
 intros.
@@ -1370,19 +1368,57 @@ inversion H.
 inversion H; auto.
 Qed.
 
-Lemma CCP_ToStar_Defs_stable : forall D' C C' tl s s',
+Lemma CCP_ToStar_Defs_stable : forall D D' C C' tl s s',
   (D,C,s) --[tl]-->* (D',C',s') -> D = D'.
 Proof.
-intros D' C C' tl; revert C C'.
+intros D D' C C' tl; revert C C'.
 induction tl; intros; inversion H; clear H; auto.
-clear c1 c3 H2 H4 t l H0 H1.
 induction c2. induction a0.
 apply CCP_To_Defs_stable in H3.
 rewrite <- H3 in H5.
 eauto.
 Qed.
 
+(** Reductions are also preserved under equivalence of the set of definitions. *)
+Lemma CCC_To_Defs_eq : forall D D' C s tl C' s',
+  (forall X, D X = D' X) ->
+  <<C,s>> --[tl,D]--> <<C',s'>> -> <<C,s>> --[tl,D']--> <<C',s'>>.
+Proof.
+intros.
+induction H0; try constructor; auto.
+all: rewrite H; constructor; try rewrite <- H; auto.
+Qed.
+
+Lemma CCP_To_Defs_eq : forall P s tl P' s' D,
+  (forall X, Procedures P X = D X) ->
+  (P,s) --[tl]--> (P',s') -> (D,Main P,s) --[tl]--> (D,Main P',s').
+Proof.
+intros.
+induction P.
+inversion H0; constructor.
+apply CCC_To_Defs_eq with a; auto.
+Qed.
+
+Lemma CCP_ToStar_Defs_eq : forall P s tl P' s' D,
+  (forall X, Procedures P X = D X) ->
+  (P,s) --[tl]-->* (P',s') -> (D,Main P,s) --[tl]-->* (D,Main P',s').
+Proof.
+intros P s1 tl; revert P s1.
+induction tl; intros.
++ inversion H0. constructor; auto.
++ inversion H0.
+  induction c2 as (P2,s2).
+  apply CCT_Step with ((D,Main P2),s2).
+  - apply CCP_To_Defs_eq; auto.
+  - apply IHtl; auto.
+    replace P with (Procedures P,Main P) in H4. 2: induction P; auto.
+    replace P2 with (Procedures P2,Main P2) in H4. 2: induction P2; auto.
+    intro; rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4); auto.
+Qed.
+
 (** Reductions and state. *)
+
+Hypothesis D : DefSet.
 
 Lemma CCC_To_disjoint_eval : forall C s tl s' p e C', disjoint_p_rl p tl ->
   <<C,s>> --[tl,D]--> <<C',s'>> -> eval_on_state Ev e s p = eval_on_state Ev e s' p.

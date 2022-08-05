@@ -174,34 +174,34 @@ Variable r:Pid.
 Variable a:Ann.
 
 (* Clean me *)
-Fixpoint amend (C:Choreography Sig) :=
+Fixpoint amend_1 (C:Choreography Sig) :=
 match C with
-| eta@a';; C' => eta@a';; (amend C')
+| eta@a';; C' => eta@a';; (amend_1 C')
 | If q ?? b Then C1 Else C2 =>
-    let C1' := amend C1 in let C2' := amend C2 in
+    let C1' := amend_1 C1 in let C2' := amend_1 C2 in
     let C' := If q ?? b Then C1' Else C2' in
     if (r =? q) then C'
     else if projectable_B_dec _ Defs (If q ?? b Then C1' Else C2') r then C'
          else If q ?? b Then (q --> r[left]@a;; C1') Else (q --> r[right]@a;; C2')
-| RT_Call X ps C' => RT_Call X ps (amend C')
+| RT_Call X ps C' => RT_Call X ps (amend_1 C')
 | _ => C
 end.
 
-Definition amend_D : DefSet Sig :=
-  fun X => (fst (Defs X),amend (snd (Defs X))).
+Definition amend_1_D : DefSet Sig :=
+  fun X => (fst (Defs X),amend_1 (snd (Defs X))).
 
 (** To avoid duplication of cases - I'd love an or... *)
 
-Lemma amend_If : forall q b C1 C2,
-  let C1' := amend C1 in let C2' := amend C2 in
-  { amend (If q ?? b Then C1 Else C2) = If q ?? b Then C1' Else C2' }
-  + { amend (If q ?? b Then C1 Else C2) = If q ?? b Then (q --> r[left]@a;; C1') Else (q --> r[right]@a;; C2') }.
+Lemma amend_1_If : forall q b C1 C2,
+  let C1' := amend_1 C1 in let C2' := amend_1 C2 in
+  { amend_1 (If q ?? b Then C1 Else C2) = If q ?? b Then C1' Else C2' }
+  + { amend_1 (If q ?? b Then C1 Else C2) = If q ?? b Then (q --> r[left]@a;; C1') Else (q --> r[right]@a;; C2') }.
 Proof. intros; simpl. elim (r =? q); auto. elim projectable_B_dec; auto. Qed.
 
 (** Amendment preserves well-formedness. *)
 
-Lemma amend_no_self_comm : forall C,
-  no_self_comm _ C -> no_self_comm _ (amend C).
+Lemma amend_1_no_self_comm : forall C,
+  no_self_comm _ C -> no_self_comm _ (amend_1 C).
 Proof.
 induction C; auto; intros.
 + induction e. all: destroy H; split; auto.
@@ -211,67 +211,67 @@ induction C; auto; intros.
   all: rewrite eqb_neq in H0; auto.
 Qed.
 
-Lemma amend_initial : forall C, initial C -> initial (amend C).
+Lemma amend_1_initial : forall C, initial C -> initial (amend_1 C).
 Proof.
 induction C; auto; intros.
-elim (amend_If t t0 C1 C2); intro HA; rewrite HA.
+elim (amend_1_If t t0 C1 C2); intro HA; rewrite HA.
 all: destroy H; split; auto.
 Qed.
 
-Lemma amend_no_empty_ann : forall C,
-  no_empty_ann _ C -> no_empty_ann _ (amend C).
+Lemma amend_1_no_empty_ann : forall C,
+  no_empty_ann _ C -> no_empty_ann _ (amend_1 C).
 Proof.
 induction C; auto; intros.
-+ elim (amend_If t t0 C1 C2); intro HA; rewrite HA.
++ elim (amend_1_If t t0 C1 C2); intro HA; rewrite HA.
   all: destroy H; split; auto.
 + destroy H; split; auto.
 Qed.
 
-Lemma amend_Choreography_WF : forall C, Choreography_WF C -> Choreography_WF (amend C).
+Lemma amend_1_Choreography_WF : forall C, Choreography_WF C -> Choreography_WF (amend_1 C).
 Proof.
 intros.
 destroy H; split.
-apply amend_no_self_comm; auto.
-apply amend_no_empty_ann; auto.
+apply amend_1_no_self_comm; auto.
+apply amend_1_no_empty_ann; auto.
 Qed.
 
-Lemma amend_within_Xs : forall C Xs,
-  within_Xs Xs C -> within_Xs Xs (amend C).
+Lemma amend_1_within_Xs : forall C Xs,
+  within_Xs Xs C -> within_Xs Xs (amend_1 C).
 Proof.
 induction C; auto; intros.
-+ elim (amend_If t t0 C1 C2); intro HA; rewrite HA; clear HA.
++ elim (amend_1_If t t0 C1 C2); intro HA; rewrite HA; clear HA.
   all: destroy H; split; eauto.
 + destroy H. split; auto.
 Qed.
 
-Lemma amend_consistent : forall C,
-  consistent _ (Vars (Defs,C)) C -> consistent _ (Vars (amend_D,amend C)) (amend C).
+Lemma amend_1_consistent : forall C,
+  consistent _ (Vars (Defs,C)) C -> consistent _ (Vars (amend_1_D,amend_1 C)) (amend_1 C).
 Proof.
 induction C; auto; intros.
-+ elim (amend_If t t0 C1 C2); intro HA; rewrite HA; clear HA.
++ elim (amend_1_If t t0 C1 C2); intro HA; rewrite HA; clear HA.
   all: destroy H; split; eauto.
 + destroy H. split; auto.
 Qed.
 
-Lemma amend_Program_WF : forall C Xs,
-  Program_WF _ Xs (Defs,C) -> Program_WF _ Xs (amend_D,amend C).
+Lemma amend_1_Program_WF : forall C Xs,
+  Program_WF _ Xs (Defs,C) -> Program_WF _ Xs (amend_1_D,amend_1 C).
 Proof.
 intros.
 destroy H. split. 2: split. 3: split.
-+ apply amend_Choreography_WF; auto.
-+ apply amend_within_Xs; auto.
-+ apply amend_consistent; auto.
++ apply amend_1_Choreography_WF; auto.
++ apply amend_1_within_Xs; auto.
++ apply amend_1_consistent; auto.
 + intros X HX. induction (H X HX) as (H3,(H4,(H5,H6))).
   repeat split.
-  - apply amend_no_self_comm; auto.
-  - apply amend_initial; auto.
-  - unfold Vars, amend_D; simpl. auto.
-  - apply amend_within_Xs; auto.
+  - apply amend_1_no_self_comm; auto.
+  - apply amend_1_initial; auto.
+  - unfold Vars, amend_1_D; simpl. auto.
+  - apply amend_1_within_Xs; auto.
 Qed.
 
 (** Projectability of amendment. *)
 
-Lemma amend_proj : forall C, projectable_B Sig Defs (amend C) r.
+Lemma amend_1_proj : forall C, projectable_B Sig Defs (amend_1 C) r.
 Proof.
 induction C; intros.
 + simpl.
@@ -310,7 +310,7 @@ Lemma amend_1_complete_1 : forall C s tl C' s', Choreography_WF C ->
   exists tl' tlI tlF C'' s'',
        sel_subtrace tl' (tlI++tlF)
     /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
-    /\ (amend_D,amend C,s) --[tlI ++ tl::tlF]-->* (amend_D,amend C'',s'').
+    /\ (amend_1_D,amend_1 C,s) --[tlI ++ tl::tlF]-->* (amend_1_D,amend_1 C'',s'').
 Proof.
 Local Ltac IHElim IHC HC H tl' tlI CI sI tl0 C0 s0 tlF CF sF H1 H2 H3 H4 H5 H6 := 
     induction (IHC _ _ _ _ HC H) as
@@ -320,9 +320,9 @@ assert (exists tl' tlI CI sI tl0 C0 s0 tlF CF sF,
        sel_subtrace tl' (tlI++tlF)
     /\ tl = forget tl0
     /\ (Defs,C',s') --[tl']-->* (Defs,CF,sF)
-    /\ (amend_D,amend C,s) --[tlI]-->* (amend_D,CI,sI)
-    /\ <<CI,sI>> --[tl0,amend_D]--> <<C0,s0>>
-    /\ (amend_D,C0,s0) --[tlF]-->* (amend_D,amend CF,sF)).
+    /\ (amend_1_D,amend_1 C,s) --[tlI]-->* (amend_1_D,CI,sI)
+    /\ <<CI,sI>> --[tl0,amend_1_D]--> <<C0,s0>>
+    /\ (amend_1_D,C0,s0) --[tlF]-->* (amend_1_D,amend_1 CF,sF)).
 2: { induction H0 as [tl' [tlI [CI [sI [tl0 [C0 [s0 [tlF [CF [sF H0] ] ] ] ] ] ] ] ] ].
      induction H0 as (H0,(H1,(H2,(H3,(H4,H5))))).
      do 5 eexists. repeat split; eauto.
@@ -337,7 +337,7 @@ induction C; intros. induction e.
     rewrite <- H8 in *.
     clear s'0 H9 C' H8 tl H7 s0 H1 C0 H6 a0 H5 x0 H4 q0 H3 e0 H2 p0 H0 H.
     simpl. exists nil, nil; do 2 eexists.
-    exists (RL_Com p v q x), (amend C), s'.
+    exists (RL_Com p v q x), (amend_1 C), s'.
     exists nil, C, s'.
     repeat split; eauto. apply sel_subtrace_refl.
     all: constructor; auto; ESEr.
@@ -363,7 +363,7 @@ induction C; intros. induction e.
     rewrite <- H7 in *.
     clear s'0 H8 C' H7 tl H6 s0 H0 C0 H5 a0 H3 l0 H2 q0 H1 p0 H H4.
     simpl. exists nil, nil; do 2 eexists.
-    exists (RL_Sel p q l), (amend C), s'.
+    exists (RL_Sel p q l), (amend_1 C), s'.
     exists nil, C, s'.
     repeat split; eauto. apply sel_subtrace_refl.
     all: constructor; eauto; try ESEr.
@@ -385,14 +385,14 @@ induction C; intros. induction e.
     rewrite <- H6 in *.
     clear s'0 H7 C' H6 tl H5 s0 H1 C3 H3 C0 H2 b0 H0 p0 H H4.
     (* did we amend? *)
-    elim (amend_If p b C1 C2); intro HA; rewrite HA.
+    elim (amend_1_If p b C1 C2); intro HA; rewrite HA.
     * exists nil, nil; do 2 eexists.
-      exists (@RL_Cond Pid Value Var RecVar p), (amend C1), s'.
+      exists (@RL_Cond Pid Value Var RecVar p), (amend_1 C1), s'.
       exists nil, C1, s'.
       repeat split; try constructor; eauto.
       all: try ESEr. erewrite eval_eq; eauto. ESEs.
     * exists nil, nil; do 2 eexists.
-      exists (@RL_Cond Pid Value Var RecVar p), (p-->r[left]@a;; amend C1), s'.
+      exists (@RL_Cond Pid Value Var RecVar p), (p-->r[left]@a;; amend_1 C1), s'.
       exists (@Forget (RL_Sel p r left)::nil), C1, s'.
       repeat split. apply sel_subtrace_extra, sel_subtrace_refl.
       all: repeat constructor; auto.
@@ -401,14 +401,14 @@ induction C; intros. induction e.
     rewrite <- H6 in *.
     clear s'0 H7 C' H6 tl H5 s0 H1 C3 H3 C0 H2 b0 H0 p0 H H4.
     (* did we amend? *)
-    elim (amend_If p b C1 C2); intro HA; rewrite HA.
+    elim (amend_1_If p b C1 C2); intro HA; rewrite HA.
     * exists nil, nil; do 2 eexists.
-      exists (@RL_Cond Pid Value Var RecVar p), (amend C2), s'.
+      exists (@RL_Cond Pid Value Var RecVar p), (amend_1 C2), s'.
       exists nil, C2, s'.
       repeat split; try constructor; eauto.
       all: try ESEr. erewrite eval_eq; eauto. ESEs.
     * exists nil, nil; do 2 eexists.
-      exists (@RL_Cond Pid Value Var RecVar p), (p-->r[right]@a;; amend C2), s'.
+      exists (@RL_Cond Pid Value Var RecVar p), (p-->r[right]@a;; amend_1 C2), s'.
       exists (@Forget (RL_Sel p r right)::nil), C2, s'.
       repeat split. apply sel_subtrace_extra, sel_subtrace_refl.
       all: repeat constructor; auto.
@@ -420,7 +420,7 @@ induction C; intros. induction e.
     IHElim IHC2 (Choreography_WF_Else _ _ _ _ _ HC) H10 tl'2 tl2I C2I s2I tl02 C02 s02 tl2F C2F s2F Htrace2 Hforget2 H2' H2I H02 H2F.
     generalize (CCC_To_disjoint_beval _ _ _ _ _ _ _ b _ H8 H9); intro Hb.
     case_eq (eval_on_state BEv b s p); intro Hb'.
-    all: elim (amend_If p b C1 C2); intro HA.
+    all: elim (amend_1_If p b C1 C2); intro HA.
     all: rewrite HA in *; clear HA.
     * (* Then, no amend *)
       set (tl0 := @RL_Cond Pid Value Var RecVar p).
@@ -471,7 +471,7 @@ induction C; intros. induction e.
     rewrite <- H6 in *.
     clear s'0 H7 C' H6 tl H5 s0 H4 X0 H0 H.
     simpl. exists nil, nil; do 2 eexists.
-    exists (RL_Call X p), (amend (snd (Defs X))), s'.
+    exists (RL_Call X p), (amend_1 (snd (Defs X))), s'.
     exists nil, (snd (Defs X)), s'.
     repeat split; eauto. apply sel_subtrace_refl.
     all: constructor; simpl; eauto; ESEr.
@@ -500,7 +500,7 @@ induction C; intros. induction e.
     rewrite <- H6, <- H1 in *.
     clear s'0 H7 C' H6 tl H5 s0 H4 C0 H2 H X0 H0 l H1.
     simpl. exists nil, nil; do 2 eexists.
-    exists (RL_Call X p), (RT_Call X (ps[\]p) (amend C)), s'.
+    exists (RL_Call X p), (RT_Call X (ps[\]p) (amend_1 C)), s'.
     exists nil; eexists; exists s'.
     repeat split; eauto. apply sel_subtrace_refl.
     all: constructor; eauto; ESEr.
@@ -508,7 +508,7 @@ induction C; intros. induction e.
     rewrite <- H6, <- H1 in *.
     clear s'0 H7 C' H6 tl H5 s0 H4 C0 H2 H X0 H0 l H1.
     simpl. exists nil, nil; do 2 eexists.
-    exists (RL_Call X p), (amend C), s'.
+    exists (RL_Call X p), (amend_1 C), s'.
     exists nil, C, s'.
     repeat split; eauto. apply sel_subtrace_refl.
     all: constructor; eauto; ESEr.
@@ -520,7 +520,7 @@ Lemma amend_1_complete_1' : forall C s tl C' s', Choreography_WF C ->
   exists tl' tl'' C'' s'',
        sel_subtrace (tl::tl') tl''
     /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
-    /\ (amend_D,amend C,s) --[tl'']-->* (amend_D,amend C'',s'').
+    /\ (amend_1_D,amend_1 C,s) --[tl'']-->* (amend_1_D,amend_1 C'',s'').
 Proof.
 intros.
 elim (amend_1_complete_1 C s tl C' s'); auto.
@@ -534,7 +534,7 @@ Lemma amend_1_complete_many : forall C s tl C' s' Xs, Program_WF _ Xs (Defs,C) -
   exists tl' tl'' C'' s'',
        sel_subtrace (tl ++ tl') tl''
     /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
-    /\ (amend_D,amend C,s) --[tl'']-->* (amend_D,amend C'',s'').
+    /\ (amend_1_D,amend_1 C,s) --[tl'']-->* (amend_1_D,amend_1 C'',s'').
 Proof.
 intros.
 set (n := length tl). assert (length tl <= n) as Hn; auto.
@@ -584,9 +584,9 @@ Qed.
 (** Soundness *)
 
 Lemma amend_1_sound_1 : forall C s tl C' s', Choreography_WF C ->
-  (amend_D, amend C,s) --[tl]--> (amend_D,C',s') ->
+  (amend_1_D, amend_1 C,s) --[tl]--> (amend_1_D,C',s') ->
   exists tl' tl'' C'' s'',
-  (amend_D,C',s') --[tl']-->* (amend_D, amend C'',s'')
+  (amend_1_D,C',s') --[tl']-->* (amend_1_D, amend_1 C'',s'')
   /\ (Defs,C,s) --[tl'']-->* (Defs,C'',s'') /\ sel_subtrace tl'' (tl::tl').
 Proof.
 Local Ltac IHElim' IHC HC H tl' tl'' C'' s'' Htl' Htl'' Hsub :=
@@ -636,7 +636,7 @@ induction C; intros. induction e.
     * econstructor; eauto. repeat constructor.
     * apply sel_subtrace_swap; auto.
 + rename t0 into p, t1 into b.
-  elim (amend_If p b C1 C2); intro HA; rewrite HA in *; clear HA.
+  elim (amend_1_If p b C1 C2); intro HA; rewrite HA in *; clear HA.
   all: inversion H.
   - (* Then *)
     rewrite <- H5, <- H6 in *.
@@ -753,9 +753,9 @@ induction C; intros. induction e.
 Qed.
 
 Lemma amend_1_sound_many : forall C s tl C' s' Xs, Program_WF _ Xs (Defs,C) ->
-  (amend_D, amend C,s) --[tl]-->* (amend_D, C',s') ->
+  (amend_1_D, amend_1 C,s) --[tl]-->* (amend_1_D, C',s') ->
   exists tl' tl'' C'' s'',
-  (amend_D,C',s') --[tl']-->* (amend_D, amend C'',s'')
+  (amend_1_D,C',s') --[tl']-->* (amend_1_D, amend_1 C'',s'')
   /\ (Defs,C,s) --[tl'']-->* (Defs,C'',s'') /\ sel_subtrace tl'' (tl++tl').
 Proof.
 intros.
@@ -786,7 +786,7 @@ induction n; intros.
   intros tl0 [t0 [C0 [s0 [Htl0 [Hsub0 Htl0IF] ] ] ] ].
   induction (diamond_4b _ _ _ _ _ _ _ _ _ H2 Htl0) as [ [D C2] [tl' [tl0' [s2a [s2b [HC' [HC0 [Hs [Hperm [Hlen1 Hlen2] ] ] ] ] ] ] ] ] ].
   generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ HC'). intro H'; rewrite <- H' in *; clear D H'.
-  generalize (CCC_To_Program_WF _ _ _ _ _ _ _ (amend_Program_WF _ _ H) H1). intro HP''.
+  generalize (CCC_To_Program_WF _ _ _ _ _ _ _ (amend_1_Program_WF _ _ H) H1). intro HP''.
   generalize (CCC_ToStar_Program_WF _ _ _ _ _ _ _ HP'' H2). intro HP'.
   generalize (CCC_ToStar_Program_WF _ _ _ _ _ _ _ HP' HC'). intro HP2.
   generalize (CCC_ToStar_Program_WF _ _ _ _ _ _ _ HP'' Htl0). intro HP0.
@@ -807,5 +807,70 @@ induction n; intros.
 Qed.
 
 End AmendOne.
+
+Section AmendMany.
+
+Variable a:Ann.
+
+Fixpoint amend_ps (ps:list Pid) (C:Choreography Sig) :=
+  match ps with
+  | nil => C
+  | p::ps' => amend_ps ps' (amend_1 p a C)
+  end.
+
+Variable ps : list Pid.
+
+Notation Amend := (amend_ps ps).
+
+Definition amend_ps_D : DefSet Sig :=
+  fun X => (fst (Defs X),Amend (snd (Defs X))).
+
+Lemma amend_ps_complete : forall C s tl C' s' Xs, Program_WF _ Xs (Defs,C) ->
+  (Defs,C,s) --[tl]-->* (Defs,C',s') ->
+  exists tl' tl'' C'' s'',
+       sel_subtrace (tl ++ tl') tl''
+    /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
+    /\ (amend_ps_D,Amend C,s) --[tl'']-->* (amend_ps_D,Amend C'',s'').
+Proof.
+unfold amend_ps_D. induction ps; simpl; intros.
++ exists nil, tl, C', s'.
+  repeat split; auto.
+  rewrite app_nil_r; apply sel_subtrace_refl.
+  apply CCT_Refl.
+  change C with (Main (Defs,C)). change C' with (Main (Defs,C')).
+  apply CCP_ToStar_Defs_eq; simpl; auto.
+  intro. induction (Defs X); auto.
++ rename a0 into p.
+  elim (amend_1_complete_many p a C s tl C' s' Xs); auto.
+  intros tl0 [t0 [C0 [s0 [Hsub0 [Htl0 Htl0IF] ] ] ] ].
+  elim (IHl
+
+
+  induction (diamond_4b _ _ _ _ _ _ _ _ _ H2 Htl0) as [ [D C2] [tl' [tl0' [s2a [s2b [HC' [HC0 [Hs [Hperm [Hlen1 Hlen2] ] ] ] ] ] ] ] ] ].
+  generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ HC'). intro H'; rewrite <- H' in *; clear D H'.
+  generalize (CCC_To_Program_WF _ _ _ _ _ _ _ H H1). intro HP''.
+  generalize (CCC_ToStar_Program_WF _ _ _ _ _ _ _ HP'' H2). intro HP'.
+  generalize (CCC_ToStar_Program_WF _ _ _ _ _ _ _ HP' HC'). intro HP2.
+  generalize (CCC_ToStar_Program_WF _ _ _ _ _ _ _ HP'' Htl0). intro HP0.
+  elim (IHn C0 s0 tl0' C2 s2b); auto.
+  intros tl1 [t1 [C1 [s1 [Hsub1 [Htl1 Htl1IF] ] ] ] ].
+  2: etransitivity; eauto.
+  exists (tl' ++ tl1), (t0 ++ t1), C1, s1.
+  repeat split.
+  - simpl. eapply sel_subtrace_trans.
+    2: apply sel_subtrace_app_both; eauto.
+    simpl. apply sel_subtrace_cons.
+    repeat rewrite app_assoc.
+    constructor. apply Permutation_app; auto.
+  - eapply CCT_Trans; eauto.
+    apply CCP_ToStar_eq with s2b s1. ESEs. ESEr. auto.
+  - eapply CCT_Trans; eauto.
+Qed.
+
+
+
+
+
+End AmendMany.
 
 End Amendment.
