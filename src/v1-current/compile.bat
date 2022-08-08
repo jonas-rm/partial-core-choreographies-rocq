@@ -8,6 +8,7 @@ coqc SP.v
 coqc BranchingOrder.v
 coqc Merge.v
 coqc EPP.v
+coqc EPPTheorem.v
 coqc Amendment.v
 coqdoc -g *.v
 pause
