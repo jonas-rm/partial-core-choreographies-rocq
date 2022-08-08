@@ -812,10 +812,13 @@ Inductive CCP_To : Configuration -> TransitionLabel _ _ -> Configuration -> Prop
 
 Inductive CCP_ToStar :
   Configuration -> list (TransitionLabel _ _) -> Configuration -> Prop :=
- | CCT_Refl c : CCP_ToStar c nil c
+ | CCT_Base P s s' : s [==] s' -> CCP_ToStar (P,s) nil (P,s')
  | CCT_Step c1 t c2 l c3 : CCP_To c1 t c2 ->
                            CCP_ToStar c2 l c3 -> CCP_ToStar c1 (t::l) c3
 .
+
+Lemma CCT_Refl : forall c, CCP_ToStar c nil c.
+Proof. induction c as (P,s). constructor. ESEr. Qed.
 
 End Semantics_Definitions.
 
@@ -861,7 +864,7 @@ induction n; intros.
   - rewrite H1 in H0; clear IHn H1 n.
     case_eq ps; intros. rewrite H1 in H; elim H; auto.
     exists (TL_Tau t::List.nil)%list.
-    econstructor. 2: constructor.
+    econstructor. 2: apply CCT_Refl.
     change (TL_Tau t) with (Forget (RL_Call X t)).
     constructor. apply C_Call_Finish'; [rewrite <- H1 | simpl]; auto.
   - case_eq ps; intros. rewrite H2 in H; elim H; auto.
@@ -891,7 +894,7 @@ case_eq ([#] (fst (D X))); intros; [idtac | case_eq n]; intros.
 + rewrite H1 in H0; clear n H1.
   case_eq (fst (D X)); intros. exfalso; auto.
   rename t into p. exists (TL_Tau p::List.nil)%list.
-  econstructor. 2: constructor.
+  econstructor. 2: apply CCT_Refl.
   replace (TL_Tau p) with (Forget (RL_Call X p)); auto.
   change (fst (A:=set Pid) (D X) = p::l)%list in H1.
   constructor. apply C_Call_Local'; auto. rewrite H1; simpl; auto.
@@ -916,13 +919,66 @@ case_eq ([#] (fst (D X))); intros; [idtac | case_eq n]; intros.
     rewrite H1; simpl; auto.
 Qed.
 
+(** Reductions are preserved by state equivalence. *)
+
+Lemma CCC_To_eq : forall D C s1 tl C' s2 s1' s2', s1 [==] s1' -> s2 [==] s2' ->
+  <<C,s1>> --[tl,D]--> <<C',s2>> -> <<C,s1'>> --[tl,D]--> <<C',s2'>>.
+Proof.
+intros.
+induction H1.
++ unfold v.
+  rewrite (eval_eq _ e s s1'); auto.
+       apply C_Com.
+  ESEt s'. ESEs. eESEt.
+  rewrite <- (eval_eq _ e s s1'); auto. fold v.
+  ESEc; auto.
++ apply C_Sel. ESEt s. ESEs. ESEt s'.
++ apply C_Then. ESEt s. ESEs. ESEt s'.
+  rewrite <- (eval_eq _ b s); auto.
++ apply C_Else. ESEt s. ESEs. ESEt s'.
+  rewrite <- (eval_eq _ b s); auto.
++ apply C_Delay_Eta; auto.
++ apply C_Delay_Cond; auto.
++ apply C_Delay_Call; auto.
++ apply C_Call_Local; auto. ESEt s. ESEs. ESEt s'.
++ apply C_Call_Start; auto. ESEt s. ESEs. ESEt s'.
++ apply C_Call_Enter; auto. ESEt s. ESEs. ESEt s'.
++ apply C_Call_Finish; auto. ESEt s. ESEs. ESEt s'.
+Qed.
+
+Lemma CCP_To_eq : forall P s1 tl P' s2 s1' s2', s1 [==] s1' -> s2 [==] s2' ->
+  (P,s1) --[tl]--> (P',s2) -> (P,s1') --[tl]--> (P',s2').
+Proof.
+intros.
+induction P.
+inversion H1; constructor.
+apply CCC_To_eq with s1 s2; auto.
+Qed.
+
+Lemma CCP_ToStar_eq : forall P s1 tl P' s2 s1' s2', s1 [==] s1' -> s2 [==] s2' ->
+  (P,s1) --[tl]-->* (P',s2) -> (P,s1') --[tl]-->* (P',s2').
+Proof.
+intros P s1 tl; revert P s1.
+induction tl; intros.
++ inversion H1. constructor.
+  ESEt s1. ESEs. ESEt s2.
++ inversion H1.
+  induction c2.
+  apply CCT_Step with (a0,b).
+  - apply CCP_To_eq with s1 b; auto. ESEr.
+  - eapply IHtl; eauto. ESEr.
+Qed.
+
 Lemma CCT_Trans : forall c tl c' tl' c'',
   c --[tl]-->* c' -> c' --[tl']-->* c'' -> c --[tl++tl']-->* c''.
 Proof.
 intros c tl; revert c.
-induction tl; simpl; intros; inversion H; auto.
-simpl. apply CCT_Step with c2; auto.
-apply IHtl with c'; auto.
+induction tl; simpl; intros; inversion H.
++ rewrite <- H4, <- H2 in *; clear c' c H2 H4.
+  induction c''. eapply CCP_ToStar_eq; eauto.
+  ESEs. ESEr.
++ simpl. apply CCT_Step with c2; auto.
+  apply IHtl with c'; auto.
 Qed.
 
 End BigStepSemantics.
@@ -1302,65 +1358,9 @@ Section Uniqueness.
 
 (** ** Results on determinism of the semantics. *)
 
-(** Reductions are preserved by state equivalence. *)
-
-Lemma CCC_To_eq : forall D C s1 tl C' s2 s1' s2', s1 [==] s1' -> s2 [==] s2' ->
-  <<C,s1>> --[tl,D]--> <<C',s2>> -> <<C,s1'>> --[tl,D]--> <<C',s2'>>.
-Proof.
-intros.
-induction H1.
-+ unfold v.
-  rewrite (eval_eq _ e s s1'); auto.
-       apply C_Com.
-  ESEt s'. ESEs. eESEt.
-  rewrite <- (eval_eq _ e s s1'); auto. fold v.
-  ESEc; auto.
-+ apply C_Sel. ESEt s. ESEs. ESEt s'.
-+ apply C_Then. ESEt s. ESEs. ESEt s'.
-  rewrite <- (eval_eq _ b s); auto.
-+ apply C_Else. ESEt s. ESEs. ESEt s'.
-  rewrite <- (eval_eq _ b s); auto.
-+ apply C_Delay_Eta; auto.
-+ apply C_Delay_Cond; auto.
-+ apply C_Delay_Call; auto.
-+ apply C_Call_Local; auto. ESEt s. ESEs. ESEt s'.
-+ apply C_Call_Start; auto. ESEt s. ESEs. ESEt s'.
-+ apply C_Call_Enter; auto. ESEt s. ESEs. ESEt s'.
-+ apply C_Call_Finish; auto. ESEt s. ESEs. ESEt s'.
-Qed.
-
-Lemma CCP_To_eq : forall P s1 tl P' s2 s1' s2', s1 [==] s1' -> s2 [==] s2' ->
-  (P,s1) --[tl]--> (P',s2) -> (P,s1') --[tl]--> (P',s2').
-Proof.
-intros.
-induction P.
-inversion H1; constructor.
-apply CCC_To_eq with s1 s2; auto.
-Qed.
-
-Lemma CCP_ToStar_eq : forall P s1 tl P' s2 s1' s2', s1 [==] s1' -> s2 [==] s2' ->
-  tl <> nil -> (P,s1) --[tl]-->* (P',s2) -> (P,s1') --[tl]-->* (P',s2').
-Proof.
-intros P s1 tl; revert P s1.
-induction tl; intros. elim H1; auto.
-case_eq tl; intros.
-+ rewrite H3 in H2; inversion H2.
-  inversion H9. rewrite H12 in H7.
-  apply CCT_Step with (P',s2'). 2: constructor.
-  apply CCP_To_eq with s1 s2; auto.
-+ inversion H2.
-  induction c2.
-  apply CCT_Step with (a0,b).
-  - apply CCP_To_eq with s1 b; auto. ESEr.
-  - rewrite <- H3. eapply IHtl; eauto. ESEr.
-    rewrite H3; discriminate.
-Qed.
-
 (** The set of procedure definitions never changes. *)
 
-Hypothesis D : DefSet.
-
-Lemma CCP_To_Defs_stable : forall D' C C' tl s s',
+Lemma CCP_To_Defs_stable : forall D D' C C' tl s s',
   (D,C,s) --[tl]--> (D',C',s') -> D = D'.
 Proof.
 intros.
@@ -1368,19 +1368,57 @@ inversion H.
 inversion H; auto.
 Qed.
 
-Lemma CCP_ToStar_Defs_stable : forall D' C C' tl s s',
+Lemma CCP_ToStar_Defs_stable : forall D D' C C' tl s s',
   (D,C,s) --[tl]-->* (D',C',s') -> D = D'.
 Proof.
-intros D' C C' tl; revert C C'.
+intros D D' C C' tl; revert C C'.
 induction tl; intros; inversion H; clear H; auto.
-clear c1 c3 H2 H4 t l H0 H1.
 induction c2. induction a0.
 apply CCP_To_Defs_stable in H3.
 rewrite <- H3 in H5.
 eauto.
 Qed.
 
+(** Reductions are also preserved under equivalence of the set of definitions. *)
+Lemma CCC_To_Defs_eq : forall D D' C s tl C' s',
+  (forall X, D X = D' X) ->
+  <<C,s>> --[tl,D]--> <<C',s'>> -> <<C,s>> --[tl,D']--> <<C',s'>>.
+Proof.
+intros.
+induction H0; try constructor; auto.
+all: rewrite H; constructor; try rewrite <- H; auto.
+Qed.
+
+Lemma CCP_To_Defs_eq : forall P s tl P' s' D,
+  (forall X, Procedures P X = D X) ->
+  (P,s) --[tl]--> (P',s') -> (D,Main P,s) --[tl]--> (D,Main P',s').
+Proof.
+intros.
+induction P.
+inversion H0; constructor.
+apply CCC_To_Defs_eq with a; auto.
+Qed.
+
+Lemma CCP_ToStar_Defs_eq : forall P s tl P' s' D,
+  (forall X, Procedures P X = D X) ->
+  (P,s) --[tl]-->* (P',s') -> (D,Main P,s) --[tl]-->* (D,Main P',s').
+Proof.
+intros P s1 tl; revert P s1.
+induction tl; intros.
++ inversion H0. constructor; auto.
++ inversion H0.
+  induction c2 as (P2,s2).
+  apply CCT_Step with ((D,Main P2),s2).
+  - apply CCP_To_Defs_eq; auto.
+  - apply IHtl; auto.
+    replace P with (Procedures P,Main P) in H4. 2: induction P; auto.
+    replace P2 with (Procedures P2,Main P2) in H4. 2: induction P2; auto.
+    intro; rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4); auto.
+Qed.
+
 (** Reductions and state. *)
+
+Hypothesis D : DefSet.
 
 Lemma CCC_To_disjoint_eval : forall C s tl s' p e C', disjoint_p_rl p tl ->
   <<C,s>> --[tl,D]--> <<C',s'>> -> eval_on_state Ev e s p = eval_on_state Ev e s' p.
@@ -2059,7 +2097,9 @@ rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H) in H.
 revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
 + right.
   inversion H.
-  rewrite <- H2, <- H4. do 2 eexists; split; eauto. constructor.
+  rewrite <- H2. exists (D,C2), s2.
+  split. apply CCP_To_eq with s s2; auto. ESEr.
+  apply CCT_Refl.
 + intros.
   inversion H; clear H.
   clear t l H1 H2 c1 c3 H3 H5.
@@ -2071,10 +2111,10 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
     inversion_clear H0. inversion_clear H4.
     rewrite (CCC_To_deterministic_3 _ _ _ _ _ _ _ _ H2 H0); auto.
     left; exists tl1. case_eq tl1; intros.
-    * rewrite H3 in H6. inversion H6. exists s2; split. constructor.
-      split. rewrite <- H8; ESEs. auto.
+    * rewrite H3 in H6. inversion H6. exists s2; split. apply CCT_Refl.
+      split; auto. ESEs. ESEt b.
     * rewrite <- H3. exists s1; split. 2: split; auto; ESEr.
-      apply CCP_ToStar_eq with b s1; auto. ESEs. ESEr. rewrite H3; discriminate.
+      apply CCP_ToStar_eq with b s1; auto. ESEs. ESEr.
   - inversion_clear b0.
     induction x, a0 as [D'' C'']; inversion_clear H.
     rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H2) in H1, H2.
@@ -2084,8 +2124,8 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
       left; exists (a::tl'), s'; repeat split; auto.
       apply CCT_Step with (D,C'',b0); auto.
       eapply Permutation_trans. 2: apply perm_swap. auto.
-    * destroy H.
-      right; exists x, x0; split; auto.
+    * induction H as [P' [s' [Htl2 Htl1] ] ].
+      right; exists P', s'; split; auto.
       apply CCT_Step with (D,C'',b0); auto.
 Qed.
 
@@ -2116,9 +2156,10 @@ clear D' D''.
 revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
 + intros.
   inversion H0.
-  rewrite <- H2, <- H4.
+  rewrite <- H2.
   exists (D,C1), nil, tl1, s1, s1, 0; repeat split; auto.
-  constructor. apply Permutation_app_comm.
+  apply CCT_Refl. apply CCP_ToStar_eq with s s1; auto. ESEr.
+  apply Permutation_app_comm.
 + intros.
   inversion H0; clear H0.
   clear t l H1 H2 c1 c3 H3 H5.
@@ -2136,15 +2177,14 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
     rename b0 into C', x0 into tl1', x1 into tl2', x2 into s1', x3 into s2'.
     case_eq tl1'; intros.
     * rewrite H11 in *. inversion H5.
-      rewrite <- H13 in *; clear C' tl1' H13 H11.
-      rewrite <- H15 in *. clear s1' H15 c H12.
+      rewrite <- H13 in *; clear C' tl1' H13 H11 H12.
       exists (D,C1), nil, tl2', s1, s2', (S x4); repeat split; auto.
-      constructor. ESEt s'. all: simpl in *.
+      apply CCT_Refl. ESEt s'. ESEt s1'. all: simpl in *.
       rewrite app_nil_r in *. eapply Permutation_trans; eauto.
       rewrite H0', H10. auto with arith.
       rewrite H3. auto with arith.
     * exists (D,C'), tl1', tl2', s1', s2', (S x4); repeat split; auto.
-      apply CCP_ToStar_eq with s' s1'; auto. ESEs. ESEr. rewrite H11; discriminate.
+      apply CCP_ToStar_eq with s' s1'; auto. ESEs. ESEr.
       all: simpl in *.
       eapply Permutation_trans. 2: apply Permutation_sym, Permutation_middle.
       eapply Permutation_trans. apply Permutation_app; eauto.
@@ -2152,10 +2192,8 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
       apply Permutation_elt; auto.
       rewrite H0', H10; auto with arith.
       rewrite H3. auto with arith.
-  - destroy H0.
-    induction x as [D' C'].
+  - induction H0 as ((D',C'),(s',(H1,H0))).
     rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0) in H1, H0.
-    rename x0 into s'.
     elim (IHtl2 _ _ _ _ _ _ _ H0 H6); intros.
     destroy H2.
     induction x as [D'' C''].
@@ -2213,14 +2251,17 @@ Qed.
 
 (** Useful particular cases. *)
 
-Lemma CCP_ToStar_End : forall c c' tl, c --[ tl ]-->* c' ->
-  Main (fst c) = End -> tl = nil /\ c = c'.
+Lemma CCP_ToStar_End : forall P s P' s' tl,
+  (P,s) --[ tl ]-->* (P',s') ->
+  Main P = End -> tl = nil /\ s [==] s'.
 Proof.
 intros.
-inversion H; auto.
-exfalso.
-induction c, a. simpl in H0; rewrite H0 in H1.
-inversion H1. inversion H11.
+inversion H. repeat split; auto.
+(* + induction P. simpl in H0; rewrite H0, <- H2 in H.
+  inversion H; auto.
+ *)+ exfalso.
+  induction P. simpl in H0; rewrite H0 in H1.
+  inversion H1. inversion H11.
 Qed.
 
 Lemma diamond_5a : forall P s tl1 tl2 P1 s1 P2 s2,
@@ -2232,9 +2273,10 @@ intros.
 elim (diamond_4a _ _ _ _ _ _ _ _ H H0); intros.
 destroy H2.
 rename x into P', x0 into tl', x1 into tl'', x2 into s', x3 into s''.
-elim (CCP_ToStar_End _ _ _ H4 H1); intros.
-inversion H7.
+elim (CCP_ToStar_End _ _ _ _ _ H4 H1); intros.
 exists tl', s'; repeat split; auto.
+rewrite H6 in H4. inversion H4; auto.
+ESEt s''. ESEs.
 rewrite H6, plus_0_r in H2; auto.
 Qed.
 
@@ -2255,9 +2297,9 @@ intros.
 induction c, c1, c2. induction a, p, p0. simpl.
 elim (diamond_4 _ _ _ _ _ _ _ _ H H0); intros.
 destroy H3.
-elim (CCP_ToStar_End _ _ _ H4 H1); intros.
-elim (CCP_ToStar_End _ _ _ H5 H2); intros.
-rewrite H6 in H4; rewrite H8 in H5. inversion H4; inversion H5; auto.
+elim (CCP_ToStar_End _ _ _ _ _ H4 H1); intros.
+elim (CCP_ToStar_End _ _ _ _ _ H5 H2); intros.
+eESEt. eESEt. ESEs.
 Qed.
 
 End Confluence.

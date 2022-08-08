@@ -239,7 +239,7 @@ Lemma SPP_ToStar_MBN : forall P1 s P2 s' P1' tl,
 Proof.
 intros. revert P1 s P2 s' P1' H H0 H1.
 induction tl; intros; inversion H1.
-+ rewrite <- H3. exists P1'; repeat split; auto. constructor.
++ rewrite <- H3. exists P1'; repeat split; auto. constructor; auto.
 + induction c2.
   apply SPP_To_MBN with (P1':=P1') in H5; auto.
   destroy H5.
