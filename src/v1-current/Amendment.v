@@ -166,10 +166,9 @@ eapply sel_subtrace_perm'.
 apply sel_subtrace_app; auto.
 Qed.
 
-Variable Defs:DefSet Sig.
-
 Section AmendOne.
 
+Variable Defs:DefSet Sig.
 Variable r:Pid.
 Variable a:Ann.
 
@@ -271,7 +270,7 @@ Qed.
 
 (** Projectability of amendment. *)
 
-Lemma amend_1_proj : forall C, projectable_B Sig Defs (amend_1 C) r.
+Lemma amend_1_proj : forall C, projectable_B Defs (amend_1 C) r.
 Proof.
 induction C; intros.
 + simpl.
@@ -810,27 +809,35 @@ End AmendOne.
 
 Section AmendMany.
 
-Variable a:Ann.
+Lemma projectable_B_stable : forall (D D':DefSet Sig),
+  (forall X, fst (D X) = fst (D' X)) ->
+  forall C p, projectable_B D C p -> projectable_B D' C p.
+Proof.
+intros. induction H0 as (B,HB).
+exists B. induction HB; econstructor; eauto.
+all: rewrite <- H; auto.
+Qed.
 
-Fixpoint amend_ps (ps:list Pid) (C:Choreography Sig) :=
+Fixpoint amend_ps D (ps:list Pid) a C :=
   match ps with
   | nil => C
-  | p::ps' => amend_ps ps' (amend_1 p a C)
+  | p::ps' => amend_ps D ps' a (amend_1 D p a C)
   end.
 
 Variable ps : list Pid.
+Variable a : Ann.
 
-Notation Amend := (amend_ps ps).
+Notation "'Amend' D" := (amend_ps D ps a) (at level 0).
 
-Definition amend_ps_D : DefSet Sig :=
-  fun X => (fst (Defs X),Amend (snd (Defs X))).
+Definition amend_ps_D D : DefSet Sig :=
+  fun X => (fst (D X), Amend D (snd (D X))).
 
-Lemma amend_ps_complete : forall C s tl C' s' Xs, Program_WF _ Xs (Defs,C) ->
+Lemma amend_ps_complete : forall Defs C s tl C' s' Xs, Program_WF _ Xs (Defs,C) ->
   (Defs,C,s) --[tl]-->* (Defs,C',s') ->
   exists tl' tl'' C'' s'',
        sel_subtrace (tl ++ tl') tl''
     /\ (Defs,C',s') --[tl']-->* (Defs,C'',s'')
-    /\ (amend_ps_D,Amend C,s) --[tl'']-->* (amend_ps_D,Amend C'',s'').
+    /\ (amend_ps_D Defs,Amend Defs C,s) --[tl'']-->* (amend_ps_D Defs,Amend Defs C'',s'').
 Proof.
 unfold amend_ps_D. induction ps; simpl; intros.
 + exists nil, tl, C', s'.
@@ -841,9 +848,14 @@ unfold amend_ps_D. induction ps; simpl; intros.
   apply CCP_ToStar_Defs_eq; simpl; auto.
   intro. induction (Defs X); auto.
 + rename a0 into p.
-  elim (amend_1_complete_many p a C s tl C' s' Xs); auto.
+  elim (amend_1_complete_many Defs p a C s tl C' s' Xs); auto.
   intros tl0 [t0 [C0 [s0 [Hsub0 [Htl0 Htl0IF] ] ] ] ].
-  elim (IHl
+  generalize (amend_1_Program_WF _ p a _ _ H) as HP; intro.
+  elim (IHl _ _ _ _ _ _ _ HP Htl0IF).
+  intros tl' (tl'',(C'',(s'',(Hsub',(Htl',Htl''))))).
+  elim (amend_1_sound_many Defs p a C0 s0 tl' C'' s'' Xs); auto.
+  2: apply (CCC_ToStar_Program_WF _ _ _ _ _ _ _ (CCC_ToStar_Program_WF _ _ _ _ _ _ _ H H0) Htl0).
+  intros tl1 (tl1',(C1,(s1,(Hsub1,(Htl1,Htl1'))))).
 
 
   induction (diamond_4b _ _ _ _ _ _ _ _ _ H2 Htl0) as [ [D C2] [tl' [tl0' [s2a [s2b [HC' [HC0 [Hs [Hperm [Hlen1 Hlen2] ] ] ] ] ] ] ] ] ].
