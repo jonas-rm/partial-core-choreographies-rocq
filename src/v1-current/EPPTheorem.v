@@ -290,7 +290,7 @@ Qed.
 
 Lemma EPP_Complete' : forall P Xs ps,
   Program_WF _ Xs P -> well_ann _ P -> forall (HP:projectable Sig Xs ps P),
-  initial (Main P) ->
+  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
   forall s tl P' s', (P,s) --[tl]-->* (P',s') ->
@@ -299,7 +299,7 @@ Lemma EPP_Complete' : forall P Xs ps,
 Proof.
 intros P Xs ps HWF Hann HP Hinit HMain HXs s tl P' s' HTo.
 assert (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) as Hsp.
-1: { intros. apply initial_str_proj with ps; auto. apply HP. }
+1: { auto. }
 induction P as (D,C), P' as (D',C').
 generalize (CCP_ToStar_Defs_stable _ D D' C C' tl s s' HTo); intro.
 rewrite <- H in HTo; rewrite <- H; clear D' H.
@@ -347,6 +347,19 @@ revert dependent C'. revert dependent C. revert s s'. induction tl.
   - change C'' with (Main (D,C'')).
     change D with (Procedures _ (D,C'')).
     intros. eapply CCP_To_str_proj; eauto.
+Qed.
+
+Lemma EPP_Complete'' : forall P Xs ps,
+  Program_WF _ Xs P -> well_ann _ P -> forall (HP:projectable Sig Xs ps P),
+  initial (Main P) ->
+  (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
+  (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
+  forall s tl P' s', (P,s) --[tl]-->* (P',s') ->
+  exists N tl', ((epp Xs ps P HP,s) --[tl']-->* (N,s'))%SP
+  /\ forall H, Net N (>>) Net (epp Xs ps P' H).
+Proof.
+intros; apply EPP_Complete' with tl; auto.
+apply initial_str_proj, HP; auto.
 Qed.
 
 End Completeness.

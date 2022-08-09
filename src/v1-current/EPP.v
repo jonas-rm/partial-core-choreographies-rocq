@@ -2096,6 +2096,64 @@ simpl. eapply CCC_To_str_proj; eauto.
 + apply Program_WF_Main_within_Xs; auto.
 Qed.
 
+Lemma CCP_ToStar_str_proj : forall P Xs ps,
+  Program_WF _ Xs P -> well_ann _ P -> projectable Xs ps P ->
+  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
+  (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
+  (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
+  forall s tl P' s', (P,s) --[tl]-->* (P',s') ->
+  forall p, In p ps -> str_proj (Procedures _ P') (Main P') p.
+Proof.
+intros. rename H2 into HSP, H3 into Hnames, H4 into HD, H5 into H2.
+induction P as (D,C). induction P' as (D', C').
+generalize (CCP_ToStar_Defs_stable _ D D' C C' tl s s' H2); intro.
+rewrite <- H3 in H2; rewrite <- H3; clear D' H3.
+revert dependent C. revert s.
+induction tl; intros; inversion H2. rewrite <- H4; auto.
+clear c3 H8 l H4 t H3 c1 H5. induction c2 as ((D',C''),s'').
+generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H7); intro.
+rewrite <- H3 in *; clear D' H3.
+apply (IHtl s'' C''); auto.
++ eapply CCC_To_Program_WF; eauto.
++ eapply CCC_To_projectable; eauto.
++ eapply CCP_To_str_proj; eauto.
++ simpl; intros.
+  generalize CCC_To_pn''; intro.
+  specialize (H4 Sig (D,C) s a (D,C'') s''). simpl in H4.
+  apply Hnames; auto.
+Qed.
+
+Lemma CCC_ToStar_projectable: forall P Xs ps,
+  Program_WF _ Xs P -> well_ann _ P -> projectable Xs ps P ->
+  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
+  (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
+  (forall p X, In X Xs -> In p (Vars P X) -> In p ps) ->
+  forall s tl P' s', (P,s) --[tl]-->* (P',s') -> projectable Xs ps P'.
+Proof.
+intros. revert dependent P. revert s P' s'.
+induction tl; simpl; intros.
+inversion H5. rewrite <- H7; auto.
+inversion_clear H5. induction c2 as (P'',s'').
+generalize H6; intro.
+induction P as (D,C), P' as (D',C'), P'' as (D'',C'').
+generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H6) as HD.
+generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H7) as HD'.
+intros. rewrite <- HD', <- HD in *; clear D' D'' HD HD'.
+apply CCC_To_projectable with (Xs:=Xs) (ps:=ps) in H6; auto.
+eapply IHtl. 7: eauto.
++ eapply CCC_To_Program_WF; eauto.
++ red; red. unfold Vars, CC.Procs; simpl; intros.
+  eapply H0; auto.
++ auto.
++ simpl. intros.
+  apply CCP_To_str_proj with (Xs:=Xs) (ps:=ps) (p:=p) in H5; auto.
++ simpl; intros.
+  generalize CCC_To_pn''; intro.
+  specialize (H9 Sig (D,C) s a (D,C'') s''). simpl in H9.
+  apply H3; auto.
++ unfold Vars; simpl. auto.
+Qed.
+
 End ProjectionLemmas.
 
 End EndPointProjection.
