@@ -1,6 +1,6 @@
 Require Import EPP.
 
-Section Amend.
+Section Amendment.
 
 Variable Sig : Signature.
 
@@ -56,7 +56,7 @@ Qed.
 
 Inductive sel_subtrace : list (TransitionLabel Pid Value) -> list (TransitionLabel Pid Value) -> Prop :=
 | ss_base l l' : Permutation l l' -> sel_subtrace l l'
-| ss_cons t l l' l'' : sel_subtrace l l' -> Permutation (t::l') l'' -> sel_subtrace l l''
+(* | ss_cons t l l' l'' : sel_subtrace l l' -> Permutation (t::l') l'' -> sel_subtrace l l'' *)
 | ss_extra p q la l l' l'' : sel_subtrace l l' -> Permutation (TL_Sel p q la::l') l'' -> sel_subtrace l l''.
 
 Lemma sel_subtrace_refl : forall ts, sel_subtrace ts ts.
@@ -67,8 +67,6 @@ Lemma sel_subtrace_cons : forall t ts ts',
 Proof.
 intros. induction H.
 - apply ss_base; auto.
-- apply ss_cons with t0 (t::l'); auto.
-  eapply Permutation_trans. apply perm_swap. auto.
 - apply ss_extra with p q la (t::l'); auto.
   eapply Permutation_trans. apply perm_swap. auto.
 Qed.
@@ -92,8 +90,6 @@ Lemma sel_subtrace_perm' : forall ts ts' ts'',
 Proof.
 intros. induction H.
 - apply ss_base. eapply perm_trans; eauto.
-- apply ss_cons with t l'; auto.
-  eapply Permutation_trans; eauto.
 - apply ss_extra with p q la l'; auto.
   eapply Permutation_trans; eauto.
 Qed.
@@ -103,7 +99,6 @@ Lemma sel_subtrace_perm : forall ts ts' ts'',
 Proof.
 intros. induction H.
 - apply ss_base. eapply perm_trans; eauto.
-- apply ss_cons with t l'; auto.
 - apply ss_extra with p q la l'; auto.
 Qed.
 
@@ -112,7 +107,6 @@ Lemma sel_subtrace_trans : forall ts ts' ts'',
 Proof.
 intros. induction H0.
 - apply sel_subtrace_perm' with l; auto.
-- apply ss_cons with t l'; auto.
 - apply ss_extra with p q la l'; auto.
 Qed.
 
@@ -166,32 +160,32 @@ eapply sel_subtrace_perm'.
 apply sel_subtrace_app; auto.
 Qed.
 
-Section AmendOne.
+Section Amend.
 
 Variable Defs:DefSet Sig.
 Variable a:Ann.
 
-Fixpoint fix_list p b ps C1 C2 : list Pid :=
+Fixpoint up_list p b ps C1 C2 : list Pid :=
   match ps with
   | nil => nil
-  | r :: ps' => let ps'' := fix_list p b ps' C1 C2 in
+  | r :: ps' => let ps'' := up_list p b ps' C1 C2 in
                 if (r =? p) then ps''
                 else if projectable_B_dec _ Defs (If p ?? b Then C1 Else C2) r
                 then ps'' else (r :: ps'')
   end.
 
-Fixpoint amend_1 p l ps C : Choreography Sig :=
+Fixpoint add_sels p l ps C : Choreography Sig :=
   match ps with
   | nil => C
-  | r :: ps' => p --> r[l]@a;; amend_1 p l ps' C
+  | r :: ps' => p --> r[l]@a;; add_sels p l ps' C
   end.
 
 Fixpoint amend (ps:list Pid) (C:Choreography Sig) :=
 match C with
 | eta@a';; C' => eta@a';; (amend ps C')
 | If p ?? b Then C1 Else C2 =>
-    let l := fix_list p b ps (amend ps C1) (amend ps C2) in
-    If p ?? b Then (amend_1 p left l (amend ps C1)) Else (amend_1 p right l (amend ps C2))
+    let l := up_list p b ps (amend ps C1) (amend ps C2) in
+    If p ?? b Then (add_sels p left l (amend ps C1)) Else (add_sels p right l (amend ps C2))
 | RT_Call X l C' => RT_Call X l (amend ps C')
 | _ => C
 end.
@@ -201,15 +195,15 @@ Definition amend_D ps : DefSet Sig :=
 
 (** To avoid duplication of cases - I'd love an or... *)
 
-Lemma fix_list_If : forall p b r ps C1 C2,
-  { fix_list p b (r::ps) C1 C2 = fix_list p b ps C1 C2 }
-  + { fix_list p b (r::ps) C1 C2 = r :: fix_list p b ps C1 C2 }.
+Lemma up_list_If : forall p b r ps C1 C2,
+  { up_list p b (r::ps) C1 C2 = up_list p b ps C1 C2 }
+  + { up_list p b (r::ps) C1 C2 = r :: up_list p b ps C1 C2 }.
 Proof. intros; simpl. elim (r =? p); auto. elim projectable_B_dec; auto. Qed.
 
 (** Amendment preserves well-formedness. *)
 
-Lemma not_In_fix_list : forall p b ps C1 C2,
-  ~In p (fix_list p b ps C1 C2).
+Lemma not_In_up_list : forall p b ps C1 C2,
+  ~In p (up_list p b ps C1 C2).
 Proof.
 induction ps; intros; simpl; auto.
 case_eq (a0 =? p); auto.
@@ -220,8 +214,8 @@ rewrite eqb_neq in H; auto.
 apply (IHps _ _ H1).
 Qed.
 
-Lemma not_In_fix_list' : forall p b ps C1 C2 r, p <> r -> In r ps ->
-  ~In r (fix_list p b ps C1 C2) ->
+Lemma not_In_up_list' : forall p b ps C1 C2 r, p <> r -> In r ps ->
+  ~In r (up_list p b ps C1 C2) ->
   projectable_B Defs (If p ?? b Then C1 Else C2) r.
 Proof.
 induction ps; intros. inversion H0.
@@ -232,13 +226,13 @@ inversion_clear H0.
   elim projectable_B_dec; auto.
   intros. elim H1; simpl; auto.
 + revert H1.
-  elim (fix_list_If p b a0 ps C1 C2); intro HA; rewrite HA; auto.
+  elim (up_list_If p b a0 ps C1 C2); intro HA; rewrite HA; auto.
   intro. apply IHps; auto.
   intro; apply H1; simpl; auto.
 Qed.
 
-Lemma amend_1_no_self_comm : forall p l ps C, ~In p ps ->
-  no_self_comm _ C -> no_self_comm _ (amend_1 p l ps C).
+Lemma add_sels_no_self_comm : forall p l ps C, ~In p ps ->
+  no_self_comm _ C -> no_self_comm _ (add_sels p l ps C).
 Proof.
 induction ps; intros; simpl; auto.
 simpl in H. apply Decidable.not_or in H.
@@ -253,22 +247,22 @@ induction C; auto; intros.
 + induction e. all: destroy H; split; auto.
 + simpl. induction H as [H1 H2].
   specialize (IHC1 H1). specialize (IHC2 H2). clear H1 H2.
-  split; apply amend_1_no_self_comm; auto.
-  all: apply not_In_fix_list; auto.
+  split; apply add_sels_no_self_comm; auto.
+  all: apply not_In_up_list; auto.
 Qed.
 
-Lemma amend_1_initial : forall p l ps C, initial C -> initial (amend_1 p l ps C).
+Lemma add_sels_initial : forall p l ps C, initial C -> initial (add_sels p l ps C).
 Proof. induction ps; auto. Qed.
 
 Lemma amend_initial : forall ps C, initial C -> initial (amend ps C).
 Proof.
 induction C; auto; intros.
 inversion_clear H.
-split; apply amend_1_initial; auto.
+split; apply add_sels_initial; auto.
 Qed.
 
-Lemma amend_1_no_empty_ann : forall p l ps C,
-  no_empty_ann _ C -> no_empty_ann _ (amend_1 p l ps C).
+Lemma add_sels_no_empty_ann : forall p l ps C,
+  no_empty_ann _ C -> no_empty_ann _ (add_sels p l ps C).
 Proof. induction ps; auto. Qed.
 
 Lemma amend_no_empty_ann : forall ps C,
@@ -276,7 +270,7 @@ Lemma amend_no_empty_ann : forall ps C,
 Proof.
 induction C; auto; intros.
 + inversion_clear H.
-  split; apply amend_1_no_empty_ann; auto.
+  split; apply add_sels_no_empty_ann; auto.
 + destroy H; split; auto.
 Qed.
 
@@ -288,8 +282,8 @@ apply amend_no_self_comm; auto.
 apply amend_no_empty_ann; auto.
 Qed.
 
-Lemma amend_1_within_Xs : forall p l ps C Xs,
-  within_Xs Xs C -> within_Xs Xs (amend_1 p l ps C).
+Lemma add_sels_within_Xs : forall p l ps C Xs,
+  within_Xs Xs C -> within_Xs Xs (add_sels p l ps C).
 Proof. induction ps; auto. Qed.
 
 Lemma amend_within_Xs : forall ps C Xs,
@@ -297,12 +291,12 @@ Lemma amend_within_Xs : forall ps C Xs,
 Proof.
 induction C; auto; intros.
 + inversion_clear H.
-  split; apply amend_1_within_Xs; auto.
+  split; apply add_sels_within_Xs; auto.
 + destroy H. split; auto.
 Qed.
 
-Lemma amend_1_consistent : forall p l ps C,
-  consistent _ (Vars (Defs,C)) C -> consistent _ (Vars (amend_D ps,amend_1 p l ps C)) (amend_1 p l ps C).
+Lemma add_sels_consistent : forall p l ps C,
+  consistent _ (Vars (Defs,C)) C -> consistent _ (Vars (amend_D ps,add_sels p l ps C)) (add_sels p l ps C).
 Proof. induction ps; auto. Qed.
 
 Lemma amend_consistent : forall ps C,
@@ -310,7 +304,7 @@ Lemma amend_consistent : forall ps C,
 Proof.
 induction C; auto; intros.
 + inversion_clear H.
-  split; apply amend_1_consistent; auto.
+  split; apply add_sels_consistent; auto.
 + destroy H. split; auto.
 Qed.
 
@@ -330,110 +324,11 @@ destroy H. split. 2: split. 3: split.
   - apply amend_within_Xs; auto.
 Qed.
 
-(** Projectability of amendment. *)
-
-Lemma amend_1_proj' : forall p l ps C r, ~In r ps ->
-  projectable_B Defs C r -> projectable_B Defs (amend_1 p l ps C) r.
-Proof.
-induction ps; auto.
-intros. simpl in *.
-apply Decidable.not_or in H; inversion_clear H.
-induction (IHps C r) as [B HB]; auto.
-elim (eq_dec p r); intro Hpr. rewrite Hpr in *.
-all: eexists; constructor; eauto.
-Qed.
-
-Lemma amend_1_proj : forall p b ps C1 C2 r, p <> r -> In r ps ->
-  projectable_B Defs C1 r -> projectable_B Defs C2 r ->
-  projectable_B Defs (If p ?? b Then (amend_1 p left ps C1) Else (amend_1 p right ps C2)) r.
-Proof.
-induction ps; intros. inversion H0.
-induction H0 as [H0 | H0]; simpl.
-elim (In_dec (@eq_dec Pid) r ps); intro Hr.
-3: elim (eq_dec a0 r); intro Hr.
-+ rewrite H0.
-  induction (IHps _ _ _ H Hr H1 H2) as [B HB]; clear IHps.
-  revert H; inversion_clear HB; intros. tauto.
-  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
-  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
-        (Branching Sig' p None (Some (a,B2))); auto.
-  all: try constructor; auto.
-  apply (merge_Branching_SNNS Sig').
-+ rewrite H0.
-  apply (amend_1_proj' p left ps) in H1; auto.
-  apply (amend_1_proj' p right ps) in H2; auto.
-  induction H1 as [B1 HB1]. induction H2 as [B2 HB2].
-  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
-  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
-        (Branching Sig' p None (Some (a,B2))); auto.
-  all: try constructor; auto.
-  apply (merge_Branching_SNNS Sig').
-+ rewrite Hr.
-  induction (IHps _ _ _ H H0 H1 H2) as [B HB]; clear IHps.
-  revert H; inversion_clear HB; intros. tauto.
-  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
-  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
-        (Branching Sig' p None (Some (a,B2))); auto.
-  all: try constructor; auto.
-  apply (merge_Branching_SNNS Sig').
-+ induction (IHps _ _ _ H H0 H1 H2) as [B HB]; clear IHps.
-  revert H; inversion_clear HB; intros. tauto.
-  exists B. apply bproj_Cond' with B1 B2; auto.
-  all: constructor; auto.
-Qed.
-
-Lemma amend_1_proj'' : forall p b ps C1 C2 r,
-  projectable_B Defs (If p ?? b Then C1 Else C2) r  ->
-  projectable_B Defs (If p ?? b Then (amend_1 p left ps C1) Else (amend_1 p right ps C2)) r.
-Proof.
-induction ps; auto.
-simpl; intros.
-einduction IHps as [B HB]; eauto.
-inversion HB.
-2: elim (eq_dec a0 r); intro Hr.
-+ rewrite H3 in *. eexists. constructor; constructor; eauto.
-+ rewrite Hr.
-  eexists. econstructor; auto.
-  apply (bproj_Left Sig); eauto. apply (bproj_Right Sig); eauto.
-  constructor.
-+ eexists. econstructor; eauto. all: constructor; eauto.
-Qed.
-
-Lemma amend_proj : forall r ps C, In r ps -> projectable_B Defs (amend ps C) r.
-Proof.
-induction C; intros.
-+ simpl.
-  induction IHC as [B HB]; auto.
-  induction e. all: eq_elim r t0 Hr.
-  2: eq_elim r t2 Hr'. 5: eq_elim r t1 Hr'. 5: induction t2.
-  all: try (eexists; econstructor; eauto; fail).
-  exists (@Branching Sig' t0 (Some (t,B)) None). constructor; auto.
-  exists (@Branching Sig' t0 None (Some (t,B))). constructor; auto.
-+ simpl. specialize (IHC1 H). specialize (IHC2 H).
-  elim (eq_dec t r); intro Htr.
-  2: elim (In_dec (@eq_dec Pid) r (fix_list t t0 ps (amend ps C1) (amend ps C2))); intro Hr.
-  - rewrite Htr.
-    apply (amend_1_proj' r left (fix_list r t0 ps (amend ps C1) (amend ps C2))) in IHC1.
-    apply (amend_1_proj' r right (fix_list r t0 ps (amend ps C1) (amend ps C2))) in IHC2.
-    2,3: apply not_In_fix_list.
-    induction IHC1 as [B1 HB1]. induction IHC2 as [B2 HB2].
-    eexists. constructor; eauto.
-  - apply amend_1_proj; auto.
-  - apply amend_1_proj''. apply not_In_fix_list' with ps; auto.
-+ elim (in_dec (@eq_dec Pid) r (fst (Defs t))).
-  all: eexists. constructor; auto. apply bproj_Call_out; auto.
-+ elim (in_dec (@eq_dec Pid) r l).
-  eexists. constructor; auto.
-  induction IHC as [B HB]; auto.
-  eexists. apply bproj_RT_Call_out; eauto.
-+ simpl. eexists; constructor.
-Qed.
-
 (** Completeness *)
 
-Lemma amend_1_reduce : forall D p l ps C s,
+Lemma add_sels_reduce : forall D p l ps C s,
   exists tl, sel_subtrace nil tl /\
-    (D,amend_1 p l ps C,s) --[tl]-->* (D,C,s).
+    (D,add_sels p l ps C,s) --[tl]-->* (D,C,s).
 Proof.
 induction ps; simpl; intros.
 + exists nil. split. apply sel_subtrace_refl. apply CCT_Refl.
@@ -522,7 +417,7 @@ induction C; intros. induction e.
   - (* Then *)
     rewrite <- H6 in *.
     clear s'0 H7 C' H6 tl H5 s0 H1 C3 H3 C0 H2 b0 H0 p0 H H4.
-    elim (amend_1_reduce (amend_D ps) p left (fix_list p b ps (amend ps C1) (amend ps C2)) (amend ps C1) s').
+    elim (add_sels_reduce (amend_D ps) p left (up_list p b ps (amend ps C1) (amend ps C2)) (amend ps C1) s').
     intros t1 (Ht1,Ht1').
     exists nil, nil; do 2 eexists.
     exists (@RL_Cond Pid Value Var RecVar p); do 2 eexists.
@@ -533,7 +428,7 @@ induction C; intros. induction e.
   - (* Else *)
     rewrite <- H6 in *.
     clear s'0 H7 C' H6 tl H5 s0 H1 C3 H3 C0 H2 b0 H0 p0 H H4.
-    elim (amend_1_reduce (amend_D ps) p right (fix_list p b ps (amend ps C1) (amend ps C2)) (amend ps C2) s').
+    elim (add_sels_reduce (amend_D ps) p right (up_list p b ps (amend ps C1) (amend ps C2)) (amend ps C2) s').
     intros t1 (Ht1,Ht1').
     exists nil, nil; do 2 eexists.
     exists (@RL_Cond Pid Value Var RecVar p); do 2 eexists.
@@ -551,7 +446,7 @@ induction C; intros. induction e.
     * (* Then, amend *)
       simpl.
       set (tl0 := @RL_Cond Pid Value Var RecVar p).
-      elim (amend_1_reduce (amend_D ps) p left (fix_list p b ps (amend ps C1) (amend ps C2)) (amend ps C1) s).
+      elim (add_sels_reduce (amend_D ps) p left (up_list p b ps (amend ps C1) (amend ps C2)) (amend ps C1) s).
       intros t1 (Ht1,Ht1').
       exists (Forget tl0::tl'1).
       exists (Forget tl0::t1++tl1I), C1I, s1I.
@@ -566,7 +461,7 @@ induction C; intros. induction e.
          repeat constructor; auto.
     * (* Else, no amend *)
       set (tl0 := @RL_Cond Pid Value Var RecVar p).
-      elim (amend_1_reduce (amend_D ps) p right (fix_list p b ps (amend ps C1) (amend ps C2)) (amend ps C2) s).
+      elim (add_sels_reduce (amend_D ps) p right (up_list p b ps (amend ps C1) (amend ps C2)) (amend ps C2) s).
       intros t1 (Ht1,Ht1').
       exists (Forget tl0::tl'2).
       exists (Forget tl0::t1++tl2I), C2I, s2I.
@@ -696,12 +591,12 @@ Qed.
 
 (** Soundness *)
 
-Lemma amend_1_reduce_both : forall p ps C1 C2 s tl D C1' C2' s',
-  <<amend_1 p left ps C1,s>> --[tl,D]--> <<C1',s'>> ->
-  <<amend_1 p right ps C2,s>> --[tl,D]--> <<C2',s'>> ->
+Lemma add_sels_reduce_both : forall p ps C1 C2 s tl D C1' C2' s',
+  <<add_sels p left ps C1,s>> --[tl,D]--> <<C1',s'>> ->
+  <<add_sels p right ps C2,s>> --[tl,D]--> <<C2',s'>> ->
   exists C1'' C2'', <<C1,s>> --[tl,D]--> <<C1'',s'>>
     /\ <<C2,s>> --[tl,D]--> <<C2'',s'>>
-    /\ C1' = amend_1 p left ps C1'' /\ C2' = amend_1 p right ps C2''.
+    /\ C1' = add_sels p left ps C1'' /\ C2' = add_sels p right ps C2''.
 Proof.
 induction ps; simpl; intros.
 + exists C1', C2'; auto.
@@ -769,12 +664,11 @@ induction C; intros. induction e.
     * econstructor; eauto. repeat constructor.
     * apply sel_subtrace_swap; auto.
 + rename t0 into p, t1 into b.
-  (* Test from here. *)
   inversion H.
   - (* Then *)
     rewrite <- H5, <- H6 in *.
     clear s'0 H7 C' H6 t H5 s0 H2 C3 H4 C0 H3 b0 H1 p0 H0.
-    elim (amend_1_reduce (amend_D ps) p left (fix_list p b ps (amend ps C1) (amend ps C2)) (amend ps C1) s').
+    elim (add_sels_reduce (amend_D ps) p left (up_list p b ps (amend ps C1) (amend ps C2)) (amend ps C1) s').
     intros t1 (Ht1,Ht1').
     exists t1, (Forget (RL_Cond p)::nil), C1, s'. repeat split; auto.
     * econstructor. 2: apply CCT_Refl. repeat constructor; eauto.
@@ -782,7 +676,7 @@ induction C; intros. induction e.
   - (* Else *)
     rewrite <- H5, <- H6 in *.
     clear s'0 H7 C' H6 t H5 s0 H2 C3 H4 C0 H3 b0 H1 p0 H0.
-    elim (amend_1_reduce (amend_D ps) p right (fix_list p b ps (amend ps C1) (amend ps C2)) (amend ps C2) s').
+    elim (add_sels_reduce (amend_D ps) p right (up_list p b ps (amend ps C1) (amend ps C2)) (amend ps C2) s').
     intros t1 (Ht1,Ht1').
     exists t1, (Forget (RL_Cond p)::nil), C2, s'. repeat split; auto.
     * econstructor. 2: apply CCT_Refl. repeat constructor; eauto.
@@ -791,12 +685,12 @@ induction C; intros. induction e.
     rewrite <- H6 in *.
     clear s'0 H7 C' H6 t0 H5 s0 H3 C3 H4 C0 H2 b0 H1 p0 H0.
     generalize (CCC_To_disjoint_beval _ _ _ _ _ _ _ b _ H8 H9); intro Hb.
-    elim (amend_1_reduce_both _ _ _ _ _ _ _ _ _ _ H9 H10).
+    elim (add_sels_reduce_both _ _ _ _ _ _ _ _ _ _ H9 H10).
     intros C'1 (C'2,(HC1,(HC2,(HC'1,HC'2)))).
     rewrite HC'1, HC'2 in *; clear C1' C2' HC'1 HC'2.
     case_eq (eval_on_state BEv b s p); intro Hb'.
     * IHElim' IHC1 (Choreography_WF_Then _ _ _ _ _ HC) HC1 tl' tl'' C'' s'' Htl' Htl'' Hsub.
-      elim (amend_1_reduce (amend_D ps) p left (fix_list p b ps (amend ps C1) (amend ps C2)) C'1 s').
+      elim (add_sels_reduce (amend_D ps) p left (up_list p b ps (amend ps C1) (amend ps C2)) C'1 s').
       intros t1 (Ht1,Ht1').
       exists (Forget (RL_Cond p)::t1++tl'), (Forget (RL_Cond p)::tl''), C'', s''.
       repeat split.
@@ -809,7 +703,7 @@ induction C; intros. induction e.
       apply sel_subtrace_app_both; auto.
       simpl. apply Permutation_cons; auto. apply Permutation_app_comm.
     * IHElim' IHC2 (Choreography_WF_Else _ _ _ _ _ HC) HC2 tl' tl'' C'' s'' Htl' Htl'' Hsub.
-      elim (amend_1_reduce (amend_D ps) p right (fix_list p b ps (amend ps C1) (amend ps C2)) C'2 s').
+      elim (add_sels_reduce (amend_D ps) p right (up_list p b ps (amend ps C1) (amend ps C2)) C'2 s').
       intros t1 (Ht1,Ht1').
       exists (Forget (RL_Cond p)::t1++tl'), (Forget (RL_Cond p)::tl''), C'', s''.
       repeat split.
@@ -918,6 +812,485 @@ induction n; intros.
   - eapply CCC_ToStar_Program_WF. 2: eauto. auto.
 Qed.
 
+(** Miscellaneous. *)
+Lemma amend_eq_End : forall ps C, amend ps C = CC.End -> C = CC.End.
+Proof. induction C; simpl; auto; discriminate. Qed.
+
 End Amend.
 
+Section Projectability.
+
+(** Projectability of amendment. *)
+
+Lemma add_sels_proj' : forall Defs a p l ps C r, ~In r ps ->
+  projectable_B Defs C r -> projectable_B Defs (add_sels a p l ps C) r.
+Proof.
+induction ps; auto.
+intros. simpl in *.
+apply Decidable.not_or in H; inversion_clear H.
+induction (IHps C r) as [B HB]; auto.
+elim (eq_dec p r); intro Hpr. rewrite Hpr in *.
+all: eexists; constructor; eauto.
+Qed.
+
+Lemma add_sels_proj : forall Defs a p b ps C1 C2 r, p <> r -> In r ps ->
+  projectable_B Defs C1 r -> projectable_B Defs C2 r ->
+  projectable_B Defs (If p ?? b Then (add_sels a p left ps C1) Else (add_sels a p right ps C2)) r.
+Proof.
+induction ps; intros. inversion H0.
+induction H0 as [H0 | H0]; simpl.
+elim (In_dec (@eq_dec Pid) r ps); intro Hr.
+3: elim (eq_dec a0 r); intro Hr.
++ rewrite H0.
+  induction (IHps _ _ _ H Hr H1 H2) as [B HB]; clear IHps.
+  revert H; inversion_clear HB; intros. tauto.
+  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
+  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
+        (Branching Sig' p None (Some (a,B2))); auto.
+  all: try constructor; auto.
+  apply (merge_Branching_SNNS Sig').
++ rewrite H0.
+  apply (add_sels_proj' Defs a p left ps) in H1; auto.
+  apply (add_sels_proj' Defs a p right ps) in H2; auto.
+  induction H1 as [B1 HB1]. induction H2 as [B2 HB2].
+  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
+  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
+        (Branching Sig' p None (Some (a,B2))); auto.
+  all: try constructor; auto.
+  apply (merge_Branching_SNNS Sig').
++ rewrite Hr.
+  induction (IHps _ _ _ H H0 H1 H2) as [B HB]; clear IHps.
+  revert H; inversion_clear HB; intros. tauto.
+  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
+  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
+        (Branching Sig' p None (Some (a,B2))); auto.
+  all: try constructor; auto.
+  apply (merge_Branching_SNNS Sig').
++ induction (IHps _ _ _ H H0 H1 H2) as [B HB]; clear IHps.
+  revert H; inversion_clear HB; intros. tauto.
+  exists B. apply bproj_Cond' with B1 B2; auto.
+  all: constructor; auto.
+Qed.
+
+Lemma add_sels_proj'' : forall Defs a p b ps C1 C2 r,
+  projectable_B Defs (If p ?? b Then C1 Else C2) r  ->
+  projectable_B Defs (If p ?? b Then (add_sels a p left ps C1) Else (add_sels a p right ps C2)) r.
+Proof.
+induction ps; auto.
+simpl; intros.
+einduction IHps as [B HB]; eauto.
+inversion HB.
+2: elim (eq_dec a0 r); intro Hr.
++ rewrite H3 in *. eexists. constructor; constructor; eauto.
++ rewrite Hr.
+  eexists. econstructor; auto.
+  apply (bproj_Left Sig); eauto. apply (bproj_Right Sig); eauto.
+  constructor.
++ eexists. econstructor; eauto. all: constructor; eauto.
+Qed.
+
+Lemma bproj_stable : forall (D D':DefSet Sig) p C B,
+  (forall X, fst (D X) = fst (D' X)) ->
+  [[D,C | p]] == B -> [[D',C | p]] == B.
+Proof.
+intros. induction H0; auto.
+all: try constructor; auto.
+2,3: rewrite <- H; auto.
+apply bproj_Cond' with B1 B2; auto.
+Qed.
+
+Lemma projectable_B_stable : forall (D D':DefSet Sig) p C,
+  (forall X, fst (D X) = fst (D' X)) ->
+  projectable_B D p C -> projectable_B D' p C.
+Proof.
+intros. induction H0 as [B HB].
+exists B. apply bproj_stable with D; auto.
+Qed.
+
+Lemma up_list_stable : forall Defs Defs' p b ps C1 C2,
+  (forall X, fst (Defs X) = fst (Defs' X)) ->
+  up_list Defs p b ps C1 C2 = up_list Defs' p b ps C1 C2.
+Proof.
+intros. induction ps; simpl; auto.
+elim (a =? p); auto.
+do 2 elim projectable_B_dec; auto.
+3: rewrite IHps; auto.
+1,2: intros; exfalso.
+all: generalize projectable_B_stable; eauto.
+Qed.
+
+Lemma amend_projectable_B : forall Defs a r ps C,
+  In r ps -> projectable_B (amend_D Defs a ps) (amend Defs a ps C) r.
+Proof.
+induction C; intros.
++ simpl.
+  induction IHC as [B HB]; auto.
+  induction e. all: eq_elim r t0 Hr.
+  2: eq_elim r t2 Hr'. 5: eq_elim r t1 Hr'. 5: induction t2.
+  all: try (eexists; econstructor; eauto; fail).
+  exists (@Branching Sig' t0 (Some (t,B)) None). constructor; auto.
+  exists (@Branching Sig' t0 None (Some (t,B))). constructor; auto.
++ simpl. specialize (IHC1 H). specialize (IHC2 H).
+  elim (eq_dec t r); intro Htr.
+  2: elim (In_dec (@eq_dec Pid) r (up_list Defs t t0 ps (amend Defs a ps C1) (amend Defs a ps C2))); intro Hr.
+  - rewrite Htr.
+    apply (add_sels_proj' (amend_D Defs a ps) a r left (up_list Defs r t0 ps (amend Defs a ps C1) (amend Defs a ps C2))) in IHC1.
+    apply (add_sels_proj' (amend_D Defs a ps) a r right (up_list Defs r t0 ps (amend Defs a ps C1) (amend Defs a ps C2))) in IHC2.
+    2,3: apply not_In_up_list.
+    induction IHC1 as [B1 HB1]. induction IHC2 as [B2 HB2].
+    eexists. constructor; eauto.
+  - apply add_sels_proj; auto.
+  - apply add_sels_proj''. apply not_In_up_list' with ps; auto.
+    intro; apply Hr. erewrite up_list_stable; eauto.
++ elim (in_dec (@eq_dec Pid) r (fst (Defs t))).
+  all: eexists. constructor; auto. apply bproj_Call_out; auto.
++ elim (in_dec (@eq_dec Pid) r l).
+  eexists. constructor; auto.
+  induction IHC as [B HB]; auto.
+  eexists. apply bproj_RT_Call_out; eauto.
++ simpl. eexists; constructor.
+Qed.
+
+(*
+Lemma add_sels_proj' : forall p l ps C r, ~In r ps ->
+  projectable_B Defs C r -> projectable_B Defs (add_sels p l ps C) r.
+Proof.
+induction ps; auto.
+intros. simpl in *.
+apply Decidable.not_or in H; inversion_clear H.
+induction (IHps C r) as [B HB]; auto.
+elim (eq_dec p r); intro Hpr. rewrite Hpr in *.
+all: eexists; constructor; eauto.
+Qed.
+
+Lemma add_sels_proj : forall p b ps C1 C2 r, p <> r -> In r ps ->
+  projectable_B Defs C1 r -> projectable_B Defs C2 r ->
+  projectable_B Defs (If p ?? b Then (add_sels p left ps C1) Else (add_sels p right ps C2)) r.
+Proof.
+induction ps; intros. inversion H0.
+induction H0 as [H0 | H0]; simpl.
+elim (In_dec (@eq_dec Pid) r ps); intro Hr.
+3: elim (eq_dec a0 r); intro Hr.
++ rewrite H0.
+  induction (IHps _ _ _ H Hr H1 H2) as [B HB]; clear IHps.
+  revert H; inversion_clear HB; intros. tauto.
+  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
+  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
+        (Branching Sig' p None (Some (a,B2))); auto.
+  all: try constructor; auto.
+  apply (merge_Branching_SNNS Sig').
++ rewrite H0.
+  apply (add_sels_proj' p left ps) in H1; auto.
+  apply (add_sels_proj' p right ps) in H2; auto.
+  induction H1 as [B1 HB1]. induction H2 as [B2 HB2].
+  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
+  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
+        (Branching Sig' p None (Some (a,B2))); auto.
+  all: try constructor; auto.
+  apply (merge_Branching_SNNS Sig').
++ rewrite Hr.
+  induction (IHps _ _ _ H H0 H1 H2) as [B HB]; clear IHps.
+  revert H; inversion_clear HB; intros. tauto.
+  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
+  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
+        (Branching Sig' p None (Some (a,B2))); auto.
+  all: try constructor; auto.
+  apply (merge_Branching_SNNS Sig').
++ induction (IHps _ _ _ H H0 H1 H2) as [B HB]; clear IHps.
+  revert H; inversion_clear HB; intros. tauto.
+  exists B. apply bproj_Cond' with B1 B2; auto.
+  all: constructor; auto.
+Qed.
+
+Lemma add_sels_proj'' : forall p b ps C1 C2 r,
+  projectable_B Defs (If p ?? b Then C1 Else C2) r  ->
+  projectable_B Defs (If p ?? b Then (add_sels p left ps C1) Else (add_sels p right ps C2)) r.
+Proof.
+induction ps; auto.
+simpl; intros.
+einduction IHps as [B HB]; eauto.
+inversion HB.
+2: elim (eq_dec a0 r); intro Hr.
++ rewrite H3 in *. eexists. constructor; constructor; eauto.
++ rewrite Hr.
+  eexists. econstructor; auto.
+  apply (bproj_Left Sig); eauto. apply (bproj_Right Sig); eauto.
+  constructor.
++ eexists. econstructor; eauto. all: constructor; eauto.
+Qed.
+
+Lemma amend_projectable_B : forall r ps C, In r ps -> projectable_B Defs (amend ps C) r.
+Proof.
+induction C; intros.
++ simpl.
+  induction IHC as [B HB]; auto.
+  induction e. all: eq_elim r t0 Hr.
+  2: eq_elim r t2 Hr'. 5: eq_elim r t1 Hr'. 5: induction t2.
+  all: try (eexists; econstructor; eauto; fail).
+  exists (@Branching Sig' t0 (Some (t,B)) None). constructor; auto.
+  exists (@Branching Sig' t0 None (Some (t,B))). constructor; auto.
++ simpl. specialize (IHC1 H). specialize (IHC2 H).
+  elim (eq_dec t r); intro Htr.
+  2: elim (In_dec (@eq_dec Pid) r (up_list t t0 ps (amend ps C1) (amend ps C2))); intro Hr.
+  - rewrite Htr.
+    apply (add_sels_proj' r left (up_list r t0 ps (amend ps C1) (amend ps C2))) in IHC1.
+    apply (add_sels_proj' r right (up_list r t0 ps (amend ps C1) (amend ps C2))) in IHC2.
+    2,3: apply not_In_up_list.
+    induction IHC1 as [B1 HB1]. induction IHC2 as [B2 HB2].
+    eexists. constructor; eauto.
+  - apply add_sels_proj; auto.
+  - apply add_sels_proj''. apply not_In_up_list' with ps; auto.
++ elim (in_dec (@eq_dec Pid) r (fst (Defs t))).
+  all: eexists. constructor; auto. apply bproj_Call_out; auto.
++ elim (in_dec (@eq_dec Pid) r l).
+  eexists. constructor; auto.
+  induction IHC as [B HB]; auto.
+  eexists. apply bproj_RT_Call_out; eauto.
++ simpl. eexists; constructor.
+Qed.
+*)
+
+Lemma amend_projectable_C : forall Defs a ps C, projectable_C (amend_D Defs a ps) (amend Defs a ps C) ps.
+Proof.
+intros. red. rewrite Forall_forall.
+intros. apply amend_projectable_B; auto.
+Qed.
+
+End Projectability.
+
+Local Ltac sup := rewrite set_union_iff; auto.
+
+Lemma add_sels_CCC_pn_C : forall ps a p l C f,
+  CCC_pn C f [C] CCC_pn (add_sels a p l ps C) f.
+Proof. red; intros. induction ps; simpl; auto. sup. Qed.
+
+Lemma add_sels_CCC_pn_ps : forall ps a p l C f,
+  ps [C] CCC_pn (add_sels a p l ps C) f.
+Proof.
+red; intros.
+induction ps, H.
+all: simpl; sup. rewrite H; simpl; auto.
+Qed.
+
+Lemma add_sels_CCC_pn : forall ps a p l C f,
+  CCC_pn (add_sels a p l ps C) f [C] (p :: CCC_pn C f [U] ps).
+Proof.
+intros; induction ps; simpl; auto.
+red; simpl; auto.
+red; red in IHps; intros.
+simpl; rewrite set_add_iff.
+rewrite set_union_iff in H.
+induction H as [ [H | [H | H] ] | H]; auto.
+inversion H. elim (IHps z); auto.
+Qed.
+
+Lemma amend_CCC_pn_C : forall ps a f Defs C,
+  CCC_pn C f [C] CCC_pn (amend Defs a ps C) f.
+Proof.
+red; intros. induction C; simpl; auto.
+all: sup.
++ induction e; simpl in H; rewrite set_union_iff in H; tauto.
++ simpl in H. repeat rewrite set_union_iff in H.
+  induction H as [ [H | H] | H]; sup.
+  1: left; right. 2: right.
+  all: apply add_sels_CCC_pn_C; auto.
++ simpl in H. rewrite set_union_iff in H; tauto.
+Qed.
+
+Lemma up_list_incl : forall Defs p b ps C1 C2, up_list Defs p b ps C1 C2 [C] ps.
+Proof.
+red; intros. induction ps; simpl; auto.
+revert H; simpl. elim eqb; auto.
+elim projectable_B_dec; auto.
+simpl; intros. inversion_clear H; auto.
+Qed.
+
+Lemma up_list_incl_C : forall Defs p b ps C1 C2,
+  up_list Defs p b ps C1 C2 [C] (CCC_pn C1 (Names Defs) [U] CCC_pn C2 (Names Defs)).
+Proof.
+red; intros. induction ps; simpl; auto. inversion H.
+generalize H; simpl.
+case_eq (a =? p); intro; auto.
+elim projectable_B_dec; intros; auto.
+elim (In_dec (@eq_dec Pid) z (up_list Defs p b ps C1 C2)); auto.
+intro. inversion_clear H1; auto.
+rewrite H2 in *; clear a H2.
+elim (In_dec (@eq_dec Pid) z (CCC_pn C1 (Names Defs) [U] CCC_pn C2 (Names Defs))); auto.
+intro. elim b0.
+exists (End _). apply bproj_not_In; auto.
+simpl. repeat sup.
+intro; apply b2. repeat sup. 
+induction H1 as [ [H1 | H1] | H1]; auto.
+rewrite eqb_neq in H0. simpl in H1.
+inversion_clear H1; exfalso; auto.
+Qed.
+
+Lemma amend_CCC_pn_incl : forall ps a Defs C,
+  CCC_pn (amend Defs a ps C) (Names Defs) [C] CCC_pn C (Names Defs).
+Proof.
+red; intros. induction C. induction e.
+all: simpl; auto.
+all: simpl in H; repeat rewrite set_union_iff in H.
+all: inversion_clear H; repeat sup.
+inversion_clear H0; auto.
+2: rename H0 into H.
+all: apply add_sels_CCC_pn in H.
+all: inversion_clear H. 1,3: rewrite H0; simpl; auto.
+all: rewrite set_union_iff in H0; inversion_clear H0; auto.
+all: apply up_list_incl_C in H; rewrite set_union_iff in H; tauto.
+Qed.
+
+Variable ps : list Pid.
+Variable a : Ann.
+Variable P : CC.Program Sig.
+
+Definition amend_P :=
+  (amend_D (Procedures _ P) a ps, amend (Procedures _ P) a ps (Main P)).
+
+Lemma amend_P_Vars : Vars P = Vars amend_P.
+Proof. auto. Qed.
+
 End Amendment.
+
+Arguments amend [Sig].
+Arguments amend_D [Sig].
+Arguments amend_P [Sig].
+
+Require Export Implementation.
+
+Section TuringRevisited.
+
+Theorem amended_encoding_WF : forall n (f:PRFunction n),
+  CCP_WF (amend_P (all_pids (Pi f)) eps (Encoding' f)).
+Proof.
+intros.
+induction (Encoding'_WF f) as [Hann [Xs HWF] ].
+split.
++ red; simpl; intros. rewrite <- amend_P_Vars.
+  clear Xs HWF.
+  red; intros. apply Hann.
+  induction (Encoding' f) as (D,C).
+  unfold Procs, Procedures, amend_P in H. simpl in H.
+  generalize amend_CCC_pn_incl; intro.
+  red in H0. eauto.
++ exists Xs. apply amend_Program_WF; auto.
+Qed.
+
+Theorem amended_encoding_sound : forall n (f:PRFunction n),
+  implements (amend_P (all_pids (Pi f)) eps (Encoding' f)) f (vec_1_to_n n) 0.
+Proof.
+red; intros.
+generalize (Encoding'_WF f); intro HWF.
+induction HWF as [Hann HWF]. induction HWF as [Xs HWF].
+induction (encoding_sound n f xs s H) as [Hconv Hdiv].
+induction (Encoding' f) as (Defs,C).
+split; intros.
+1: induction (Hconv y) as [Hto Hfrom]; clear Hconv Hdiv.
+2: induction Hdiv as [Hto Hfrom]; clear Hconv.
+all: split; intros.
++ (* function converges *)
+  specialize (Hto H0); clear Hfrom.
+  induction Hto as [s' [ts [P' [Hred [Hs' HP'] ] ] ] ].
+  induction P' as (Defs',C').
+  generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ Hred) as HDefs; intros.
+  rewrite <- HDefs in *; clear Defs' HDefs. simpl in *.
+  set (ps := all_pids (Pi f)).
+  rewrite HP' in *; clear C' HP'.
+  apply amend_complete_many with (a:=eps) (ps:=ps) (Xs:=Xs) in Hred; auto.
+  induction Hred as (tl',(tl'',(C'',(s'',(Hsub,(Htl',Htl'')))))).
+  generalize (CCP_ToStar_End _ _ _ _ _ _ Htl'); intro H'.
+  induction H' as [H1 H2]; auto. rewrite H1 in *; clear H1 tl'.
+  inversion Htl'. rewrite <- H3 in *; clear s'0 H6 C'' H3 s0 H4 P H1 H5.
+  exists s'', tl'', (amend_P ps eps (Defs,End)). repeat split; auto.
+  rewrite <- H2; auto.
++ (* choreography terminates *)
+  apply Hfrom; clear Hto Hfrom.
+  induction H0 as (s',(ts,(P',(Hts,(Hs',HP'))))).
+  induction P' as (Defs',C'). simpl in *; rewrite HP' in *; clear C' HP'.
+  rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ Hts) in Hts; clear Defs'.
+  apply amend_sound_many with (Xs:=Xs) in Hts; auto.
+  induction Hts as (tl',(tl'',(C'',(s'',(Htl',(Htl'',Hsub)))))).
+  generalize (CCP_ToStar_End _ _ _ _ _ _ Htl'); intro H'.
+  induction H' as [H1 H2]; auto. rewrite H1 in *; clear H1 tl'.
+  inversion Htl'. symmetry in H1. rewrite (amend_eq_End _ _ _ _ _ H1) in *.
+  clear s'0 H5 C'' H1 s0 H3 P H0 H4.
+  exists s'', tl'', (Defs,End). repeat split; auto.
+  rewrite <- H2; auto.
++ (* function diverges *)
+  specialize (Hto H0); clear H0 Hfrom.
+  induction P' as (Defs',C').
+  generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H1) as HDefs; intros.
+  rewrite <- HDefs in *; clear Defs' HDefs. simpl in *.
+  apply amend_sound_many with (Xs:=Xs) in H1; auto.
+  induction H1 as (tl',(tl'',(C'',(s'',(Htl',(Htl'',Hsub)))))).
+  simpl in Htl''. specialize (Hto _ _ _ Htl'').
+  intro. apply Hto; simpl.
+  rewrite H0 in *; clear C' H0. simpl in *.
+  generalize (CCP_ToStar_End _ _ _ _ _ _ Htl'); intro H'.
+  induction H' as [H1 H2]; auto. rewrite H1 in *; clear H1 tl'.
+  inversion Htl'. symmetry in H1. apply (amend_eq_End _ _ _ _ _ H1).
++ (* choreography diverges *)
+  apply Hfrom; clear Hto Hfrom; intros.
+  induction P' as (Defs',C').
+  generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H1) as HDefs; intros.
+  rewrite <- HDefs in *; clear Defs' HDefs. simpl in *.
+  set (ps := all_pids (Pi f)).
+  apply amend_complete_many with (a:=eps) (ps:=ps) (Xs:=Xs) in H1; auto.
+  induction H1 as (tl',(tl'',(C'',(s'',(Hsub,(Htl',Htl'')))))).
+  intro HC'. rewrite HC' in *; clear C' HC'.
+  generalize (CCP_ToStar_End _ _ _ _ _ _ Htl'); intro H'.
+  induction H' as [H1 H2]; auto. rewrite H1 in *; clear H1 tl'.
+  inversion Htl'. rewrite <- H3 in *; clear s'0 H6 C'' H3 s0 H4 P H1 H5.
+  apply (H0 _ _ _ Htl''); auto.
+Qed.
+
+Lemma vec_1_to_n_vmax : forall n, vmax (vec_1_to_n n) = n.
+Proof.
+intro. unfold vec_1_to_n.
+destruct n; auto.
+rewrite vec_k_to_n_vmax.
+apply Nat.add_sub.
+auto with arith.
+Qed.
+
+Theorem amended_encoding_projectable : forall n (f:PRFunction n),
+  Projectable _ (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
+Proof.
+intros.
+induction (Encoding'_WF f) as [Hann [Xs HWF] ].
+exists Xs, (all_pids (n+Pi f)); split. repeat split.
++ apply amend_projectable_C.
++ red. rewrite List.Forall_forall; intros.
+  unfold Procedures, amend_P.
+  set (P := Encoding' f). assert (P = Encoding' f); auto.
+  clearbody P. induction P as (D,C). simpl.
+  red; rewrite List.Forall_forall; intros.
+  apply amend_projectable_B.
+  unfold Encoding', Encoding in H0.
+  change D with (fst (D,C)) in H1. rewrite H0 in H1. simpl in H1.
+  rewrite vec_1_to_n_vmax in H1; auto.
++ unfold amend_P; simpl. tauto.
++ set (P := Encoding' f). assert (P = Encoding' f); auto.
+  clearbody P. induction P as (D,C). simpl.
+  unfold Encoding', Encoding in H.
+  intros. change D with (fst (D,C)) in H1.
+  rewrite H in H1. simpl in H1.
+  rewrite vec_1_to_n_vmax in H1; auto.
++ set (P := Encoding' f). assert (P = Encoding' f); auto.
+  clearbody P. induction P as (D,C). simpl; intros.
+  specialize (Hann X p). rewrite <- H in Hann.
+  unfold Encoding', Encoding in H.
+  intros. apply CCC_pn_mon with (Y:=Names D) in H1.
+  2: simpl; tauto.
+  apply amend_CCC_pn_incl in H1.
+  apply Hann in H1.
+  change D with (fst (D,C)) in H1.
+  rewrite H in H1. simpl in H1.
+  rewrite vec_1_to_n_vmax in H1; auto.
++ apply amend_Program_WF; auto.
+Qed.
+
+End TuringRevisited.
+
+
+
