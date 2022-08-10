@@ -1,13 +1,14 @@
 Require Export SP.
 
+(** ** Branching order *)
+
 Section BranchingOrder.
 
 Local Ltac rew_inv H H' := rewrite <- H in H'; inversion H'.
 
 Variable Sig : Signature.
 
-(** ** Branching order
-  The branching order is defined as: B has more branches than B' if B' can be
+(** The branching order is defined as: B has more branches than B' if B' can be
   obtained from B by removing some branches in branching terms. *)
 
 Inductive more_branches : Behaviour Sig -> Behaviour Sig -> Prop :=

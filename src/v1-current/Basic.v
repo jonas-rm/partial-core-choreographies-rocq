@@ -998,6 +998,23 @@ elim (In_elim H); intros.
 + elim (IHn _ _ H0); intros; split; eauto with arith.
 Qed.
 
+Lemma vmax_vec_k_to_n : forall n k, 0 < n -> vmax (vec_k_to_n n k) = n + k - 1.
+Proof.
+induction n; intros; inversion H.
++ simpl. rewrite Nat.sub_0_r, max_l; auto with arith.
++ simpl. rewrite IHn; auto.
+  rewrite <- Nat.add_sub_assoc, max_r; simpl; try rewrite Nat.sub_0_r; auto with arith.
+Qed.
+
+Lemma vmax_vec_1_to_n : forall n, vmax (vec_1_to_n n) = n.
+Proof.
+intro. unfold vec_1_to_n.
+destruct n; auto.
+rewrite vmax_vec_k_to_n.
+apply Nat.add_sub.
+auto with arith.
+Qed.
+
 (** Vector of vectors with values [[m; ...; m+n-1] [m+n; ...; m+2n-1] ... [m+(k-1)n; ...; m+kn-1]]. *)
 
 Fixpoint vec_m_with_k m k n :=

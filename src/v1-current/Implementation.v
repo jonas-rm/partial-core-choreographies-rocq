@@ -170,7 +170,6 @@ Qed.
 Eval compute in (Pi PR_sub).
 Eval compute in (Gamma PR_sub).
 *)
-
 (** Useful macros for writing choreographies. *)
 
 Definition Pack0 (ps:list Pid) (C:Choreography IS) :=
@@ -223,6 +222,25 @@ Fixpoint skip_labels (n:nat) {k} {m} (fs:t (PRFunction m) k) : t Pid k :=
   | [] => []
   | (f :: fs') => (n :: skip_labels (n + Pi f) fs')
   end.
+
+(** Some auxiliary results about these functions. *)
+
+Lemma all_pids_In : forall m n, m <= n -> List.In m (all_pids n).
+Proof.
+induction n; simpl; auto with arith.
+intro. inversion_clear H; auto.
+Qed.
+
+Lemma In_all_pids : forall m n, List.In m (all_pids n) -> m <= n.
+Proof.
+induction n; simpl; intros; inversion_clear H; auto; inversion H0; auto.
+Qed.
+
+Lemma all_pids_incl : forall (m n:Pid), m <= n -> all_pids m [C] all_pids n.
+Proof.
+red; red; intros.
+apply all_pids_In. transitivity m; auto. apply In_all_pids; auto.
+Qed.
 
 (** This function takes care of the first part of the definition of composition.
     Relationship to the arguments in the paper:
@@ -345,12 +363,12 @@ Eval compute in (Main (Encoding' PR_add)).
 Eval compute in (map snd (map ((Procedures _) (Encoding' PR_add)) [0;1;2;3;4;5;6])).
 Eval compute in (map snd (map ((Procedures _) (Encoding' (Composition Successor [Projection aux23]))) [0;1;2])).
 *)
-
 End Definitions.
+
+(** Again - since the definitions are interactive, we prove that they behave as expected. *)
 
 Section Soundness.
 
-(** Again - since the definitions are interactive, we prove that they behave as expected. *)
 Lemma Zero_Procs : forall d Hd ps q n X,
   Encoding_rec Zero d Hd ps q n X X = Send (hd ps) zero q @ eps;; @Call IS (S X).
 Proof.
@@ -591,8 +609,9 @@ intros n f. case f; intros.
        rewrite <- plus_0_r at 1. apply plus_lt_compat_l, Gamma_neq_zero.
 Qed.
 
-(** We prove some auxiliary results about how these functions reduce.
-*)
+End Soundness.
+
+(** Some auxiliary results about how these functions reduce. *)
 
 Section LargeStepSemantics.
 
@@ -772,6 +791,7 @@ Definition implements (P:Program IS) {n} (f:PRFunction n) (ps:t Pid n) (q:Pid) :
   (diverges f xs <-> forall s' ts P', (P,s) --[ts]-->* (P',s') -> Main P' <> End).
 
 (** For convenience. *)
+
 Lemma implements_None : forall P {n} f ps q, implements P f ps q -> 
   forall (xs:t nat n) s, (forall Hi, s (ps[@Hi]) xx = xs[@Hi]) ->
   diverges f xs -> forall s' ts P', (P,s) --[ts]-->* (P',s') -> Main P' <> End.
@@ -1858,14 +1878,6 @@ elim (Encoding_rec_End f _ Hd ps q i 0 (Procedures IS (Encoding f ps q))) with n
 + unfold Encoding in H2. rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H2) in H2; auto.
 Qed.
 
-Lemma vec_k_to_n_vmax : forall n k, 0 < n -> vmax (vec_k_to_n n k) = n + k - 1.
-Proof.
-induction n; intros; inversion H.
-+ simpl. rewrite Nat.sub_0_r, max_l; auto with arith.
-+ simpl. rewrite IHn; auto.
-  rewrite <- Nat.add_sub_assoc, max_r; simpl; try rewrite Nat.sub_0_r; auto with arith.
-Qed.
-
 Theorem encoding_sound : forall n (f:PRFunction n),
   implements (Encoding' f) f (vec_1_to_n n) 0.
 Proof.
@@ -1881,13 +1893,11 @@ split; intros.
   destroy H0. exists (x1,x), x0; repeat split; auto.
 Qed.
 
-End Soundness.
-
-Section WellFormedness.
-
 (** ** Well formedness
   We now show that implementation choreographies are well-formed. This is strictly speaking not necessary,
   but it is relevant. *)
+
+Section WellFormedness.
 
 (** We need to use the list of recursion variables up to a given bound. *)
 
@@ -2125,23 +2135,6 @@ do 2 intro; case f; intros; simpl.
     apply RecVarList_incl.
     rewrite <- plus_assoc. apply plus_le_compat_l.
     rewrite plus_comm; auto with arith.
-Qed.
-
-Lemma all_pids_In : forall m n, m <= n -> List.In m (all_pids n).
-Proof.
-induction n; simpl; auto with arith.
-intro. inversion_clear H; auto.
-Qed.
-
-Lemma In_all_pids : forall m n, List.In m (all_pids n) -> m <= n.
-Proof.
-induction n; simpl; intros; inversion_clear H; auto; inversion H0; auto.
-Qed.
-
-Lemma all_pids_incl : forall (m n:Pid), m <= n -> all_pids m [C] all_pids n.
-Proof.
-red; red; intros.
-apply all_pids_In. transitivity m; auto. apply In_all_pids; auto.
 Qed.
 
 Lemma CCC_pn_all_pids_incl : forall (C:Choreography IS) m n, m <= n ->

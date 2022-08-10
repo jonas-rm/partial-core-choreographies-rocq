@@ -74,7 +74,7 @@ Inductive bproj : DefSet Sig -> Choreography Sig -> Pid -> Behaviour Sig' -> Pro
 
 Notation "[[ D , C | p ]] == B" := (bproj D C p B) (at level 20).
 
-(** Again, this relation is functional... *)
+(** Like [merge], this relation is functional... *)
 
 Lemma bproj_unique : forall D C p B B',
   [[D,C | p ]] == B -> [[D,C | p]] == B' -> B = B'.
@@ -270,6 +270,24 @@ Lemma bproj_disjoint : forall D e a C p, ~In p (eta_pn _ e) ->
 Proof.
 induction e; intros.
 all: simpl in H; inversion H0; tauto.
+Qed.
+
+Lemma bproj_stable : forall D D' p C B,
+  (forall X, fst (D X) = fst (D' X)) ->
+  [[D,C | p]] == B -> [[D',C | p]] == B.
+Proof.
+intros. induction H0; auto.
+all: try constructor; auto.
+2,3: rewrite <- H; auto.
+apply bproj_Cond' with B1 B2; auto.
+Qed.
+
+Lemma projectable_B_stable : forall D D' p C,
+  (forall X, fst (D X) = fst (D' X)) ->
+  projectable_B D p C -> projectable_B D' p C.
+Proof.
+intros. induction H0 as [B HB].
+exists B. apply bproj_stable with D; auto.
 Qed.
 
 Open Scope SP_scope.
@@ -796,10 +814,11 @@ Qed.
 
 Open Scope CC_scope.
 
+(** ** Properties of projectability *)
+
 Section Projectability.
 
-(** ** Properties of projectability
-  All variants of parameterized projectability are decidable. *)
+(** All variants of parameterized projectability are decidable. *)
 
 Lemma projectable_B_dec : forall D C p,
   { projectable_B D C p } + { ~projectable_B D C p }.
@@ -958,7 +977,8 @@ destroy H; repeat split; auto.
   left. eapply set_remove'_1; eauto.
 Qed.
 
-(** The corresponding lemmas for [RT_Call] do not hold, and indeed projectability
+(** ** Strong projectability
+  The corresponding lemmas for [RT_Call] do not hold, and indeed projectability
   is not preserved by reductions, so we need a stronger notion. *)
 
 Fixpoint str_proj D (C:Choreography Sig) (r:Pid) : Prop :=
@@ -1072,11 +1092,66 @@ elim (In_dec (@eq_dec Pid) p (Vars P X)); intros.
   intro; apply b, H1. auto.
 Qed.
 
+Lemma epp_EmptyNet' : forall Xs ps P HP N, Program_WF Sig Xs P ->
+  N (==) nnil -> N (>>) Net (epp Xs ps P HP) -> Main P = CC.End.
+Proof.
+intros. rename H into HWF, H1 into HN, H0 into HN'.
+induction P as (D,C).
+assert (projectable_C D C ps) as HC.
+1: inversion HP; auto.
+generalize (epp_C_char _ _ _ _ HP HC); intro.
+destruct C; auto. induction e.
+1,2: rename t0 into p. 3: rename t into p.
+1,2,3: specialize (HN p); rewrite HN', H in HN; simpl in HN.
+- rewrite epp_C_Com_p with (HC':=projectable_C_inv_Com _ _ _ _ _ _ _ _ HC) in HN.
+  inversion HN; auto.
+  inversion HP. inversion_clear H1. inversion_clear H3.
+  apply H1; simpl. rewrite set_union_iff; simpl; auto.
+- rewrite epp_C_Sel_p with (HC':=projectable_C_inv_Sel _ _ _ _ _ _ _ HC) in HN.
+  inversion HN; auto.
+  inversion HP. inversion_clear H1. inversion_clear H3.
+  apply H1; simpl. rewrite set_union_iff; simpl; auto.
+- rewrite epp_C_Cond_p with (HC1:=projectable_C_inv_Then _ _ _ _ _ _ HC)
+        (HC2:=projectable_C_inv_Else _ _ _ _ _ _ HC) in HN.
+  inversion HN; auto.
+  inversion HP. inversion_clear H1. inversion_clear H3.
+  apply H1; simpl. repeat rewrite set_union_iff; simpl; auto.
+- generalize (Program_WF_Main_within_Xs _ _ _ HWF); intro.
+  simpl in H0.
+  generalize (Program_WF_Vars _ _ _ HWF t H0); intros.
+  case_eq (Vars (D,CC.Call t) t); intro. tauto.
+  rename t0 into p. intros. clear H1.
+  specialize (HN p). rewrite HN', H, epp_C_Call in HN.
+  3: { unfold Vars in H2. simpl in H2.
+       rewrite H2; simpl; auto. }
+  2: { inversion_clear HP. destroy H3.
+       apply H6 with t; simpl; auto.
+       unfold Vars in H2. simpl in H2.
+       rewrite H2; simpl; auto. }
+  inversion HN; auto.
+- apply Program_WF_Main, Choreography_WF_no_empty_ann in HWF.
+  induction HWF as [H2 H2'].
+  case_eq l; intro. tauto.
+  rename t0 into p. intros.
+  specialize (HN p). rewrite HN', H, epp_C_RT_Call in HN.
+  3: rewrite H0; simpl; auto.
+  inversion HN; auto.
+  apply HP; simpl. rewrite set_union_iff, H0; simpl; auto.
+Qed.
+
+Lemma epp_EmptyNet : forall Xs ps P HP, Program_WF Sig Xs P ->
+  nnil (>>) Net (epp Xs ps P HP) -> Main P = CC.End.
+Proof.
+intros.
+apply epp_EmptyNet' with (N:=nnil) (HP:=HP); auto.
+apply Network_eq_refl.
+Qed.
+
 End Projectability.
 
-Section ProjectionChar.
-
 (** ** Characterization of projection *)
+
+Section ProjectionChar.
 
 Lemma CCC_To_bproj_Com_p : forall D C s C' s' p q v x,
   str_proj D C p -> <<C,s>> --[RL_Com p v q x,D]--> <<C',s'>> ->
@@ -1642,9 +1717,9 @@ Qed.
 
 End ProjectionChar.
 
-Section ProjectionLemmas.
-
 (** Projectability of well-formed programs is preserved by transitions. *)
+
+Section ProjectionLemmas.
 
 Lemma CCC_To_projectable_C_Com : forall D ps C s C' s' p v q x,
   (forall p, In p ps -> str_proj D C p) ->
@@ -1731,7 +1806,7 @@ eapply CCC_To_projectable_C_Call; eauto.
 eapply CCC_To_Xs; eauto.
 Qed.
 
-Lemma CCC_To_projectable : forall P Xs ps,
+Lemma CCP_To_projectable : forall P Xs ps,
   Program_WF _ Xs P -> well_ann _ P -> projectable Xs ps P ->
   (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
@@ -2114,16 +2189,16 @@ clear c3 H8 l H4 t H3 c1 H5. induction c2 as ((D',C''),s'').
 generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H7); intro.
 rewrite <- H3 in *; clear D' H3.
 apply (IHtl s'' C''); auto.
-+ eapply CCC_To_Program_WF; eauto.
-+ eapply CCC_To_projectable; eauto.
++ eapply CCP_To_Program_WF; eauto.
++ eapply CCP_To_projectable; eauto.
 + eapply CCP_To_str_proj; eauto.
 + simpl; intros.
-  generalize CCC_To_pn''; intro.
+  generalize CCP_To_pn; intro.
   specialize (H4 Sig (D,C) s a (D,C'') s''). simpl in H4.
   apply Hnames; auto.
 Qed.
 
-Lemma CCC_ToStar_projectable: forall P Xs ps,
+Lemma CCP_ToStar_projectable: forall P Xs ps,
   Program_WF _ Xs P -> well_ann _ P -> projectable Xs ps P ->
   (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
@@ -2139,16 +2214,16 @@ induction P as (D,C), P' as (D',C'), P'' as (D'',C'').
 generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H6) as HD.
 generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H7) as HD'.
 intros. rewrite <- HD', <- HD in *; clear D' D'' HD HD'.
-apply CCC_To_projectable with (Xs:=Xs) (ps:=ps) in H6; auto.
+apply CCP_To_projectable with (Xs:=Xs) (ps:=ps) in H6; auto.
 eapply IHtl. 7: eauto.
-+ eapply CCC_To_Program_WF; eauto.
++ eapply CCP_To_Program_WF; eauto.
 + red; red. unfold Vars, CC.Procs; simpl; intros.
   eapply H0; auto.
 + auto.
 + simpl. intros.
   apply CCP_To_str_proj with (Xs:=Xs) (ps:=ps) (p:=p) in H5; auto.
 + simpl; intros.
-  generalize CCC_To_pn''; intro.
+  generalize CCP_To_pn; intro.
   specialize (H9 Sig (D,C) s a (D,C'') s''). simpl in H9.
   apply H3; auto.
 + unfold Vars; simpl. auto.

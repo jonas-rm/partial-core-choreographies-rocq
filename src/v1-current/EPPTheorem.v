@@ -105,7 +105,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
       simpl. replace (N r) with (End Sig'). constructor.
       replace N with (Net (D',N)); auto.
       rewrite HN, epp_C_char with (HC:=HC), epp_C_out; auto.
-      elim (CCC_To_projectable _ (D,C) Xs ps)
+      elim (CCP_To_projectable _ (D,C) Xs ps)
         with s (TL_Com p v q) (D,C') s'; intros; auto.
       rewrite epp_C_char with (HC:=H), epp_C_out; auto.
       eauto.
@@ -163,10 +163,10 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
     1,3: constructor.
     1,2: replace N with (Net (D',N)); auto;
       rewrite HN, epp_C_char with (HC:=HC), epp_C_out; auto.
-    1: elim (CCC_To_projectable _ (D,C) Xs ps)
+    1: elim (CCP_To_projectable _ (D,C) Xs ps)
         with s (TL_Sel p q left) (D,C') s'; intros;
        eauto; rewrite epp_C_char with (HC:=H), epp_C_out; auto.
-    1: elim (CCC_To_projectable _ (D,C) Xs ps)
+    1: elim (CCP_To_projectable _ (D,C) Xs ps)
         with s (TL_Sel p q right) (D,C') s'; intros;
        eauto; rewrite epp_C_char with (HC:=H), epp_C_out; auto.
 + rewrite H7 in H0.
@@ -213,7 +213,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
     simpl. replace (N r) with (End Sig'). constructor.
     replace N with (Net (D',N)); auto.
     rewrite HN, epp_C_char with (HC:=HC), epp_C_out; auto.
-    elim (CCC_To_projectable _ (D,C) Xs ps)
+    elim (CCP_To_projectable _ (D,C) Xs ps)
       with s (TL_Tau p) (D,C') s'; intros; auto.
     rewrite epp_C_char with (HC:=H), epp_C_out; auto.
     eauto.
@@ -231,7 +231,7 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
     simpl. replace (N r) with (End Sig'). constructor.
     replace N with (Net (D',N)); auto.
     rewrite HN, epp_C_char with (HC:=HC), epp_C_out; auto.
-    elim (CCC_To_projectable _ (D,C) Xs ps)
+    elim (CCP_To_projectable _ (D,C) Xs ps)
       with s (TL_Tau p) (D,C') s'; intros; auto.
     rewrite epp_C_char with (HC:=H), epp_C_out; auto.
     eauto.
@@ -327,7 +327,7 @@ revert dependent C'. revert dependent C. revert s s'. induction tl.
     apply str_proj_C'.
     eapply CCP_To_str_proj; eauto.
     intros. apply HMain. change C with (Main (D,C)).
-    eapply CCC_To_pn''; eauto.
+    eapply CCP_To_pn; eauto.
     eapply CCC_pn_mon. 2: apply H9. simpl; tauto.
   }
   elim IHtl with (s:=s'') (s':=s') (C:=C'') (C':=C') (HP:=HP''); auto.
@@ -341,9 +341,9 @@ revert dependent C'. revert dependent C. revert s s'. induction tl.
     intro. rewrite H1.
     inversion HP''. simpl in H7; clear H6; destroy H7.
     induction X. repeat rewrite epp_D_char with (HD:=H6); auto.
-  - eapply CCC_To_Program_WF; eauto.
+  - eapply CCP_To_Program_WF; eauto.
   - intros. apply HMain. change C with (Main (D,C)).
-    eapply CCC_To_pn''; eauto.
+    eapply CCP_To_pn; eauto.
   - change C'' with (Main (D,C'')).
     change D with (Procedures _ (D,C'')).
     intros. eapply CCP_To_str_proj; eauto.
@@ -2587,7 +2587,7 @@ revert dependent C. revert s s' N1 N2 H6. induction tl; intros.
   induction x as (D'3,C'').
   rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H8) in H6, H8. clear D'3.
   assert (projectable Sig Xs ps (D',C'')).
-  1: eapply CCC_To_projectable; eauto.
+  1: eapply CCP_To_projectable; eauto.
   generalize (H6 H9); clear H6; intro. simpl in H6.
   generalize H12 as H12'; intro.
   inversion HP. clear H11; inversion_clear H13. simpl in H11; clear H14.
@@ -2612,9 +2612,9 @@ revert dependent C. revert s s' N1 N2 H6. induction tl; intros.
   - simpl; intro. rewrite H12, <- H11.
     induction X. repeat rewrite epp_D_char with (HD:=HD); auto.
   - simpl; intro. induction X; repeat rewrite epp_D_char with (HD:=HD); auto.
-  - eapply CCC_To_Program_WF; eauto.
+  - eapply CCP_To_Program_WF; eauto.
   - eapply CCP_To_str_proj; eauto.
-  - intros. apply H2. eapply CCC_To_pn''; eauto.
+  - intros. apply H2. eapply CCP_To_pn; eauto.
   - intro; rewrite H10. induction X; repeat rewrite epp_D_char with (HD:=HD); auto.
   - apply MBN_trans with N3'; auto.
 Qed.
@@ -2647,12 +2647,12 @@ induction tl; intros; inversion H4.
   apply EPP_Sound in H4; auto. destroy H4.
   rename x into P1, x0 into t'.
   assert (projectable Sig Xs ps P1).
-  1: eapply CCC_To_projectable; eauto.
+  1: eapply CCP_To_projectable; eauto.
   induction P1 as (D1, C1).
   rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H6) in H4, H7, H6. clear D1.
   generalize (H4 H7); clear H4; intro.
   assert (Program_WF _ Xs (D,C1)).
-  1: eapply CCC_To_Program_WF; eauto.
+  1: eapply CCP_To_Program_WF; eauto.
   assert (forall p, In p ps -> str_proj D C1 p).
   1: {
     change D with (Procedures _ (D,C1)).
@@ -2663,7 +2663,7 @@ induction tl; intros; inversion H4.
   assert (forall p, In p (CCC_pn C1 (Vars (D,C1))) -> In p ps).
   1:{
     change C1 with (Main (D,C1)) at 1.
-    intros. apply H2. eapply CCC_To_pn''; eauto.
+    intros. apply H2. eapply CCP_To_pn; eauto.
   }
   apply SPP_ToStar_MBN_epp with (HP:=H7) in H10; auto.
   - destroy H10.

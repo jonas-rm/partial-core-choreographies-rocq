@@ -1365,9 +1365,9 @@ Qed.
 
 End Convergence.
 
-Section Divergence.
-
 (** Lemmas about divergence - currently unused. *)
+
+Section Divergence.
 
 Lemma diverges_Composition_arg : forall {m k} fs g ns H,
   diverges fs[@H] ns -> diverges (@Composition m k g fs) ns.

@@ -489,6 +489,17 @@ elim eqb.
 + apply Leq_state_refl.
 Qed.
 
+Lemma update_idempotent : forall s p x, s[p,x=>s p x] [==] s.
+Proof.
+red; red; intros.
+unfold update, Lupdate. case_eq (p =? p0).
+2: intros; apply eq_state_ext_refl.
+intro. rewrite eqb_eq in H; rewrite <- H; clear p0 H.
+case_eq (x =? x0).
+2: intros; apply eq_state_ext_refl.
+intro. rewrite eqb_eq in H; rewrite <- H; auto.
+Qed.
+
 End GState.
 
 Notation "s '[[' p ',' x '=>' v ']]'" := (update _ _ _ s p x v) (at level 100).
@@ -627,6 +638,14 @@ match t with
 | RL_Cond r      => p <> r
 | RL_Call _ r    => p <> r
 end.
+
+Lemma disjoint_p_rl_eq : forall p t t', forget t = forget t' ->
+  disjoint_p_rl p t -> disjoint_p_rl p t'.
+Proof.
+intros. induction t0, t'; inversion H; auto.
+all: rewrite H2 in *; auto.
+all: rewrite H3, H4 in *; auto.
+Qed.
 
 Fixpoint disjoint_ps_rl (ps:list Pid) (t:RichLabel) : Prop :=
 match ps with

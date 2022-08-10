@@ -1,11 +1,12 @@
 Require Export BranchingOrder.
 
+(** * Merging of two behaviours *)
+
 Section SP_Merge.
 
 Open Scope SP.
 
-(** * Merging of two behaviours
-  Merging is defined inductively as a ternary relation. *)
+(** Merging is defined inductively as a ternary relation. *)
 
 Variable Sig : Signature.
 
@@ -205,7 +206,7 @@ intros. induction H; simpl; auto.
 all: destroy H0; destroy H1; auto.
 Qed.
 
-(** ** Relationship with pruning
+(** ** Relationship with the branching order
   We now look into the relationship between [merge] and [more_branches]. *)
 
 Lemma larger_is_merge : forall B1 B2, B1 [>>] B2 -> B1 [V] B2 == B1.

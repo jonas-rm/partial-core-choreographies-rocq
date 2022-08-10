@@ -10,5 +10,6 @@ coqc Merge.v
 coqc EPP.v
 coqc EPPTheorem.v
 coqc Amendment.v
+coqc Turing.v
 coqdoc -g *.v
 pause
