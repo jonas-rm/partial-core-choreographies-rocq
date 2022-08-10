@@ -52,6 +52,65 @@ all: rewrite H2 in *; auto.
 all: rewrite H3, H4 in *; auto.
 Qed.
 
+Open Scope SP_scope.
+
+Lemma epp_EmptyNet' : forall Xs ps P HP N, Program_WF Sig Xs P ->
+  N (==) nnil -> N (>>) Net (epp Xs ps P HP) -> Main P = CC.End.
+Proof.
+intros. rename H into HWF, H1 into HN, H0 into HN'.
+induction P as (D,C).
+assert (projectable_C D C ps) as HC.
+1: inversion HP; auto.
+generalize (epp_C_char _ _ _ _ _ HP HC); intro.
+destruct C; auto. induction e.
+1,2: rename t0 into p. 3: rename t into p.
+1,2,3: specialize (HN p); rewrite HN', H in HN; simpl in HN.
+- rewrite epp_C_Com_p with (HC':=projectable_C_inv_Com _ _ _ _ _ _ _ _ _ HC) in HN.
+  inversion HN; auto.
+  inversion HP. inversion_clear H1. inversion_clear H3.
+  apply H1; simpl. rewrite set_union_iff; simpl; auto.
+- rewrite epp_C_Sel_p with (HC':=projectable_C_inv_Sel _ _ _ _ _ _ _ _ HC) in HN.
+  inversion HN; auto.
+  inversion HP. inversion_clear H1. inversion_clear H3.
+  apply H1; simpl. rewrite set_union_iff; simpl; auto.
+- rewrite epp_C_Cond_p with (HC1:=projectable_C_inv_Then _ _ _ _ _ _ _ HC)
+        (HC2:=projectable_C_inv_Else _ _ _ _ _ _ _ HC) in HN.
+  inversion HN; auto.
+  inversion HP. inversion_clear H1. inversion_clear H3.
+  apply H1; simpl. repeat rewrite set_union_iff; simpl; auto.
+- generalize (Program_WF_Main_within_Xs _ _ _ HWF); intro.
+  simpl in H0.
+  generalize (Program_WF_Vars _ _ _ HWF t H0); intros.
+  case_eq (Vars (D,CC.Call t) t); intro. tauto.
+  rename t0 into p. intros. clear H1.
+  specialize (HN p). rewrite HN', H, epp_C_Call in HN.
+  3: { unfold Vars in H2. simpl in H2.
+       rewrite H2; simpl; auto. }
+  2: { inversion_clear HP. destroy H3.
+       apply H6 with t; simpl; auto.
+       unfold Vars in H2. simpl in H2.
+       rewrite H2; simpl; auto. }
+  inversion HN; auto.
+- apply Program_WF_Main, Choreography_WF_no_empty_ann in HWF.
+  induction HWF as [H2 H2'].
+  case_eq l; intro. tauto.
+  rename t0 into p. intros.
+  specialize (HN p). rewrite HN', H, epp_C_RT_Call in HN.
+  3: rewrite H0; simpl; auto.
+  inversion HN; auto.
+  apply HP; simpl. rewrite set_union_iff, H0; simpl; auto.
+Qed.
+
+Lemma epp_EmptyNet : forall Xs ps P HP, Program_WF Sig Xs P ->
+  nnil (>>) Net (epp Xs ps P HP) -> Main P = CC.End.
+Proof.
+intros.
+apply epp_EmptyNet' with (N:=nnil) (HP:=HP); auto.
+apply Network_eq_refl.
+Qed.
+
+Close Scope SP_scope.
+
 (** For characterising traces created by amendment. *)
 
 Inductive sel_subtrace : list (TransitionLabel Pid Value) -> list (TransitionLabel Pid Value) -> Prop :=
@@ -951,105 +1010,6 @@ induction C; intros.
 + simpl. eexists; constructor.
 Qed.
 
-(*
-Lemma add_sels_proj' : forall p l ps C r, ~In r ps ->
-  projectable_B Defs C r -> projectable_B Defs (add_sels p l ps C) r.
-Proof.
-induction ps; auto.
-intros. simpl in *.
-apply Decidable.not_or in H; inversion_clear H.
-induction (IHps C r) as [B HB]; auto.
-elim (eq_dec p r); intro Hpr. rewrite Hpr in *.
-all: eexists; constructor; eauto.
-Qed.
-
-Lemma add_sels_proj : forall p b ps C1 C2 r, p <> r -> In r ps ->
-  projectable_B Defs C1 r -> projectable_B Defs C2 r ->
-  projectable_B Defs (If p ?? b Then (add_sels p left ps C1) Else (add_sels p right ps C2)) r.
-Proof.
-induction ps; intros. inversion H0.
-induction H0 as [H0 | H0]; simpl.
-elim (In_dec (@eq_dec Pid) r ps); intro Hr.
-3: elim (eq_dec a0 r); intro Hr.
-+ rewrite H0.
-  induction (IHps _ _ _ H Hr H1 H2) as [B HB]; clear IHps.
-  revert H; inversion_clear HB; intros. tauto.
-  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
-  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
-        (Branching Sig' p None (Some (a,B2))); auto.
-  all: try constructor; auto.
-  apply (merge_Branching_SNNS Sig').
-+ rewrite H0.
-  apply (add_sels_proj' p left ps) in H1; auto.
-  apply (add_sels_proj' p right ps) in H2; auto.
-  induction H1 as [B1 HB1]. induction H2 as [B2 HB2].
-  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
-  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
-        (Branching Sig' p None (Some (a,B2))); auto.
-  all: try constructor; auto.
-  apply (merge_Branching_SNNS Sig').
-+ rewrite Hr.
-  induction (IHps _ _ _ H H0 H1 H2) as [B HB]; clear IHps.
-  revert H; inversion_clear HB; intros. tauto.
-  exists (Branching Sig' p (Some (a,B1)) (Some (a,B2))).
-  apply bproj_Cond' with (Branching Sig' p (Some (a,B1)) None)
-        (Branching Sig' p None (Some (a,B2))); auto.
-  all: try constructor; auto.
-  apply (merge_Branching_SNNS Sig').
-+ induction (IHps _ _ _ H H0 H1 H2) as [B HB]; clear IHps.
-  revert H; inversion_clear HB; intros. tauto.
-  exists B. apply bproj_Cond' with B1 B2; auto.
-  all: constructor; auto.
-Qed.
-
-Lemma add_sels_proj'' : forall p b ps C1 C2 r,
-  projectable_B Defs (If p ?? b Then C1 Else C2) r  ->
-  projectable_B Defs (If p ?? b Then (add_sels p left ps C1) Else (add_sels p right ps C2)) r.
-Proof.
-induction ps; auto.
-simpl; intros.
-einduction IHps as [B HB]; eauto.
-inversion HB.
-2: elim (eq_dec a0 r); intro Hr.
-+ rewrite H3 in *. eexists. constructor; constructor; eauto.
-+ rewrite Hr.
-  eexists. econstructor; auto.
-  apply (bproj_Left Sig); eauto. apply (bproj_Right Sig); eauto.
-  constructor.
-+ eexists. econstructor; eauto. all: constructor; eauto.
-Qed.
-
-Lemma amend_projectable_B : forall r ps C, In r ps -> projectable_B Defs (amend ps C) r.
-Proof.
-induction C; intros.
-+ simpl.
-  induction IHC as [B HB]; auto.
-  induction e. all: eq_elim r t0 Hr.
-  2: eq_elim r t2 Hr'. 5: eq_elim r t1 Hr'. 5: induction t2.
-  all: try (eexists; econstructor; eauto; fail).
-  exists (@Branching Sig' t0 (Some (t,B)) None). constructor; auto.
-  exists (@Branching Sig' t0 None (Some (t,B))). constructor; auto.
-+ simpl. specialize (IHC1 H). specialize (IHC2 H).
-  elim (eq_dec t r); intro Htr.
-  2: elim (In_dec (@eq_dec Pid) r (up_list t t0 ps (amend ps C1) (amend ps C2))); intro Hr.
-  - rewrite Htr.
-    apply (add_sels_proj' r left (up_list r t0 ps (amend ps C1) (amend ps C2))) in IHC1.
-    apply (add_sels_proj' r right (up_list r t0 ps (amend ps C1) (amend ps C2))) in IHC2.
-    2,3: apply not_In_up_list.
-    induction IHC1 as [B1 HB1]. induction IHC2 as [B2 HB2].
-    eexists. constructor; eauto.
-  - apply add_sels_proj; auto.
-  - apply add_sels_proj''. apply not_In_up_list' with ps; auto.
-+ elim (in_dec (@eq_dec Pid) r (fst (Defs t))).
-  all: eexists. constructor; auto. apply bproj_Call_out; auto.
-+ elim (in_dec (@eq_dec Pid) r l).
-  eexists. constructor; auto.
-  induction IHC as [B HB]; auto.
-  eexists. apply bproj_RT_Call_out; eauto.
-+ simpl. eexists; constructor.
-Qed.
-*)
-
 Lemma amend_projectable_C : forall Defs a ps C, projectable_C (amend_D Defs a ps) (amend Defs a ps C) ps.
 Proof.
 intros. red. rewrite Forall_forall.
@@ -1162,7 +1122,7 @@ Require Export Implementation.
 Section TuringRevisited.
 
 Theorem amended_encoding_WF : forall n (f:PRFunction n),
-  CCP_WF (amend_P (all_pids (Pi f)) eps (Encoding' f)).
+  CCP_WF (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
 Proof.
 intros.
 induction (Encoding'_WF f) as [Hann [Xs HWF] ].
@@ -1242,7 +1202,7 @@ all: split; intros.
 Qed.
 
 Theorem amended_encoding_sound : forall n (f:PRFunction n),
-  implements (amend_P (all_pids (Pi f)) eps (Encoding' f)) f (vec_1_to_n n) 0.
+  implements (amend_P (all_pids (n+Pi f)) eps (Encoding' f)) f (vec_1_to_n n) 0.
 Proof.
 intros.
 induction (Encoding'_WF f) as [Hann [Xs HP] ].
@@ -1250,7 +1210,7 @@ apply amend_implements with Xs; auto.
 apply encoding_sound.
 Qed.
 
-Lemma vec_1_to_n_vmax : forall n, vmax (vec_1_to_n n) = n.
+Lemma vmax_vec_1_to_n : forall n, vmax (vec_1_to_n n) = n.
 Proof.
 intro. unfold vec_1_to_n.
 destruct n; auto.
@@ -1274,14 +1234,14 @@ repeat split.
   apply amend_projectable_B.
   unfold Encoding', Encoding in H0.
   change D with (fst (D,C)) in H1. rewrite H0 in H1. simpl in H1.
-  rewrite vec_1_to_n_vmax in H1; auto.
+  rewrite vmax_vec_1_to_n in H1; auto.
 + unfold amend_P; simpl. tauto.
 + set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl.
   unfold Encoding', Encoding in H.
   intros. change D with (fst (D,C)) in H1.
   rewrite H in H1. simpl in H1.
-  rewrite vec_1_to_n_vmax in H1; auto.
+  rewrite vmax_vec_1_to_n in H1; auto.
 + set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl; intros.
   specialize (Hann X p). rewrite <- H in Hann.
@@ -1292,7 +1252,7 @@ repeat split.
   apply Hann in H1.
   change D with (fst (D,C)) in H1.
   rewrite H in H1. simpl in H1.
-  rewrite vec_1_to_n_vmax in H1; auto.
+  rewrite vmax_vec_1_to_n in H1; auto.
 Qed.
 
 Theorem amended_encoding_Projectable : forall n (f:PRFunction n),
@@ -1311,14 +1271,14 @@ exists Xs, (all_pids (n+Pi f)); split. repeat split.
   apply amend_projectable_B.
   unfold Encoding', Encoding in H0.
   change D with (fst (D,C)) in H1. rewrite H0 in H1. simpl in H1.
-  rewrite vec_1_to_n_vmax in H1; auto.
+  rewrite vmax_vec_1_to_n in H1; auto.
 + unfold amend_P; simpl. tauto.
 + set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl.
   unfold Encoding', Encoding in H.
   intros. change D with (fst (D,C)) in H1.
   rewrite H in H1. simpl in H1.
-  rewrite vec_1_to_n_vmax in H1; auto.
+  rewrite vmax_vec_1_to_n in H1; auto.
 + set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl; intros.
   specialize (Hann X p). rewrite <- H in Hann.
@@ -1329,7 +1289,7 @@ exists Xs, (all_pids (n+Pi f)); split. repeat split.
   apply Hann in H1.
   change D with (fst (D,C)) in H1.
   rewrite H in H1. simpl in H1.
-  rewrite vec_1_to_n_vmax in H1; auto.
+  rewrite vmax_vec_1_to_n in H1; auto.
 + apply amend_Program_WF; auto.
 Qed.
 
@@ -1386,56 +1346,73 @@ repeat split.
   induction H0 as [s' [ts [P' [Hts [Hs' HP'] ] ] ] ].
   apply EPP_Sound' in Hts; auto.
   induction Hts as [P'' [ts' [Htl' HN] ] ].
-
-die here.
-
-(* need to prove: if epp(C) = End then C ->* End *)
   exists s', ts', P''; repeat split; auto.
   apply CCC_ToStar_projectable with (s:=s) (tl:=ts') (P':=P'') (s':=s') in HP; auto.
   specialize (HN HP).
-  induction P'' as (D,C); simpl in *.
-  assert (projectable_C D C ps').
-  1: inversion HP; auto.
-  generalize (epp_C_char _ _ _ _ _ HP H0); intro.
-  destruct C; auto. induction e.
-  1,2: rename t0 into p. 3: rename t into p.
-  1,2,3: specialize (HN p); rewrite HP' in HN.
-  1,2,3: rewrite H1 in HN; simpl in HN.
-  - rewrite epp_C_Com_p with (HC':=projectable_C_inv_Com _ _ _ _ _ _ _ _ _ H0) in HN.
-    inversion HN; auto.
-    inversion HP. inversion_clear H3. inversion_clear H5.
-    apply H3; simpl. rewrite set_union_iff; simpl; auto.
-  - rewrite epp_C_Sel_p with (HC':=projectable_C_inv_Sel _ _ _ _ _ _ _ _ H0) in HN.
-    inversion HN; auto.
-    inversion HP. inversion_clear H3. inversion_clear H5.
-    apply H3; simpl. rewrite set_union_iff; simpl; auto.
-  - rewrite epp_C_Cond_p with (HC1:=projectable_C_inv_Then _ _ _ _ _ _ _ H0)
-          (HC2:=projectable_C_inv_Else _ _ _ _ _ _ _ H0) in HN.
-    inversion HN; auto.
-    inversion HP. inversion_clear H3. inversion_clear H5.
-    apply H3; simpl. repeat rewrite set_union_iff; simpl; auto.
-  - 
-rewrite epp_C_Call in HN.
- with (HC1:=projectable_C_inv_Then _ _ _ _ _ _ _ H0)
-          (HC2:=projectable_C_inv_Else _ _ _ _ _ _ _ H0) in HN.
-    inversion HN; auto.
-    inversion HP. inversion_clear H3. inversion_clear H5.
-    apply H3; simpl. repeat rewrite set_union_iff; simpl; auto.
-
-
+  apply epp_EmptyNet' with (HP:=HP) (N:=Net P'); auto.
+  apply (CCC_ToStar_Program_WF _ _ _ _ _ _ _ H Htl').
++ (* f diverges *)
+  induction Hdiv; intros. specialize (H0 H2). clear Hconv H1 H2.
+  apply EPP_Sound' in H3.
+  induction H3 as [P'' [ts' [Htl' HN] ] ].
+  intro. eapply H0; eauto. all: auto.
+  apply CCC_ToStar_projectable with (s:=s) (tl:=ts') (P':=P'') (s':=s') in HP; auto.
+  apply epp_EmptyNet' with (HP:=HP) (N:=Net P'); auto.
+  apply (CCC_ToStar_Program_WF _ _ _ _ _ _ _ H Htl').
++ (* N loops *)
+  intros. apply Hdiv; intros. clear Hconv Hdiv.
+  induction P as (D,C), P' as (D',C').
+  generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H1); intros HD HC'.
+  simpl in HC'. rewrite HC', <- HD in *; clear D' C' HD HC'.
+  apply EPP_Complete' with (HP:=HP) in H1; auto.
+  induction H1 as [N [tl' [Htl' HN] ] ].
+  eapply H0; eauto.
+  assert (projectable_C D End ps').
+  1:{ red; rewrite List.Forall_forall; intros.
+      exists (SP.End _); constructor.
+  }
+  assert (projectable IS Xs ps' (D,End)).
+  1: { elim HP. intros HC (HD,(H2,(H3,H4))).
+       repeat split; auto. simpl; tauto.
+  }
+  specialize (HN H2).
+  generalize (epp_C_char _ _ _ _ _ H2 H1); intros.
+  intro. specialize (HN p). rewrite H3 in HN.
+  rewrite epp_C_End in HN. inversion HN; auto.
+Qed.
 
 Theorem encode_Net_sound : forall n (f:PRFunction n),
-  implements (Encode_Net f) f (vec_1_to_n n) 0.
+  SP_implements (Encode_Net f) f (vec_1_to_n n) 0.
 Proof.
-
-
-
-
-
-
+intros.
+induction (amended_encoding_WF n f) as [Hann [Xs HXs] ].
+apply epp_implements; auto.
++ apply amend_Program_WF; auto.
+  split. apply Encoding_Main_WF.
+  split. apply Encoding_Main_within_Xs; apply RecVarList_In; auto with arith.
+  split. simpl; auto.
+  split.
+  1: { apply Encoding_rec_WF; intros; auto.
+       intro. elim (in_vec_k_to_n _ H0); intros.
+       inversion H1.
+    2: auto with arith.
+    elim (in_vec_k_to_n _ H0); intros.
+    rewrite vmax_vec_1_to_n; auto.
+  }
+  split. apply Encoding_rec_initial.
+  split. apply Encoding_Procs_Vars_not_nil.
+  change (Gamma f) with (0 + Gamma f).
+  apply Encoding_rec_within_Xs; simpl; auto.
++ intros. apply HXs.
++ intros. simpl in H.
+  rewrite <- amend_P_Vars in H.
+  unfold Vars, Encoding', Procedures in H.
+  simpl in H.
+  rewrite vmax_vec_1_to_n in H; auto.
++ intros. unfold Vars, Encoding', Procedures in H0.
+  simpl in H0.
+  rewrite vmax_vec_1_to_n in H0; auto.
++ apply amended_encoding_sound.
+Qed.
 
 End SP_Turing.
-
-
-
-

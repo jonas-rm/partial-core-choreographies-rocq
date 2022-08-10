@@ -1416,6 +1416,23 @@ induction tl; intros.
     intro; rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4); auto.
 Qed.
 
+(** Miscellaneous. *)
+
+Lemma CCC_ToStar_pn'' : forall P s tl P' s',  well_ann P -> (P,s) --[tl]-->* (P',s') ->
+  forall p, In p (CCC_pn (Main P') (Vars P')) -> In p (CCC_pn (Main P) (Vars P)).
+Proof.
+intros.
+revert P s P' s' H H0 H1. induction tl; simpl; intros.
+all: inversion H0; auto.
+clear c3 H6 l H3 t H2 c1 H4. induction c2 as (P'',s'').
+assert (well_ann P'').
+induction P; induction P''.
+generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ H5); intro.
+rewrite <- H2 in *.
+eapply well_ann_Main_change; eauto.
+eapply CCC_To_pn''; eauto.
+Qed.
+
 (** Reductions and state. *)
 
 Hypothesis D : DefSet.
