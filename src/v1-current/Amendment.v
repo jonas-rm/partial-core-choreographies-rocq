@@ -18,6 +18,8 @@ Notation BEv := (bev Sig).
 
 Notation Sig' := (Sig' Sig).
 
+Notation Forget := (@forget Pid Value Var RecVar).
+
 Local Ltac eq_elim t t' H := case (eq_dec t t'); intro H;
   [ rewrite <- H in *; clear t' H | idtac].
 
@@ -548,8 +550,8 @@ induction C; intros. induction e.
       set (tl0 := @RL_Cond Pid Value Var RecVar p).
       elim (add_sels_reduce (amend_D ps) p left (up_list p b ps (amend ps C1) (amend ps C2)) (amend ps C1) s).
       intros t1 (Ht1,Ht1').
-      exists (Forget _ tl0::tl'1).
-      exists (Forget _ tl0::t1++tl1I), C1I, s1I.
+      exists (Forget tl0::tl'1).
+      exists (Forget tl0::t1++tl1I), C1I, s1I.
       exists tl01, C01, s01.
       exists tl1F, C1F, s1F.
       repeat split; auto.
@@ -563,8 +565,8 @@ induction C; intros. induction e.
       set (tl0 := @RL_Cond Pid Value Var RecVar p).
       elim (add_sels_reduce (amend_D ps) p right (up_list p b ps (amend ps C1) (amend ps C2)) (amend ps C2) s).
       intros t1 (Ht1,Ht1').
-      exists (Forget _ tl0::tl'2).
-      exists (Forget _ tl0::t1++tl2I), C2I, s2I.
+      exists (Forget tl0::tl'2).
+      exists (Forget tl0::t1++tl2I), C2I, s2I.
       exists tl02, C02, s02.
       exists tl2F, C2F, s2F.
       repeat split; auto.
@@ -707,7 +709,7 @@ induction C; intros. induction e.
   - (* Com *)
     rewrite <- H7 in *.
     clear s'0 H9 C' H8 t H7 s0 H1 C0 H6 a0 H5 x0 H4 q0 H3 e0 H2 p0 H H0.
-    exists nil, (Forget _ (RL_Com p v q x) :: nil), C, s'. repeat split.
+    exists nil, (Forget (RL_Com p v q x) :: nil), C, s'. repeat split.
     * repeat constructor.
     * econstructor; eauto. 2: apply CCT_Refl. repeat constructor; auto.
     * apply sel_exp_refl.
@@ -719,7 +721,7 @@ induction C; intros. induction e.
     1: unfold v. symmetry; eapply CCC_To_disjoint_eval; eauto.
     apply CCC_To_disjoint_update with (p:=q) (v:=v) (x:=x) in H8; auto.
     IHElim' IHC (Choreography_WF_eta _ _ _ _ HC) H8 tl' tl'' C'' s'' Htl' Htl'' Hsub.
-    exists (Forget _ tlS::tl'), (Forget _ tlS::tl''), C'', s''.
+    exists (Forget tlS::tl'), (Forget tlS::tl''), C'', s''.
     repeat split; auto.
     * econstructor; eauto. unfold v; repeat constructor.
     * econstructor; eauto. unfold tlS; rewrite Hv; repeat constructor.
@@ -729,7 +731,7 @@ induction C; intros. induction e.
   - (* Sel *)
     rewrite <- H6 in *.
     clear s'0 H8 C' H7 t H6 s0 H1 C0 H5 a0 H4 l0 H3 q0 H2 p0 H H0.
-    exists nil, (Forget _ (RL_Sel p q l) :: nil), C, s'. repeat split.
+    exists nil, (Forget (RL_Sel p q l) :: nil), C, s'. repeat split.
     * repeat constructor.
     * econstructor; eauto. 2: apply CCT_Refl. repeat constructor; auto.
     * apply sel_exp_refl.
@@ -738,7 +740,7 @@ induction C; intros. induction e.
     induction H7 as [Hp Hq].
     IHElim' IHC (Choreography_WF_eta _ _ _ _ HC) H8 tl' tl'' C'' s'' Htl' Htl'' Hsub.
     set (tlS := @RL_Sel Pid Value Var RecVar p q l).
-    exists (Forget _ tlS::tl'), (Forget _ tlS::tl''), C'', s''.
+    exists (Forget tlS::tl'), (Forget tlS::tl''), C'', s''.
     repeat split; auto.
     * econstructor; eauto. repeat constructor.
     * econstructor; eauto. repeat constructor.
@@ -750,7 +752,7 @@ induction C; intros. induction e.
     clear s'0 H7 C' H6 t H5 s0 H2 C3 H4 C0 H3 b0 H1 p0 H0.
     elim (add_sels_reduce (amend_D ps) p left (up_list p b ps (amend ps C1) (amend ps C2)) (amend ps C1) s').
     intros t1 (Ht1,Ht1').
-    exists t1, (Forget _ (RL_Cond p)::nil), C1, s'. repeat split; auto.
+    exists t1, (Forget (RL_Cond p)::nil), C1, s'. repeat split; auto.
     * econstructor. 2: apply CCT_Refl. repeat constructor; eauto.
     * apply sel_exp_cons; auto.
   - (* Else *)
@@ -758,7 +760,7 @@ induction C; intros. induction e.
     clear s'0 H7 C' H6 t H5 s0 H2 C3 H4 C0 H3 b0 H1 p0 H0.
     elim (add_sels_reduce (amend_D ps) p right (up_list p b ps (amend ps C1) (amend ps C2)) (amend ps C2) s').
     intros t1 (Ht1,Ht1').
-    exists t1, (Forget _ (RL_Cond p)::nil), C2, s'. repeat split; auto.
+    exists t1, (Forget (RL_Cond p)::nil), C2, s'. repeat split; auto.
     * econstructor. 2: apply CCT_Refl. repeat constructor; eauto.
     * apply sel_exp_cons; auto.
   - (* Delay *)
@@ -772,40 +774,40 @@ induction C; intros. induction e.
     * IHElim' IHC1 (Choreography_WF_Then _ _ _ _ _ HC) HC1 tl' tl'' C'' s'' Htl' Htl'' Hsub.
       elim (add_sels_reduce (amend_D ps) p left (up_list p b ps (amend ps C1) (amend ps C2)) C'1 s').
       intros t1 (Ht1,Ht1').
-      exists (Forget _ (RL_Cond p)::t1++tl'), (Forget _ (RL_Cond p)::tl''), C'', s''.
+      exists (Forget (RL_Cond p)::t1++tl'), (Forget (RL_Cond p)::tl''), C'', s''.
       repeat split.
       econstructor; eauto. repeat constructor; auto. rewrite <- Hb; auto.
       eapply CCT_Trans; eauto.
       econstructor; eauto. repeat constructor; auto.
       apply sel_exp_swap; auto.
       rewrite <- (app_nil_r tl'').
-      apply sel_exp_perm' with ((Forget _ t :: tl') ++ t1).
+      apply sel_exp_perm' with ((Forget t :: tl') ++ t1).
       apply sel_exp_app_both; auto.
       simpl. apply Permutation_cons; auto. apply Permutation_app_comm.
     * IHElim' IHC2 (Choreography_WF_Else _ _ _ _ _ HC) HC2 tl' tl'' C'' s'' Htl' Htl'' Hsub.
       elim (add_sels_reduce (amend_D ps) p right (up_list p b ps (amend ps C1) (amend ps C2)) C'2 s').
       intros t1 (Ht1,Ht1').
-      exists (Forget _ (RL_Cond p)::t1++tl'), (Forget _ (RL_Cond p)::tl''), C'', s''.
+      exists (Forget (RL_Cond p)::t1++tl'), (Forget (RL_Cond p)::tl''), C'', s''.
       repeat split.
       econstructor; eauto. constructor. apply C_Else'; eauto.
       eapply CCT_Trans; eauto.
       econstructor; eauto. repeat constructor; auto.
       apply sel_exp_swap; auto.
       rewrite <- (app_nil_r tl'').
-      apply sel_exp_perm' with ((Forget _ t :: tl') ++ t1).
+      apply sel_exp_perm' with ((Forget t :: tl') ++ t1).
       apply sel_exp_app_both; auto.
       simpl. apply Permutation_cons; auto. apply Permutation_app_comm.
 + rename t0 into X. inversion H.
   - (* Local *)
     rewrite <- H6 in *.
     clear s'0 H7 C' H6 t H5 s0 H4 X0 H0 H.
-    simpl. exists nil, (Forget _ (RL_Call X p)::nil), (snd (Defs X)), s'.
+    simpl. exists nil, (Forget (RL_Call X p)::nil), (snd (Defs X)), s'.
     repeat split; repeat constructor.
     econstructor. 2: apply CCT_Refl. repeat constructor; auto.
   - (* Call *)
     rewrite <- H5 in *.
     clear s'0 H7 C' H6 t H5 s0 H4 X0 H0 H.
-    simpl. exists nil, (Forget _ (RL_Call X p)::nil), (RT_Call X (fst (Defs X) [\] p) (snd (Defs X))), s'.
+    simpl. exists nil, (Forget (RL_Call X p)::nil), (RT_Call X (fst (Defs X) [\] p) (snd (Defs X))), s'.
     repeat split; eauto. 3: apply sel_exp_refl.
     apply CCT_Refl.
     econstructor. 2: apply CCT_Refl. repeat constructor; auto.
@@ -824,14 +826,14 @@ induction C; intros. induction e.
   - (* Enter *)
     rewrite <- H5, <- H1 in *.
     clear s'0 H7 C' H6 t H5 s0 H4 C0 H2 H X0 H0 l H1.
-    exists nil, (Forget _ (RL_Call X p)::nil), (RT_Call X (ps0[\]p) C), s'.
+    exists nil, (Forget (RL_Call X p)::nil), (RT_Call X (ps0[\]p) C), s'.
     repeat split; eauto. 3: apply sel_exp_refl.
     apply CCT_Refl.
     econstructor. 2: apply CCT_Refl. repeat constructor; auto.
   - (* Finish *)
     rewrite <- H5, <- H1 in *.
     clear s'0 H7 C' H6 t H5 s0 H4 C0 H2 H X0 H0 l H1.
-    exists nil, (Forget _ (RL_Call X p)::nil), C, s'.
+    exists nil, (Forget (RL_Call X p)::nil), C, s'.
     repeat split; eauto. 3: apply sel_exp_refl.
     apply CCT_Refl.
     econstructor. 2: apply CCT_Refl. repeat constructor; auto.
