@@ -3,6 +3,7 @@ SHELL=/bin/bash
 # Detect number of cores
 NPROCS := 32
 
+# TODO: This doesn't actually work for some reason
 ifdef NUMBER_OF_PROCESSORS # Windows
 	NPROCS := $(NUMBER_OF_PROCESSORS) \
 else
