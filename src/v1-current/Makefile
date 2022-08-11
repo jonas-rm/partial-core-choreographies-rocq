@@ -10,16 +10,16 @@ _ := $(foreach exe,$(EXEs),\
               $(eval $(exe) := $(exe).exe),\
               $(error "No $(exe) or $(exe).exe in PATH"))))
 
-CLEANING_LIST := %.aux %.glob %.o %.vo 
+CLEANING_LIST := %.aux %.glob %.o %.vo %.vio %.vok %.vos
 
-targets := Basic Common CC Kleene Implementation SP BranchingOrder Merge EPP Amendment Turing
+targets := Basic Common CC Kleene Implementation SP BranchingOrder Merge EPP EPPTheorem Amendment Turing
 
 .PHONY: all clean targets
 
 all: $(targets)
 
 $(targets):
-	$(coqc) $@
+	$(coqc) $(COQFLAGS) $@
 
 clean:
 	@rm -f $(foreach file,$(targets),$(subst %,$(file),$(CLEANING_LIST))) 3>&1 1>&2 2>&3 3>&- | grep -v "No such file or directory" | 3>&1 1>&2 2>&3 3>&-
