@@ -4,17 +4,17 @@ SHELL=/bin/bash
 NPROCS := 32
 
 # TODO: This doesn't actually work for some reason
-ifdef NUMBER_OF_PROCESSORS # Windows
-	NPROCS := $(NUMBER_OF_PROCESSORS) \
-else
-	OS := $(shell uname -s) \
-	ifeq($(OS),Linux) # Linux
-		NPROCS := $(shell grep -c '^processor' /proc/cpuinfo) \
-	endif
-	ifeq($(OS),Darwin) # Mac OS X
-		NPROCS := $(shell system_profiler | awk '/Number Of CPUs/{print $4}{next;}') \
-	endif
-endif
+# ifdef NUMBER_OF_PROCESSORS # Windows
+# 	NPROCS := $(NUMBER_OF_PROCESSORS) \
+# else
+# 	OS := $(shell uname -s) \
+# 	ifeq($(OS),Linux) # Linux
+# 		NPROCS := $(shell grep -c '^processor' /proc/cpuinfo) \
+# 	endif
+# 	ifeq($(OS),Darwin) # Mac OS X
+# 		NPROCS := $(shell system_profiler | awk '/Number Of CPUs/{print $4}{next;}') \
+# 	endif
+# endif
 
 # Make these cores work
 MAKEFLAGS := --jobs=$(NPROCS)
