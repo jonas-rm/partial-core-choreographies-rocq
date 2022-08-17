@@ -1936,9 +1936,10 @@ Lemma Encoding_Main_WF : forall {n} (f:PRFunction n) ps q,
   Choreography_WF (Main (Encoding f ps q)).
 Proof. intros. simpl. split; simpl; auto. Qed.
 
-Lemma Encoding_Main_within_Xs : forall {n} (f:PRFunction n) ps q Xs,
+(* Lemma Encoding_Main_within_Xs : forall {n} (f:PRFunction n) ps q Xs,
   List.In 0 Xs -> @within_Xs IS Xs (Main (Encoding f ps q)).
 Proof. auto. Qed.
+ *)
 
 Lemma seq_compose_WF :
   forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
@@ -2057,7 +2058,7 @@ intros. unfold Vars; simpl.
 apply all_pids_not_nil.
 Qed.
 
-Lemma seq_compose_within_Xs :
+(* Lemma seq_compose_within_Xs :
   forall {k m} (fs:t (PRFunction m) k) d Hd ps n q X Implement Y,
   (forall k f ps' m' n' H X Y,
     within_Xs (RecVarList (X+Gamma f)) (Implement k f H ps' m' n' X Y)) ->
@@ -2136,6 +2137,7 @@ do 2 intro; case f; intros; simpl.
     rewrite <- plus_assoc. apply plus_le_compat_l.
     rewrite plus_comm; auto with arith.
 Qed.
+ *)
 
 Lemma CCC_pn_all_pids_incl : forall (C:Choreography IS) m n, m <= n ->
   (CCC_pn C (fun _ => all_pids m) [C] all_pids m)
@@ -2349,9 +2351,7 @@ split.
   - apply all_pids_In; auto.
   - intros. apply Nat.max_le_iff. right; apply vmax_In; auto.
   - apply Nat.le_max_l.
-+ exists (RecVarList (0+Gamma f)).
-  split. apply Encoding_Main_WF.
-  split. apply Encoding_Main_within_Xs; apply RecVarList_In; auto with arith.
++ split. apply Encoding_Main_WF.
   split. simpl; auto.
   split.
   1: { apply Encoding_rec_WF; intros; auto; apply le_n_S.
@@ -2359,8 +2359,7 @@ split.
     transitivity (vmax ps). 2: apply Nat.le_max_r. apply vmax_In; auto.
   }
   split. apply Encoding_rec_initial.
-  split. apply Encoding_Procs_Vars_not_nil.
-  apply Encoding_rec_within_Xs; simpl; auto.
+  apply Encoding_Procs_Vars_not_nil.
 Qed.
 
 Lemma Encoding'_WF : forall {n} (f:PRFunction n),

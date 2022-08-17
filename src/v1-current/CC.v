@@ -355,7 +355,7 @@ Proof.
 intros. intro. apply H. red. simpl. apply set_union_intro2. auto.
 Qed.
 
-(** Now we move to well-formedness. *)
+(** Now we move to well-formedness.
 
 Fixpoint within_Xs (Xs:list RecVar) (C:Choreography) : Prop :=
 match C with
@@ -401,6 +401,7 @@ induction C; auto; simpl; unfold set_union_rv; intros; destroy H.
   inversion H2; inversion H3; auto. rewrite <- H3; auto.
 - inversion H0.
 Qed.
+*)
 
 Fixpoint consistent (Xs:RecVar -> list Pid) (C:Choreography) : Prop :=
 match C with
@@ -430,12 +431,11 @@ Qed.
 
 (** We need to consider the list of used process variables. *)
 
-Definition Program_WF (Xs:list RecVar) (P:Program) : Prop :=
-  Choreography_WF (Main P) /\ within_Xs Xs (Main P) /\
-  consistent (Vars P) (Main P) /\
-  forall X, In X Xs -> no_self_comm (Procs P X) /\ initial (Procs P X) /\
-            (Vars P X) <> nil /\ within_Xs Xs (Procs P X).
+Definition Program_WF (P:Program) : Prop :=
+  Choreography_WF (Main P) /\ consistent (Vars P) (Main P) /\
+  forall X, no_self_comm (Procs P X) /\ initial (Procs P X) /\ (Vars P X) <> nil.
 
+(*
 Lemma Program_WF_dec : forall Xs P, {Program_WF Xs P} + {~Program_WF Xs P}.
 Proof.
 intros.
@@ -472,26 +472,28 @@ induction Ys; simpl; intros.
   rewrite <- H1; repeat (split; auto).
   rewrite H; discriminate.
 Qed.
+*)
 
-Lemma Program_WF_Proc : forall P Xs, Program_WF Xs P ->
-  forall X, In X Xs -> Choreography_WF (Procs P X).
+Lemma Program_WF_Proc : forall P, Program_WF P ->
+  forall X, Choreography_WF (Procs P X).
 Proof.
-intros. destroy H. induction (H X H0); destroy H4.
+intros. destroy H. induction (H X); destroy H4.
 repeat split; auto.
 apply initial_no_empty_ann; tauto.
 Qed.
 
-Lemma Program_WF_Main : forall P Xs, Program_WF Xs P -> Choreography_WF (Main P).
+Lemma Program_WF_Main : forall P, Program_WF P -> Choreography_WF (Main P).
 Proof. intros. destroy H; auto. Qed.
 
-Lemma Program_WF_consistent : forall P Xs, Program_WF Xs P ->
+Lemma Program_WF_consistent : forall P, Program_WF P ->
   consistent (Vars P) (Main P).
 Proof. intros. destroy H; auto. Qed.
 
-Lemma Program_WF_initial_Proc : forall P Xs, Program_WF Xs P ->
-  forall X, In X Xs -> initial (Procs P X).
-Proof. intros. destroy H. elim (H X); auto. intros. destroy H5; auto. Qed.
+Lemma Program_WF_initial_Proc : forall P X,
+  Program_WF P -> initial (Procs P X).
+Proof. intros. destroy H. elim (H X); tauto. Qed.
 
+(*
 Lemma Program_WF_Main_within_Xs : forall P Xs, Program_WF Xs P ->
   within_Xs Xs (Main P).
 Proof. intros. destroy H; auto. Qed.
@@ -516,71 +518,66 @@ induction C; auto.
 + (* End *)
   inversion H0.
 Qed.
+*)
 
-Lemma Program_WF_Vars : forall P Xs, Program_WF Xs P ->
-  forall X, In X Xs -> Vars P X <> nil.
-Proof. intros. destroy H. elim (H X); auto. intros. destroy H5; auto. Qed.
+Lemma Program_WF_Vars : forall P X, Program_WF P -> Vars P X <> nil.
+Proof. intros. destroy H. elim (H X); tauto. Qed.
 
+(*
 Lemma Program_WF_within_Xs : forall P Xs, Program_WF Xs P ->
   forall X, In X Xs -> within_Xs Xs (Procs P X).
 Proof. intros. destroy H. elim (H X); auto. intros. destroy H5; auto. Qed.
+*)
 
 (** Inversion results. *)
 
-Lemma Program_WF_Main_change : forall Xs D C C',
-  Choreography_WF C' -> within_Xs Xs C' -> consistent (Names D) C' ->
-  Program_WF Xs (D,C) -> Program_WF Xs (D,C').
-Proof.
-intros.
-destroy H2; repeat (split; auto).
-Qed.
+Lemma Program_WF_Main_change : forall D C C',
+  Choreography_WF C' -> consistent (Names D) C' ->
+  Program_WF (D,C) -> Program_WF (D,C').
+Proof. intros. destroy H1; repeat (split; auto). Qed.
 
-Lemma Program_WF_eta : forall Xs D C ann eta,
-  Program_WF Xs (D,eta @ ann;;C) -> Program_WF Xs (D,C).
+Lemma Program_WF_eta : forall D C ann eta,
+  Program_WF (D,eta @ ann;;C) -> Program_WF (D,C).
 Proof.
 intros.
-elim (Program_WF_Main _ _ H); simpl; intros.
+elim (Program_WF_Main _ H); simpl; intros.
 inversion_clear H0.
 eapply Program_WF_Main_change; eauto.
 eapply Choreography_WF_eta with (ann:=ann0); repeat split; eauto.
-apply (Program_WF_Main_within_Xs _ _ H).
 destroy H; auto.
 Qed.
 
-Lemma Program_WF_Then : forall Xs D p b C1 C2,
-  Program_WF Xs (D,If p ?? b Then C1 Else C2) -> Program_WF Xs (D,C1).
+Lemma Program_WF_Then : forall D p b C1 C2,
+  Program_WF (D,If p ?? b Then C1 Else C2) -> Program_WF (D,C1).
 Proof.
 intros.
-elim (Program_WF_Main _ _ H); simpl; intros.
+elim (Program_WF_Main _ H); simpl; intros.
 inversion_clear H0; inversion_clear H1.
 eapply Program_WF_Main_change; eauto.
 apply Choreography_WF_Then with p b C2; repeat split; auto.
-apply (Program_WF_Main_within_Xs _ _ H).
-destroy H. inversion_clear H6; auto.
+destroy H. inversion_clear H5; auto.
 Qed.
 
-Lemma Program_WF_Else : forall Xs D p b C1 C2,
-  Program_WF Xs (D,If p ?? b Then C1 Else C2) -> Program_WF Xs (D,C2).
+Lemma Program_WF_Else : forall D p b C1 C2,
+  Program_WF (D,If p ?? b Then C1 Else C2) -> Program_WF (D,C2).
 Proof.
 intros.
-elim (Program_WF_Main _ _ H); simpl; intros.
+elim (Program_WF_Main _ H); simpl; intros.
 inversion_clear H0; inversion_clear H1.
 eapply Program_WF_Main_change; eauto.
 apply Choreography_WF_Else with p b C1; repeat split; auto.
-apply (Program_WF_Main_within_Xs _ _ H).
-destroy H. inversion_clear H6; auto.
+destroy H. inversion_clear H5; auto.
 Qed.
 
-Lemma Program_WF_Call : forall Xs D X ps C,
-  Program_WF Xs (D,RT_Call X ps C) -> Program_WF Xs (D,C).
+Lemma Program_WF_Call : forall D X ps C,
+  Program_WF (D,RT_Call X ps C) -> Program_WF (D,C).
 Proof.
 intros.
-elim (Program_WF_Main _ _ H); simpl; intros.
+elim (Program_WF_Main _ H); simpl; intros.
 inversion_clear H1.
 eapply Program_WF_Main_change; eauto.
 split; auto.
-apply (Program_WF_Main_within_Xs _ _ H).
-destroy H. inversion_clear H5; auto.
+destroy H. inversion_clear H4; auto.
 Qed.
 
 (** The set of process names in a choreography. *)
@@ -627,53 +624,50 @@ Qed.
 
 (** This one is not decidable. *)
 
-Definition CCP_WF (P:Program) := well_ann P /\ exists Xs, Program_WF Xs P.
+Definition CCP_WF (P:Program) := well_ann P /\ Program_WF P.
 
 Lemma CCP_WF_Main : forall P, CCP_WF P -> Choreography_WF (Main P).
 Proof.
-intros.
-inversion_clear H; inversion_clear H1.
-apply Program_WF_Main with x; auto.
+intros. 
+inversion_clear H.
+apply Program_WF_Main; auto.
 Qed.
 
-Lemma CCP_WF_Vars : forall P, CCP_WF P ->
-  forall X, X_Free X (Main P) -> Vars P X <> nil.
+Lemma CCP_WF_Vars : forall P X, CCP_WF P -> Vars P X <> nil.
 Proof.
 intros.
-inversion_clear H; inversion_clear H2.
-rename x into Xs.
-apply Program_WF_Vars with Xs; auto.
-apply Program_WF_Vars_In with P; auto.
+inversion_clear H.
+apply Program_WF_Vars; auto.
 Qed.
 
 Lemma CCP_WF_eta : forall D C ann eta, CCP_WF (D,eta @ ann;;C) -> CCP_WF (D,C).
 Proof.
 intros.
-inversion_clear H; inversion_clear H1.
-split; auto. exists x; auto. eapply Program_WF_eta; eauto.
+inversion_clear H.
+split; auto. eapply Program_WF_eta; eauto.
 Qed.
 
 Lemma CCP_WF_Then : forall D p b C1 C2,
   CCP_WF (D,If p ?? b Then C1 Else C2) -> CCP_WF (D,C1).
 Proof.
 intros.
-inversion_clear H; inversion_clear H1.
-split; auto. exists x; auto. eapply Program_WF_Then; eauto.
+inversion_clear H.
+split; auto. eapply Program_WF_Then; eauto.
 Qed.
 
 Lemma CCP_WF_Else : forall D p b C1 C2,
   CCP_WF (D,If p ?? b Then C1 Else C2) -> CCP_WF (D,C2).
 Proof.
 intros.
-inversion_clear H; inversion_clear H1.
-split; auto. exists x; auto. eapply Program_WF_Else; eauto.
+inversion_clear H.
+split; auto. eapply Program_WF_Else; eauto.
 Qed.
 
 Lemma CCP_WF_Call : forall D X ps C, CCP_WF (D,RT_Call X ps C) -> CCP_WF (D,C).
 Proof.
 intros.
-inversion_clear H; inversion_clear H1.
-split; auto. exists x; auto. eapply Program_WF_Call; eauto.
+inversion_clear H.
+split; auto. eapply Program_WF_Call; eauto.
 Qed.
 
 End Syntactic_Properties.
@@ -1101,6 +1095,7 @@ Qed.
 
 (** Reductions preserve well-formedness. *)
 
+(*
 Lemma CCP_To_within_Xs : forall P s l P' s' Xs,
   Program_WF Xs P -> (P,s) --[l]--> (P',s') -> within_Xs Xs (Main P').
 Proof.
@@ -1114,23 +1109,24 @@ generalize (Program_WF_Main_within_Xs _ _ H0); simpl; intros.
 clear H0.
 induction H; simpl; try (inversion_clear H2); auto.
 Qed.
+*)
 
-Lemma CCP_To_consistent : forall P s l P' s' Xs,
-  Program_WF Xs P -> (P,s) --[l]--> (P',s') -> consistent (Vars P') (Main P').
+Lemma CCP_To_consistent : forall P s l P' s',
+  Program_WF P -> (P,s) --[l]--> (P',s') -> consistent (Vars P') (Main P').
 Proof.
 intros.
 revert H.
 inversion_clear H0.
 simpl; intros.
-generalize (Program_WF_consistent _ _ H0); intros.
+generalize (Program_WF_consistent _ H0); intros.
 unfold Vars in H1; simpl in H1.
 unfold Vars; simpl.
-generalize (Program_WF_initial_Proc _ _ H0); intros.
-generalize (Program_WF_Main_within_Xs _ _ H0); simpl; intros.
+assert (forall X, initial (Procs (D,C) X)).
+1: intro; apply Program_WF_initial_Proc; auto.
 unfold Procs in H2; simpl in H2.
 clear H0.
 induction H; auto; inversion_clear H1; auto.
-1,2: inversion_clear H3; split; auto.
+1,2: split; auto.
 + apply initial_consistent; auto.
 + split. intro; apply set_remove'_1.
   apply initial_consistent; auto.
@@ -1139,18 +1135,17 @@ induction H; auto; inversion_clear H1; auto.
   apply set_remove'_1 in H1; auto.
 Qed.
 
-Lemma CCP_To_Program_WF : forall P s l P' s' Xs,
-  Program_WF Xs P -> (P,s) --[l]--> (P',s') -> Program_WF Xs P'.
+Lemma CCP_To_Program_WF : forall P s l P' s',
+  Program_WF P -> (P,s) --[l]--> (P',s') -> Program_WF P'.
 Proof.
 intros.
-generalize (CCP_To_within_Xs _ _ _ _ _ Xs H H0); intro HXs.
 inversion H0; auto.
-generalize (CCP_To_consistent _ _ _ _ _ Xs H H0); intro HXs'.
-rewrite <- H1 in H; rewrite <- H5 in HXs, HXs'.
+generalize (CCP_To_consistent _ _ _ _ _ H H0); intro HXs'.
+rewrite <- H1 in H; rewrite <- H5 in HXs'.
 clear s'0 H6 s0 H3 H5 H0 P' H1 P H2 l.
 apply Program_WF_Main_change with C; auto.
-clear HXs HXs'.
-generalize (Program_WF_Main _ _ H); simpl; intro HC.
+clear HXs'.
+generalize (Program_WF_Main _ H); simpl; intro HC.
 induction H4.
 + eapply Choreography_WF_eta; eauto.
 + eapply Choreography_WF_eta; eauto.
@@ -1164,25 +1159,21 @@ induction H4.
   inversion_clear H1; inversion_clear H2.
   assert (Choreography_WF C1). split; auto.
   assert (Choreography_WF C2). split; auto.
-  generalize (Program_WF_Then _ _ _ _ _ _ H); intro.
-  generalize (Program_WF_Else _ _ _ _ _ _ H); intro.
+  generalize (Program_WF_Then _ _ _ _ _ H); intro.
+  generalize (Program_WF_Else _ _ _ _ _ H); intro.
   elim IHCCC_To1; auto; elim IHCCC_To2; auto; intros.
   split; split; auto.
 + assert (Choreography_WF C).
   1: { inversion_clear HC. simpl in H1; inversion_clear H2; split; auto. }
-  assert (within_Xs Xs C).
-  1: { elim (Program_WF_Main_within_Xs _ _ H); auto. }
   assert (consistent (Names D) C).
-  1: { elim (Program_WF_consistent _ _ H); auto. }
-  generalize (Program_WF_Main_change _ _ _ _ H1 H2 H3 H); intro.
+  1: { elim (Program_WF_consistent _ H); auto. }
+  generalize (Program_WF_Main_change _ _ _ H1 H2 H); intro.
   assert (Choreography_WF C'); auto; clear IHCCC_To.
-  inversion_clear H6. repeat split; simpl; auto.
-  inversion_clear HC. inversion_clear H9; auto.
+  inversion_clear H5. repeat split; simpl; auto.
+  inversion_clear HC. inversion_clear H8; auto.
 + change (Choreography_WF (Procs (D,Call X) X)).
-  apply Program_WF_Proc with Xs; auto.
-  apply (Program_WF_Vars_In _ _ H). red; simpl; auto.
-+ elim (Program_WF_Proc _ _ H X); intros.
-  2: apply (Program_WF_Vars_In _ _ H); red; simpl; auto.
+  apply Program_WF_Proc; auto.
++ elim (Program_WF_Proc _ H X); intros.
   split; simpl; auto.
   split; auto.
   revert H1; case (fst (D X)); intros.
@@ -1193,11 +1184,7 @@ induction H4.
     elim (lt_irrefl _ H1).
   - revert H5; simpl. elim eq_dec; auto.
     intros. inversion H5.
-+ elim (Program_WF_Proc _ _ H X); intros.
-  2: {
-    apply (Program_WF_Vars_In _ _ H); red; simpl.
-    apply set_union_intro1; simpl; auto.
-  }
++ elim (Program_WF_Proc _ H X); intros.
   inversion_clear HC.
   simpl in H4, H5.
   split; simpl; auto.
@@ -1208,8 +1195,8 @@ induction H4.
 + destroy HC. repeat split; auto.
 Qed.
 
-Lemma CCP_ToStar_Program_WF : forall P s l P' s' Xs,
-  Program_WF Xs P -> (P,s) --[l]-->* (P',s') -> Program_WF Xs P'.
+Lemma CCP_ToStar_Program_WF : forall P s l P' s',
+  Program_WF P -> (P,s) --[l]-->* (P',s') -> Program_WF P'.
 Proof.
 intros P s l; revert P s.
 induction l; intros; inversion H0.
@@ -1224,12 +1211,12 @@ Lemma CCP_To_CCP_WF : forall P s l P' s',
 Proof.
 intros.
 inversion H0. inversion_clear H.
-inversion_clear H8. rename x into Xs.
+elim H8; intros.
 split.
 + rewrite <- H1 in H7.
   apply well_ann_Main_change with C; auto.
-+ exists Xs. rewrite H5.
-  apply (CCP_To_Program_WF _ _ _ _ _ _ H H0).
++ rewrite H5.
+  apply (CCP_To_Program_WF _ _ _ _ _ H8 H0).
 Qed.
 
 Lemma CCP_ToStar_CCP_WF : forall P s l P' s',
@@ -1267,6 +1254,7 @@ induction C; intros; inversion H0.
 + eapply IHC; eauto. eapply Choreography_WF_Call_1; eauto.
 Qed.
 
+(*
 Lemma CCC_To_Xs : forall D C s p X C' s' Xs, within_Xs Xs C ->
   <<C,s>> --[RL_Call X p,D]--> <<C',s'>> -> In X Xs.
 Proof.
@@ -1279,6 +1267,7 @@ induction C; intros; inversion H0.
 + rewrite <- H4; inversion H; auto.
 + rewrite <- H4; inversion H; auto.
 Qed.
+*)
 
 Lemma CCP_ToStar_End : forall P s P' s' tl,
   (P,s) --[ tl ]-->* (P',s') -> Main P = End -> tl = nil /\ s [==] s'.
@@ -1309,12 +1298,11 @@ induction C; intros.
   case_eq ([#] ps); [idtac | intros; case_eq n].
   - intro. exfalso.
     unfold ps in H1.
-    generalize (CCP_WF_Vars _ H0 X); intros.
+    generalize (CCP_WF_Vars _ X H0); intros.
     simpl in H2.
     unfold Vars in H2; simpl in H2.
     rewrite (set_size_0 _ _ H1) in H2.
     apply H2; auto.
-    red. simpl. auto.
   - intros.
     rewrite H2 in H1; clear H2 n.
     case_eq ps; intros.
@@ -2351,7 +2339,6 @@ Arguments Main {Sig}.
 Arguments Procs {Sig}.
 Arguments Vars {Sig}.
 Arguments initial {Sig}.
-Arguments within_Xs {Sig}.
 Arguments Choreography_WF {Sig}.
 Arguments CCC_pn {Sig}.
 Arguments CCP_WF {Sig}.
