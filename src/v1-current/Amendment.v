@@ -71,108 +71,6 @@ end.
 Definition amend_D ps : DefSet Sig :=
   fun X => (fst (Defs X), amend ps (snd (Defs X))).
 
-(** Sanity checks - examples from the paper. *)
-
-Example BuyerSeller : forall buyer seller offer x acceptable product y,
-  buyer<>seller ->
-  amend (buyer::seller::nil)
-  (buyer#offer --> seller$x@a;;
-    If seller??acceptable
-      Then (seller#product --> buyer$y@a;; CC.End)
-    Else CC.End)
-  = (buyer#offer --> seller$x@a;;
-    If seller??acceptable
-      Then (seller-->buyer[left]@a;; seller#product --> buyer$y@a;; CC.End)
-    Else (seller-->buyer[right]@a;; CC.End)).
-Proof.
-intros; simpl.
-rewrite <- eqb_neq in H. rewrite H.
-elim projectable_B_dec; simpl; auto.
-- intro; exfalso. rewrite eqb_neq in H.
-  induction a0 as [B HB].
-  inversion HB; auto.
-  inversion H5; auto. inversion H8; auto.
-  rewrite <- H19, <- H25 in H10; inversion H10.
-- intro.
-  rewrite eqb_refl. auto.
-Qed.
-
-Example counter_example_1 : forall p q r e e' x y b, p <> q -> p <> r -> q <> r ->
-  amend (p::q::r::nil)
-    (p#e-->q$x@a;; If r??b Then (r#e'-->p$y@a;;CC.End) Else CC.End)
-  = (p#e-->q$x@a;; If r??b
-                   Then (r-->p[left]@a;; r#e'-->p$y@a;; CC.End)
-                   Else (r-->p[right]@a;; CC.End)).
-Proof.
-intros; simpl.
-rewrite <- eqb_neq in H0, H1; rewrite H0, H1.
-elim projectable_B_dec; auto.
-2: elim projectable_B_dec; auto.
-- intro; exfalso. rewrite eqb_neq in H0; clear H1.
-  induction a0 as [B HB].
-  inversion HB; auto.
-  inversion H6; auto. inversion H9; auto.
-  rewrite <- H20, <- H26 in H11; inversion H11.
-- intro. rewrite eqb_refl. auto.
-- intro; exfalso. apply b0.
-  rewrite eqb_neq in H0, H1.
-  exists (End _).
-  apply bproj_Cond' with (End _) (End _); repeat constructor; auto.
-Qed.
-
-Example smart : forall p q r e e' e'' x b, p <> q -> p <> r -> q <> r ->
-  amend (p::q::r::nil)
-    (If p??b Then (p#e-->q$x@a;; q#e'-->r$x@a;; CC.End)
-            Else (q#e''-->r$x@a;; CC.End))
-  = (If p??b Then (p-->q[left]@a;; p#e-->q$x@a;; q#e'-->r$x@a;; CC.End)
-            Else (p-->q[right]@a;; q#e''-->r$x@a;; CC.End)).
-Proof.
-intros; simpl.
-rewrite eqb_refl.
-assert (q <> p) as Hq; auto.
-assert (r <> p) as Hr; auto.
-rewrite <- eqb_neq in Hq, Hr; rewrite Hq, Hr.
-elim projectable_B_dec; auto.
-2: elim projectable_B_dec; auto.
-- intro; exfalso.
-  induction a0 as [B HB].
-  inversion HB; auto.
-  inversion H7; auto. inversion H10; auto.
-  rewrite <- H21, <- H32 in H12; inversion H12.
-- intros; exfalso. apply b0.
-  exists (Recv Sig' q x a (End _)).
-  apply bproj_Cond' with (Recv Sig' q x a (End _)) (Recv Sig' q x a (End _));
-    repeat constructor; auto.
-Qed.
-
-Example counter_example_2 : forall p q r e x b, p <> q -> p <> r -> q <> r ->
-  amend (p::q::r::nil)
-    (If p??b Then (q#e-->r$x@a;; q#e-->p$x@a;; CC.End)
-             Else (q#e-->r$x@a;; CC.End))
-  = (If p??b Then (p-->q[left]@a;; q#e-->r$x@a;; q#e-->p$x@a;; CC.End)
-             Else (p-->q[right]@a;; q#e-->r$x@a;; CC.End)).
-Proof.
-intros; simpl.
-rewrite eqb_refl.
-assert (q <> p) as Hq; auto.
-assert (r <> p) as Hr; auto.
-rewrite <- eqb_neq in Hq, Hr; rewrite Hq, Hr.
-elim projectable_B_dec; auto.
-2: elim projectable_B_dec; auto.
-- intro; exfalso.
-  induction a0 as [B HB].
-  inversion HB; auto.
-  revert H12.
-  inversion_clear H7; auto. inversion_clear H10; auto.
-  intro. inversion_clear H10. revert H13.
-  inversion_clear H12; auto. inversion_clear H7; auto.
-  intro. inversion_clear H13.
-- intros; exfalso. apply b0.
-  rewrite eqb_neq in Hr.
-  exists (Recv Sig' q x a (End _)).
-  apply bproj_Cond' with (Recv Sig' q x a (End _)) (Recv Sig' q x a (End _)); repeat constructor; auto.
-Qed.
-
 (** To avoid duplication of cases - I'd love an or... *)
 
 Lemma up_list_If : forall p b r ps C1 C2,
@@ -346,7 +244,7 @@ apply amend_no_self_comm; auto.
 apply amend_no_empty_ann; auto.
 Qed.
 
-Lemma add_sels_within_Xs : forall p l ps C Xs,
+(* Lemma add_sels_within_Xs : forall p l ps C Xs,
   within_Xs Xs C -> within_Xs Xs (add_sels p l ps C).
 Proof. induction ps; auto. Qed.
 
@@ -358,6 +256,7 @@ induction C; auto; intros.
   split; apply add_sels_within_Xs; auto.
 + destroy H. split; auto.
 Qed.
+*)
 
 Lemma add_sels_consistent : forall p l ps C, consistent _ (Vars (Defs,C)) C ->
   consistent _ (Vars (amend_D ps,add_sels p l ps C)) (add_sels p l ps C).
@@ -372,20 +271,18 @@ induction C; auto; intros.
 + destroy H. split; auto.
 Qed.
 
-Lemma amend_Program_WF : forall ps C Xs,
-  Program_WF _ Xs (Defs,C) -> Program_WF _ Xs (amend_D ps,amend ps C).
+Lemma amend_Program_WF : forall ps C,
+  Program_WF _ (Defs,C) -> Program_WF _ (amend_D ps,amend ps C).
 Proof.
 intros.
-destroy H. split. 2: split. 3: split.
+destroy H. split. 2: split.
 + apply amend_Choreography_WF; auto.
-+ apply amend_within_Xs; auto.
 + apply amend_consistent; auto.
-+ intros X HX. induction (H X HX) as (H3,(H4,(H5,H6))).
++ intro X. induction (H X) as (H3,(H4,H5)).
   repeat split.
   - apply amend_no_self_comm; auto.
   - apply amend_initial; auto.
   - unfold Vars, amend_D; simpl. auto.
-  - apply amend_within_Xs; auto.
 Qed.
 
 (** ** Selection expansion up to permutation
@@ -741,7 +638,7 @@ do 4 eexists. repeat split; eauto.
 apply sel_exp_app''; auto.
 Qed.
 
-Lemma amend_complete_many : forall ps C s tl C' s' Xs, Program_WF _ Xs (Defs,C) ->
+Lemma amend_complete_many : forall ps C s tl C' s', Program_WF _ (Defs,C) ->
   (Defs,C,s) --[tl]-->* (Defs,C',s') ->
   exists tl' tl'' C'' s'',
        sel_exp (tl++tl') tl''
@@ -774,10 +671,10 @@ induction n; intros.
   intros tl0 [t0 [C0 [s0 [Hsub0 [Htl0 Htl0IF] ] ] ] ].
   induction (diamond_4b _ _ _ _ _ _ _ _ _ H2 Htl0) as [ [D C2] [tl' [tl0' [s2a [s2b [HC' [HC0 [Hs [Hperm [Hlen1 Hlen2] ] ] ] ] ] ] ] ] ].
   generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ HC'). intro H'; rewrite <- H' in *; clear D H'.
-  generalize (CCP_To_Program_WF _ _ _ _ _ _ _ H H1). intro HP''.
-  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ _ HP'' H2). intro HP'.
-  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ _ HP' HC'). intro HP2.
-  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ _ HP'' Htl0). intro HP0.
+  generalize (CCP_To_Program_WF _ _ _ _ _ _ H H1). intro HP''.
+  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ HP'' H2). intro HP'.
+  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ HP' HC'). intro HP2.
+  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ HP'' Htl0). intro HP0.
   elim (IHn C0 s0 tl0' C2 s2b); auto.
   intros tl1 [t1 [C1 [s1 [Hsub1 [Htl1 Htl1IF] ] ] ] ].
   2: etransitivity; eauto.
@@ -942,7 +839,7 @@ induction C; intros. induction e.
 + inversion H.
 Qed.
 
-Lemma amend_sound_many : forall ps C s tl C' s' Xs, Program_WF _ Xs (Defs,C) ->
+Lemma amend_sound_many : forall ps C s tl C' s', Program_WF _ (Defs,C) ->
   (amend_D ps, amend ps C,s) --[tl]-->* (amend_D ps,C',s') ->
   exists tl' tl'' C'' s'',
   (amend_D ps,C',s') --[tl']-->* (amend_D ps, amend ps C'',s'')
@@ -976,10 +873,10 @@ induction n; intros.
   intros tl0 [t0 [C0 [s0 [Htl0 [Hsub0 Htl0IF] ] ] ] ].
   induction (diamond_4b _ _ _ _ _ _ _ _ _ H2 Htl0) as [ [D C2] [tl' [tl0' [s2a [s2b [HC' [HC0 [Hs [Hperm [Hlen1 Hlen2] ] ] ] ] ] ] ] ] ].
   generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ HC'). intro H'; rewrite <- H' in *; clear D H'.
-  generalize (CCP_To_Program_WF _ _ _ _ _ _ _ (amend_Program_WF _ _ _ H) H1). intro HP''.
-  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ _ HP'' H2). intro HP'.
-  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ _ HP' HC'). intro HP2.
-  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ _ HP'' Htl0). intro HP0.
+  generalize (CCP_To_Program_WF _ _ _ _ _ _ (amend_Program_WF _ _ H) H1). intro HP''.
+  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ HP'' H2). intro HP'.
+  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ HP' HC'). intro HP2.
+  generalize (CCP_ToStar_Program_WF _ _ _ _ _ _ HP'' Htl0). intro HP0.
   elim (IHn C0 s0 tl0' C2 s2b); auto.
   intros tl1 [t1 [C1 [s1 [Hsub1 [Htl1 Htl1IF] ] ] ] ].
   2: etransitivity; eauto.

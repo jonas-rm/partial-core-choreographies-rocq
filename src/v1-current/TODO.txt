@@ -1,3 +1,6 @@
+- relativize decidability to Xs
+- relax amend_P and epp
+
 - add indices to communications (family of communication operations)
   and selections?
 - formalize trees (communication expressions)

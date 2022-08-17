@@ -24,20 +24,20 @@ Variable f:PRFunction n.
 Theorem amended_encoding_WF : CCP_WF (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
 Proof.
 intros.
-induction (Encoding'_WF f) as [Hann [Xs HWF] ].
+induction (Encoding'_WF f) as [Hann HWF].
 split.
 + red; simpl; intros. rewrite <- amend_P_Vars.
-  clear Xs HWF.
+  clear HWF.
   red; intros. apply Hann.
   induction (Encoding' f) as (D,C).
   unfold Procs, Procedures, amend_P in H. simpl in H.
   generalize amend_CCC_pn_incl; intro.
   red in H0. eauto.
-+ exists Xs. apply amend_Program_WF; auto.
++ apply amend_Program_WF; auto.
 Qed.
 
-Lemma amend_implements : forall ps q P ps' a Xs,
-  Program_WF _ Xs P -> implements P f ps q -> implements (amend_P ps' a P) f ps q.
+Lemma amend_implements : forall ps q P ps' a,
+  Program_WF _ P -> implements P f ps q -> implements (amend_P ps' a P) f ps q.
 Proof.
 red; intros. rename H into HP, H1 into Hps.
 induction (H0 xs s) as [Hconv Hdiv]; auto.
@@ -53,7 +53,7 @@ all: split; intros.
   generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ Hred) as HDefs; intros.
   rewrite <- HDefs in *; clear Defs' HDefs. simpl in *.
   rewrite HP' in *; clear C' HP'.
-  apply amend_complete_many with (a:=a) (ps:=ps') (Xs:=Xs) in Hred; auto.
+  apply amend_complete_many with (a:=a) (ps:=ps') in Hred; auto.
   induction Hred as (tl',(tl'',(C'',(s'',(Hsub,(Htl',Htl'')))))).
   generalize (CCP_ToStar_End _ _ _ _ _ _ Htl'); intro H'.
   induction H' as [H1 H2]; auto. rewrite H1 in *; clear H1 tl'.
@@ -65,7 +65,7 @@ all: split; intros.
   induction H as (s',(ts,(P',(Hts,(Hs',HP'))))).
   induction P' as (Defs',C'). simpl in *; rewrite HP' in *; clear C' HP'.
   rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ Hts) in Hts; clear Defs'.
-  apply amend_sound_many with (Xs:=Xs) in Hts; auto.
+  apply amend_sound_many in Hts; auto.
   induction Hts as (tl',(tl'',(C'',(s'',(Htl',(Htl'',Hsub)))))).
   generalize (CCP_ToStar_End _ _ _ _ _ _ Htl'); intro H'.
   induction H' as [H1 H2]; auto. rewrite H1 in *; clear H1 tl'.
@@ -78,7 +78,7 @@ all: split; intros.
   induction P' as (Defs',C').
   generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H1) as HDefs; intros.
   rewrite <- HDefs in *; clear Defs' HDefs. simpl in *.
-  apply amend_sound_many with (Xs:=Xs) in H1; auto.
+  apply amend_sound_many in H1; auto.
   induction H1 as (tl',(tl'',(C'',(s'',(Htl',(Htl'',Hsub)))))).
   simpl in Htl''. specialize (Hto _ _ _ Htl'').
   intro. apply Hto; simpl.
@@ -91,7 +91,7 @@ all: split; intros.
   induction P' as (Defs',C').
   generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H1) as HDefs; intros.
   rewrite <- HDefs in *; clear Defs' HDefs. simpl in *.
-  apply amend_complete_many with (a:=a) (ps:=ps') (Xs:=Xs) in H1; auto.
+  apply amend_complete_many with (a:=a) (ps:=ps') in H1; auto.
   induction H1 as (tl',(tl'',(C'',(s'',(Hsub,(Htl',Htl'')))))).
   intro HC'. rewrite HC' in *; clear C' HC'.
   generalize (CCP_ToStar_End _ _ _ _ _ _ Htl'); intro H'.
@@ -105,83 +105,83 @@ Theorem amended_encoding_sound :
              f (vec_1_to_n n) 0.
 Proof.
 intros.
-induction (Encoding'_WF f) as [Hann [Xs HP] ].
-apply amend_implements with Xs; auto.
+induction (Encoding'_WF f) as [Hann HP].
+apply amend_implements; auto.
 apply encoding_sound.
 Qed.
 
 Theorem amended_encoding_projectable :
-  projectable _ (RecVarList (Gamma f)) (all_pids (n+Pi f))
+  projectable _ (all_pids (n+Pi f))
                 (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
 Proof.
 intros.
 induction (Encoding'_WF f) as [Hann [Xs HWF] ].
 repeat split.
 + apply amend_projectable_C.
-+ red. rewrite List.Forall_forall; intros.
++ intro X.
   unfold Procedures, amend_P.
   set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl.
   red; rewrite List.Forall_forall; intros.
   apply amend_projectable_B.
-  unfold Encoding', Encoding in H0.
-  change D with (fst (D,C)) in H1. rewrite H0 in H1. simpl in H1.
-  rewrite vmax_vec_1_to_n in H1; auto.
+  unfold Encoding', Encoding in H.
+  change D with (fst (D,C)) in H0. rewrite H in H0. simpl in H0.
+  rewrite vmax_vec_1_to_n in H0; auto.
 + unfold amend_P; simpl. tauto.
 + set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl.
   unfold Encoding', Encoding in H.
-  intros. change D with (fst (D,C)) in H1.
-  rewrite H in H1. simpl in H1.
-  rewrite vmax_vec_1_to_n in H1; auto.
+  intros. change D with (fst (D,C)) in H0.
+  rewrite H in H0. simpl in H0.
+  rewrite vmax_vec_1_to_n in H0; auto.
 + set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl; intros.
   specialize (Hann X p). rewrite <- H in Hann.
   unfold Encoding', Encoding in H.
-  intros. apply CCC_pn_mon with (Y:=Names D) in H1.
+  intros. apply CCC_pn_mon with (Y:=Names D) in H0.
   2: simpl; tauto.
-  apply amend_CCC_pn_incl in H1.
-  apply Hann in H1.
-  change D with (fst (D,C)) in H1.
-  rewrite H in H1. simpl in H1.
-  rewrite vmax_vec_1_to_n in H1; auto.
+  apply amend_CCC_pn_incl in H0.
+  apply Hann in H0.
+  change D with (fst (D,C)) in H0.
+  rewrite H in H0. simpl in H0.
+  rewrite vmax_vec_1_to_n in H0; auto.
 Qed.
 
 Theorem amended_encoding_Projectable :
   Projectable _ (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
 Proof.
 intros.
-induction (Encoding'_WF f) as [Hann [Xs HWF] ].
+induction (Encoding'_WF f) as [Hann HWF].
 (* this should be simplifiable *)
-exists Xs, (all_pids (n+Pi f)); split. repeat split.
+exists (all_pids (n+Pi f)); split. repeat split.
 + apply amend_projectable_C.
-+ red. rewrite List.Forall_forall; intros.
++ intro.
   unfold Procedures, amend_P.
   set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl.
   red; rewrite List.Forall_forall; intros.
   apply amend_projectable_B.
-  unfold Encoding', Encoding in H0.
-  change D with (fst (D,C)) in H1. rewrite H0 in H1. simpl in H1.
-  rewrite vmax_vec_1_to_n in H1; auto.
+  unfold Encoding', Encoding in H.
+  change D with (fst (D,C)) in H0. rewrite H in H0. simpl in H0.
+  rewrite vmax_vec_1_to_n in H0; auto.
 + unfold amend_P; simpl. tauto.
 + set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl.
   unfold Encoding', Encoding in H.
-  intros. change D with (fst (D,C)) in H1.
-  rewrite H in H1. simpl in H1.
-  rewrite vmax_vec_1_to_n in H1; auto.
+  intros. change D with (fst (D,C)) in H0.
+  rewrite H in H0. simpl in H0.
+  rewrite vmax_vec_1_to_n in H0; auto.
 + set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl; intros.
   specialize (Hann X p). rewrite <- H in Hann.
   unfold Encoding', Encoding in H.
-  intros. apply CCC_pn_mon with (Y:=Names D) in H1.
+  intros. apply CCC_pn_mon with (Y:=Names D) in H0.
   2: simpl; tauto.
-  apply amend_CCC_pn_incl in H1.
-  apply Hann in H1.
-  change D with (fst (D,C)) in H1.
-  rewrite H in H1. simpl in H1.
-  rewrite vmax_vec_1_to_n in H1; auto.
+  apply amend_CCC_pn_incl in H0.
+  apply Hann in H0.
+  change D with (fst (D,C)) in H0.
+  rewrite H in H0. simpl in H0.
+  rewrite vmax_vec_1_to_n in H0; auto.
 + apply amend_Program_WF; auto.
 Qed.
 
@@ -210,17 +210,17 @@ Definition SP_implements (P:SP.Program (Sig' IS))
     (diverges f xs <->
         forall s' ts P', (P,s) --[ts]-->* (P',s') -> ~(Net P' (==) EmptyNet _)).
 
-Definition Encode_Net {n} f := epp _ _ _ (amended_encoding_projectable n f).
+Definition Encode_Net {n} f := epp _ _ (amended_encoding_projectable n f).
 
 Variable n:nat.
 Variable f:PRFunction n.
 
-Lemma epp_implements : forall P Xs ps q ps',
-  Program_WF _ Xs P -> well_ann _ P -> forall (HP:projectable _ Xs ps' P),
+Lemma epp_implements : forall P ps q ps',
+  Program_WF _ P -> well_ann _ P -> forall (HP:projectable _ ps' P),
   (forall p, List.In p ps' -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, List.In p (CCC_pn (Main P) (Vars P)) -> List.In p ps') ->
-  (forall p X, List.In X Xs -> List.In p (Vars P X) -> List.In p ps') ->
-  implements P f ps q -> SP_implements (epp Xs ps' P HP) f ps q.
+  (forall p X, List.In p (Vars P X) -> List.In p ps') ->
+  implements P f ps q -> SP_implements (epp ps' P HP) f ps q.
 Proof.
 intros.
 rename H0 into Hann, H1 into Hsp, H2 into Hpn, H3 into Hin, H4 into Himpl.
@@ -241,12 +241,12 @@ repeat split.
   1:{ red; rewrite List.Forall_forall; intros.
       exists (SP.End _); constructor.
   }
-  assert (projectable IS Xs ps' (D,End)).
+  assert (projectable IS ps' (D,End)).
   1: { elim HP. intros HC (HD,(H1,(H2,H3))).
        repeat split; auto. simpl; tauto.
   }
   specialize (HN H1).
-  generalize (epp_C_char _ _ _ _ _ H1 H0); intros.
+  generalize (epp_C_char _ _ _ _ H1 H0); intros.
   intro. specialize (HN p). rewrite H2 in HN.
   rewrite epp_C_End in HN. inversion HN; auto.
 + (* N terminates *)
@@ -258,7 +258,7 @@ repeat split.
   apply CCP_ToStar_projectable with (s:=s) (tl:=ts') (P':=P'') (s':=s') in HP; auto.
   specialize (HN HP).
   apply epp_EmptyNet' with (HP:=HP) (N:=Net P'); auto.
-  apply (CCP_ToStar_Program_WF _ _ _ _ _ _ _ H Htl').
+  apply (CCP_ToStar_Program_WF _ _ _ _ _ _ H Htl').
 + (* f diverges *)
   induction Hdiv; intros. specialize (H0 H2). clear Hconv H1 H2.
   apply EPP_Sound' in H3.
@@ -266,7 +266,7 @@ repeat split.
   intro. eapply H0; eauto. all: auto.
   apply CCP_ToStar_projectable with (s:=s) (tl:=ts') (P':=P'') (s':=s') in HP; auto.
   apply epp_EmptyNet' with (HP:=HP) (N:=Net P'); auto.
-  apply (CCP_ToStar_Program_WF _ _ _ _ _ _ _ H Htl').
+  apply (CCP_ToStar_Program_WF _ _ _ _ _ _ H Htl').
 + (* N loops *)
   intros. apply Hdiv; intros. clear Hconv Hdiv.
   induction P as (D,C), P' as (D',C').
@@ -279,12 +279,12 @@ repeat split.
   1:{ red; rewrite List.Forall_forall; intros.
       exists (SP.End _); constructor.
   }
-  assert (projectable IS Xs ps' (D,End)).
+  assert (projectable IS ps' (D,End)).
   1: { elim HP. intros HC (HD,(H2,(H3,H4))).
        repeat split; auto. simpl; tauto.
   }
   specialize (HN H2).
-  generalize (epp_C_char _ _ _ _ _ H2 H1); intros.
+  generalize (epp_C_char _ _ _ _ H2 H1); intros.
   intro. specialize (HN p). rewrite H3 in HN.
   rewrite epp_C_End in HN. inversion HN; auto.
 Qed.
@@ -296,36 +296,33 @@ induction (amended_encoding_WF n f) as [Hann [Xs HXs] ].
 apply epp_implements; auto.
 + apply amend_Program_WF; auto.
   split. apply Encoding_Main_WF.
-  split. apply Encoding_Main_within_Xs; apply RecVarList_In; auto with arith.
   split. simpl; auto.
   split.
   1: { apply Encoding_rec_WF; intros; auto.
-       intro. elim (in_vec_k_to_n _ H0); intros.
-       inversion H1.
+       intro. elim (in_vec_k_to_n _ H); intros.
+       inversion H0.
     2: auto with arith.
-    elim (in_vec_k_to_n _ H0); intros.
+    elim (in_vec_k_to_n _ H); intros.
     rewrite vmax_vec_1_to_n; auto.
   }
   split. apply Encoding_rec_initial.
-  split. apply Encoding_Procs_Vars_not_nil.
-  change (Gamma f) with (0 + Gamma f).
-  apply Encoding_rec_within_Xs; simpl; auto.
+  apply Encoding_Procs_Vars_not_nil.
 + intros. apply HXs.
 + intros. simpl in H.
   rewrite <- amend_P_Vars in H.
   unfold Vars, Encoding', Procedures in H.
   simpl in H.
   rewrite vmax_vec_1_to_n in H; auto.
-+ intros. unfold Vars, Encoding', Procedures in H0.
-  simpl in H0.
-  rewrite vmax_vec_1_to_n in H0; auto.
++ intros. unfold Vars, Encoding', Procedures in H.
+  simpl in H.
+  rewrite vmax_vec_1_to_n in H; auto.
 + apply amended_encoding_sound.
 Qed.
 
 Lemma encode_Net_WF : Network_WF _ (Net (Encode_Net f)).
 Proof.
 unfold Encode_Net.
-set (Xs := RecVarList (Gamma f)).
+(* set (Xs := RecVarList (Gamma f)). *)
 set (ps := all_pids (n+Pi f)).
 (* set (P := Encoding' f).
 assert (P = Encoding' f); auto. *)
