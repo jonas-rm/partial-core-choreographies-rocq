@@ -71,6 +71,108 @@ end.
 Definition amend_D ps : DefSet Sig :=
   fun X => (fst (Defs X), amend ps (snd (Defs X))).
 
+(** Sanity checks - examples from the paper. *)
+
+Example BuyerSeller : forall buyer seller offer x acceptable product y,
+  buyer<>seller ->
+  amend (buyer::seller::nil)
+  (buyer#offer --> seller$x@a;;
+    If seller??acceptable
+      Then (seller#product --> buyer$y@a;; CC.End)
+    Else CC.End)
+  = (buyer#offer --> seller$x@a;;
+    If seller??acceptable
+      Then (seller-->buyer[left]@a;; seller#product --> buyer$y@a;; CC.End)
+    Else (seller-->buyer[right]@a;; CC.End)).
+Proof.
+intros; simpl.
+rewrite <- eqb_neq in H. rewrite H.
+elim projectable_B_dec; simpl; auto.
+- intro; exfalso. rewrite eqb_neq in H.
+  induction a0 as [B HB].
+  inversion HB; auto.
+  inversion H5; auto. inversion H8; auto.
+  rewrite <- H19, <- H25 in H10; inversion H10.
+- intro.
+  rewrite eqb_refl. auto.
+Qed.
+
+Example counter_example_1 : forall p q r e e' x y b, p <> q -> p <> r -> q <> r ->
+  amend (p::q::r::nil)
+    (p#e-->q$x@a;; If r??b Then (r#e'-->p$y@a;;CC.End) Else CC.End)
+  = (p#e-->q$x@a;; If r??b
+                   Then (r-->p[left]@a;; r#e'-->p$y@a;; CC.End)
+                   Else (r-->p[right]@a;; CC.End)).
+Proof.
+intros; simpl.
+rewrite <- eqb_neq in H0, H1; rewrite H0, H1.
+elim projectable_B_dec; auto.
+2: elim projectable_B_dec; auto.
+- intro; exfalso. rewrite eqb_neq in H0; clear H1.
+  induction a0 as [B HB].
+  inversion HB; auto.
+  inversion H6; auto. inversion H9; auto.
+  rewrite <- H20, <- H26 in H11; inversion H11.
+- intro. rewrite eqb_refl. auto.
+- intro; exfalso. apply b0.
+  rewrite eqb_neq in H0, H1.
+  exists (End _).
+  apply bproj_Cond' with (End _) (End _); repeat constructor; auto.
+Qed.
+
+Example smart : forall p q r e e' e'' x b, p <> q -> p <> r -> q <> r ->
+  amend (p::q::r::nil)
+    (If p??b Then (p#e-->q$x@a;; q#e'-->r$x@a;; CC.End)
+            Else (q#e''-->r$x@a;; CC.End))
+  = (If p??b Then (p-->q[left]@a;; p#e-->q$x@a;; q#e'-->r$x@a;; CC.End)
+            Else (p-->q[right]@a;; q#e''-->r$x@a;; CC.End)).
+Proof.
+intros; simpl.
+rewrite eqb_refl.
+assert (q <> p) as Hq; auto.
+assert (r <> p) as Hr; auto.
+rewrite <- eqb_neq in Hq, Hr; rewrite Hq, Hr.
+elim projectable_B_dec; auto.
+2: elim projectable_B_dec; auto.
+- intro; exfalso.
+  induction a0 as [B HB].
+  inversion HB; auto.
+  inversion H7; auto. inversion H10; auto.
+  rewrite <- H21, <- H32 in H12; inversion H12.
+- intros; exfalso. apply b0.
+  exists (Recv Sig' q x a (End _)).
+  apply bproj_Cond' with (Recv Sig' q x a (End _)) (Recv Sig' q x a (End _));
+    repeat constructor; auto.
+Qed.
+
+Example counter_example_2 : forall p q r e x b, p <> q -> p <> r -> q <> r ->
+  amend (p::q::r::nil)
+    (If p??b Then (q#e-->r$x@a;; q#e-->p$x@a;; CC.End)
+             Else (q#e-->r$x@a;; CC.End))
+  = (If p??b Then (p-->q[left]@a;; q#e-->r$x@a;; q#e-->p$x@a;; CC.End)
+             Else (p-->q[right]@a;; q#e-->r$x@a;; CC.End)).
+Proof.
+intros; simpl.
+rewrite eqb_refl.
+assert (q <> p) as Hq; auto.
+assert (r <> p) as Hr; auto.
+rewrite <- eqb_neq in Hq, Hr; rewrite Hq, Hr.
+elim projectable_B_dec; auto.
+2: elim projectable_B_dec; auto.
+- intro; exfalso.
+  induction a0 as [B HB].
+  inversion HB; auto.
+  revert H12.
+  inversion_clear H7; auto. inversion_clear H10; auto.
+  intro. inversion_clear H10. revert H13.
+  inversion_clear H12; auto. inversion_clear H7; auto.
+  intro. inversion_clear H13.
+- intros; exfalso. apply b0.
+  rewrite eqb_neq in Hr.
+  exists (Recv Sig' q x a (End _)).
+  apply bproj_Cond' with (Recv Sig' q x a (End _)) (Recv Sig' q x a (End _)); repeat constructor; auto.
+Qed.
+
 (** To avoid duplication of cases - I'd love an or... *)
 
 Lemma up_list_If : forall p b r ps C1 C2,

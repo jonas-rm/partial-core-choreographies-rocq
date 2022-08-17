@@ -42,7 +42,7 @@ $(build-targets):
 
 .SECONDEXPANSION:
 $(doc-targets): $$(basename $$@).vo
-	$(coqdoc) $(basename $@).v
+	$(coqdoc) -g $(basename $@).v
 
 # TODO: Use coqdep instead of writing deps manually
 Common.vo: Basic.vo
