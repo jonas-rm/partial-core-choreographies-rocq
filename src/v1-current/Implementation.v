@@ -2341,9 +2341,10 @@ do 2 intro; case f; simpl; intros; revert H1.
 Qed.
 
 Lemma Encoding_WF : forall {n} (f:PRFunction n) ps q,
-  ~In q ps -> CCP_WF (Encoding f ps q).
+  ~In q ps -> Program_WF (Encoding f ps q).
 Proof.
-split.
+split. 2: repeat split.
++ apply Encoding_Main_WF.
 + red; intro. unfold Vars; simpl.
   do 2 red; intros.
   unfold Procs, Encoding, Procedures in H0.
@@ -2351,19 +2352,15 @@ split.
   - apply all_pids_In; auto.
   - intros. apply Nat.max_le_iff. right; apply vmax_In; auto.
   - apply Nat.le_max_l.
-+ split. apply Encoding_Main_WF.
-  split. simpl; auto.
-  split.
-  1: { apply Encoding_rec_WF; intros; auto; apply le_n_S.
-    2: apply Nat.le_max_l.
-    transitivity (vmax ps). 2: apply Nat.le_max_r. apply vmax_In; auto.
-  }
-  split. apply Encoding_rec_initial.
-  apply Encoding_Procs_Vars_not_nil.
++ apply Encoding_rec_WF; intros; auto; apply le_n_S.
+  2: apply Nat.le_max_l.
+  transitivity (vmax ps). 2: apply Nat.le_max_r. apply vmax_In; auto.
++ apply Encoding_rec_initial.
++ apply Encoding_Procs_Vars_not_nil.
 Qed.
 
 Lemma Encoding'_WF : forall {n} (f:PRFunction n),
-  CCP_WF (Encoding' f).
+  Program_WF (Encoding' f).
 Proof.
 intros; apply Encoding_WF.
 intro. elim (in_vec_k_to_n _ H); intros.

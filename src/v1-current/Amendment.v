@@ -272,17 +272,20 @@ induction C; auto; intros.
 Qed.
 
 Lemma amend_Program_WF : forall ps C,
-  Program_WF _ (Defs,C) -> Program_WF _ (amend_D ps,amend ps C).
+  Program_WF (Defs,C) -> Program_WF (amend_D ps,amend ps C).
 Proof.
 intros.
-destroy H. split. 2: split.
+destroy H. split. 2: repeat split.
 + apply amend_Choreography_WF; auto.
 + apply amend_consistent; auto.
-+ intro X. induction (H X) as (H3,(H4,H5)).
-  repeat split.
-  - apply amend_no_self_comm; auto.
-  - apply amend_initial; auto.
-  - unfold Vars, amend_D; simpl. auto.
++ red in H2; red. intros.
+  unfold CC.Procs, Vars; simpl.
+  unfold CC.Procs, Vars in H2; simpl in H2.
+  red; intros. apply H2.
+  apply amend_CCC_pn_incl in H3; auto.
++ apply amend_no_self_comm, H.
++ apply amend_initial, H.
++ unfold Vars, amend_D; apply H.
 Qed.
 
 (** ** Selection expansion up to permutation
@@ -638,7 +641,7 @@ do 4 eexists. repeat split; eauto.
 apply sel_exp_app''; auto.
 Qed.
 
-Lemma amend_complete_many : forall ps C s tl C' s', Program_WF _ (Defs,C) ->
+Lemma amend_complete_many : forall ps C s tl C' s', Program_WF (Defs,C) ->
   (Defs,C,s) --[tl]-->* (Defs,C',s') ->
   exists tl' tl'' C'' s'',
        sel_exp (tl++tl') tl''
@@ -839,7 +842,7 @@ induction C; intros. induction e.
 + inversion H.
 Qed.
 
-Lemma amend_sound_many : forall ps C s tl C' s', Program_WF _ (Defs,C) ->
+Lemma amend_sound_many : forall ps C s tl C' s', Program_WF (Defs,C) ->
   (amend_D ps, amend ps C,s) --[tl]-->* (amend_D ps,C',s') ->
   exists tl' tl'' C'' s'',
   (amend_D ps,C',s') --[tl']-->* (amend_D ps, amend ps C'',s'')

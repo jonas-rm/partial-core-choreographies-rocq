@@ -7,7 +7,7 @@ Require Export Implementation.
 (** ** Turing completeness of CC *)
 
 Theorem CC_Turing_Complete : forall n (f:PRFunction n),
-  exists P, CCP_WF P /\ implements P f (vec_1_to_n n) 0.
+  exists P, Program_WF P /\ implements P f (vec_1_to_n n) 0.
 Proof.
 eexists; split.
 2: apply encoding_sound.
@@ -21,23 +21,14 @@ Section Amend.
 Variable n:nat.
 Variable f:PRFunction n.
 
-Theorem amended_encoding_WF : CCP_WF (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
+Theorem amended_encoding_WF : Program_WF (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
 Proof.
 intros.
-induction (Encoding'_WF f) as [Hann HWF].
-split.
-+ red; simpl; intros. rewrite <- amend_P_Vars.
-  clear HWF.
-  red; intros. apply Hann.
-  induction (Encoding' f) as (D,C).
-  unfold Procs, Procedures, amend_P in H. simpl in H.
-  generalize amend_CCC_pn_incl; intro.
-  red in H0. eauto.
-+ apply amend_Program_WF; auto.
+apply amend_Program_WF, Encoding'_WF.
 Qed.
 
 Lemma amend_implements : forall ps q P ps' a,
-  Program_WF _ P -> implements P f ps q -> implements (amend_P ps' a P) f ps q.
+  Program_WF P -> implements P f ps q -> implements (amend_P ps' a P) f ps q.
 Proof.
 red; intros. rename H into HP, H1 into Hps.
 induction (H0 xs s) as [Hconv Hdiv]; auto.
@@ -105,8 +96,7 @@ Theorem amended_encoding_sound :
              f (vec_1_to_n n) 0.
 Proof.
 intros.
-induction (Encoding'_WF f) as [Hann HP].
-apply amend_implements; auto.
+apply amend_implements. apply Encoding'_WF.
 apply encoding_sound.
 Qed.
 
@@ -115,7 +105,7 @@ Theorem amended_encoding_projectable :
                 (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
 Proof.
 intros.
-induction (Encoding'_WF f) as [Hann [Xs HWF] ].
+induction (Encoding'_WF f) as [HWF [Hcons [Hann HProcs] ] ].
 repeat split.
 + apply amend_projectable_C.
 + intro X.
@@ -140,8 +130,7 @@ repeat split.
   unfold Encoding', Encoding in H.
   intros. apply CCC_pn_mon with (Y:=Names D) in H0.
   2: simpl; tauto.
-  apply amend_CCC_pn_incl in H0.
-  apply Hann in H0.
+  apply amend_CCC_pn_incl, Hann in H0.
   change D with (fst (D,C)) in H0.
   rewrite H in H0. simpl in H0.
   rewrite vmax_vec_1_to_n in H0; auto.
@@ -151,7 +140,7 @@ Theorem amended_encoding_Projectable :
   Projectable _ (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
 Proof.
 intros.
-induction (Encoding'_WF f) as [Hann HWF].
+induction (Encoding'_WF f) as [HWF [Hcons [Hann HProcs] ] ].
 (* this should be simplifiable *)
 exists (all_pids (n+Pi f)); split. repeat split.
 + apply amend_projectable_C.
@@ -182,11 +171,11 @@ exists (all_pids (n+Pi f)); split. repeat split.
   change D with (fst (D,C)) in H0.
   rewrite H in H0. simpl in H0.
   rewrite vmax_vec_1_to_n in H0; auto.
-+ apply amend_Program_WF; auto.
++ apply amend_Program_WF; red; auto.
 Qed.
 
 Lemma projCC_Turing_Complete : exists P,
-  CCP_WF P /\ Projectable _ P /\ implements P f (vec_1_to_n n) 0.
+  Program_WF P /\ Projectable _ P /\ implements P f (vec_1_to_n n) 0.
 Proof.
 eexists; split. 2: split.
 2: apply amended_encoding_Projectable.
@@ -216,14 +205,14 @@ Variable n:nat.
 Variable f:PRFunction n.
 
 Lemma epp_implements : forall P ps q ps',
-  Program_WF _ P -> well_ann _ P -> forall (HP:projectable _ ps' P),
+  Program_WF P -> forall (HP:projectable _ ps' P),
   (forall p, List.In p ps' -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, List.In p (CCC_pn (Main P) (Vars P)) -> List.In p ps') ->
   (forall p X, List.In p (Vars P X) -> List.In p ps') ->
   implements P f ps q -> SP_implements (epp ps' P HP) f ps q.
 Proof.
 intros.
-rename H0 into Hann, H1 into Hsp, H2 into Hpn, H3 into Hin, H4 into Himpl.
+rename H0 into Hsp, H1 into Hpn, H2 into Hin, H3 into Himpl.
 red; intros.
 induction (Himpl _ _ H0) as [Hconv Hdiv]; clear H0.
 repeat split.
@@ -292,11 +281,20 @@ Qed.
 Theorem encode_Net_sound : SP_implements (Encode_Net f) f (vec_1_to_n n) 0.
 Proof.
 intros.
-induction (amended_encoding_WF n f) as [Hann [Xs HXs] ].
+induction (amended_encoding_WF n f) as [HWF [Hcons [Hann HProcs] ] ].
 apply epp_implements; auto.
 + apply amend_Program_WF; auto.
   split. apply Encoding_Main_WF.
   split. simpl; auto.
+  split.
+  1: {
+    repeat intro; apply Hann.
+    clear HWF Hcons HProcs Hann.
+    set (ps := all_pids (n + Pi f)); clearbody ps.
+    induction (Encoding' f) as (D,C).
+    revert H. simpl. unfold Procs, Vars; simpl.
+    apply (amend_CCC_pn_C IS).
+  }
   split.
   1: { apply Encoding_rec_WF; intros; auto.
        intro. elim (in_vec_k_to_n _ H); intros.
@@ -307,7 +305,6 @@ apply epp_implements; auto.
   }
   split. apply Encoding_rec_initial.
   apply Encoding_Procs_Vars_not_nil.
-+ intros. apply HXs.
 + intros. simpl in H.
   rewrite <- amend_P_Vars in H.
   unfold Vars, Encoding', Procedures in H.

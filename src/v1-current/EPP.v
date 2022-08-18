@@ -180,7 +180,7 @@ Definition projectable ps P :=
 (** Not decidable, but in practice easy to compute. 
   Maybe we want to compute ps from Xs? *)
 
-Definition Projectable P := exists ps, projectable ps P /\ Program_WF _ P.
+Definition Projectable P := exists ps, projectable ps P /\ Program_WF P.
 
 (** For tackling contradictions in the absurd cases of the definitions below. *)
 
@@ -1073,21 +1073,21 @@ all: rewrite <- H4; specialize (H13 _ H11); tauto.
 Qed.
 
 Lemma Program_WF_D_str_proj : forall ps P,
-  CC.Program_WF _ P -> projectable ps P -> well_ann _ P ->
+  CC.Program_WF P -> projectable ps P -> well_ann _ P ->
   forall X p, In p ps -> str_proj (Procedures _ P) (CC.Procs P X) p.
 Proof.
 intros. destroy H.
 elim (H X); auto.
-intros. clear H; destroy H6.
+intros. clear H; destroy H7.
 destroy H0.
 elim (In_dec (@eq_dec Pid) p (Vars P X)); intros.
 + apply initial_str_proj with (Vars P X); auto.
-  apply H8.
+  apply H9.
 + apply initial_str_proj'; auto.
   intro; apply b, H1. auto.
 Qed.
 
-Lemma epp_EmptyNet' : forall ps P HP N, Program_WF Sig P ->
+Lemma epp_EmptyNet' : forall ps P HP N, Program_WF P ->
   N (==) nnil -> N (>>) Net (epp ps P HP) -> Main P = CC.End.
 Proof.
 intros. rename H into HWF, H1 into HN, H0 into HN'.
@@ -1132,7 +1132,7 @@ destruct C; auto. induction e.
   apply HP; simpl. rewrite set_union_iff, H0; simpl; auto.
 Qed.
 
-Lemma epp_EmptyNet : forall ps P HP, Program_WF Sig P ->
+Lemma epp_EmptyNet : forall ps P HP, Program_WF P ->
   nnil (>>) Net (epp ps P HP) -> Main P = CC.End.
 Proof.
 intros.
@@ -1799,18 +1799,18 @@ eapply CCC_To_projectable_C_Call; eauto.
 Qed.
 
 Lemma CCP_To_projectable : forall P ps,
-  Program_WF _ P -> well_ann _ P -> projectable ps P ->
+  Program_WF P -> projectable ps P ->
   (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In p (Vars P X) -> In p ps) ->
   forall s tl P' s', (P,s) --[tl]--> (P',s') -> projectable ps P'.
 Proof.
-intros. rename H2 into HSP, H3 into Hnames, H4 into HD, H5 into H2.
+intros. rename H1 into HSP, H2 into Hnames, H3 into HD, H4 into H2.
 induction P as (D,C). induction P' as (D', C').
 generalize (CCP_To_Defs_stable _ D D' C C' tl s s' H2); intro.
-rewrite <- H3 in H2; rewrite <- H3; clear D' H3.
-inversion H2. rewrite <- H4 in H2. clear s'0 H9 C'0 H8 tl H4 s0 H6 C0 H5 D0 H3.
-rename H7 into Ht.
+rewrite <- H1 in *; clear D' H1.
+inversion H2. rewrite <- H3 in H2. clear s'0 H8 C'0 H7 tl H3 s0 H5 C0 H4 D0 H1.
+rename H6 into Ht.
 destroy H0; intros. repeat split; auto.
 + destroy H1.
   apply CCC_To_projectable_C with C s s' t; auto.
@@ -1818,16 +1818,15 @@ destroy H0; intros. repeat split; auto.
     elim (In_dec (@eq_dec Pid) r (CCC_pn (snd (D Y)) (Names D))); intro.
     * apply initial_str_proj with (fst (D Y)); auto.
       destroy H. elim (H Y); tauto.
-      apply H0; auto.
+      apply H; auto.
     * apply initial_str_proj'; auto.
       destroy H. elim (H Y); tauto.
-+ apply H1.
+  - simpl. apply H.
 + simpl. intros. elim (CCC_To_pn' _ _ _ _ _ _ _ Ht p); intros; auto.
-  - destroy H4. apply HD with x.
-    apply H0; auto.
+  - destroy H7. apply HD with x.
+    apply H; auto.
   - unfold Names. eapply CCC_pn_mon; eauto.
-    intros. inversion H4.
-+ apply H1.
+    intros. inversion H7.
 Qed.
 
 (** Strong projectability of well-formed programs is also preserved by reductions:
@@ -2132,60 +2131,60 @@ induction t; intros.
 Qed.
 
 Lemma CCP_To_str_proj : forall P ps,
-  Program_WF _ P -> well_ann _ P -> projectable ps P ->
+  Program_WF P -> projectable ps P ->
   (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In p (Vars P X) -> In p ps) ->
   forall s tl P' s', (P,s) --[tl]--> (P',s') ->
   forall p, In p ps -> str_proj (Procedures _ P') (Main P') p.
 Proof.
-intros. rename H2 into HSP, H3 into Hnames, H4 into HD, H5 into H2.
+intros. rename H1 into HSP, H2 into Hnames, H3 into HD, H4 into H2.
 induction P as (D,C). induction P' as (D', C').
 generalize (CCP_To_Defs_stable _ D D' C C' tl s s' H2); intro.
-rewrite <- H3 in H2; rewrite <- H3; clear D' H3.
-inversion H2. rewrite <- H4 in H2. clear s'0 H10 C'0 H9 tl H4 s0 H7 C0 H5 D0 H3.
-rename H8 into Ht.
-destroy H0; intros.
+rewrite <- H1 in *; clear D' H1.
+inversion H2. rewrite <- H3 in H2. clear s'0 H9 C'0 H8 tl H3 s0 H6 C0 H4 D0 H1.
+rename H7 into Ht.
+destroy H; intros.
 rename p into r.
-destroy H1.
+destroy H0.
 simpl. eapply CCC_To_str_proj; eauto.
 intros.
-destroy H. elim (H Y); auto. clear H. simpl; intros; destroy H11.
+(* destroy H. *) elim (H Y); auto. clear H. simpl; intros; destroy H11.
 elim (In_dec (@eq_dec Pid) p (fst (D Y))); intro.
 apply initial_str_proj with (fst (D Y)); auto.
 apply initial_str_proj'; auto.
-intro. apply b, H0; auto.
+intro. apply b, H4; auto.
 Qed.
 
 Lemma CCP_ToStar_str_proj : forall P ps,
-  Program_WF _ P -> well_ann _ P -> projectable ps P ->
+  Program_WF P -> projectable ps P ->
   (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In p (Vars P X) -> In p ps) ->
   forall s tl P' s', (P,s) --[tl]-->* (P',s') ->
   forall p, In p ps -> str_proj (Procedures _ P') (Main P') p.
 Proof.
-intros. rename H2 into HSP, H3 into Hnames, H4 into HD, H5 into H2.
+intros. rename H1 into HSP, H2 into Hnames, H3 into HD, H4 into H2.
 induction P as (D,C). induction P' as (D', C').
 generalize (CCP_ToStar_Defs_stable _ D D' C C' tl s s' H2); intro.
-rewrite <- H3 in H2; rewrite <- H3; clear D' H3.
+rewrite <- H1 in *; clear D' H1.
 revert dependent C. revert s.
-induction tl; intros; inversion H2. rewrite <- H4; auto.
-clear c3 H8 l H4 t H3 c1 H5. induction c2 as ((D',C''),s'').
-generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H7); intro.
-rewrite <- H3 in *; clear D' H3.
+induction tl; intros; inversion H2. rewrite <- H3; auto.
+clear c3 H7 l H3 t H1 c1 H4. induction c2 as ((D',C''),s'').
+generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H6); intro.
+rewrite <- H1 in *; clear D' H1.
 apply (IHtl s'' C''); auto.
 + eapply CCP_To_Program_WF; eauto.
 + eapply CCP_To_projectable; eauto.
 + eapply CCP_To_str_proj; eauto.
 + simpl; intros.
   generalize CCP_To_pn; intro.
-  specialize (H4 Sig (D,C) s a (D,C'') s''). simpl in H4.
-  apply Hnames; auto.
+  specialize (H3 Sig (D,C) s a (D,C'') s''). simpl in H3.
+  destroy H. apply Hnames; auto.
 Qed.
 
 Lemma CCP_ToStar_projectable: forall P ps,
-  Program_WF _ P -> well_ann _ P -> projectable ps P ->
+  Program_WF P -> projectable ps P ->
   (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
   (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
   (forall p X, In p (Vars P X) -> In p ps) ->
@@ -2193,25 +2192,23 @@ Lemma CCP_ToStar_projectable: forall P ps,
 Proof.
 intros. revert dependent P. revert s P' s'.
 induction tl; simpl; intros.
-inversion H5. rewrite <- H7; auto.
-inversion_clear H5. induction c2 as (P'',s'').
-generalize H6; intro.
+inversion H4. rewrite <- H6; auto.
+inversion_clear H4. induction c2 as (P'',s'').
+generalize H5; intro.
 induction P as (D,C), P' as (D',C'), P'' as (D'',C'').
-generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H6) as HD.
-generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H7) as HD'.
+generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H5) as HD.
+generalize (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H6) as HD'.
 intros. rewrite <- HD', <- HD in *; clear D' D'' HD HD'.
-apply CCP_To_projectable with (ps:=ps) in H6; auto.
-eapply IHtl. 7: eauto.
+apply CCP_To_projectable with (ps:=ps) in H5; auto.
+eapply IHtl. 6: eauto.
 + eapply CCP_To_Program_WF; eauto.
-+ red; red. unfold Vars, CC.Procs; simpl; intros.
-  eapply H0; auto.
 + auto.
 + simpl. intros.
-  apply CCP_To_str_proj with (ps:=ps) (p:=p) in H5; auto.
+  apply CCP_To_str_proj with (ps:=ps) (p:=p) in H4; auto.
 + simpl; intros.
   generalize CCP_To_pn; intro.
-  specialize (H9 Sig (D,C) s a (D,C'') s''). simpl in H9.
-  apply H3; auto.
+  specialize (H8 Sig (D,C) s a (D,C'') s''). simpl in H8.
+  destroy H. apply H2; auto.
 + unfold Vars; simpl. auto.
 Qed.
 
