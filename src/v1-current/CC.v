@@ -1042,6 +1042,65 @@ assert (Program_WF P''). eapply CCP_To_Program_WF; eauto.
 eapply CCP_To_pn; eauto.
 Qed.
 
+(** The set of procedure definitions never changes. *)
+
+Lemma CCP_To_Defs_stable : forall D D' C C' tl s s',
+  (D,C,s) --[tl]--> (D',C',s') -> D = D'.
+Proof.
+intros.
+inversion H.
+inversion H; auto.
+Qed.
+
+Lemma CCP_ToStar_Defs_stable : forall D D' C C' tl s s',
+  (D,C,s) --[tl]-->* (D',C',s') -> D = D'.
+Proof.
+intros D D' C C' tl; revert C C'.
+induction tl; intros; inversion H; clear H; auto.
+induction c2. induction a0.
+apply CCP_To_Defs_stable in H3.
+rewrite <- H3 in H5.
+eauto.
+Qed.
+
+(** Reductions are also preserved under equivalence of the set of definitions. *)
+
+Lemma CCC_To_Defs_eq : forall D D' C s tl C' s',
+  (forall X, D X = D' X) ->
+  <<C,s>> --[tl,D]--> <<C',s'>> -> <<C,s>> --[tl,D']--> <<C',s'>>.
+Proof.
+intros.
+induction H0; try constructor; auto.
+all: rewrite H; constructor; try rewrite <- H; auto.
+Qed.
+
+Lemma CCP_To_Defs_eq : forall P s tl P' s' D,
+  (forall X, Procedures P X = D X) ->
+  (P,s) --[tl]--> (P',s') -> (D,Main P,s) --[tl]--> (D,Main P',s').
+Proof.
+intros.
+induction P.
+inversion H0; constructor.
+apply CCC_To_Defs_eq with a; auto.
+Qed.
+
+Lemma CCP_ToStar_Defs_eq : forall P s tl P' s' D,
+  (forall X, Procedures P X = D X) ->
+  (P,s) --[tl]-->* (P',s') -> (D,Main P,s) --[tl]-->* (D,Main P',s').
+Proof.
+intros P s1 tl; revert P s1.
+induction tl; intros.
++ inversion H0. constructor; auto.
++ inversion H0.
+  induction c2 as (P2,s2).
+  apply CCT_Step with ((D,Main P2),s2).
+  - apply CCP_To_Defs_eq; auto.
+  - apply IHtl; auto.
+    replace P with (Procedures P,Main P) in H4. 2: induction P; auto.
+    replace P2 with (Procedures P2,Main P2) in H4. 2: induction P2; auto.
+    intro; rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4); auto.
+Qed.
+
 (** Some more specific properties. *)
 
 Lemma CCC_To_Com_neq : forall D C s p v q x C' s', Choreography_WF C ->
@@ -1159,68 +1218,161 @@ Qed.
 
 End Properties.
 
+(** ** Decidability results
+In practice, programs are finite - so in particular they can only
+use a finite number of procedures.
+This has some implications for decidability and computability. *)
+
+Fixpoint used_procedures_C (C:Choreography) (Xs:list RecVar) : Prop :=
+match C with
+| Interaction _ _ C' => used_procedures_C C' Xs
+| Cond _ _ C1 C2     => used_procedures_C C1 Xs /\ used_procedures_C C2 Xs
+| Call X             => In X Xs
+| RT_Call X _ C'     => In X Xs /\ used_procedures_C C' Xs
+| End                => True
+end.
+
+(** We cannot compute the set of used procedures (it may be infinite), but we can check it. *)
+
+Lemma used_procedures_C_dec : forall C Xs, {used_procedures_C C Xs} + {~used_procedures_C C Xs}.
+Proof.
+intros. induction C; simpl; auto.
++ (* Cond *)
+  inversion_clear IHC1; inversion_clear IHC2; auto;
+  right; intro; destroy H1; auto.
++ (* Call *)
+  apply In_dec, eq_dec.
++ (* RT_Call *)
+  inversion_clear IHC; [elim (In_dec (@eq_dec _) t Xs) | idtac]; intros.
+  - left; split; auto.
+  - right; intro; apply b.
+    destroy H0; auto.
+  - right; intro; apply H.
+    destroy H0; auto.
+Qed.
+
+(** Monotonicity and minimum requirements. *)
+
+Lemma used_procedures_C_mon : forall C Xs Ys, set_incl Xs Ys ->
+  used_procedures_C C Xs -> used_procedures_C C Ys.
+Proof.
+induction C; simpl; auto;
+  intros; inversion_clear H0; split; eauto.
+Qed.
+
+Lemma used_procedures_C_Free : forall C Xs, used_procedures_C C Xs ->
+  forall X, X_Free X C -> In X Xs.
+Proof.
+unfold X_Free.
+induction C; auto; simpl; unfold set_union_rv; intros; destroy H.
+- rewrite set_union_iff in H0. inversion H0; auto.
+- inversion_clear H0; inversion H1. rewrite <- H1; auto.
+- rewrite set_union_iff in H0. inversion H0; auto.
+  inversion H2; inversion H3; auto. rewrite <- H3; auto.
+- inversion H0.
+Qed.
+
+(** Given an adequate set of procedures, we can decide program well-formedness. *)
+
+Definition used_procedures (P:Program) (Xs:list RecVar) :=
+  used_procedures_C (Main P) Xs /\
+  forall X, (In X Xs -> used_procedures_C (Procs P X) Xs)
+        /\ (~In X Xs -> Procs P X = End /\ Vars P X <> nil).
+
+Lemma used_procedures_Main : forall P Xs,
+  used_procedures P Xs -> used_procedures_C (Main P) Xs.
+Proof. intros. apply H. Qed.
+
+Lemma used_procedures_Procs : forall P Xs, used_procedures P Xs ->
+  forall X, In X Xs -> used_procedures_C (Procs P X) Xs.
+Proof. intros. apply H; auto. Qed.
+
+Lemma used_procedures_End : forall P Xs, used_procedures P Xs ->
+  forall X, ~In X Xs -> Procs P X = End.
+Proof. intros. apply H; auto. Qed.
+
+Lemma used_procedures_Vars : forall P Xs, used_procedures P Xs ->
+  forall X, ~In X Xs -> Vars P X <> nil.
+Proof. intros. apply H; auto. Qed.
+
+Lemma Program_WF_dec : forall P Xs, used_procedures P Xs ->
+  {Program_WF P} + {~Program_WF P}.
+Proof.
+intros.
+elim (Choreography_WF_dec (Main P)); intro HC.
+2: right; intro HP; destroy HP; auto.
+elim (consistent_dec (Vars P) (Main P)); intros.
+2: right; intro HP; destroy HP; auto.
+assert ({forall X, In X Xs -> no_self_comm (Procs P X) /\ initial (Procs P X) /\ well_ann P X} +
+       {~forall X, In X Xs -> no_self_comm (Procs P X) /\ initial (Procs P X) /\ well_ann P X}); intros.
+2: { elim H0; clear H0; intros.
+  left. split; auto. split; auto.
+  intro X. elim (In_dec (@eq_dec RecVar) X Xs); auto.
+  intro. rewrite used_procedures_End with (Xs:=Xs); auto.
+  simpl; repeat split; auto.
+  apply used_procedures_Vars with Xs; auto.
+  rewrite used_procedures_End with (Xs:=Xs); auto.
+  intro; simpl; tauto.
+  right; intro. destroy H0; auto.
+}
+clear H HC a.
+induction Xs; simpl; intros.
++ left. intros; inversion H.
++ elim IHXs; intros.
+  2: right; intro; destroy H; auto.
+  clear IHXs.
+  elim (no_self_comm_dec (Procs P a)); intros.
+  2: right; intro; elim (H a); auto.
+  elim (initial_dec (Procs P a)); intros.
+  2: right; intro; elim (H a); intros; destroy H1; auto.
+  case_eq (Vars P a); intros.
+  right; intro; elim (H0 a); intros; destroy H2; auto.
+  elim (set_incl_dec (@eq_dec Pid) (CCC_pn (Procs P a) (Vars P)) (Vars P a)); intros.
+  2: right; intro; elim (H0 a); intros; destroy H2; auto.
+  left; intros.
+  inversion_clear H0; auto.
+  rewrite <- H1; repeat (split; auto).
+  rewrite H; discriminate.
+Qed.
+
+Lemma CCP_To_used_procedures : forall P s l P' s' Xs, used_procedures P Xs ->
+  (* Program_WF Xs P -> *) (P,s) --[l]--> (P',s') -> used_procedures P' Xs.
+Proof.
+intros.
+induction P as (D,C); induction P' as (D',C').
+rewrite (CCP_To_Defs_stable _ _ _ _ _ _ _ H0) in H, H0; clear D.
+inversion_clear H. split; auto.
+simpl in H1; simpl.
+inversion H0. clear H0 s'0 H8 C'0 H7 l H3 s0 H5 C0 H4 D H.
+revert H1. induction H6; simpl; try tauto.
+intro; apply H2; auto.
+split; auto. apply H2; auto.
+Qed.
+
+Lemma CCC_To_Xs : forall D C s p X C' s' Xs, used_procedures_C C Xs ->
+  <<C,s>> --[RL_Call X p,D]--> <<C',s'>> -> In X Xs.
+Proof.
+induction C; intros; inversion H0.
++ eapply IHC; eauto.
++ eapply IHC1; eauto. inversion H; auto.
++ rewrite <- H2. auto.
++ rewrite <- H2; auto.
++ eapply IHC; eauto. inversion H; auto.
++ rewrite <- H4; inversion H; auto.
++ rewrite <- H4; inversion H; auto.
+Qed.
+
+
+
+
+
+
+
+
 (** ** Results on determinism of the semantics. *)
 
 Section Uniqueness.
 
-(** The set of procedure definitions never changes. *)
-
-Lemma CCP_To_Defs_stable : forall D D' C C' tl s s',
-  (D,C,s) --[tl]--> (D',C',s') -> D = D'.
-Proof.
-intros.
-inversion H.
-inversion H; auto.
-Qed.
-
-Lemma CCP_ToStar_Defs_stable : forall D D' C C' tl s s',
-  (D,C,s) --[tl]-->* (D',C',s') -> D = D'.
-Proof.
-intros D D' C C' tl; revert C C'.
-induction tl; intros; inversion H; clear H; auto.
-induction c2. induction a0.
-apply CCP_To_Defs_stable in H3.
-rewrite <- H3 in H5.
-eauto.
-Qed.
-
-(** Reductions are also preserved under equivalence of the set of definitions. *)
-
-Lemma CCC_To_Defs_eq : forall D D' C s tl C' s',
-  (forall X, D X = D' X) ->
-  <<C,s>> --[tl,D]--> <<C',s'>> -> <<C,s>> --[tl,D']--> <<C',s'>>.
-Proof.
-intros.
-induction H0; try constructor; auto.
-all: rewrite H; constructor; try rewrite <- H; auto.
-Qed.
-
-Lemma CCP_To_Defs_eq : forall P s tl P' s' D,
-  (forall X, Procedures P X = D X) ->
-  (P,s) --[tl]--> (P',s') -> (D,Main P,s) --[tl]--> (D,Main P',s').
-Proof.
-intros.
-induction P.
-inversion H0; constructor.
-apply CCC_To_Defs_eq with a; auto.
-Qed.
-
-Lemma CCP_ToStar_Defs_eq : forall P s tl P' s' D,
-  (forall X, Procedures P X = D X) ->
-  (P,s) --[tl]-->* (P',s') -> (D,Main P,s) --[tl]-->* (D,Main P',s').
-Proof.
-intros P s1 tl; revert P s1.
-induction tl; intros.
-+ inversion H0. constructor; auto.
-+ inversion H0.
-  induction c2 as (P2,s2).
-  apply CCT_Step with ((D,Main P2),s2).
-  - apply CCP_To_Defs_eq; auto.
-  - apply IHtl; auto.
-    replace P with (Procedures P,Main P) in H4. 2: induction P; auto.
-    replace P2 with (Procedures P2,Main P2) in H4. 2: induction P2; auto.
-    intro; rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4); auto.
-Qed.
 
 (** Reductions and state. *)
 
