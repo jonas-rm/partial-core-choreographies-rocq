@@ -1073,18 +1073,16 @@ all: rewrite <- H4; specialize (H13 _ H11); tauto.
 Qed.
 
 Lemma Program_WF_D_str_proj : forall ps P,
-  CC.Program_WF P -> projectable ps P -> well_ann _ P ->
+  CC.Program_WF P -> projectable ps P ->
   forall X p, In p ps -> str_proj (Procedures _ P) (CC.Procs P X) p.
 Proof.
 intros. destroy H.
 elim (H X); auto.
-intros. clear H; destroy H7.
-destroy H0.
+intros. clear H; destroy H5.
 elim (In_dec (@eq_dec Pid) p (Vars P X)); intros.
 + apply initial_str_proj with (Vars P X); auto.
-  apply H9.
+  apply H0.
 + apply initial_str_proj'; auto.
-  intro; apply b, H1. auto.
 Qed.
 
 Lemma epp_EmptyNet' : forall ps P HP N, Program_WF P ->
@@ -1111,7 +1109,7 @@ destruct C; auto. induction e.
   inversion HN; auto.
   inversion HP. inversion_clear H1. inversion_clear H3.
   apply H1; simpl. repeat rewrite set_union_iff; simpl; auto.
-- generalize (Program_WF_Vars _ _ t HWF); intros.
+- generalize (Program_WF_Vars _ _ HWF t); intros.
   case_eq (Vars (D,CC.Call t) t); intro. tauto.
   rename t0 into p. intros. clear H0.
   specialize (HN p). rewrite HN', H, epp_C_Call in HN.
@@ -2148,12 +2146,12 @@ destroy H; intros.
 rename p into r.
 destroy H0.
 simpl. eapply CCC_To_str_proj; eauto.
+2: apply H.
 intros.
-(* destroy H. *) elim (H Y); auto. clear H. simpl; intros; destroy H11.
+specialize (H Y); simpl in H; destroy H.
 elim (In_dec (@eq_dec Pid) p (fst (D Y))); intro.
 apply initial_str_proj with (fst (D Y)); auto.
 apply initial_str_proj'; auto.
-intro. apply b, H4; auto.
 Qed.
 
 Lemma CCP_ToStar_str_proj : forall P ps,
@@ -2180,7 +2178,7 @@ apply (IHtl s'' C''); auto.
 + simpl; intros.
   generalize CCP_To_pn; intro.
   specialize (H3 Sig (D,C) s a (D,C'') s''). simpl in H3.
-  destroy H. apply Hnames; auto.
+  apply Hnames; auto.
 Qed.
 
 Lemma CCP_ToStar_projectable: forall P ps,
@@ -2208,7 +2206,7 @@ eapply IHtl. 6: eauto.
 + simpl; intros.
   generalize CCP_To_pn; intro.
   specialize (H8 Sig (D,C) s a (D,C'') s''). simpl in H8.
-  destroy H. apply H2; auto.
+  apply H2; auto.
 + unfold Vars; simpl. auto.
 Qed.
 

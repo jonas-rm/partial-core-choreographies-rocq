@@ -105,7 +105,7 @@ Theorem amended_encoding_projectable :
                 (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
 Proof.
 intros.
-induction (Encoding'_WF f) as [HWF [Hcons [Hann HProcs] ] ].
+induction (Encoding'_WF f) as [HWF [Hcons HProcs] ].
 repeat split.
 + apply amend_projectable_C.
 + intro X.
@@ -126,11 +126,11 @@ repeat split.
   rewrite vmax_vec_1_to_n in H0; auto.
 + set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl; intros.
-  specialize (Hann X p). rewrite <- H in Hann.
+  specialize (HProcs X). rewrite <- H in HProcs.
   unfold Encoding', Encoding in H.
   intros. apply CCC_pn_mon with (Y:=Names D) in H0.
   2: simpl; tauto.
-  apply amend_CCC_pn_incl, Hann in H0.
+  apply amend_CCC_pn_incl, HProcs in H0.
   change D with (fst (D,C)) in H0.
   rewrite H in H0. simpl in H0.
   rewrite vmax_vec_1_to_n in H0; auto.
@@ -140,7 +140,7 @@ Theorem amended_encoding_Projectable :
   Projectable _ (amend_P (all_pids (n+Pi f)) eps (Encoding' f)).
 Proof.
 intros.
-induction (Encoding'_WF f) as [HWF [Hcons [Hann HProcs] ] ].
+induction (Encoding'_WF f) as [HWF [Hcons HProcs] ].
 (* this should be simplifiable *)
 exists (all_pids (n+Pi f)); split. repeat split.
 + apply amend_projectable_C.
@@ -162,12 +162,12 @@ exists (all_pids (n+Pi f)); split. repeat split.
   rewrite vmax_vec_1_to_n in H0; auto.
 + set (P := Encoding' f). assert (P = Encoding' f); auto.
   clearbody P. induction P as (D,C). simpl; intros.
-  specialize (Hann X p). rewrite <- H in Hann.
+  specialize (HProcs X). rewrite <- H in HProcs.
   unfold Encoding', Encoding in H.
   intros. apply CCC_pn_mon with (Y:=Names D) in H0.
   2: simpl; tauto.
   apply amend_CCC_pn_incl in H0.
-  apply Hann in H0.
+  apply HProcs in H0.
   change D with (fst (D,C)) in H0.
   rewrite H in H0. simpl in H0.
   rewrite vmax_vec_1_to_n in H0; auto.
@@ -281,30 +281,10 @@ Qed.
 Theorem encode_Net_sound : SP_implements (Encode_Net f) f (vec_1_to_n n) 0.
 Proof.
 intros.
-induction (amended_encoding_WF n f) as [HWF [Hcons [Hann HProcs] ] ].
+induction (amended_encoding_WF n f) as [HWF [Hcons HProcs] ].
 apply epp_implements; auto.
 + apply amend_Program_WF; auto.
-  split. apply Encoding_Main_WF.
-  split. simpl; auto.
-  split.
-  1: {
-    repeat intro; apply Hann.
-    clear HWF Hcons HProcs Hann.
-    set (ps := all_pids (n + Pi f)); clearbody ps.
-    induction (Encoding' f) as (D,C).
-    revert H. simpl. unfold Procs, Vars; simpl.
-    apply (amend_CCC_pn_C IS).
-  }
-  split.
-  1: { apply Encoding_rec_WF; intros; auto.
-       intro. elim (in_vec_k_to_n _ H); intros.
-       inversion H0.
-    2: auto with arith.
-    elim (in_vec_k_to_n _ H); intros.
-    rewrite vmax_vec_1_to_n; auto.
-  }
-  split. apply Encoding_rec_initial.
-  apply Encoding_Procs_Vars_not_nil.
+  apply Encoding'_WF.
 + intros. simpl in H.
   rewrite <- amend_P_Vars in H.
   unfold Vars, Encoding', Procedures in H.
@@ -319,10 +299,7 @@ Qed.
 Lemma encode_Net_WF : Network_WF _ (Net (Encode_Net f)).
 Proof.
 unfold Encode_Net.
-(* set (Xs := RecVarList (Gamma f)). *)
 set (ps := all_pids (n+Pi f)).
-(* set (P := Encoding' f).
-assert (P = Encoding' f); auto. *)
 unfold amend_P.
 assert (projectable_C (amend_D (Procedures _ (Encoding' f)) eps ps) (Main (Encoding' f)) ps).
 1: apply amended_encoding_projectable.

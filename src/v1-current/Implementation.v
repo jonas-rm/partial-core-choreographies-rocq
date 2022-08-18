@@ -2345,6 +2345,11 @@ Lemma Encoding_WF : forall {n} (f:PRFunction n) ps q,
 Proof.
 split. 2: repeat split.
 + apply Encoding_Main_WF.
++ apply Encoding_rec_WF; intros; auto; apply le_n_S.
+  2: apply Nat.le_max_l.
+  transitivity (vmax ps). 2: apply Nat.le_max_r. apply vmax_In; auto.
++ apply Encoding_rec_initial.
++ apply Encoding_Procs_Vars_not_nil.
 + red; intro. unfold Vars; simpl.
   do 2 red; intros.
   unfold Procs, Encoding, Procedures in H0.
@@ -2352,11 +2357,6 @@ split. 2: repeat split.
   - apply all_pids_In; auto.
   - intros. apply Nat.max_le_iff. right; apply vmax_In; auto.
   - apply Nat.le_max_l.
-+ apply Encoding_rec_WF; intros; auto; apply le_n_S.
-  2: apply Nat.le_max_l.
-  transitivity (vmax ps). 2: apply Nat.le_max_r. apply vmax_In; auto.
-+ apply Encoding_rec_initial.
-+ apply Encoding_Procs_Vars_not_nil.
 Qed.
 
 Lemma Encoding'_WF : forall {n} (f:PRFunction n),

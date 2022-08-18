@@ -278,14 +278,14 @@ intros.
 destroy H. split. 2: repeat split.
 + apply amend_Choreography_WF; auto.
 + apply amend_consistent; auto.
-+ red in H2; red. intros.
-  unfold CC.Procs, Vars; simpl.
-  unfold CC.Procs, Vars in H2; simpl in H2.
-  red; intros. apply H2.
-  apply amend_CCC_pn_incl in H3; auto.
 + apply amend_no_self_comm, H.
 + apply amend_initial, H.
 + unfold Vars, amend_D; apply H.
++ red. intros.
+  unfold CC.Procs, Vars; simpl.
+  unfold CC.Procs, Vars in H2; simpl in H2.
+  apply amend_CCC_pn_incl in H2.
+  apply H; auto.
 Qed.
 
 (** ** Selection expansion up to permutation

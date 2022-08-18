@@ -414,13 +414,12 @@ Qed.
 
 (** A program is well-annotated if every process used by a procedure is in its annotation. *)
 
-Definition well_ann (P:Program) : Prop :=
-  forall X, CCC_pn (Procs P X) (Vars P) [C] Vars P X.
+Definition well_ann (P:Program) (X:RecVar) : Prop :=
+  Vars P X <> nil /\ CCC_pn (Procs P X) (Vars P) [C] Vars P X.
 
-Lemma well_ann_Main_change : forall D C C', well_ann (D,C) -> well_ann (D,C').
+Lemma well_ann_Main_change : forall D C C' X, well_ann (D,C) X -> well_ann (D,C') X.
 Proof.
 intros.
-intro.
 unfold Procs, Vars; simpl.
 apply H.
 Qed.
@@ -428,8 +427,8 @@ Qed.
 (** Finally, well-formedness. *)
 
 Definition Program_WF (P:Program) : Prop :=
-  Choreography_WF (Main P) /\ consistent (Vars P) (Main P) /\ well_ann P /\
-  forall X, no_self_comm (Procs P X) /\ initial (Procs P X) /\ (Vars P X) <> nil.
+  Choreography_WF (Main P) /\ consistent (Vars P) (Main P) /\
+  forall X, no_self_comm (Procs P X) /\ initial (Procs P X) /\ well_ann P X.
 
 Lemma Program_WF_Proc : forall P, Program_WF P ->
   forall X, Choreography_WF (Procs P X).
@@ -446,15 +445,21 @@ Lemma Program_WF_consistent : forall P, Program_WF P ->
   consistent (Vars P) (Main P).
 Proof. intros. destroy H; auto. Qed.
 
-Lemma Program_WF_well_ann : forall P, Program_WF P -> well_ann P.
-Proof. intros. destroy H; auto. Qed.
-
-Lemma Program_WF_initial_Proc : forall P X,
-  Program_WF P -> initial (Procs P X).
+Lemma Program_WF_initial_Proc : forall P, Program_WF P ->
+  forall X, initial (Procs P X).
 Proof. intros. destroy H. elim (H X); tauto. Qed.
 
-Lemma Program_WF_Vars : forall P X, Program_WF P -> Vars P X <> nil.
+Lemma Program_WF_well_ann : forall P, Program_WF P ->
+  forall X, well_ann P X.
 Proof. intros. destroy H. elim (H X); tauto. Qed.
+
+Lemma Program_WF_Vars_incl : forall P, Program_WF P ->
+  forall X, CCC_pn (Procs P X) (Vars P) [C] Vars P X.
+Proof. intros. elim (Program_WF_well_ann P) with X; auto. Qed.
+
+Lemma Program_WF_Vars : forall P, Program_WF P ->
+  forall X, Vars P X <> nil.
+Proof. intros. elim (Program_WF_well_ann P) with X; auto. Qed.
 
 (** Inversion results. *)
 
@@ -902,10 +907,11 @@ induction C; intros; inversion H.
 + simpl; sup.
 Qed.
 
-Lemma CCP_To_pn : forall P s tl P' s', well_ann P -> (P,s) --[tl]--> (P',s') ->
+Lemma CCP_To_pn : forall P s tl P' s', Program_WF P -> (P,s) --[tl]--> (P',s') ->
   forall p, In p (CCC_pn (Main P') (Vars P')) -> In p (CCC_pn (Main P) (Vars P)).
 Proof.
 intros.
+generalize (Program_WF_Vars_incl _ H); clear H; intro.
 revert H1. inversion H0. unfold Vars; simpl.
 rewrite <- H1 in H. clear P H0 H1 P' H5.
 revert dependent C'.
@@ -1025,6 +1031,17 @@ induction l; intros; inversion H0.
   eapply CCP_To_Program_WF; eauto.
 Qed.
 
+Lemma CCP_ToStar_pn : forall P s tl P' s', Program_WF P -> (P,s) --[tl]-->* (P',s') ->
+  forall p, In p (CCC_pn (Main P') (Vars P')) -> In p (CCC_pn (Main P) (Vars P)).
+Proof.
+intros.
+revert P s P' s' H H0 H1. induction tl; simpl; intros.
+all: inversion H0; auto.
+clear c3 H6 l H3 t H2 c1 H4. induction c2 as (P'',s'').
+assert (Program_WF P''). eapply CCP_To_Program_WF; eauto.
+eapply CCP_To_pn; eauto.
+Qed.
+
 (** Some more specific properties. *)
 
 Lemma CCC_To_Com_neq : forall D C s p v q x C' s', Choreography_WF C ->
@@ -1078,7 +1095,7 @@ induction C; intros.
   case_eq ([#] ps); [idtac | intros; case_eq n].
   - intro. exfalso.
     unfold ps in H1.
-    generalize (Program_WF_Vars _ X H0); intros.
+    generalize (Program_WF_Vars _ H0 X); intros.
     simpl in H2.
     unfold Vars in H2; simpl in H2.
     rewrite (set_size_0 _ _ H1) in H2.
@@ -1203,23 +1220,6 @@ induction tl; intros.
     replace P with (Procedures P,Main P) in H4. 2: induction P; auto.
     replace P2 with (Procedures P2,Main P2) in H4. 2: induction P2; auto.
     intro; rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4); auto.
-Qed.
-
-(** Finally we can prove this one. *)
-
-Lemma CCP_ToStar_pn : forall P s tl P' s',  well_ann P -> (P,s) --[tl]-->* (P',s') ->
-  forall p, In p (CCC_pn (Main P') (Vars P')) -> In p (CCC_pn (Main P) (Vars P)).
-Proof.
-intros.
-revert P s P' s' H H0 H1. induction tl; simpl; intros.
-all: inversion H0; auto.
-clear c3 H6 l H3 t H2 c1 H4. induction c2 as (P'',s'').
-assert (well_ann P'').
-induction P; induction P''.
-generalize (CCP_To_Defs_stable _ _ _ _ _ _ _ H5); intro.
-rewrite <- H2 in *.
-eapply well_ann_Main_change; eauto.
-eapply CCP_To_pn; eauto.
 Qed.
 
 (** Reductions and state. *)

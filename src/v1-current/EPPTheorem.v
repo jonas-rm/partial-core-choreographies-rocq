@@ -275,15 +275,17 @@ induction tl; intros; inversion HTo; induction t; inversion H3.
       erewrite bproj_unique; eauto.
       apply epp_C_char'; auto.
       intros. eapply Program_WF_D_str_proj with (P:=(D,C)); eauto.
+      apply HWF.
     * elim (In_dec (@eq_dec Pid) r ps); intro Hr'.
       apply MB_refl'. transitivity (N r); auto.
       replace N with (Net (D',N)); auto.
       elim (CCC_To_bproj_Call_r _ D C s C' s' p X r); auto.
       intros B0 [HB0 HB0'].
       rewrite HN. etransitivity; eapply bproj_unique.
-      1,4: apply epp_C_char'; auto. 1,2: eauto.
+      1,4: apply epp_C_char'; auto. 1,2: eauto. apply HWF.
       rewrite HN.
       repeat rewrite epp_out; auto. constructor.
+  - apply HWF.
 Qed.
 
 Lemma EPP_Complete' : forall P ps,
@@ -2296,6 +2298,7 @@ Lemma EPP_Sound : forall P ps,
     forall H, Net N' (>>) Net (epp ps P' H).
 Proof.
 intros P ps HWF HP Hstr Hpn HVars; intros.
+generalize (Program_WF_Vars_incl _ _ HWF) as Hincl; intro.
 inversion H.
 clear tl H1 s'0 H5 H4 s0 H2 s'0 N' H. rename N'0 into N'.
 rename D into D'.
@@ -2309,13 +2312,13 @@ assert (SP_To _ D' (epp_C _ _ _ HC) s t N' s').
 }
 destroy HWF. simpl in *.
   unfold CC.Procs in HWF; simpl in HWF.
-inversion HP. simpl in *. destroy H6.
+inversion HP. simpl in *. destroy H5.
 assert (forall X p, In p ps -> str_proj D (snd (D X)) p).
 1: {
   intros. elim (In_dec (@eq_dec Pid) p (fst (D X))); intro.
   eapply initial_str_proj; eauto. apply HWF.
   eapply initial_str_proj'; eauto. apply HWF.
-  intro; apply b, H4; auto.
+  intro; apply b, HWF; auto.
 }
 induction t. 2: induction l.
 + apply SP_To_bproj_Com in H.
@@ -2325,7 +2328,7 @@ induction t. 2: induction l.
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Com p v q x)); repeat split; auto.
   - simpl. intros. apply MBN_refl'.
-    eapply Network_eq_trans. apply (H H12); auto.
+    eapply Network_eq_trans. apply (H H11); auto.
     apply Network_eq_sym; apply epp_C_char.
   - auto.
   - auto.
@@ -2336,7 +2339,7 @@ induction t. 2: induction l.
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Sel p q left)); repeat split; auto.
   - simpl. intros. apply MBN_refl'.
-    eapply Network_eq_trans. apply (H H12); auto.
+    eapply Network_eq_trans. apply (H H11); auto.
     apply Network_eq_sym; apply epp_C_char.
   - auto.
   - auto.
@@ -2347,7 +2350,7 @@ induction t. 2: induction l.
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Sel p q right)); repeat split; auto.
   - simpl. intros. apply MBN_refl'.
-    eapply Network_eq_trans. apply (H H12); auto.
+    eapply Network_eq_trans. apply (H H11); auto.
     apply Network_eq_sym; apply epp_C_char.
   - auto.
   - auto.
@@ -2357,30 +2360,30 @@ induction t. 2: induction l.
   1: { eapply CCC_To_projectable_C; eauto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Cond p)); repeat split; auto.
-  - simpl. intros. eapply MBN_trans. apply (H H12).
+  - simpl. intros. eapply MBN_trans. apply (H H11).
     apply MBN_refl'.
     apply Network_eq_sym. apply epp_C_char.
   - auto.
   - auto.
 + elim (SP_To_bproj_Call_name _ _ _ _ _ _ _ _ _ _ H); intros.
-  destroy H11. rename x into Y. rewrite H12 in *; clear X H12.
+  destroy H10. rename x into Y. rewrite H11 in *; clear X H11.
   apply SP_To_bproj_Call in H; auto.
   destroy H. rename x into C'.
   assert (projectable_C D C' ps).
   1: { eapply CCC_To_projectable_C; eauto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Call Y p)); repeat split; auto.
-  - simpl. intros. eapply MBN_trans. apply (H H13).
+  - simpl. intros. eapply MBN_trans. apply (H H12).
     apply MBN_refl'.
     apply Network_eq_sym. apply epp_C_char.
   - replace D' with (Procs (epp _ _ HP)).
     2: rewrite <- H0; auto.
-    intro r; intros. rewrite epp_D_char'' with (HX:=H7 Y); auto.
+    intro r; intros. rewrite epp_D_char'' with (HX:=H6 Y); auto.
     elim (In_dec (@eq_dec Pid) r (fst (D Y))); intro Hr.
     eapply bproj_unique; apply epp_C_bproj; eauto.
     rewrite epp_C_out; auto. rewrite epp_C_out'; auto.
-    intro. apply Hr, H4; auto.
-  - intros; apply H4; auto.
+    intro. apply Hr, Hincl; auto.
+  - intros; apply Hincl; auto.
   - intros. apply Forall_forall; intros.
     apply str_proj_C; auto.
   - split; eauto. apply HWF.
@@ -2599,7 +2602,7 @@ revert dependent C. revert s s' N1 N2 H5. induction tl; intros.
   - simpl; intro. induction X; repeat rewrite epp_D_char with (HD:=HD); auto.
   - eapply CCP_To_Program_WF; eauto.
   - eapply CCP_To_str_proj; eauto.
-  - intros. apply Hpn. eapply CCP_To_pn; eauto. apply HWF.
+  - intros. apply Hpn. eapply CCP_To_pn; eauto.
   - intro; rewrite H2. induction X; repeat rewrite epp_D_char with (HD:=HD); auto.
   - apply MBN_trans with N3'; auto.
 Qed.
@@ -2648,7 +2651,7 @@ induction tl; intros; inversion H.
   assert (forall p, In p (CCC_pn C1 (Vars (D,C1))) -> In p ps).
   1:{
     change C1 with (Main (D,C1)) at 1.
-    intros. apply Hpn. eapply CCP_To_pn; eauto. apply HWF.
+    intros. apply Hpn. eapply CCP_To_pn; eauto.
   }
   apply SPP_ToStar_MBN_epp with (HP:=H2) in H5; auto.
   - destroy H5.
