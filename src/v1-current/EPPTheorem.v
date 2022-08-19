@@ -360,21 +360,20 @@ Section Soundness.
 Open Scope SP_scope.
 
 Lemma SP_To_bproj_Com : forall D D' ps C HC s N' s' p x q v,
-  (forall p, In p ps -> @str_proj Sig D C p) ->
-  (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
+  @str_proj_P Sig (D,C) ->
   <<epp_C D ps C HC,s>> --[RL_Com p v q x,D']--> <<N',s'>> ->
   exists C', (<<C,s>> --[RL_Com p v q x,D]--> <<C',s'>>)%CC
   /\ forall HC', (N' (==) (epp_C D ps C' HC')).
 Proof.
 intros.
-rename H into Hsp, H0 into Hin, H1 into H.
+rename H into Hsp, H0 into H.
 revert v N' H.
 induction C; intros. induction e.
 + inversion H. rewrite <- H1 in H. unfold v1; unfold v1 in H, H11.
   clear s'0 H8 N'0 H7 x0 H3 q0 H2 v v1 H1 p0 H0 s0 H5.
   rename t into a'', t0 into p', t2 into q', t1 into e0, t3 into v'.
   elim ((@eq_dec Pid) p p'); intro Hpp'.
-  - clear IHC Hsp Hin.
+  - clear IHC Hsp.
     revert HC H H6 H9 H10 H4. rewrite <- Hpp'. clear p' Hpp'. intros.
     (* get the remaining equalities *)
     assert (In p ps /\ q = q' /\ e = e0).
@@ -439,9 +438,9 @@ induction C; intros. induction e.
       inversion H9. apply Hpp'; auto. 1,2: rewrite H0; auto.
     assert (p <> q) as Hpq.
     1: { intro H'; rewrite H', H9 in H6; inversion H6. }
-    assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-    1: intros. apply Hin. simpl; sup.
-    elim (IHC HC' Hsp Hin' (eval_on_state Ev e s p) ((epp_C D ps C HC' \ p \ q | p[B] | q[B'])%SP)); intros.
+    assert (str_proj_P (D,C)) as Hsp'.
+    1: { split. eapply Program_WF_eta; apply Hsp. apply Hsp. }
+    elim (IHC HC' Hsp' (eval_on_state Ev e s p) ((epp_C D ps C HC' \ p \ q | p[B] | q[B'])%SP)); intros.
     rename x0 into C'. destroy H0.
     exists (p' # e0 --> q' $ v' @ a'';; C'); repeat split.
     * apply (@C_Delay_Eta Sig); repeat split; auto.
@@ -507,9 +506,9 @@ induction C; intros. induction e.
     1,4: inversion H9. 1,2,3,4: rewrite H0; auto.
   assert (p <> q) as Hpq.
   1: { intro H'; rewrite H', H9 in H6; inversion H6. }
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  elim (IHC HC' Hsp Hin' (eval_on_state Ev e s p) (epp_C D ps C HC' \ p \ q | p[B] | q[B']))%SP; intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_eta; apply Hsp. apply Hsp. }
+  elim (IHC HC' Hsp' (eval_on_state Ev e s p) (epp_C D ps C HC' \ p \ q | p[B] | q[B']))%SP; intros.
   rename x0 into C'. destroy H0.
   exists (p' --> q'[l] @ a'';; C'); repeat split.
   * apply C_Delay_Eta; repeat split; auto.
@@ -554,10 +553,10 @@ induction C; intros. induction e.
   rename t into p', t0 into b.
   generalize (projectable_C_inv_Then Sig _ _ _ _ _ _ HC); intro HC1.
   generalize (projectable_C_inv_Else Sig _ _ _ _ _ _ HC); intro HC2.
-  assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
-  1: apply Hsp.
-  assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
-  1: apply Hsp.
+  assert (str_proj_P (D,C1)) as Hsp1.
+  1: split. eapply Program_WF_Then. 1,2: apply Hsp.
+  assert (str_proj_P (D,C2)) as Hsp2.
+  1: split. eapply Program_WF_Else. 1,2: apply Hsp.
   clear Hsp.
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
@@ -578,13 +577,9 @@ induction C; intros. induction e.
   intros. destroy H0. rename x0 into Bp1, x1 into Bp2, H1 into Hp1, H2 into Hp2, H0 into Hp'.
   elim (epp_C_Cond_Recv_inv Sig _ _ _ _ _ _ HC HC1 HC2 _ _ _ _ _ H9).
   intros. destroy H0. rename x0 into Bq1, x1 into Bq2, H1 into Hq1, H2 into Hq2, H0 into Hq'.
-  assert (forall p, In p (CCC_pn C1 (Names D)) -> In p ps) as Hin1.
-  1: intros. apply Hin. simpl; sup; sup.
-  assert (forall p, In p (CCC_pn C2 (Names D)) -> In p ps) as Hin2.
-  1: intros. apply Hin. simpl; sup; sup.
-  elim (IHC1 HC1 Hsp1 Hin1 (eval_on_state Ev e s p) (epp_C D ps C1 HC1 \ p \ q | p[Bp1] | q[Bq1]))%SP; intros.
+  elim (IHC1 HC1 Hsp1 (eval_on_state Ev e s p) (epp_C D ps C1 HC1 \ p \ q | p[Bp1] | q[Bq1]))%SP; intros.
   rename x0 into C1'. destroy H0.
-  elim (IHC2 HC2 Hsp2 Hin2 (eval_on_state Ev e s p) (Network_rm _ (Network_rm _ (epp_C D ps C2 HC2) p) q | p[Bp2] | q[Bq2]))%SP; intros.
+  elim (IHC2 HC2 Hsp2 (eval_on_state Ev e s p) (Network_rm _ (Network_rm _ (epp_C D ps C2 HC2) p) q | p[Bp2] | q[Bq2]))%SP; intros.
   rename x0 into C2'. destroy H2. clear IHC1 IHC2.
   exists (If p' ?? b Then C1' Else C2'); repeat split.
   * apply C_Delay_Cond; repeat split; auto.
@@ -641,8 +636,7 @@ induction C; intros. induction e.
   rename l into ps', t into X.
   assert (projectable_C D C ps) as HC'.
   1: { red. rewrite Forall_forall. intros.
-    elim (Hsp x0); auto; intros.
-    apply str_proj_C; auto.
+       apply str_proj_C, Hsp.
   }
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
@@ -655,11 +649,9 @@ induction C; intros. induction e.
   1: intro. rewrite epp_C_RT_Call in H9; auto. inversion H9.
   assert (p <> q) as Hpq.
   1: { intro H'; rewrite H', H9 in H6; inversion H6. }
-  assert (forall p, In p ps -> str_proj D C p) as Hsp'.
-  1: apply Hsp.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  elim (IHC HC' Hsp' Hin' (eval_on_state Ev e s p) (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[B']))%SP; intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: split. eapply Program_WF_Call. 1,2: apply Hsp.
+  elim (IHC HC' Hsp' (eval_on_state Ev e s p) (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[B']))%SP; intros.
   rename x0 into C'. destroy H0.
   exists (RT_Call X ps' C'); repeat split.
   * apply C_Delay_Call; repeat split; auto.
@@ -668,6 +660,7 @@ induction C; intros. induction e.
   * intros. eapply Network_eq_trans. apply H10. rewrite <- H4.
     assert (projectable_C D C' ps).
     1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Com; eauto.
+    apply Hsp.
     intro r. elim ((@eq_dec Pid) p r); intro Hpr.
     2: elim ((@eq_dec Pid) q r); intro Hqr.
     3: rewrite Network_rm_add_2_out, H4; auto.
@@ -695,14 +688,13 @@ induction C; intros. induction e.
 Qed.
 
 Lemma SP_To_bproj_Sel_l : forall D D' ps C HC s N' s' p q,
-  (forall p, In p ps -> @str_proj Sig D C p) ->
-  (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
+  @str_proj_P Sig (D,C) ->
   <<epp_C D ps C HC,s>> --[RL_Sel p q left,D']--> <<N',s'>> ->
   exists C', (<<C,s>> --[RL_Sel p q left,D]--> <<C',s'>>)%CC
   /\ forall HC', (N' (==) (epp_C D ps C' HC')).
 Proof.
 intros.
-rename H into Hsp, H0 into Hin, H1 into H.
+rename H into Hsp, H0 into H.
 revert N' H.
 induction C; intros. induction e.
 + inversion H.
@@ -728,9 +720,9 @@ induction C; intros. induction e.
     inversion H2. 1,2: rewrite H0; auto.
   assert (p <> q) as Hpq.
   1: { intro H'; rewrite H', H3 in H2; inversion H2. }
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  elim (IHC HC' Hsp Hin' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Bl])); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_eta. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Bl])); intros.
   rename x into C'. destroy H0.
   exists (p' # e --> q' $ v' @ a'';; C'); repeat split.
   * apply C_Delay_Eta; repeat split; auto.
@@ -775,7 +767,7 @@ induction C; intros. induction e.
   clear s'0 H8 N'0 H7 q0 H1 p0 H0 s0 H5.
   rename t into a'', t0 into p', t1 into q', t2 into l.
   elim ((@eq_dec Pid) p p'); intro Hpp'.
-  - clear IHC Hsp Hin.
+  - clear IHC Hsp.
     revert HC H H2 H3 H6 H4. rewrite <- Hpp'. clear p' Hpp'. intros.
     (* get the remaining equalities *)
     assert (In p ps /\ q = q' /\ l = left).
@@ -836,9 +828,9 @@ induction C; intros. induction e.
       1,4: inversion H3; auto. 1,2,3,4: rewrite H0; auto.
     assert (p <> q) as Hpq.
     1: { intro H'; rewrite H', H3 in H2; inversion H2. }
-    assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-    1: intros. apply Hin. simpl; sup.
-    elim (IHC HC' Hsp Hin' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Bl])); intros.
+    assert (str_proj_P (D,C)) as Hsp'.
+    1: { split. eapply Program_WF_eta. all: apply Hsp. }
+    elim (IHC HC' Hsp' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Bl])); intros.
     rename x into C'. destroy H0.
     exists (p' --> q'[l] @ a'';; C'); repeat split.
     * apply C_Delay_Eta; repeat split; auto.
@@ -888,10 +880,10 @@ induction C; intros. induction e.
   rename t into p', t0 into b.
   generalize (projectable_C_inv_Then Sig _ _ _ _ _ _ HC); intro HC1.
   generalize (projectable_C_inv_Else Sig _ _ _ _ _ _ HC); intro HC2.
-  assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
-  1: apply Hsp.
-  assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
-  1: apply Hsp.
+  assert (str_proj_P (D,C1)) as Hsp1.
+  1: { split. eapply Program_WF_Then. all: apply Hsp. }
+  assert (str_proj_P (D,C2)) as Hsp2.
+  1: { split. eapply Program_WF_Else. all: apply Hsp. }
   clear Hsp.
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
@@ -910,13 +902,9 @@ induction C; intros. induction e.
   intros. destroy H0. rename x into Bp1, x0 into Bp2, H1 into Hp1, H5 into Hp2, H0 into Hp'.
   elim (epp_C_Cond_Branching_l_inv Sig _ _ _ _ _ _ HC HC1 HC2 _ _ _ _ H3).
   intros. destroy H0. rename x into Bq1, x0 into Bq2, H1 into Hq1, H5 into Hq2, H0 into Hq'.
-  assert (forall p, In p (CCC_pn C1 (Names D)) -> In p ps) as Hin1.
-  1: intros. apply Hin. simpl; sup; sup.
-  assert (forall p, In p (CCC_pn C2 (Names D)) -> In p ps) as Hin2.
-  1: intros. apply Hin. simpl; sup; sup.
-  elim (IHC1 HC1 Hsp1 Hin1 (epp_C D ps C1 HC1 \ p \ q | p[Bp1] | q[Bq1])); intros.
+  elim (IHC1 HC1 Hsp1 (epp_C D ps C1 HC1 \ p \ q | p[Bp1] | q[Bq1])); intros.
   rename x into C1'. destroy H0.
-  elim (IHC2 HC2 Hsp2 Hin2 (Network_rm _ (Network_rm _ (epp_C D ps C2 HC2) p) q | p[Bp2] | q[Bq2])); intros.
+  elim (IHC2 HC2 Hsp2 (Network_rm _ (Network_rm _ (epp_C D ps C2 HC2) p) q | p[Bp2] | q[Bq2])); intros.
   rename x into C2'. destroy H5. clear IHC1 IHC2.
   exists (If p' ?? b Then C1' Else C2'); repeat split.
   * apply C_Delay_Cond; repeat split; auto.
@@ -973,8 +961,7 @@ induction C; intros. induction e.
   rename l into ps', t into X.
   assert (projectable_C D C ps) as HC'.
   1: { red. rewrite Forall_forall. intros.
-    elim (Hsp x); auto; intros.
-    apply str_proj_C; auto.
+       apply str_proj_C, Hsp.
   }
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
@@ -987,11 +974,9 @@ induction C; intros. induction e.
   1: intro. rewrite epp_C_RT_Call in H3; auto. inversion H3.
   assert (p <> q) as Hpq.
   1: { intro H'; rewrite H', H3 in H2; inversion H2. }
-  assert (forall p, In p ps -> str_proj D C p) as Hsp'.
-  1: apply Hsp.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  elim (IHC HC' Hsp' Hin' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Bl])); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_Call. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Bl])); intros.
   rename x into C'. destroy H0.
   exists (RT_Call X ps' C'); repeat split.
   * apply C_Delay_Call; repeat split; auto.
@@ -999,7 +984,7 @@ induction C; intros. induction e.
     intros r Hr. split; intro H'; rewrite H' in Hr; auto.
   * intros. eapply Network_eq_trans. apply H6. rewrite <- H4.
     assert (projectable_C D C' ps).
-    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Sel; eauto.
+    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Sel; eauto. apply Hsp.
     intro r. elim ((@eq_dec Pid) p r); intro Hpr.
     2: elim ((@eq_dec Pid) q r); intro Hqr.
     3: rewrite Network_rm_add_2_out, H4; auto.
@@ -1027,14 +1012,13 @@ induction C; intros. induction e.
 Qed.
 
 Lemma SP_To_bproj_Sel_r : forall D D' ps C HC s N' s' p q,
-  (forall p, In p ps -> @str_proj Sig D C p) ->
-  (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
+  @str_proj_P Sig (D,C) ->
   <<epp_C D ps C HC,s>> --[RL_Sel p q right,D']--> <<N',s'>> ->
   exists C', (<<C,s>> --[RL_Sel p q right,D]--> <<C',s'>>)%CC
   /\ forall HC', (N' (==) (epp_C D ps C' HC')).
 Proof.
 intros.
-rename H into Hsp, H0 into Hin, H1 into H.
+rename H into Hsp, H0 into H.
 revert N' H.
 induction C; intros. induction e.
 + inversion H.
@@ -1060,9 +1044,9 @@ induction C; intros. induction e.
     inversion H2. 1,2: rewrite H0; auto.
   assert (p <> q) as Hpq.
   1: { intro H'; rewrite H', H3 in H2; inversion H2. }
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  elim (IHC HC' Hsp Hin' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Br])); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_eta. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Br])); intros.
   rename x into C'. destroy H0.
   exists (p' # e --> q' $ v' @ a'';; C'); repeat split.
   * apply C_Delay_Eta; repeat split; auto.
@@ -1107,7 +1091,7 @@ induction C; intros. induction e.
   clear s'0 H8 N'0 H7 q0 H1 p0 H0 s0 H5.
   rename t into a'', t0 into p', t1 into q', t2 into l.
   elim ((@eq_dec Pid) p p'); intro Hpp'.
-  - clear IHC Hsp Hin.
+  - clear IHC Hsp.
     revert HC H H2 H3 H6 H4. rewrite <- Hpp'. clear p' Hpp'. intros.
     (* get the remaining equalities *)
     assert (In p ps /\ q = q' /\ l = right).
@@ -1168,9 +1152,9 @@ induction C; intros. induction e.
       1,4: inversion H3; auto. 1,2,3,4: rewrite H0; auto.
     assert (p <> q) as Hpq.
     1: { intro H'; rewrite H', H3 in H2; inversion H2. }
-    assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-    1: intros. apply Hin. simpl; sup.
-    elim (IHC HC' Hsp Hin' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Br])); intros.
+    assert (str_proj_P (D,C)) as Hsp'.
+    1: { split. eapply Program_WF_eta. all: apply Hsp. }
+    elim (IHC HC' Hsp' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Br])); intros.
     rename x into C'. destroy H0.
     exists (p' --> q'[l] @ a'';; C'); repeat split.
     * apply C_Delay_Eta; repeat split; auto.
@@ -1220,10 +1204,10 @@ induction C; intros. induction e.
   rename t into p', t0 into b.
   generalize (projectable_C_inv_Then Sig _ _ _ _ _ _ HC); intro HC1.
   generalize (projectable_C_inv_Else Sig _ _ _ _ _ _ HC); intro HC2.
-  assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
-  1: apply Hsp.
-  assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
-  1: apply Hsp.
+  assert (str_proj_P (D,C1)) as Hsp1.
+  1: { split. eapply Program_WF_Then. all: apply Hsp. }
+  assert (str_proj_P (D,C2)) as Hsp2.
+  1: { split. eapply Program_WF_Else. all: apply Hsp. }
   clear Hsp.
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
@@ -1242,13 +1226,9 @@ induction C; intros. induction e.
   intros. destroy H0. rename x into Bp1, x0 into Bp2, H1 into Hp1, H5 into Hp2, H0 into Hp'.
   elim (epp_C_Cond_Branching_r_inv Sig _ _ _ _ _ _ HC HC1 HC2 _ _ _ _ H3).
   intros. destroy H0. rename x into Bq1, x0 into Bq2, H1 into Hq1, H5 into Hq2, H0 into Hq'.
-  assert (forall p, In p (CCC_pn C1 (Names D)) -> In p ps) as Hin1.
-  1: intros. apply Hin. simpl; sup; sup.
-  assert (forall p, In p (CCC_pn C2 (Names D)) -> In p ps) as Hin2.
-  1: intros. apply Hin. simpl; sup; sup.
-  elim (IHC1 HC1 Hsp1 Hin1 (epp_C D ps C1 HC1 \ p \ q | p[Bp1] | q[Bq1])); intros.
+  elim (IHC1 HC1 Hsp1 (epp_C D ps C1 HC1 \ p \ q | p[Bp1] | q[Bq1])); intros.
   rename x into C1'. destroy H0.
-  elim (IHC2 HC2 Hsp2 Hin2 (Network_rm _ (Network_rm _ (epp_C D ps C2 HC2) p) q | p[Bp2] | q[Bq2])); intros.
+  elim (IHC2 HC2 Hsp2 (Network_rm _ (Network_rm _ (epp_C D ps C2 HC2) p) q | p[Bp2] | q[Bq2])); intros.
   rename x into C2'. destroy H5. clear IHC1 IHC2.
   exists (If p' ?? b Then C1' Else C2'); repeat split.
   * apply C_Delay_Cond; repeat split; auto.
@@ -1305,9 +1285,7 @@ induction C; intros. induction e.
   rename l into ps', t into X.
   assert (projectable_C D C ps) as HC'.
   1: { red. rewrite Forall_forall. intros.
-    elim (Hsp x); auto; intros.
-    apply str_proj_C; auto.
-  }
+       apply str_proj_C, Hsp; auto. }
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
   1: { revert H2. unfold epp_C. elim In_dec; simpl; auto. discriminate. }
@@ -1319,11 +1297,9 @@ induction C; intros. induction e.
   1: intro. rewrite epp_C_RT_Call in H3; auto. inversion H3.
   assert (p <> q) as Hpq.
   1: { intro H'; rewrite H', H3 in H2; inversion H2. }
-  assert (forall p, In p ps -> str_proj D C p) as Hsp'.
-  1: apply Hsp.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  elim (IHC HC' Hsp' Hin' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Br])); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_Call. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (Network_rm _ (epp_C D ps C HC') p) q | p[B] | q[Br])); intros.
   rename x into C'. destroy H0.
   exists (RT_Call X ps' C'); repeat split.
   * apply C_Delay_Call; repeat split; auto.
@@ -1331,7 +1307,7 @@ induction C; intros. induction e.
     intros r Hr. split; intro H'; rewrite H' in Hr; auto.
   * intros. eapply Network_eq_trans. apply H6. rewrite <- H4.
     assert (projectable_C D C' ps).
-    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Sel; eauto.
+    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Sel; eauto. apply Hsp.
     intro r. elim ((@eq_dec Pid) p r); intro Hpr.
     2: elim ((@eq_dec Pid) q r); intro Hqr.
     3: rewrite Network_rm_add_2_out, H4; auto.
@@ -1359,14 +1335,13 @@ induction C; intros. induction e.
 Qed.
 
 Lemma SP_To_bproj_Cond : forall D D' ps C HC s N' s' p,
-  (forall p, In p ps -> @str_proj Sig D C p) ->
-  (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
+  @str_proj_P Sig (D,C) ->
   <<epp_C D ps C HC,s>> --[RL_Cond p,D']--> <<N',s'>> ->
   exists C', (<<C,s>> --[RL_Cond p,D]--> <<C',s'>>)%CC
   /\ forall HC', (N' (>>) (epp_C D ps C' HC')).
 Proof.
 intros.
-rename H into Hsp, H0 into Hin, H1 into H.
+rename H into Hsp, H0 into H.
 revert N' H.
 induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
 + clear s'0 H8 N'0 H7 p0 H0 s0 H5 H.
@@ -1381,9 +1356,9 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
   assert (q' <> p) as Hq'p.
   1: intro. rewrite <- H, epp_C_Com_q with (HC':=HC') in H1.
     inversion H1. 1,2: rewrite H; auto.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  elim (IHC HC' Hsp Hin' (Network_rm _ (epp_C D ps C HC') p | p[B1])) ; intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_eta. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (epp_C D ps C HC') p | p[B1])) ; intros.
   rename x into C'. destroy H.
   exists (p' # e --> q' $ v' @ a'';; C'); repeat split.
   * apply C_Delay_Eta; repeat split; auto.
@@ -1431,9 +1406,9 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
   assert (q' <> p) as Hq'p.
   1: intro. rewrite <- H, epp_C_Com_q with (HC':=HC') in H1.
     inversion H1. 1,2: rewrite H; auto.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  elim (IHC HC' Hsp Hin' (Network_rm _ (epp_C D ps C HC') p | p[B2])); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_eta. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (epp_C D ps C HC') p | p[B2])); intros.
   rename x into C'. destroy H.
   exists (p' # e --> q' $ v' @ a'';; C'); repeat split.
   * apply C_Delay_Eta; repeat split; auto.
@@ -1483,9 +1458,9 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     rewrite <- H, epp_C_Sel_ql with (HC':=HC') in H1. inversion H1.
     3: rewrite <- H, epp_C_Sel_qr with (HC':=HC') in H1. 3: inversion H1.
     1,2,3,4: rewrite H; auto.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  elim (IHC HC' Hsp Hin' (Network_rm _ (epp_C D ps C HC') p | p[B1])); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_eta. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (epp_C D ps C HC') p | p[B1])); intros.
   rename x into C'. destroy H.
   exists (p' --> q' [l] @ a'';; C'); repeat split.
   * apply C_Delay_Eta; repeat split; auto.
@@ -1539,9 +1514,9 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     rewrite <- H, epp_C_Sel_ql with (HC':=HC') in H1. inversion H1.
     3: rewrite <- H, epp_C_Sel_qr with (HC':=HC') in H1. 3: inversion H1.
     1,2,3,4: rewrite H; auto.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  elim (IHC HC' Hsp Hin' (Network_rm _ (epp_C D ps C HC') p | p[B2])); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_eta. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (epp_C D ps C HC') p | p[B2])); intros.
   rename x into C'. destroy H.
   exists (p' --> q' [l] @ a'';; C'); repeat split.
   * apply C_Delay_Eta; repeat split; auto.
@@ -1590,7 +1565,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
   assert (In p ps) as Hpps.
   1: { revert H1. unfold epp_C. elim In_dec; simpl; auto. discriminate. }
   elim ((@eq_dec Pid) p p'); intro Hpp'.
-  - revert dependent HC. revert Hsp Hin.
+  - revert dependent HC. revert Hsp.
     rewrite <- Hpp'; clear p' Hpp'; intros.
     assert (b = b0).
     1: rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2) in H1; inversion H1; auto.
@@ -1610,22 +1585,18 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     * rewrite Par_proj1', Network_rm_out; auto.
       apply MB_refl'. repeat rewrite epp_C_out; auto.
       apply Process_out; auto.
-  - assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
-    1: apply Hsp.
-    assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
-    1: apply Hsp.
+  - assert (str_proj_P (D,C1)) as Hsp1.
+    1: { split. eapply Program_WF_Then. all: apply Hsp. }
+    assert (str_proj_P (D,C2)) as Hsp2.
+    1: { split. eapply Program_WF_Else. all: apply Hsp. }
     clear Hsp.
     assert (p' <> p) as Hp'p. auto.
     (* get the remaining equalities *)
     elim (epp_C_Cond_Cond_inv Sig _ _ _ _ _ _ _ HC HC1 HC2 _ _ _ Hp'p H1); auto.
     intros. destroy H. rename x into B1t, x0 into B1e, x1 into B2t, x2 into B2e, H0 into Hp1, H5 into Hp2, H7 into Ht, H into He.
-    assert (forall p, In p (CCC_pn C1 (Names D)) -> In p ps) as Hin1.
-    1: intros. apply Hin. simpl; sup; sup.
-    assert (forall p, In p (CCC_pn C2 (Names D)) -> In p ps) as Hin2.
-    1: intros. apply Hin. simpl; sup; sup.
-    elim (IHC1 HC1 Hsp1 Hin1 (epp_C D ps C1 HC1 \ p | p[B1t])); intros.
+    elim (IHC1 HC1 Hsp1 (epp_C D ps C1 HC1 \ p | p[B1t])); intros.
     rename x into C1'. destroy H.
-    elim (IHC2 HC2 Hsp2 Hin2 (Network_rm _ (epp_C D ps C2 HC2) p | p[B2t])); intros.
+    elim (IHC2 HC2 Hsp2 (Network_rm _ (epp_C D ps C2 HC2) p | p[B2t])); intros.
     rename x into C2'. destroy H5. clear IHC1 IHC2.
     exists (If p' ?? b0 Then C1' Else C2'); repeat split.
     * apply (@C_Delay_Cond Sig); repeat split; simpl; auto.
@@ -1679,7 +1650,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
   assert (In p ps) as Hpps.
   1: { revert H1. unfold epp_C. elim In_dec; simpl; auto. discriminate. }
   elim ((@eq_dec Pid) p p'); intro Hpp'.
-  - revert dependent HC. revert Hsp Hin.
+  - revert dependent HC. revert Hsp.
     rewrite <- Hpp'; clear p' Hpp'; intros.
     assert (b = b0).
     1: rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2) in H1; inversion H1; auto.
@@ -1699,22 +1670,18 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     * rewrite Par_proj1', Network_rm_out; auto.
       apply MB_refl'. repeat rewrite epp_C_out; auto.
       apply Process_out; auto.
-  - assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
-    1: apply Hsp.
-    assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
-    1: apply Hsp.
+  - assert (str_proj_P (D,C1)) as Hsp1.
+    1: { split. eapply Program_WF_Then. all: apply Hsp. }
+    assert (str_proj_P (D,C2)) as Hsp2.
+    1: { split. eapply Program_WF_Else. all: apply Hsp. }
     clear Hsp.
     assert (p' <> p) as Hp'p. auto.
     (* get the remaining equalities *)
     elim (epp_C_Cond_Cond_inv Sig _ _ _ _ _ _ _ HC HC1 HC2 _ _ _ Hp'p H1); auto.
     intros. destroy H. rename x into B1t, x0 into B1e, x1 into B2t, x2 into B2e, H0 into Hp1, H5 into Hp2, H7 into Ht, H into He.
-    assert (forall p, In p (CCC_pn C1 (Names D)) -> In p ps) as Hin1.
-    1: intros. apply Hin. simpl; sup; sup.
-    assert (forall p, In p (CCC_pn C2 (Names D)) -> In p ps) as Hin2.
-    1: intros. apply Hin. simpl; sup; sup.
-    elim (IHC1 HC1 Hsp1 Hin1 (epp_C D ps C1 HC1 \ p | p[B1e])); intros.
+    elim (IHC1 HC1 Hsp1 (epp_C D ps C1 HC1 \ p | p[B1e])); intros.
     rename x into C1'. destroy H.
-    elim (IHC2 HC2 Hsp2 Hin2 (Network_rm _ (epp_C D ps C2 HC2) p | p[B2e])); intros.
+    elim (IHC2 HC2 Hsp2 (Network_rm _ (epp_C D ps C2 HC2) p | p[B2e])); intros.
     rename x into C2'. destroy H5. clear IHC1 IHC2.
     exists (If p' ?? b0 Then C1' Else C2'); repeat split.
     * apply (@C_Delay_Cond Sig); repeat split; simpl; auto.
@@ -1763,16 +1730,15 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
 + clear s'0 H8 N'0 H7 p0 H0 s0 H5 H.
   rename t into X, l into ps'.
   assert (projectable_C D C ps) as HC'.
-  1: apply str_proj_C'. apply Hsp.
+  1: apply str_proj_C'. intros; apply Hsp.
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
   1: { revert H1. unfold epp_C. elim In_dec; simpl; auto. discriminate. }
   assert (~In p ps').
   1: intro. rewrite epp_C_RT_Call in H1; auto; inversion H1.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  assert (forall p, In p ps -> str_proj D C p) as Hsp'. apply Hsp.
-  elim (IHC HC' Hsp' Hin' (Network_rm _ (epp_C D ps C HC') p | p[B1])); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_Call. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (epp_C D ps C HC') p | p[B1])); intros.
   rename x into C'. destroy H0.
   exists (RT_Call X ps' C'); repeat split.
   * apply C_Delay_Call; repeat split; auto.
@@ -1780,7 +1746,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     intros; intro. rewrite H8 in H7; auto.
   * intros; intro r. rewrite H3.
     assert (projectable_C D C' ps) as H'.
-    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Cond; eauto.
+    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Cond; eauto. apply Hsp.
     specialize (H0 H' r).
     elim ((@eq_dec Pid) r p); intro Hpr.
     2: elim (In_dec (@eq_dec Pid) r ps'); intro Hr.
@@ -1790,8 +1756,9 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H0; auto.
       apply MB_refl'.
+      elim (In_dec (@eq_dec Pid) r ps); intro.
       repeat rewrite epp_C_RT_Call; auto.
-      1,2: apply Hin; simpl; sup.
+      repeat rewrite epp_C_out; auto.
       all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H0; auto.
@@ -1804,16 +1771,15 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
 + clear s'0 H8 N'0 H7 p0 H0 s0 H5 H.
   rename t into X, l into ps'.
   assert (projectable_C D C ps) as HC'.
-  1: apply str_proj_C'. apply Hsp.
+  1: apply str_proj_C'. intros; apply Hsp.
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
   1: { revert H1. unfold epp_C. elim In_dec; simpl; auto. discriminate. }
   assert (~In p ps').
   1: intro. rewrite epp_C_RT_Call in H1; auto; inversion H1.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  assert (forall p, In p ps -> str_proj D C p) as Hsp'. apply Hsp.
-  elim (IHC HC' Hsp' Hin' (Network_rm _ (epp_C D ps C HC') p | p[B2])); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_Call. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (epp_C D ps C HC') p | p[B2])); intros.
   rename x into C'. destroy H0.
   exists (RT_Call X ps' C'); repeat split.
   * apply C_Delay_Call; repeat split; auto.
@@ -1821,7 +1787,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     intros; intro. rewrite H8 in H7; auto.
   * intros; intro r. rewrite H3.
     assert (projectable_C D C' ps) as H'.
-    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Cond; eauto.
+    1: apply str_proj_C'; intros. eapply CCC_To_str_proj_Cond; eauto. apply Hsp.
     specialize (H0 H' r).
     elim ((@eq_dec Pid) r p); intro Hpr.
     2: elim (In_dec (@eq_dec Pid) r ps'); intro Hr.
@@ -1831,8 +1797,9 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H0; auto.
       apply MB_refl'.
+      elim (In_dec (@eq_dec Pid) r ps); intro.
       repeat rewrite epp_C_RT_Call; auto.
-      1,2: apply Hin; simpl; sup.
+      repeat rewrite epp_C_out; auto.
       all: apply Process_out; auto.
     - rewrite Par_proj1', Network_rm_out; auto.
       rewrite Par_proj1', Network_rm_out in H0; auto.
@@ -1857,22 +1824,15 @@ Unshelve. auto. auto.
 Qed.
 
 Lemma SP_To_bproj_Call : forall D (D':DefSetB Sig') ps C HC s N' s' p X,
-  Choreography_WF C ->
-  (forall p, In p ps -> str_proj D C p) ->
-  (forall p, In p (CCC_pn C (Names D)) -> In p ps) ->
-  (forall p HX, D' (X,p) = epp_C D ps (snd (D X)) HX p) ->
-  (forall p X, In p (CCC_pn (snd (D X)) (Names D))
-            -> In p (fst (D X))) ->
+  @str_proj_P Sig (D,C) ->
   (forall X, projectable_C D (snd (D X)) ps) ->
-  (forall X, initial (snd (D X))
-    /\ forall p, In p (fst (D X)) -> In p ps) ->
+  (forall p HX, In p ps -> D' (X,p) = epp_C D ps (snd (D X)) HX p) ->
   <<epp_C D ps C HC,s>> --[RL_Call ((X,p):recvar Sig') p,D']--> <<N',s'>> ->
   exists C', (<<C,s>> --[RL_Call X p,D]--> <<C',s'>>)%CC
   /\ forall HC', (N' (>>) epp_C D ps C' HC').
 Proof.
 intros.
-rename H into HWF, H0 into Hsp, H1 into Hin,
-  H2 into HD, H3 into Hnames, H4 into HD', H5 into Hinit, H6 into H.
+rename H into Hsp, H0 into HD, H1 into HD', H2 into H.
 revert N' H.
 induction C; intros. induction e.
 + inversion H.
@@ -1888,10 +1848,9 @@ induction C; intros. induction e.
   assert (q' <> p) as Hq'p.
   1: intro. rewrite <- H0, epp_C_Com_q with (HC':=HC') in H2.
     inversion H2. rewrite H0; auto. rewrite H0; auto.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  apply Choreography_WF_eta in HWF.
-  elim (IHC HC' HWF Hsp Hin' (Network_rm _ (epp_C D ps C HC') p | Process Sig' p (D' (X,p)))); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_eta. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (epp_C D ps C HC') p | Process Sig' p (D' (X,p)))); intros.
   rename x into C'. destroy H0.
   exists (p' # e --> q' $ v @ a'';; C'); repeat split.
   * apply C_Delay_Eta; repeat split; auto.
@@ -1939,10 +1898,9 @@ induction C; intros. induction e.
     inversion H2. rewrite H0; auto. rewrite H0; auto.
     rewrite <- H0, epp_C_Sel_qr with (HC':=HC') in H2.
     inversion H2. rewrite H0; auto. rewrite H0; auto.
-  assert (forall p, In p (CCC_pn C (Names D)) -> In p ps) as Hin'.
-  1: intros. apply Hin. simpl; sup.
-  apply Choreography_WF_eta in HWF.
-  elim (IHC HC' HWF Hsp Hin' (Network_rm _ (epp_C D ps C HC') p | (Process Sig' p (D' (X,p))))); intros.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_eta. all: apply Hsp. }
+  elim (IHC HC' Hsp' (Network_rm _ (epp_C D ps C HC') p | (Process Sig' p (D' (X,p))))); intros.
   rename x into C'. destroy H0.
   exists (p' --> q'[l] @ a'';; C'); repeat split.
   * apply C_Delay_Eta; repeat split; auto.
@@ -1984,10 +1942,10 @@ induction C; intros. induction e.
   rename t into p', t0 into b.
   generalize (projectable_C_inv_Then Sig _ _ _ _ _ _ HC); intro HC1.
   generalize (projectable_C_inv_Else Sig _ _ _ _ _ _ HC); intro HC2.
-  assert (forall p, In p ps -> str_proj D C1 p) as Hsp1.
-  1: apply Hsp.
-  assert (forall p, In p ps -> str_proj D C2 p) as Hsp2.
-  1: apply Hsp.
+  assert (str_proj_P (D,C1)) as Hsp1.
+  1: { split. eapply Program_WF_Then. all: apply Hsp. }
+  assert (str_proj_P (D,C2)) as Hsp2.
+  1: { split. eapply Program_WF_Else. all: apply Hsp. }
   clear Hsp.
   (* get the remaining equalities *)
   assert (In p ps) as Hpps.
@@ -1995,16 +1953,9 @@ induction C; intros. induction e.
   assert (p' <> p) as Hp'p.
   1: intro. rewrite <- H0, epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2) in H2; auto.
     inversion H2. rewrite H0; auto.
-  generalize (Choreography_WF_Then _ _ _ _ _ HWF) as HWF1.
-  generalize (Choreography_WF_Else _ _ _ _ _ HWF) as HWF2.
-  intros; clear HWF.
-  assert (forall p, In p (CCC_pn C1 (Names D)) -> In p ps) as Hin1.
-  1: intros. apply Hin. simpl; sup; sup.
-  assert (forall p, In p (CCC_pn C2 (Names D)) -> In p ps) as Hin2.
-  1: intros. apply Hin. simpl; sup; sup.
-  elim (IHC1 HC1 HWF1 Hsp1 Hin1 (epp_C D ps C1 HC1 \ p | Process Sig' p (D' (X,p)))); intros.
+  elim (IHC1 HC1 Hsp1 (epp_C D ps C1 HC1 \ p | Process Sig' p (D' (X,p)))); intros.
   rename x into C1'. destroy H0.
-  elim (IHC2 HC2 HWF2 Hsp2 Hin2 (Network_rm _ (epp_C D ps C2 HC2) p | Process Sig' p (D' (X,p)))); intros.
+  elim (IHC2 HC2 Hsp2 (Network_rm _ (epp_C D ps C2 HC2) p | Process Sig' p (D' (X,p)))); intros.
   rename x into C2'. destroy H4. clear IHC1 IHC2.
   exists (If p' ?? b Then C1' Else C2'); repeat split.
   * apply C_Delay_Cond; repeat split; auto.
@@ -2050,7 +2001,7 @@ induction C; intros. induction e.
 + inversion H.
   clear s'0 H7 N'0 H6 p0 H1 X0 H0 s0 H4. rename t into r.
   assert (In p ps /\ In p (fst (D r)) /\ r = X).
-  1: { clear H3 H8 H5 N H N' Hin Hsp s s'.
+  1: { clear H3 H8 H5 N H N' Hsp s s'.
     revert H2. unfold epp_C. elim In_dec. 2: discriminate.
     elim bproj_dec. induction a; simpl; intros.
     rewrite H2 in p0; inversion_clear p0; auto.
@@ -2058,7 +2009,7 @@ induction C; intros. induction e.
   }
   destroy H0. rename H1 into Hpps, H4 into HX.
   revert dependent HC. rewrite H0.
-  rewrite H0 in HX, Hsp, Hin, HWF; clear r H0; intros.
+  rewrite H0 in *; clear r H0; intros.
   assert (0 < [#] (fst (D X))).
   1: {
     elim (Nat.lt_ge_cases 0 ([#] (fst (D X)))); auto.
@@ -2075,8 +2026,7 @@ induction C; intros. induction e.
     * rewrite Par_proj1', Network_rm_out; auto.
       rewrite epp_C_Call_out, epp_C_out'; auto.
       ++ intro. apply Hpr.
-         apply Hnames in H1.
-         eapply set_size_1; eauto.
+         eapply set_size_1; eauto. apply Hsp; auto.
       ++ intro. apply Hpr. eapply set_size_1; eauto.
       ++ apply Process_out; auto.
   - exists (RT_Call X (fst (D X) [\] p) (snd (D X))).
@@ -2088,36 +2038,38 @@ induction C; intros. induction e.
     * rewrite <- Hpr, Par_proj2. 2: apply Network_rm_In.
       rewrite Process_refl.
       apply MB_refl'.
-      rewrite epp_C_RT_Call_out with (HC':=HD' X); auto.
+      rewrite epp_C_RT_Call_out with (HC':=HD X); auto.
       intro Hp; apply set_remove'_2 in Hp; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       apply MB_refl'.
+      elim (In_dec (@eq_dec Pid) r ps); intros.
       rewrite epp_C_RT_Call, epp_C_Call; auto.
       apply set_remove'_3; auto.
+      repeat rewrite epp_C_out; auto.
       apply Process_out; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       apply MB_refl'.
       rewrite epp_C_out', epp_C_out'; auto.
       simpl. sup. intro; apply Hr.
       inversion_clear H6. eapply set_remove'_1; eauto.
-      apply Hnames; auto.
+      apply Hsp; auto.
       apply Process_out; auto.
 + inversion H.
   clear s'0 H7 N'0 H6 p0 H1 X0 H0 s0 H4. rename t into r.
   assert (In p ps) as Hpps.
   1: { revert H2. unfold epp_C. elim In_dec; auto. discriminate. }
-  generalize (Choreography_WF_no_empty_ann _ _ HWF) as Hann.
-  apply Choreography_WF_Call_1 in HWF.
-  intro. destroy Hann. clear Hann.
+  assert (str_proj_P (D,C)) as Hsp'.
+  1: { split. eapply Program_WF_Call. all: apply Hsp. }
   assert (projectable_C D C ps) as HCp.
-  1: apply str_proj_C'; apply Hsp.
+  1: apply str_proj_C'. intros; apply Hsp.
   elim (eq_dec r X); intro Hr. (* case 2 pending *)
   revert dependent HC. rewrite Hr.
-  rewrite Hr in Hsp, Hin; clear r Hr; intros.
+  rewrite Hr in *; clear r Hr; intros.
   assert (0 < [#] l).
   1: {
     elim (Nat.lt_ge_cases 0 ([#] l)); auto.
-    intro. exfalso. inversion H1. apply set_size_0 in H6; auto.
+    intro. inversion H0. apply set_size_0 in H4.
+    apply Hsp in H4; tauto.
   }
   elim (In_dec (@eq_dec Pid) p l); intro Hpl. (* weird edge case *)
   1: elim (Nat.eq_dec ([#] l) 1); clear H0; intro H0.
@@ -2127,9 +2079,10 @@ induction C; intros. induction e.
     elim ((@eq_dec Pid) p r); intro Hpr.
     * rewrite <- Hpr, Par_proj2. 2: apply Network_rm_In.
       rewrite Process_refl.
-      elim (Hsp p); auto; intros. elim (H6 p); auto; intros; clear H6.
-      rewrite (HD _ (HD' X)); auto.
-      apply H9; apply epp_C_bproj; auto.
+      induction Hsp.
+      elim (H4 p); auto; intros. elim (H7 p); auto; intros; clear H7.
+      rewrite (HD' _ (HD X)); auto.
+      apply H10; apply epp_C_bproj; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       rewrite epp_C_RT_Call_out with (HC':=HC'). apply MB_refl.
       intro. apply Hpr. eapply set_size_1; eauto.
@@ -2137,22 +2090,26 @@ induction C; intros. induction e.
   - exists (RT_Call X (l [\] p) C).
     split.
     apply C_Call_Enter; auto.
-    1: inversion H1; auto. elim H0; auto. apply le_n_S in H6; auto.
+    1: { elim (nat_total_order _ _ H0); auto.
+         intro. inversion H1. apply set_size_0 in H6.
+         rewrite H6 in Hpl; inversion Hpl. inversion H6.
+    }
     intro. intro r. rewrite H5.
     elim ((@eq_dec Pid) p r); intro Hpr.
     2: elim (In_dec (@eq_dec Pid) r l); intro Hr.
     * rewrite <- Hpr, Par_proj2, Process_refl. 2: apply Network_rm_In.
-      elim (Hsp p); auto; intros.
+      induction Hsp.
+      elim (H4 p); auto; intros. elim (H7 p); auto; intros; clear H7.
       rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
-      elim (H6 p); auto; clear H6; intros.
-      rewrite (HD _ (HD' X)).
-      apply H7; apply epp_C_bproj; auto.
+      rewrite (HD' _ (HD X)); auto.
+      apply H10; apply epp_C_bproj; auto.
       intro Hp; apply set_remove'_2 in Hp; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       apply MB_refl'.
+      elim (In_dec (@eq_dec Pid) r ps); intros.
       rewrite epp_C_RT_Call, epp_C_RT_Call; auto.
-      1,3: apply Hin; simpl; sup.
       apply set_remove'_3; auto.
+      repeat rewrite epp_C_out; auto.
       apply Process_out; auto.
     * rewrite Par_proj1', Network_rm_out; auto.
       apply MB_refl'.
@@ -2161,35 +2118,33 @@ induction C; intros. induction e.
       intro. apply Hr. eapply set_remove'_1; eauto.
       apply Process_out; auto.
   - elim (IHC HCp) with (N':=(Network_rm _ (epp_C _ _ _ HCp) p | Process Sig' p (D'(X,p)))); auto.
-    2: intros; elim (Hsp p0); auto.
-    2: intros; apply Hin; simpl; sup.
-    intros. destroy H4. rename x into C'.
+    intros. destroy H1. rename x into C'.
     exists (RT_Call X l C'); split.
     * apply C_Delay_Call; auto.
       apply disjoint_ps_char.
-      simpl; intros. intro. rewrite H9 in H7; auto.
+      simpl; intros. intro. rewrite H7 in *; auto.
     * intros.
       assert (projectable_C D C' ps).
       1: {
         eapply (CCC_To_projectable_C _ D ps C s C' s' (RL_Call X p)); eauto.
-        apply Hsp. intros; eapply initial_str_proj; eauto.
-        apply Hinit; auto.
-        intros. intro. apply Hnames.
-        intros r Z. intros. elim (Hinit Z); auto.
+        intros; apply Hsp.
+        intros; eapply initial_str_proj; eauto. apply Hsp.
+        apply Hsp.
       }
       intro r. rewrite H5. clear N N' H H3 H5. rename l into ps'.
-      generalize (H4 H7 r); clear H4; intro.
+      generalize (H1 H6 r); clear H1; intro.
       elim ((@eq_dec Pid) p r); intro Hpr.
       2: rewrite Par_proj1', Network_rm_out; auto.
       2: elim (In_dec (@eq_dec Pid) r ps'); intro Hr.
       ++ rewrite <- Hpr, Par_proj2. 2: apply Network_rm_In.
-         rewrite epp_C_RT_Call_out with (HC':=H7); auto.
+         rewrite epp_C_RT_Call_out with (HC':=H6); auto.
          rewrite <- Hpr, Par_proj2 in H; auto.
          apply Network_rm_In.
-      ++ repeat rewrite epp_C_RT_Call; auto.
-         apply MB_refl.
-         all: apply Hin; simpl; sup.
-      ++ rewrite epp_C_RT_Call_out with (HC':=H7); auto.
+      ++ elim (In_dec (@eq_dec Pid) r ps); intros.
+         repeat rewrite epp_C_RT_Call; auto.
+         apply MB_refl'; auto.
+         repeat rewrite epp_C_out; auto. constructor.
+      ++ rewrite epp_C_RT_Call_out with (HC':=H6); auto.
          rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
          rewrite Par_proj1', Network_rm_out in H; auto.
          apply Process_out; auto.
@@ -2200,35 +2155,32 @@ induction C; intros. induction e.
   - assert (~In p l) as Hp.
     1: { intro. rewrite epp_C_RT_Call in H2; auto. inversion H2; auto. }
     elim (IHC HCp) with (N':=(Network_rm _ (epp_C _ _ _ HCp) p | Process Sig' p (D'(X,p)))); auto.
-    2: intros; elim (Hsp p0); auto.
-    2: intros; apply Hin; simpl; sup.
-    intros. destroy H1. rename x into C', r into Y.
+    intros. destroy H0. rename x into C', r into Y.
     exists (RT_Call Y l C'); split.
     * apply C_Delay_Call; auto.
       apply disjoint_ps_char.
-      simpl; intros. intro. rewrite H7 in H6; auto.
+      simpl; intros. intro. rewrite H6 in *; auto.
     * intros.
       assert (projectable_C D C' ps).
       1: {
         eapply (CCC_To_projectable_C Sig D ps C s C' s' (RL_Call X p)); eauto.
-        apply Hsp. intros; eapply initial_str_proj; eauto.
-        apply Hinit; auto.
-        intros. intro. apply Hnames.
-        intros r Z. intros. elim (Hinit Z); auto.
+        intros; apply Hsp. intros; eapply initial_str_proj; eauto. apply Hsp.
+        apply Hsp.
       }
       intro r. rewrite H5. clear N N' H H3 H5. rename l into ps'.
-      generalize (H1 H6 r); clear H1; intro.
+      generalize (H0 H4 r); clear H0; intro.
       elim ((@eq_dec Pid) p r); intro Hpr.
       2: rewrite Par_proj1', Network_rm_out; auto.
       2: elim (In_dec (@eq_dec Pid) r ps'); intro Hr'.
       ++ rewrite <- Hpr, Par_proj2. 2: apply Network_rm_In.
-         rewrite epp_C_RT_Call_out with (HC':=H6); auto.
+         rewrite epp_C_RT_Call_out with (HC':=H4); auto.
          rewrite <- Hpr, Par_proj2 in H; auto.
          apply Network_rm_In.
-      ++ repeat rewrite epp_C_RT_Call; auto.
-         apply MB_refl.
-         all: apply Hin; simpl; sup.
-      ++ rewrite epp_C_RT_Call_out with (HC':=H6); auto.
+      ++ elim (In_dec (@eq_dec Pid) r ps); intros.
+         repeat rewrite epp_C_RT_Call; auto.
+         apply MB_refl'; auto.
+         repeat rewrite epp_C_out; auto. constructor.
+      ++ rewrite epp_C_RT_Call_out with (HC':=H4); auto.
          rewrite epp_C_RT_Call_out with (HC':=HCp); auto.
          rewrite Par_proj1', Network_rm_out in H; auto.
          apply Process_out; auto.
@@ -2270,16 +2222,18 @@ all: unfold X_Free; simpl; unfold set_union_rv.
 - clear H2. contr HC.
 Qed.
 
-Lemma EPP_Sound : forall (P:CC.Program Sig) (HP:projectable Sig ps P),
+Lemma EPP_Sound : forall (P:CC.Program Sig) (HP:projectable_P P),
   str_proj_P P -> forall s tl N' s', (epp P HP,s) --[tl]--> (N',s') ->
   exists P' tl', ((P,s) --[tl']--> (P',s'))%CC /\
     forall HP', Net N' (>>) Net (epp P' HP').
 Proof.
-intros P ps HWF HP Hstr Hpn HVars; intros.
+intros P HP Hsp; intros.
+generalize (str_proj_P_Program_WF _ _ Hsp) as HWF; intro.
 generalize (Program_WF_Vars_incl _ _ HWF) as Hincl; intro.
 inversion H.
 clear tl H1 s'0 H5 H4 s0 H2 s'0 N' H. rename N'0 into N'.
 rename D into D'.
+set (ps := CCP_pn P).
 induction P as (D,C).
 assert (projectable_C D C ps) as HC.
 1: inversion HP; auto.
@@ -2291,7 +2245,7 @@ assert (SP_To _ D' (epp_C _ _ _ HC) s t N' s').
 destroy HWF. simpl in *.
   unfold CC.Procs in HWF; simpl in HWF.
 inversion HP. simpl in *. destroy H5.
-assert (forall X p, In p ps -> str_proj D (snd (D X)) p).
+assert (forall X p, str_proj D (snd (D X)) p).
 1: {
   intros. elim (In_dec (@eq_dec Pid) p (fst (D X))); intro.
   eapply initial_str_proj; eauto. apply HWF.
@@ -2299,72 +2253,126 @@ assert (forall X p, In p ps -> str_proj D (snd (D X)) p).
   intro; apply b, HWF; auto.
 }
 induction t. 2: induction l.
-+ apply SP_To_bproj_Com in H.
++ apply SP_To_bproj_Com in H. 2: apply Hsp.
   destroy H. rename x0 into C'.
-  assert (projectable_C D C' ps).
-  1: { eapply CCC_To_projectable_C; eauto. }
+  assert (set_incl (CCP_pn (D,C')) ps) as Hps'.
+  1: { red; intros. eapply CCP_To_pn'; eauto.
+       2: constructor; apply H7. apply Hsp. }
+  assert (projectable_C D C' ps) as HC'.
+  1: { eapply CCC_To_projectable_C. 4: apply H7.
+       all: eauto. intros; apply Hsp. }
+  assert (projectable_C D C' (CCP_pn (D,C'))).
+  1: { apply projectable_C_incl with (CCP_pn (D,C)); auto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Com p v q x)); repeat split; auto.
   - simpl. intros. apply MBN_refl'.
-    eapply Network_eq_trans. apply (H H11); auto.
-    apply Network_eq_sym; apply epp_C_char.
-  - auto.
-  - auto.
-+ apply SP_To_bproj_Sel_l in H.
+    eapply Network_eq_trans. apply (H HC'); auto.
+    eapply Network_eq_trans. 2: NEQs; apply epp_C_char with (HC:=H8).
+    intro r.
+    elim (In_dec (@eq_dec Pid) r (CCP_pn (D,C'))); intros.
+    * apply bproj_unique with D C' r; auto.
+      all: apply epp_C_bproj; auto.
+    * rewrite epp_C_out'; auto.
+      rewrite epp_C_out; auto.
++ apply SP_To_bproj_Sel_l in H. 2: apply Hsp.
   destroy H. rename x into C'.
-  assert (projectable_C D C' ps).
-  1: { eapply CCC_To_projectable_C; eauto. }
+  assert (set_incl (CCP_pn (D,C')) ps) as Hps'.
+  1: { red; intros. eapply CCP_To_pn'; eauto.
+       2: constructor; apply H7. apply Hsp. }
+  assert (projectable_C D C' ps) as HC'.
+  1: { eapply CCC_To_projectable_C. 4: apply H7.
+       all: eauto. intros; apply Hsp. }
+  assert (projectable_C D C' (CCP_pn (D,C'))).
+  1: { apply projectable_C_incl with (CCP_pn (D,C)); auto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Sel p q left)); repeat split; auto.
   - simpl. intros. apply MBN_refl'.
-    eapply Network_eq_trans. apply (H H11); auto.
-    apply Network_eq_sym; apply epp_C_char.
-  - auto.
-  - auto.
-+ apply SP_To_bproj_Sel_r in H.
+    eapply Network_eq_trans. apply (H HC'); auto.
+    eapply Network_eq_trans. 2: NEQs; apply epp_C_char with (HC:=H8).
+    intro r.
+    elim (In_dec (@eq_dec Pid) r (CCP_pn (D,C'))); intros.
+    * apply bproj_unique with D C' r; auto.
+      all: apply epp_C_bproj; auto.
+    * rewrite epp_C_out'; auto.
+      rewrite epp_C_out; auto.
++ apply SP_To_bproj_Sel_r in H. 2: apply Hsp.
   destroy H. rename x into C'.
-  assert (projectable_C D C' ps).
-  1: { eapply CCC_To_projectable_C; eauto. }
+  assert (set_incl (CCP_pn (D,C')) ps) as Hps'.
+  1: { red; intros. eapply CCP_To_pn'; eauto.
+       2: constructor; apply H7. apply Hsp. }
+  assert (projectable_C D C' ps) as HC'.
+  1: { eapply CCC_To_projectable_C. 4: apply H7.
+       all: eauto. intros; apply Hsp. }
+  assert (projectable_C D C' (CCP_pn (D,C'))).
+  1: { apply projectable_C_incl with (CCP_pn (D,C)); auto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Sel p q right)); repeat split; auto.
   - simpl. intros. apply MBN_refl'.
-    eapply Network_eq_trans. apply (H H11); auto.
-    apply Network_eq_sym; apply epp_C_char.
-  - auto.
-  - auto.
-+ apply SP_To_bproj_Cond in H.
+    eapply Network_eq_trans. apply (H HC'); auto.
+    eapply Network_eq_trans. 2: NEQs; apply epp_C_char with (HC:=H8).
+    intro r.
+    elim (In_dec (@eq_dec Pid) r (CCP_pn (D,C'))); intros.
+    * apply bproj_unique with D C' r; auto.
+      all: apply epp_C_bproj; auto.
+    * rewrite epp_C_out'; auto.
+      rewrite epp_C_out; auto.
++ apply SP_To_bproj_Cond in H. 2: apply Hsp.
   destroy H. rename x into C'.
-  assert (projectable_C D C' ps).
-  1: { eapply CCC_To_projectable_C; eauto. }
+  assert (set_incl (CCP_pn (D,C')) ps) as Hps'.
+  1: { red; intros. eapply CCP_To_pn'; eauto.
+       2: constructor; apply H7. apply Hsp. }
+  assert (projectable_C D C' ps) as HC'.
+  1: { eapply CCC_To_projectable_C. 4: apply H7.
+       all: eauto. intros; apply Hsp. }
+  assert (projectable_C D C' (CCP_pn (D,C'))).
+  1: { apply projectable_C_incl with (CCP_pn (D,C)); auto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Cond p)); repeat split; auto.
-  - simpl. intros. eapply MBN_trans. apply (H H11).
+  - simpl. intros. eapply MBN_trans. apply (H HC').
     apply MBN_refl'.
-    apply Network_eq_sym. apply epp_C_char.
-  - auto.
-  - auto.
+    eapply Network_eq_trans. 2: NEQs; apply epp_C_char with (HC:=H8).
+    intro r.
+    elim (In_dec (@eq_dec Pid) r (CCP_pn (D,C'))); intros.
+    * apply bproj_unique with D C' r; auto.
+      all: apply epp_C_bproj; auto.
+    * rewrite epp_C_out'; auto.
+      rewrite epp_C_out; auto.
 + elim (SP_To_bproj_Call_name _ _ _ _ _ _ _ _ _ _ H); intros.
-  destroy H10. rename x into Y. rewrite H11 in *; clear X H11.
+  destroy H7. rename x into Y. rewrite H8 in *; clear X H8.
   apply SP_To_bproj_Call in H; auto.
   destroy H. rename x into C'.
-  assert (projectable_C D C' ps).
-  1: { eapply CCC_To_projectable_C; eauto. }
+  assert (set_incl (CCP_pn (D,C')) ps) as Hps'.
+  1: { red; intros. eapply CCP_To_pn'; eauto.
+       2: constructor; apply H8. apply Hsp. }
+  assert (projectable_C D C' ps) as HC'.
+  1: { eapply CCC_To_projectable_C. 4: apply H8.
+       all: eauto. intros; apply Hsp. }
+  assert (projectable_C D C' (CCP_pn (D,C'))).
+  1: { apply projectable_C_incl with (CCP_pn (D,C)); auto. }
   exists (D,C'),
      (@forget Pid Value Var RecVar (RL_Call Y p)); repeat split; auto.
-  - simpl. intros. eapply MBN_trans. apply (H H12).
+  - simpl. intros. eapply MBN_trans. apply (H HC').
     apply MBN_refl'.
-    apply Network_eq_sym. apply epp_C_char.
-  - replace D' with (Procs (epp _ _ HP)).
+    eapply Network_eq_trans. 2: NEQs; apply epp_C_char with (HC:=H9).
+    intro r.
+    elim (In_dec (@eq_dec Pid) r (CCP_pn (D,C'))); intros.
+    * apply bproj_unique with D C' r; auto.
+      all: apply epp_C_bproj; auto.
+    * rewrite epp_C_out'; auto.
+      rewrite epp_C_out; auto.
+  - replace D' with (Procs (epp _ HP)).
     2: rewrite <- H0; auto.
-    intro r; intros. rewrite epp_D_char'' with (HX:=H6 Y); auto.
-    elim (In_dec (@eq_dec Pid) r (fst (D Y))); intro Hr.
-    eapply bproj_unique; apply epp_C_bproj; eauto.
-    rewrite epp_C_out; auto. rewrite epp_C_out'; auto.
-    intro. apply Hr, Hincl; auto.
-  - intros; apply Hincl; auto.
-  - intros. apply Forall_forall; intros.
+    intro r; intros. red; rewrite Forall_forall; intros.
     apply str_proj_C; auto.
-  - split; eauto. apply HWF.
+  - intros. replace D' with (Procs (D',N)).
+    rewrite H0. 2: unfold Procs; auto.
+    rewrite epp_D_char'' with (HX:=H5 Y).
+    elim (In_dec (@eq_dec Pid) p0 (fst (D Y))); intros.
+    * apply bproj_unique with D (snd (D Y)) p0; auto.
+      all: apply epp_C_bproj; auto.
+    * rewrite epp_C_out; auto.
+      rewrite epp_C_out'; auto.
+      intro. apply b, Hsp; auto.
 Qed.
 
 Lemma SP_To_MBN_epp : forall D N1 s N2 s' tl D' ps C HC,
@@ -2497,10 +2505,10 @@ inversion HTo.
       apply Process_out; auto.
 Qed.
 
-Lemma SPP_To_MBN_epp : forall P1 s P2 s' tl ps P HP,
-  (forall X, Procs P1 X = Procs (epp ps P HP) X) ->
-  Net P1 (>>) Net (epp ps P HP) -> SPP_To Sig' (P1,s) tl (P2,s') ->
-  exists P2', ((epp ps P HP,s) --[tl]--> (P2',s')) /\ Net P2 (>>) Net P2'
+Lemma SPP_To_MBN_epp : forall P1 s P2 s' tl P HP,
+  (forall X, Procs P1 X = Procs (epp P HP) X) ->
+  Net P1 (>>) Net (epp P HP) -> SPP_To Sig' (P1,s) tl (P2,s') ->
+  exists P2', ((epp P HP,s) --[tl]--> (P2',s')) /\ Net P2 (>>) Net P2'
   /\ forall X, Procs P2 X = Procs P2' X.
 Proof.
 intros.
@@ -2508,13 +2516,13 @@ induction P1 as (D,N1), P2 as (D2,N2).
 rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H1);
 rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H1) in H1; clear D2.
 induction P as (D',C).
-inversion HP. inversion_clear H3. clear H5. simpl in H2, H4.
-inversion H1. clear s'0 H10 N' H9 tl H5 s0 H7 N H6 D0 H3 H1.
+inversion HP. simpl in *.
+inversion H1. clear s'0 H10 N' H9 tl H5 s0 H7 N H6 D0 H4 H1.
 eapply SP_To_MBN_epp with (HC:=H2) in H8; eauto.
 2: intro r; rewrite <- epp_C_char with (HP:=HP); auto.
 destroy H8. rename x into N2'.
-exists (Procs (epp _ _ HP),N2'); repeat split; auto.
-rewrite (SP_eta _ (epp _ _ HP)); constructor.
+exists (Procs (epp _ HP),N2'); repeat split; auto.
+rewrite (SP_eta _ (epp _ HP)). apply (SPP_Base Sig').
 simpl. apply SP_To_Defs_wd with D; auto.
 eapply SP_To_Network_eq; eauto.
 apply Network_eq_sym; apply epp_C_char.
@@ -2522,127 +2530,114 @@ Qed.
 
 (** Generalizing the last result to -->* already requires the EPP Theorem. *)
 
-Lemma SPP_ToStar_MBN_epp : forall P1 s P2 s' tl ps P,
-  Program_WF P -> forall (HP:projectable Sig ps P),
-  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
-  (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
-  (forall p X, In p (Vars P X) -> In p ps) ->
-  (forall X, Procs P1 X = Procs (epp ps P HP) X) ->
-  Net P1 (>>) Net (epp ps P HP) -> (P1,s) --[tl]-->* (P2,s') ->
-  exists P2', (epp ps P HP,s) --[tl]-->* (P2',s') /\ Net P2 (>>) Net P2'
+Lemma SPP_ToStar_MBN_epp : forall P1 s P2 s' tl P,
+  @str_proj_P Sig P -> forall (HP:projectable_P P),
+  (forall X, Procs P1 X = Procs (epp P HP) X) ->
+  Net P1 (>>) Net (epp P HP) -> (P1,s) --[tl]-->* (P2,s') ->
+  exists P2', (epp P HP,s) --[tl]-->* (P2',s') /\ Net P2 (>>) Net P2'
   /\ forall X, Procs P2 X = Procs P2' X.
 Proof.
-intros. rename H into HWF, H0 into Hstr, H1 into Hpn, H2 into HVars, H3 into HProcs.
+intros. rename H into Hstr.
 induction P1 as (D,N1), P2 as (D2,N2).
-rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H5);
-rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H5) in H5; clear D2.
+rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H2);
+rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H2) in H2; clear D2.
 induction P as (D',C).
-revert dependent C. revert s s' N1 N2 H5. induction tl; intros.
-+ inversion H5. rewrite <- H0.
-  exists (epp _ _ HP); repeat split; auto. apply (SPT_Base Sig'); auto.
-+ inversion H5. clear c3 H3 l H0 t H c1 H1 H5. rename a into t.
+revert dependent C. revert s s' N1 N2 H2. induction tl; intros.
++ inversion H2. rewrite <- H3.
+  exists (epp _ HP); repeat split; auto. apply (SPT_Base Sig'); auto.
++ inversion H2. clear c3 H6 l H3 t H c1 H4 H2. rename a into t.
   induction c2 as ((D2,N3),s'').
-  rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H2) in H6, H2. clear D2.
-  apply SPP_To_MBN_epp with (HP:=HP) in H2; auto.
-  destroy H2. induction x as (D3,N3'). simpl in H0, H2.
+  rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H5) in H7, H5. clear D2.
+  apply SPP_To_MBN_epp with (HP:=HP) in H5; auto.
+  destroy H5. induction x as (D3,N3'). simpl in *.
   generalize H as H6'; intro.
-  rewrite (SP_eta _ (epp _ _ HP)) in H6'.
-  rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H6') in H, H2, H6'. clear D3.
+  rewrite (SP_eta _ (epp _ HP)) in H6'.
+  rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H6') in H5, H, H6'. clear D3.
   rewrite <- SP_eta in H6'.
   apply EPP_Sound in H; auto. destroy H. rename x0 into t'.
   induction x as (D'3,C'').
-  rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H1) in H, H1. clear D'3.
-  assert (projectable Sig ps (D',C'')).
-  1: eapply CCP_To_projectable; eauto.
-  specialize (H H3). simpl in H.
-  generalize H6 as H12'; intro.
-  inversion HP. clear H5; inversion_clear H7. simpl in H5; clear H8.
-  rename H5 into HD.
-  apply IHtl with (HP:=H3) in H6; auto. clear IHtl.
-  destroy H6. rename x into P2'. induction P2' as (D2',N2').
-  rewrite (SP_eta _ (epp _ _ H3)) in H5.
-  rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H5) in H7, H6, H5.
-  clear D2'. rewrite <- SP_eta in H5. simpl in *.
-  apply SPP_ToStar_MBN with (P1':=(Procs (epp _ _ HP),N3')) in H5; auto.
-  destroy H5. rename x into P2'. simpl in *.
+  rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H3) in H, H3. clear D'3.
+  assert (projectable_P (D',C'')).
+  1: eapply CCP_To_projectable_P; eauto.
+  specialize (H H4). simpl in H.
+  generalize H7 as H12'; intro.
+  inversion HP. simpl in *.
+  rename H8 into HD.
+  apply IHtl with (HP:=H4) in H7; auto. clear IHtl.
+  destroy H7. rename x into P2'. induction P2' as (D2',N2').
+  rewrite (SP_eta _ (epp _ H4)) in H8.
+  rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H8) in H7, H9, H8.
+  clear D2'. rewrite <- SP_eta in H8. simpl in *.
+  apply SPP_ToStar_MBN with (P1':=(Procs (epp _ HP),N3')) in H8; auto.
+  destroy H8. rename x into P2'. simpl in *.
   exists P2'; repeat split; auto.
   - eapply (SPT_Step Sig'); eauto.
   - simpl.
-    apply SPP_ToStar_MBN with (P1':=(D,N3)) in H8; auto.
-    destroy H8. apply MBN_trans with (Net x); auto.
+    apply SPP_ToStar_MBN with (P1':=(D,N3)) in H10; auto.
+    destroy H10. apply MBN_trans with (Net x); auto.
     apply MBN_refl'.
     change N2 with (Net (D,N2)).
     eapply SPP_ToStar_deterministic_1; eauto.
     simpl; intro.
-    rewrite H6. induction X. repeat rewrite epp_D_char with (HD:=HD); auto.
-  - simpl; intro. rewrite H6, <- H5.
+    rewrite H7. induction X. repeat rewrite epp_D_char with (HD:=HD); auto.
+  - simpl; intro. rewrite H7, <- H8.
     induction X. repeat rewrite epp_D_char with (HD:=HD); auto.
   - simpl; intro. induction X; repeat rewrite epp_D_char with (HD:=HD); auto.
-  - eapply CCP_To_Program_WF; eauto.
-  - eapply CCP_To_str_proj; eauto.
-  - intros. apply Hpn. eapply CCP_To_pn; eauto.
-  - intro; rewrite H2. induction X; repeat rewrite epp_D_char with (HD:=HD); auto.
+  - eapply CCP_To_str_proj. 3: eauto. all: auto.
+  - intro; rewrite H0. induction X; repeat rewrite epp_D_char with (HD:=HD); auto.
   - apply MBN_trans with N3'; auto.
 Qed.
 
-Lemma EPP_Sound' : forall P ps,
-  Program_WF P -> forall (HP:projectable Sig ps P),
-  (forall p, In p ps -> str_proj (Procedures _ P) (Main P) p) ->
-  (forall p, In p (CCC_pn (Main P) (Vars P)) -> In p ps) ->
-  (forall p X, In p (Vars P X) -> In p ps) ->
-  forall s tl P' s', (epp ps P HP,s) --[tl]-->* (P',s') ->
+Lemma EPP_Sound' : forall (P:CC.Program Sig) (HP:projectable_P P),
+  str_proj_P P -> forall s tl P' s', (epp P HP,s) --[tl]-->* (P',s') ->
   exists P'' tl', ((P,s) --[tl']-->* (P'',s'))%CC /\
-    forall H, Net P' (>>) Net (epp ps P'' H).
+    forall HP'', Net P' (>>) Net (epp P'' HP'').
 Proof.
-intros. rename H into HWF, H0 into Hstr, H1 into Hpn, H2 into HVars, H3 into H.
+intros. rename H into Hstr, H0 into H.
 induction P as (D,C), P' as (D',N).
 revert dependent N. revert dependent C. revert D' s s'.
 induction tl; intros; inversion H.
 + eexists; exists nil. repeat split. apply (CCT_Base Sig); auto.
   intro. apply MBN_refl'.
-  inversion HP. simpl in H6.
-  apply Network_eq_trans with (epp_C D ps C H6).
+  inversion HP. simpl in H5.
+  NEQt (epp_C _ _ _ H5).
   2: apply Network_eq_sym. all: apply epp_C_char.
 + clear c3 H4 l H1 t H0 c1 H2 H. rename a into t.
   induction c2 as (P'', s'').
   eapply SPP_To_MBN_epp in H3; eauto. destroy H3.
   rename x into P'. 2: apply MBN_refl.
-  rewrite (SP_eta _ (epp _ _ HP)), (SP_eta _ P') in H.
+  rewrite (SP_eta _ (epp _ HP)), (SP_eta _ P') in H.
   generalize (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H); intro H4'.
   rewrite <- SP_eta, <- SP_eta in H.
   apply EPP_Sound in H; auto. destroy H.
   rename x into P1, x0 into t'.
-  assert (projectable Sig ps P1).
-  1: eapply CCP_To_projectable; eauto.
+  assert (projectable_P P1).
+  1: eapply CCP_To_projectable_P; eauto.
   induction P1 as (D1, C1).
   rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H1) in H, H2, H1. clear D1.
   specialize (H H2).
   assert (Program_WF (D,C1)).
-  1: eapply CCP_To_Program_WF; eauto.
-  assert (forall p, In p ps -> str_proj D C1 p).
+  1: eapply CCP_To_Program_WF; eauto. apply Hstr.
+  assert (str_proj_P (D,C1)).
   1: {
-    change D with (Procedures _ (D,C1)).
+    split. auto.
+    change D with (Procedures (D,C1)).
     change C1 with (Main (D,C1)) at 2.
     intros. inversion HP. destroy H13.
     eapply CCP_To_str_proj with (P:=(D,C)); eauto.
   }
-  assert (forall p, In p (CCC_pn C1 (Vars (D,C1))) -> In p ps).
-  1:{
-    change C1 with (Main (D,C1)) at 1.
-    intros. apply Hpn. eapply CCP_To_pn; eauto.
-  }
   apply SPP_ToStar_MBN_epp with (HP:=H2) in H5; auto.
   - destroy H5.
     rename x into P1. induction P1 as (D1,N1).
-    eapply IHtl in H8; auto. (* 2: apply H13. *)
-    destroy H8. rename x into P2, x0 into tl'.
+    eapply IHtl in H7; auto.
+    destroy H7. rename x into P2, x0 into tl'.
     clear IHtl. exists P2, (t'::tl').
     repeat split.
     eapply CCT_Step; eauto.
     intro. apply MBN_trans with N1; auto.
   - intro. rewrite H3, <- H4'.
-    inversion HP. destroy H9. induction X.
-    simpl in H10; repeat rewrite epp_D_char with (HD:=H10); auto.
+    inversion HP. induction X.
+    simpl in *; repeat rewrite epp_D_char with (HD:=H8); auto.
   - apply MBN_trans with (Net P'); auto.
 Qed.
 
