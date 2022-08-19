@@ -917,12 +917,11 @@ Qed.
 
 (** Now we can also define amendment of a program. *)
 
-Variable ps : list Pid.
 Variable a : Ann.
 Variable P : CC.Program Sig.
 
 Definition amend_P :=
-  (amend_D (Procedures _ P) a ps, amend (Procedures _ P) a ps (Main P)).
+  (amend_D (Procedures P) a (CCP_pn P), amend (Procedures P) a (CCP_pn P) (Main P)).
 
 Lemma amend_P_Vars : Vars P = Vars amend_P.
 Proof. auto. Qed.
@@ -1038,6 +1037,20 @@ intros. red. rewrite Forall_forall.
 intros. apply amend_projectable_B; auto.
 Qed.
 
+(* Lemma amend_P_projectable : forall P, Program_WF P ->
+  forall Xs, used_procedures _ P Xs ->
+  forall a, projectable_P (amend_P a P).
+Proof.
+split.
++ simpl. eapply projectable_C_incl.
+  2: apply amend_projectable_C; auto.
+  apply amend_CCC_pn_incl.
++ intro. simpl.
+  elim (In_dec (@eq_dec RecVar) X Xs); intro.
+  eapply projectable_C_incl.
+  2: apply amend_projectable_C; auto.
+  apply H.
+ *)
 End Projectability.
 
 End Amendment.
