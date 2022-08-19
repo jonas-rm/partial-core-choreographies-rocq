@@ -412,6 +412,10 @@ induction C; simpl; auto.
 + intro. sup; sup. intro. elim H0; auto.
 Qed.
 
+(** For well-formed programs, these are all relevant processes. *)
+
+Definition CCP_pn (P:Program) := CCC_pn (Main P) (Vars P).
+
 (** A program is well-annotated if every process used by a procedure is in its annotation. *)
 
 Definition well_ann (P:Program) (X:RecVar) : Prop :=
@@ -869,6 +873,15 @@ induction C; simpl; intros; inversion H; simpl.
   inversion_clear H0. rewrite <- H11; auto. inversion H11.
 Qed.
 
+Lemma CCP_To_pn : forall P s tl P' s', (P,s) --[tl]--> (P',s') ->
+  forall p, In p (TL_pn _ _ tl) -> In p (CCP_pn P).
+Proof.
+intros. inversion H.
+rewrite <- H2 in *; clear tl H2.
+eapply CCC_To_pn; eauto.
+induction t; auto.
+Qed.
+
 Lemma CCC_To_pn' : forall D C s tl C' s', <<C,s>> --[tl,D]--> <<C',s'>> ->
   forall p, In p (CCC_pn C' (Names D)) ->
     In p (CCC_pn C (Names D))
@@ -907,8 +920,8 @@ induction C; intros; inversion H.
 + simpl; sup.
 Qed.
 
-Lemma CCP_To_pn : forall P s tl P' s', Program_WF P -> (P,s) --[tl]--> (P',s') ->
-  forall p, In p (CCC_pn (Main P') (Vars P')) -> In p (CCC_pn (Main P) (Vars P)).
+Lemma CCP_To_pn' : forall P s tl P' s', Program_WF P -> (P,s) --[tl]--> (P',s') ->
+  forall p, In p (CCP_pn P') -> In p (CCP_pn P).
 Proof.
 intros.
 generalize (Program_WF_Vars_incl _ H); clear H; intro.
@@ -916,6 +929,7 @@ revert H1. inversion H0. unfold Vars; simpl.
 rewrite <- H1 in H. clear P H0 H1 P' H5.
 revert dependent C'.
 clear s'0 H6 tl H2 s0 H3.
+unfold CCP_pn.
 induction C; intros; revert H1; inversion H4.
 all: simpl; repeat sup.
 + intro. inversion_clear H10; auto.
@@ -1032,14 +1046,14 @@ induction l; intros; inversion H0.
 Qed.
 
 Lemma CCP_ToStar_pn : forall P s tl P' s', Program_WF P -> (P,s) --[tl]-->* (P',s') ->
-  forall p, In p (CCC_pn (Main P') (Vars P')) -> In p (CCC_pn (Main P) (Vars P)).
+  forall p, In p (CCP_pn P') -> In p (CCP_pn P).
 Proof.
 intros.
 revert P s P' s' H H0 H1. induction tl; simpl; intros.
 all: inversion H0; auto.
 clear c3 H6 l H3 t H2 c1 H4. induction c2 as (P'',s'').
 assert (Program_WF P''). eapply CCP_To_Program_WF; eauto.
-eapply CCP_To_pn; eauto.
+eapply CCP_To_pn'; eauto.
 Qed.
 
 (** The set of procedure definitions never changes. *)
@@ -1234,7 +1248,8 @@ end.
 
 (** We cannot compute the set of used procedures (it may be infinite), but we can check it. *)
 
-Lemma used_procedures_C_dec : forall C Xs, {used_procedures_C C Xs} + {~used_procedures_C C Xs}.
+Lemma used_procedures_C_dec : forall C Xs,
+  {used_procedures_C C Xs} + {~used_procedures_C C Xs}.
 Proof.
 intros. induction C; simpl; auto.
 + (* Cond *)
@@ -1336,7 +1351,7 @@ induction Xs; simpl; intros.
 Qed.
 
 Lemma CCP_To_used_procedures : forall P s l P' s' Xs, used_procedures P Xs ->
-  (* Program_WF Xs P -> *) (P,s) --[l]--> (P',s') -> used_procedures P' Xs.
+  (P,s) --[l]--> (P',s') -> used_procedures P' Xs.
 Proof.
 intros.
 induction P as (D,C); induction P' as (D',C').
@@ -1362,17 +1377,9 @@ induction C; intros; inversion H0.
 + rewrite <- H4; inversion H; auto.
 Qed.
 
-
-
-
-
-
-
-
 (** ** Results on determinism of the semantics. *)
 
 Section Uniqueness.
-
 
 (** Reductions and state. *)
 
@@ -2271,7 +2278,10 @@ Arguments RT_Call {Sig}.
 Arguments Main {Sig}.
 Arguments Procs {Sig}.
 Arguments Vars {Sig}.
+Arguments Procedures {Sig}.
+Arguments Names {Sig}.
 Arguments initial {Sig}.
 Arguments Choreography_WF {Sig}.
 Arguments CCC_pn {Sig}.
+Arguments CCP_pn {Sig}.
 Arguments Program_WF {Sig}.

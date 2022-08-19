@@ -584,6 +584,13 @@ Inductive TransitionLabel : Type :=
 Lemma TransitionLabel_eq_dec : forall (x y:TransitionLabel), {x=y} + {x<>y}.
 Proof. decide equality; apply eq_dec. Qed.
 
+Definition TL_pn (t:TransitionLabel) : list Pid :=
+  match t with
+  | TL_Com p v q => p::q::nil
+  | TL_Sel p q l => p::q::nil
+  | TL_Tau p     => p::nil
+end.
+
 (** The inductive definition of the semantics in Coq uses an LTS with
   more expressive labels. *)
 

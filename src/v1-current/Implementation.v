@@ -1,5 +1,5 @@
 Require Import Common.
-Require Export CC.
+Require Export CC. 
 Require Export Kleene.
 
 Open Scope nat_scope.
@@ -1340,15 +1340,15 @@ Proof.
 intros.
 set (Hd := Nat.lt_succ_diag_r (depth f)).
 set (i := (S (max q (vmax ps)))).
-elim (Encoding_rec_converges f _ Hd ps q i 0 (Procedures IS (Encoding f ps q)) ns y H) with s; intros; auto.
+elim (Encoding_rec_converges f _ Hd ps q i 0 (Procedures (Encoding f ps q)) ns y H) with s; intros; auto.
 + destroy H2. rename x0 into s', x into tl.
   simpl (0 + Gamma f) in H2.
-  elim (Call_reduce _ (Procedures IS (Encoding f ps q)) (Gamma f)); intros.
+  elim (Call_reduce _ (Procedures (Encoding f ps q)) (Gamma f)); intros.
   2: apply all_pids_not_nil.
   rename x into tl'.
   eexists. exists (tl++tl')%list; repeat split.
   * eapply CCT_Trans; eauto.
-  * change (snd (Procedures IS (Encoding f ps q) (Gamma f)) = End).
+  * change (snd (Procedures (Encoding f ps q) (Gamma f)) = End).
     apply Encoding_rec_ge; auto with arith.
   * auto.
 + apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
@@ -1842,12 +1842,12 @@ intros. destroy H1. induction x; induction a as (Procs,Main).
 simpl in H1, H3. rewrite H3 in H2; clear H3 Main. rename x0 into tl, b into s'.
 set (Hd := Nat.lt_succ_diag_r (depth f)).
 set (i := (S (max q (vmax ps)))).
-elim (Encoding_rec_End f _ Hd ps q i 0 (Procedures IS (Encoding f ps q))) with ns s tl s'; intros; auto.
+elim (Encoding_rec_End f _ Hd ps q i 0 (Procedures (Encoding f ps q))) with ns s tl s'; intros; auto.
 + destroy H3. rewrite <- H1. exists x1; auto.
-  elim (Call_reduce _ (Procedures IS (Encoding f ps q)) (0 + Gamma f)).
+  elim (Call_reduce _ (Procedures (Encoding f ps q)) (0 + Gamma f)).
   2: apply all_pids_not_nil.
   intros.
-  replace (snd (Procedures IS (Encoding f ps q) (0 + Gamma f))) with (Encoding_rec f _ Hd ps q i 0 (0 + Gamma f)) in H6.
+  replace (snd (Procedures (Encoding f ps q) (0 + Gamma f))) with (Encoding_rec f _ Hd ps q i 0 (0 + Gamma f)) in H6.
   2: reflexivity. 
   rewrite (Encoding_rec_ge f _ Hd ps q i 0 (0 + Gamma f)) in H6; auto.
   elim (diamond_5 _ _ _ _ _ _ _ _ _ H2 (CCT_Trans _ _ _ _ _ _ H4 (H6 x0))); auto. intros.
@@ -1870,7 +1870,7 @@ set (Hd := Nat.lt_succ_diag_r (depth f)).
 set (i := (S (max q (vmax ps)))).
 induction c; induction a as (Procs,Main).
 simpl in H3; rewrite H3 in H2; clear Main H3. rename b into s'.
-elim (Encoding_rec_End f _ Hd ps q i 0 (Procedures IS (Encoding f ps q))) with ns s tl s'; intros; auto.
+elim (Encoding_rec_End f _ Hd ps q i 0 (Procedures (Encoding f ps q))) with ns s tl s'; intros; auto.
 + destroy H3. rewrite H0 in H3. inversion H3.
 + apply all_pids_not_nil.
 + apply le_n_S. transitivity (vmax ps). apply vmax_In; auto. apply Nat.le_max_r.
