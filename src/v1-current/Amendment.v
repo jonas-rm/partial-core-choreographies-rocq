@@ -1047,6 +1047,11 @@ split.
   apply amend_CCC_pn_incl.
 + intro. simpl.
   elim (In_dec (@eq_dec RecVar) X Xs); intro.
+  2: { induction H0. induction (H1 X). induction H3; auto.
+       unfold CC.Procs in H3. rewrite H3.
+       simpl. red; rewrite Forall_forall; intros.
+       exists (End _); constructor.
+  }
   eapply projectable_C_incl.
   2: apply amend_projectable_C; auto.
   apply H.

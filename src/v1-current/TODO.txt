@@ -1,5 +1,4 @@
-- relativize decidability to Xs
-- relax amend_P and epp
+- relax amend_P
 
 - add indices to communications (family of communication operations)
   and selections?
