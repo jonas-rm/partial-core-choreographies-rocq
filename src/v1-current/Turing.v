@@ -148,9 +148,8 @@ Definition Encode_Net {n} f := epp _ (amended_encoding_projectable_P n f).
 Variable n:nat.
 Variable f:PRFunction n.
 
-Lemma epp_implements : forall P (HP:projectable_P P),
-  str_proj_P P -> forall ps q,
-  implements P f ps q -> SP_implements (epp P HP) f ps q.
+Lemma epp_implements : forall P (HP:projectable_P P), str_proj_P P ->
+  forall ps q, implements P f ps q -> SP_implements (epp P HP) f ps q.
 Proof.
 intros.
 rename H into Hsp, H0 into Himpl.
@@ -183,19 +182,19 @@ repeat split.
   apply EPP_Sound' in Hts; auto.
   induction Hts as [P'' [ts' [Htl' HN] ] ].
   exists s', ts', P''; repeat split; auto.
-  apply CCP_ToStar_projectable with (s:=s) (tl:=ts') (P':=P'') (s':=s') in HP; auto.
-  specialize (HN HP).
-  apply epp_EmptyNet' with (HP:=HP) (N:=Net P'); auto.
-  induction Hsp as (HWF,Hsp).
+  elim Hsp; intros HWF Hsp'.
+  apply CCP_ToStar_projectable with (s:=s) (tl:=ts') (P':=P'') (s':=s') in Hsp; auto.
+  specialize (HN Hsp).
+  apply epp_EmptyNet' with (HP:=Hsp) (N:=Net P'); auto.
   apply (CCP_ToStar_Program_WF _ _ _ _ _ _ HWF Htl').
 + (* f diverges *)
   induction Hdiv; intros. specialize (H H1). clear Hconv H0 H1.
   apply EPP_Sound' in H2.
   induction H2 as [P'' [ts' [Htl' HN] ] ].
   intro. eapply H; eauto. all: auto.
-  apply CCP_ToStar_projectable with (s:=s) (tl:=ts') (P':=P'') (s':=s') in HP; auto.
-  apply epp_EmptyNet' with (HP:=HP) (N:=Net P'); auto.
-  induction Hsp as (HWF,Hsp).
+  elim Hsp; intros HWF Hsp'.
+  apply CCP_ToStar_projectable with (s:=s) (tl:=ts') (P':=P'') (s':=s') in Hsp; auto.
+  apply epp_EmptyNet' with (HP:=Hsp) (N:=Net P'); auto.
   apply (CCP_ToStar_Program_WF _ _ _ _ _ _ HWF Htl').
 + (* N loops *)
   intros. apply Hdiv; intros. clear Hconv Hdiv.
@@ -221,9 +220,10 @@ Theorem encode_Net_sound : SP_implements (Encode_Net f) f (vec_1_to_n n) 0.
 Proof.
 intros.
 induction (amended_encoding_WF n f) as [HWF [Hcons HProcs] ].
-apply epp_implements; auto. split; auto.
+apply epp_implements; auto. split; auto. 2: split; auto.
 + apply amend_Program_WF; auto.
   apply Encoding'_WF.
++ repeat red; intros. apply amend_projectable_C.
 + apply amended_encoding_sound.
 Qed.
 

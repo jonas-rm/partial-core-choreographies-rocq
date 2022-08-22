@@ -997,9 +997,9 @@ match C with
 | If p ?? b Then C1 Else C2 =>
      str_proj D C1 r /\ str_proj D C2 r /\ projectable_B D C r
 | RT_Call X ps C =>
-     str_proj D C r /\ (forall p, In p ps -> In p (fst (D X))
-  /\ forall B B', [[D,snd (D X) | p]] == B -> [[D,C | p]] == B' -> B [>>] B')
-| _                         => True
+     str_proj D C r /\ (forall p, In p ps ->
+     forall B B', [[D,snd (D X) | p]] == B -> [[D,C | p]] == B' -> B [>>] B')
+| _  => True
 end.
 
 Lemma str_proj_C : forall D C r, str_proj D C r -> projectable_B D C r.
@@ -1060,8 +1060,8 @@ induction C; simpl; intros; auto.
 + destroy H.
 Qed.
 
-Definition str_proj_P P :=
-  Program_WF P /\ forall r, str_proj (Procedures P) (Main P) r.
+Definition str_proj_P P := Program_WF P /\ projectable_D (Procedures P) /\
+  forall r, str_proj (Procedures P) (Main P) r.
 
 Lemma str_proj_P_Program_WF : forall P, str_proj_P P -> Program_WF P.
 Proof. intros. apply H. Qed.
@@ -1069,6 +1069,24 @@ Proof. intros. apply H. Qed.
 Lemma str_proj_P_str_proj : forall P, str_proj_P P ->
   forall r, str_proj (Procedures P) (Main P) r.
 Proof. intros. apply H. Qed.
+
+Lemma str_proj_P_str_proj' : forall P, str_proj_P P ->
+  forall r X, str_proj (Procedures P) (CC.Procs P X) r.
+Proof.
+intros. elim (In_dec (@eq_dec Pid) r (Vars P X)).
+apply initial_str_proj; apply H.
+intros. apply initial_str_proj'. apply H.
+intro; apply b, H; auto.
+Qed.
+
+Lemma str_proj_P_projectable_P : forall P,
+  str_proj_P P -> projectable_P P.
+Proof.
+repeat split.
++ red. rewrite Forall_forall; intros.
+  apply str_proj_C, H.
++ apply H.
+Qed.
 
 (** Inversion lemmas for strong projectability. *)
 
@@ -1088,13 +1106,41 @@ Lemma str_proj_inv_RT_Call : forall D ps X C p,
   str_proj D (RT_Call ps X C) p -> str_proj D C p.
 Proof. intros. red in H. tauto. Qed.
 
+Lemma str_proj_P_inv_Eta : forall D eta C a,
+  str_proj_P (D,eta@a;;C) -> str_proj_P (D,C).
+Proof.
+split. 2: split. 2,3: apply H.
+eapply Program_WF_eta; apply H.
+Qed.
+
+Lemma str_proj_P_inv_Then : forall D p b C1 C2,
+  str_proj_P (D,If p ?? b Then C1 Else C2) -> str_proj_P (D,C1).
+Proof.
+split. 2: split. 2,3: apply H.
+eapply Program_WF_Then; apply H.
+Qed.
+
+Lemma str_proj_P_inv_Else : forall D p b C1 C2,
+  str_proj_P (D,If p ?? b Then C1 Else C2) -> str_proj_P (D,C2).
+Proof.
+split. 2: split. 2,3: apply H.
+eapply Program_WF_Else; apply H.
+Qed.
+
+Lemma str_proj_P_inv_RT_Call : forall D ps X C,
+  str_proj_P (D,RT_Call ps X C) -> str_proj_P (D,C).
+Proof.
+split. 2: split. 2,3: apply H.
+eapply Program_WF_Call; apply H.
+Qed.
+
 (** Miscellaneous. *)
 
-Lemma CCC_To_Call_ann : forall D C s X p C' s',
-  <<C,s>> --[RL_Call X p,D]--> <<C',s'>> -> str_proj D C p -> In p (fst (D X)).
+Lemma CCC_To_Call_ann : forall D C s X p C' s', consistent Sig (Names D) C ->
+  <<C,s>> --[RL_Call X p,D]--> <<C',s'>> -> In p (fst (D X)).
 Proof.
-induction C; intros; inversion H; eauto; inversion H0; eauto.
-all: rewrite <- H4; specialize (H13 _ H11); tauto.
+induction C; intros; inversion H0; eauto; inversion H; eauto.
+all: rewrite <- H4; specialize (H12 _ H11); tauto.
 Qed.
 
 Lemma Program_WF_str_proj : forall P, Program_WF P -> projectable_P P ->
@@ -1893,17 +1939,15 @@ induction C; intros; inversion H.
   split. apply IHC; auto. apply Hr.
   intros r' Hr'. elim (Hr r'); intros.
   specialize (H1 r' Hr').
-  induction H1 as (H1,H2).
-  split; auto.
   apply disjoint_ps_Com in H7.
   assert (p <> r') as Hpr'.
-  1: specialize (H7 p); simpl in H7. intro. rewrite H3 in H7; tauto.
+  1: specialize (H7 p); simpl in H7. intro. rewrite H4 in H7; tauto.
   assert (q <> r') as Hqr'.
-  1: specialize (H7 q); simpl in H7. intro. rewrite H3 in H7; tauto.
+  1: specialize (H7 q); simpl in H7. intro. rewrite H4 in H7; tauto.
   clear H7.
   elim (CCC_To_bproj_Com_r D C s C'0 s' p q v x r'); intros; auto.
-  inversion_clear H3.
-  rewrite (bproj_unique _ _ _ _ _ H7 H5) in *; auto.
+  inversion_clear H4.
+  rewrite (bproj_unique _ _ _ _ _ H3 H6) in *; auto.
 Qed.
 
 Lemma CCC_To_str_proj_Sel : forall D C s C' s' p q l,
@@ -1971,17 +2015,15 @@ induction C; intros; inversion H.
   split. apply IHC; auto. apply Hr.
   intros r' Hr'. elim (Hr r'); intros.
   specialize (H1 r' Hr').
-  induction H1 as (H1,H2).
-  split; auto.
   apply disjoint_ps_Sel in H7.
   assert (p <> r') as Hpr'.
-  1: specialize (H7 p); simpl in H7. intro. rewrite H3 in H7; tauto.
+  1: specialize (H7 p); simpl in H7. intro. rewrite H4 in H7; tauto.
   assert (q <> r') as Hqr'.
-  1: specialize (H7 q); simpl in H7. intro. rewrite H3 in H7; tauto.
+  1: specialize (H7 q); simpl in H7. intro. rewrite H4 in H7; tauto.
   clear H7.
   elim (CCC_To_bproj_Sel_r D C s C'0 s' p q l r'); intros; auto.
-  inversion_clear H3.
-  rewrite (bproj_unique _ _ _ _ _ H7 H5) in *; auto.
+  inversion_clear H4.
+  rewrite (bproj_unique _ _ _ _ _ H3 H6) in *; auto.
 Qed.
 
 Lemma CCC_To_str_proj_Cond : forall D C s C' s' p,
@@ -2027,12 +2069,11 @@ induction C; intros; inversion H.
 + rewrite <- H0, <- H1 in *. clear t H0 l H1 C0 H3 s0 H2 C' H5 s'0 H6 H.
   repeat split; auto.
   apply IHC; auto. apply Hr.
-  apply Hr; auto.
   destroy H7; intros.
   induction (CCC_To_bproj_Cond_r D C s C'0 s' p p0) as [B1 [B2 [HB1 [HB2 H'] ] ] ]; auto.
   rewrite (bproj_unique _ _ _ _ _ H1 HB2) in *. clear B' H1.
   apply MB_trans with B1; auto.
-  elim (Hr r); auto. intros. elim (H2 p0); auto.
+  elim (Hr r); auto. intros. specialize (H2 p0); auto.
   apply Hr.
   apply disjoint_ps_Cond in H7. intro.
   rewrite H2 in H7; auto.
@@ -2079,14 +2120,12 @@ induction C; intros; inversion H.
     rewrite (bproj_unique _ _ _ _ _ H12 HB2) in *; clear B3 H12.
     eexists; apply bproj_Cond' with B1 B2; eauto.
 + auto.
-+ repeat split; auto.
-  eapply set_remove'_1; eauto.
++ repeat split; intros; auto.
   specialize (HD p1 X); intros.
   apply str_proj_C in HD; auto.
   apply MB_refl'. eapply bproj_unique; eauto.
-+ repeat split.
++ repeat split; intros.
   eapply IHC; eauto. apply Hr.
-  apply Hr; auto.
   apply disjoint_ps_rl_In with (p:=p0) in H7; auto.
   intros.
   elim (CCC_To_bproj_Call_r D C s C'0 s' p X p0); auto.
@@ -2098,7 +2137,7 @@ induction C; intros; inversion H.
   elim (Hr r); auto; intros.
   split; auto; intros.
   assert (In p1 ps). eapply set_remove'_1; eauto.
-  elim (H3 p1); auto.
+  specialize (H3 p1 H14); auto.
 + rewrite <- H5. apply Hr; auto.
 Qed.
 
@@ -2115,49 +2154,43 @@ induction t; intros.
 + eapply CCC_To_str_proj_Call; eauto.
 Qed.
 
-Lemma CCP_To_str_proj : forall P, projectable_P P -> str_proj_P P ->
+Lemma CCP_To_str_proj : forall P, str_proj_P P ->
   forall s tl P' s', (P,s) --[tl]--> (P',s') -> str_proj_P P'.
 Proof.
-intros. rename H into HP, H0 into Hsp, H1 into H2.
+intros. rename H into Hsp, H0 into H2.
 induction P as (D,C). induction P' as (D', C').
 generalize (CCP_To_Defs_stable _ D D' C C' tl s s' H2); intro.
 rewrite <- H in *; clear D' H.
 inversion H2. rewrite <- H1 in H2. clear s'0 H6 C'0 H5 tl H0 s0 H3 C0 H1 D0 H H2.
 rename H4 into Ht.
-split. 2: eapply CCC_To_str_proj; eauto.
+split. 2: split. 3: eapply CCC_To_str_proj; eauto.
+all: try (apply Hsp).
 + eapply CCP_To_Program_WF. apply Hsp.
   apply CCP_Base; eauto.
-+ apply Hsp.
 + intros.
   elim (In_dec (@eq_dec Pid) p (fst (D Y))).
-  apply initial_str_proj. apply Hsp. apply HP.
+  apply initial_str_proj. apply Hsp. apply Hsp.
   intro; apply initial_str_proj'. apply Hsp.
   intro; apply b, Hsp; auto.
-+ apply Hsp.
 Qed.
 
-Lemma CCP_ToStar_str_proj : forall P, projectable_P P -> str_proj_P P ->
+Lemma CCP_ToStar_str_proj : forall P, str_proj_P P ->
   forall s tl P' s', (P,s) --[tl]-->* (P',s') -> str_proj_P P'.
 Proof.
-intros. revert P H H0 s P' s' H1.
-induction tl; intros; inversion H1.
-+ rewrite <- H3; auto.
+intros. revert P H s P' s' H0.
+induction tl; intros; inversion H0.
++ rewrite <- H2; auto.
 + induction c2 as (P'',s'').
   apply IHtl with P'' s'' s'; auto.
-  apply CCP_To_projectable_P in H5; auto.
-  apply CCP_To_str_proj in H5; auto.
+  apply CCP_To_str_proj in H4; auto.
 Qed.
 
-Lemma CCP_ToStar_projectable: forall P, projectable_P P -> str_proj_P P ->
+Lemma CCP_ToStar_projectable: forall P, str_proj_P P ->
   forall s tl P' s', (P,s) --[tl]-->* (P',s') -> projectable_P P'.
 Proof.
-intros. revert P H H0 s P' s' H1.
-induction tl; intros; inversion H1.
-+ rewrite <- H3; auto.
-+ induction c2 as (P'',s'').
-  apply IHtl with P'' s'' s'; auto.
-  apply CCP_To_projectable_P in H5; auto.
-  apply CCP_To_str_proj in H5; auto.
+intros.
+apply str_proj_P_projectable_P.
+eapply CCP_ToStar_str_proj; eauto.
 Qed.
 
 End ProjectionLemmas.
