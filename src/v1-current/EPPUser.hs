@@ -5,9 +5,6 @@ module EPPUser where
 -- TODO: Simulation. How exactly does evaluation work? How exactly can we use
 -- the "state function" and who even provides it?
 
--- TODO: Make our representation use lists instead of functions. We can recover
--- them because we can collect all of the Pids and then extract them later.
-
 import qualified Data.List as L
 import qualified GHC.Base
 
@@ -17,32 +14,18 @@ import qualified EPP as E
 
 newtype Var = Var String deriving (Show, Eq)
 
--- newtype Env = Env [(Var, Val)] deriving Show
+newtype Env = Env [(Var, Val)] deriving Show
 
--- empty :: Env
--- empty = Env []
-
--- bind :: Env -> Var -> Val -> Env
--- bind (Env e) v x = Env $ (v, x):e
-
--- ref :: Env -> Var -> Val
--- ref (Env e) v = case L.lookup v e of
---   Just x -> x
---   Nothing -> error "Variable doesn't exist"
-
-newtype Env = Env (Var -> Val)
-
-instance Show Env where
-  show _ = "#<Env>"
-
-emptyEnv :: Env
-emptyEnv = Env $ \_ -> error "Variable doesn't exist"
+empty :: Env
+empty = Env []
 
 bind :: Env -> Var -> Val -> Env
-bind (Env e) v x = Env $ \v' -> if v' == v then x else e v'
+bind (Env e) v x = Env $ (v, x):e
 
 ref :: Env -> Var -> Val
-ref (Env e) v = e v
+ref (Env e) v = case L.lookup v e of
+  Just x -> x
+  Nothing -> error "Variable doesn't exist"
 
 data Val
   = BoolVal Bool
@@ -119,15 +102,7 @@ data Choreography
   | RtCall RecVar [Pid] Choreography
   deriving Show
 
--- newtype CDefSet = CDefSet [(RecVar, ([Pid], Choreography))] deriving Show
-newtype CDefSet = CDefSet (RecVar -> ([Pid], Choreography))
-
-emptyCDefSet :: CDefSet
-emptyCDefSet = CDefSet $ \_ -> error "Definition doesn't exist"
-
-instance Show CDefSet where
-  show _ = "#<CDefSet>"
-
+newtype CDefSet = CDefSet [(RecVar, ([Pid], Choreography))] deriving Show
 newtype CProgram = CProgram (CDefSet, Choreography) deriving Show
 
 -- Processes
@@ -142,18 +117,8 @@ data Behaviour
   | BCall RecVar
   deriving Show
 
--- newtype BDefSet = BDefSet [(RecVar, Behaviour)]
-newtype BDefSet = BDefSet (RecVar -> Behaviour)
-
-instance Show BDefSet where
-  show _ = "#<BDefSet>"
-
--- newtype Network = Network [(Pid, Behaviour)]
-newtype Network = Network (Pid -> Behaviour)
-
-instance Show Network where
-  show _ = "#<Network>"
-
+newtype BDefSet = BDefSet [(RecVar, Behaviour)] deriving Show
+newtype Network = Network [(Pid, Behaviour)] deriving Show
 newtype BProgram = BProgram (BDefSet, Network) deriving Show
 
 -- Encode
@@ -176,12 +141,24 @@ encodeChoreography (CCall v) = E.Call (cast v)
 encodeChoreography (RtCall v pids c) =
   E.RT_Call (cast v) (encodeList $ map cast pids) (encodeChoreography c)
 
-encodeDefs :: CDefSet -> E.DefSet
-encodeDefs (CDefSet s) = \v -> let (pids, c) = s (cast v) in
-  E.Pair (encodeList $ map cast pids) (encodeChoreography c)
+collectPids :: Choreography -> [Pid]
+collectPids CEnd = []
+collectPids (Interaction (Com src _ dst _) _ c) = [src, dst] ++ collectPids c
+collectPids (Interaction (Sel src dst _) _ c) = [src, dst] ++ collectPids c
+collectPids (CCond pid _ c1 c2) = [pid] ++ collectPids c1 ++ collectPids c2
+collectPids (CCall _) = []
+collectPids (RtCall _ pids c) = pids ++ collectPids c
 
-encodeProgram :: CProgram -> E.Program
-encodeProgram (CProgram (s, c)) = E.Pair (encodeDefs s) (encodeChoreography c)
+encodeDefs :: CDefSet -> E.DefSet
+encodeDefs (CDefSet s) = \v -> case L.lookup (cast v) s of
+  Just (pids, c) -> E.Pair (encodeList $ map cast pids) (encodeChoreography c)
+  Nothing -> error "Definition doesn't exist"
+
+encodeProgram :: CProgram -> (E.Program, [RecVar], [Pid])
+encodeProgram (CProgram (s, c)) =
+  (E.Pair (encodeDefs s) (encodeChoreography c),
+   let CDefSet s' = s in L.nub $ map fst s',
+   L.nub $ collectPids c)
 
 -- Decode
 
@@ -209,19 +186,22 @@ decodeBehaviour (E.Cond0 ex b1 b2) =
   BCond (cast ex) (decodeBehaviour b1) (decodeBehaviour b2)
 decodeBehaviour (E.Call0 v) = BCall (cast v)
 
-decodeNetwork :: E.Network -> Network
-decodeNetwork n = Network $ \pid -> decodeBehaviour $ n (cast pid)
+decodeNetwork :: [Pid] -> E.Network -> Network
+decodeNetwork pids n = Network $
+  map (\pid -> (pid, decodeBehaviour $ n $ cast pid)) pids
 
-decodeDefs :: E.DefSetB -> BDefSet
-decodeDefs s = BDefSet $ \v -> decodeBehaviour $ s (cast v)
+decodeDefs :: [RecVar] -> E.DefSetB -> BDefSet
+decodeDefs vs s = BDefSet $ map (\v -> (v, decodeBehaviour $ s $ cast v)) vs
 
-decodeProgram :: E.Program0 -> BProgram
-decodeProgram (E.Pair s n) = BProgram (decodeDefs s, decodeNetwork n)
+decodeProgram :: [RecVar] -> [Pid] -> E.Program0 -> BProgram
+decodeProgram vs pids (E.Pair s n) =
+  BProgram (decodeDefs vs s, decodeNetwork pids n)
 
 -- Projection
 
 epp :: E.Signature -> CProgram -> BProgram
-epp sig = decodeProgram . E.epp sig . encodeProgram
+epp sig p = decodeProgram vs pids $ E.epp sig $ p'
+  where (p', vs, pids) = encodeProgram p
 
 -- Signature
 
@@ -363,10 +343,9 @@ test2 = let ip = Pid "ip"
             c1 = Interaction (Sel ip s CLeft) a (Interaction (Sel ip c CLeft) a (Interaction (Com s token c t) a CEnd))
             c2 = Interaction (Sel ip s CRight) a (Interaction (Sel ip c CRight) a CEnd)
             c3 = Interaction (Com c credentials ip x) a (CCond ip (BExpr $ Lit $ BoolVal True) c1 c2)
-     in CProgram (emptyCDefSet, c3)
+     in CProgram (CDefSet [], c3)
 
-test3 = let BProgram (_, Network n) = epp sig test2 in
-  [n (Pid "c"), n (Pid "s"), n (Pid "ip")]
+test3 = let BProgram (_, Network n) = epp sig test2 in n
 
 test4 = let CProgram (_, c) = test2 in c
 
