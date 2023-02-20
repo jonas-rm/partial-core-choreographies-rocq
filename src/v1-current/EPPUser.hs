@@ -100,7 +100,7 @@ data Choreography e b
   | RtCall RecVar [Pid] (Choreography e b)
   deriving Show
 
-newtype CDefSet e b = CDefSet [(RecVar, ([Pid], Choreography e b))] deriving Show
+newtype CDefSet e b = CDefSet [(RecVar, Choreography e b)] deriving Show
 newtype CProgram e b = CProgram (CDefSet e b, Choreography e b) deriving Show
 
 -- Processes
@@ -112,16 +112,19 @@ data Behaviour e b
   | Choose Pid Label Ann (Behaviour e b)
   | Offer Pid (Maybe (Ann, (Behaviour e b))) (Maybe (Ann, (Behaviour e b)))
   | BCond b (Behaviour e b) (Behaviour e b)
-  | BCall RecVar
+  | BCall (RecVar, Pid)
   deriving Show
 
-newtype BDefSet e b = BDefSet [(RecVar, Behaviour e b)] deriving Show
+newtype BDefSet e b = BDefSet [((RecVar, Pid), Behaviour e b)] deriving Show
 newtype Network e b = Network [(Pid, Behaviour e b)] deriving Show
 newtype BProgram e b = BProgram (BDefSet e b, Network e b) deriving Show
 
 -- Encode
 
 cast = E.unsafeCoerce
+
+encodeProd :: (a, b) -> E.Prod a b
+encodeProd (x1, x2) = E.Pair x1 x2
 
 encodeList :: [a] -> E.List a
 encodeList [] = E.Nil
@@ -139,26 +142,30 @@ encodeChoreography (CCall v) = E.Call (cast v)
 encodeChoreography (RtCall v pids c) =
   E.RT_Call (cast v) (encodeList $ map cast pids) (encodeChoreography c)
 
-collectPids :: CProgram e b -> S.Set Pid
-collectPids (CProgram (CDefSet defs, c)) = S.unions $ map rec $ [c] ++ (map (snd . snd) defs)
+collectPids :: CDefSet e b -> Choreography e b -> S.Set Pid
+collectPids (CDefSet defs) c = rec S.empty c
   where
-    rec CEnd = S.empty
-    rec (Interaction (Com src _ dst _) _ c) = S.fromList [src, dst] `S.union` rec c
-    rec (Interaction (Sel src dst _) _ c) = S.fromList [src, dst] `S.union` rec c
-    rec (CCond pid _ c1 c2) = S.singleton pid `S.union` rec c1 `S.union` rec c2
-    rec (CCall _) = S.empty
-    rec (RtCall _ pids c) = S.fromList pids `S.union` rec c
+    rec _ CEnd = S.empty
+    rec seen (Interaction (Com src _ dst _) _ c) = S.fromList [src, dst] `S.union` rec seen c
+    rec seen (Interaction (Sel src dst _) _ c) = S.fromList [src, dst] `S.union` rec seen c
+    rec seen (CCond pid _ c1 c2) = S.singleton pid `S.union` rec seen c1 `S.union` rec seen c2
+    rec seen (CCall v'@(RecVar v))
+      | S.member v' seen = S.empty
+      | otherwise = case L.lookup v' defs of
+        Just c -> rec (S.insert v' seen) c
+        Nothing -> error $ "Definition doesn't exist: " ++ show v'
+    rec seen (RtCall _ pids c) = error "Runtime term encountered"
 
 encodeDefs :: CDefSet e b -> E.DefSet
-encodeDefs (CDefSet s) = \v -> case L.lookup (cast v) s of
-  Just (pids, c) -> E.Pair (encodeList $ map cast pids) (encodeChoreography c)
-  Nothing -> error "Definition doesn't exist"
+encodeDefs s@(CDefSet defs) = \v -> let d = cast v :: RecVar in case L.lookup d defs of
+  Just c -> E.Pair (encodeList $ map cast $ S.toList $ collectPids s c) (encodeChoreography c)
+  Nothing -> error $ "Definition doesn't exist: " ++ show d
 
-encodeProgram :: CProgram e b -> (E.Program, [RecVar], [Pid])
-encodeProgram p@(CProgram (s, c)) =
+encodeProgram :: CProgram e b -> (E.Program, [(RecVar, Pid)], [Pid])
+encodeProgram p@(CProgram (s@(CDefSet defs), c)) =
   (E.Pair (encodeDefs s) (encodeChoreography c),
-   let CDefSet s' = s in L.nub $ map fst s',
-   S.toList $ collectPids p)
+   [(v, pid) | pid <- S.toList $ collectPids s c, (v, c) <- defs],
+   S.toList $ collectPids s c)
 
 -- Decode
 
@@ -184,61 +191,62 @@ decodeBehaviour (E.Branching pid left right) =
     Offer (cast pid) left' right'
 decodeBehaviour (E.Cond0 ex b1 b2) =
   BCond (cast ex) (decodeBehaviour b1) (decodeBehaviour b2)
-decodeBehaviour (E.Call0 v) = BCall (cast v)
+decodeBehaviour (E.Call0 v) = BCall $ decodeProd $ cast v
 
 decodeNetwork :: [Pid] -> E.Network -> Network e b
-decodeNetwork pids n = Network $
-  map (\pid -> (pid, decodeBehaviour $ n $ cast pid)) pids
+decodeNetwork pids n =
+  Network $ [(pid, decodeBehaviour $ n $ cast pid) | pid <- pids]
 
-decodeDefs :: [RecVar] -> E.DefSetB -> BDefSet e b
-decodeDefs vs s = BDefSet $ map (\v -> (v, decodeBehaviour $ s $ cast v)) vs
+decodeDefs :: [(RecVar, Pid)] -> E.DefSetB -> BDefSet e b
+decodeDefs vs s =
+  BDefSet $ [(p, decodeBehaviour $ s $ cast $ encodeProd p) | p@(v, pid) <- vs]
 
-decodeProgram :: [RecVar] -> [Pid] -> E.Program0 -> BProgram e b
+decodeProgram :: [(RecVar, Pid)] -> [Pid] -> E.Program0 -> BProgram e b
 decodeProgram vs pids (E.Pair s n) =
   BProgram (decodeDefs vs s, decodeNetwork pids n)
 
--- Projection
-
-epp :: E.Signature -> CProgram e b -> BProgram e b
-epp sig p = decodeProgram vs pids $ E.epp sig $ p'
-  where (p', vs, pids) = encodeProgram p
-
 -- Signature
 
-toSumbool :: Bool -> E.Sumbool
-toSumbool True = E.Left
-toSumbool False = E.Right
-
 sig :: E.Signature
-sig = E.Build_Signature (cast val) (cast bool) (cast val) (cast expr) (cast bexpr) (cast val) (cast ann) (cast eval') (cast beval')
+sig = E.Build_Signature (cast pid) (cast var) undefined undefined undefined (cast recvar) (cast ann) undefined undefined
   where
-    val :: Val -> Val -> E.Sumbool
-    val (IntVal x1) (IntVal x2) = toSumbool $ x1 == x2
-    -- val = undefined
+    eq :: Eq a => a -> a -> E.Sumbool
+    eq x y = if x == y then E.Left else E.Right
 
-    bool :: Val -> Val -> E.Sumbool
-    -- bool (BoolVal x1) (BoolVal x2) = toSumbool $ x1 == x2
-    bool = undefined
+    pid :: Pid -> Pid -> E.Sumbool
+    pid = eq
 
-    expr :: Expr -> Expr -> E.Sumbool
-    -- expr ex1 ex2 = toSumbool $ ex1 == ex2
-    expr = undefined
+    var :: Var -> Var -> E.Sumbool
+    var = eq
 
-    bexpr :: BExpr -> BExpr -> E.Sumbool
-    -- bexpr (BExpr ex1) (BExpr ex2) = toSumbool $ ex1 == ex2
-    bexpr = undefined
+    -- val :: Eq v => v -> v -> E.Sumbool
+    -- val = eq
+
+    -- expr :: Eq e => e -> e -> E.Sumbool
+    -- expr = eq
+
+    -- bexpr :: Eq b => b -> b -> E.Sumbool
+    -- bexpr = eq
 
     ann :: Ann -> Ann -> E.Sumbool
-    -- ann a1 a2 = toSumbool $ a1 == a2
-    ann = undefined
+    ann = eq
 
-    eval' :: Expr -> (Var -> Val) -> Val
-    -- eval' ex e = eval (Env e) ex
-    eval' = undefined
+    recvar :: RecVar -> RecVar -> E.Sumbool
+    recvar = eq
 
-    beval' :: BExpr -> (Var -> Val) -> Bool
-    -- beval' ex e = beval (Env e) ex
-    beval' = undefined
+    -- ev :: e -> (Var -> v) -> v
+    -- ev ex e = eval (Env e) ex
+    -- ev = undefined
+
+    -- bev :: b -> (Var -> v) -> Bool
+    -- bev ex e = beval (Env e) ex
+    -- bev = undefined
+
+-- Projection
+
+epp :: CProgram e b -> BProgram e b
+epp p = decodeProgram vs pids $ E.epp sig $ p'
+  where (p', vs, pids) = encodeProgram p
 
 -- Pretty-printing
 
@@ -317,14 +325,14 @@ formatBehaviour d (BCond ex b1 b2) =
    formatBehaviour (d + 2) b1 ++
    replicate d ' ' ++ "else\n" ++
    formatBehaviour (d + 2) b2)
-formatBehaviour d (BCall (RecVar v)) =
-  replicate d ' ' ++ v ++ ";\n"
+formatBehaviour d (BCall (RecVar v, Pid pid)) =
+  replicate d ' ' ++ v ++ "_" ++ pid ++ ";\n"
 
 instance (Format e, Format b) => Format (Behaviour e b) where
   format = formatBehaviour 0
 
 instance (Format e, Format b) => Format (Network e b) where
-  format (Network n) = L.intercalate "\n" $ map (\(Pid pid, b) -> pid ++ ":\n" ++ formatBehaviour 2 b) n
+  format (Network n) = L.intercalate "\n" $ [pid ++ ":\n" ++ formatBehaviour 2 b | (Pid pid, b) <- n]
 
 -- Lambda Example
 
@@ -368,7 +376,7 @@ auth = let ip = Pid "Ip"
            c3 = Interaction (Com c (Ref credentials) ip credentials) a (CCond ip (BExpr $ Lit $ BoolVal True) c1 c2)
      in CProgram (CDefSet [], c3)
 authc = let CProgram (_, c) = auth in c
-authb = epp sig auth
+authb = epp auth
 authn = let BProgram (_, n) = authb in n
 
 -- Jolie
@@ -442,7 +450,9 @@ mkService (BDefSet defs) port (pid, b) = rec S.empty (serviceDefault { sPid = pi
     rec seen s (Choose dst _ ann b) = rec seen (s { sOutputs = S.insert dst $ sOutputs s }) b
     rec seen s (Offer src left right) = serviceUnion (branch seen s src CLeft left) (branch seen s src CRight right)
     rec seen s (BCond _ b1 b2) = serviceUnion (rec seen s b1) (rec seen s b2)
-    rec seen s (BCall v) = if S.member v seen then s else rec (S.insert v seen) s b
+    rec seen s (BCall v)
+      | S.member v seen = s
+      | otherwise = rec (S.insert v seen) s b
       where Just b = L.lookup v defs
 
     branch _ s _ _ Nothing = s
@@ -479,8 +489,7 @@ compileOutputPort s = let Pid pid = sPid s in
 
 compileOutputPorts :: M.Map Pid Service -> Service -> String
 compileOutputPorts smap s = L.intercalate "\n\n" $ map compileOutputPort outputs
-  where
-    outputs = map (\pid -> fromJust $ M.lookup pid smap) $ S.toList $ sOutputs s
+  where outputs = [fromJust $ M.lookup pid smap | pid <- S.toList $ sOutputs s]
 
 compilePorts :: M.Map Pid Service -> Service -> String
 compilePorts smap s = compileInputPort s ++ "\n\n" ++ compileOutputPorts smap s
@@ -513,8 +522,8 @@ compileBehaviour s = "main {\n" ++ (indent 4 $ rec 0 $ sBehaviour s) ++ "\n}"
        replicate d ' ' ++ "} else {\n" ++
        rec (d + 4) b2
        ++ "}")
-    rec d (BCall (RecVar v)) =
-      replicate d ' ' ++ v ++ ";\n"
+    rec d (BCall (RecVar v, Pid pid)) =
+      replicate d ' ' ++ v ++ "_" ++ pid ++ ";\n"
 
     branch :: Int -> Pid -> Label -> Maybe (Ann, JolieBehaviour) -> Maybe String
     branch _ _ _ Nothing = Nothing
@@ -545,15 +554,36 @@ auth' = let ip = Pid "Ip"
             s = Pid "Server"
             c = Pid "Client"
             a = Ann ""
-            credentials = JolieExpr "credentials"
-            token = JolieExpr "makeToken()"
-            x = Var "credentials"
-            t = Var "t"
+            credsRef = JolieExpr "credentials"
+            makeToken = JolieExpr "makeToken()"
+            creds = Var "credentials"
+            token = Var "token"
             cond = JolieBExpr $ JolieExpr "check( credentials )"
-            c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s token c t) a CEnd))
+            c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s makeToken c token) a CEnd))
             c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a CEnd)
-            c3 = Interaction (Com c credentials ip x) a (CCond ip cond c1 c2)
+            c3 = Interaction (Com c credsRef ip creds) a (CCond ip cond c1 c2)
         in CProgram (CDefSet [], c3)
 authc' = let CProgram (_, c) = auth' in c
-authb' = epp sig auth'
+authb' = epp auth'
 authn' = let BProgram (_, n) = authb' in n
+
+-- Jolie RecVar Test
+
+recvar = let ip = Pid "Ip"
+             s = Pid "Server"
+             c = Pid "Client"
+             a = Ann ""
+             credsRef = JolieExpr "credentials"
+             makeToken = JolieExpr "makeToken()"
+             creds = Var "credentials"
+             token = Var "token"
+             cond = JolieBExpr $ JolieExpr "check( credentials )"
+             c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s makeToken c token) a CEnd))
+             c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a CEnd)
+             c3 = Interaction (Com c credsRef ip creds) a (CCond ip cond c1 c2)
+             x = RecVar "X"
+             c4 = CCall x
+         in CProgram (CDefSet [(x, c3), (RecVar "Y", c3)], c4)
+recvarc = let CProgram (_, c) = recvar in c
+recvarb = epp recvar
+recvarn = let BProgram (_, n) = recvarb in n
