@@ -363,8 +363,8 @@ auth = let ip = Pid "Ip"
            credentials = Var "credentials"
            token = Ref (Var "token")
            t = Var "t"
-           c1 = Interaction (Sel ip s CLeft) a (Interaction (Sel ip c CLeft) a (Interaction (Com s token c t) a CEnd))
-           c2 = Interaction (Sel ip s CRight) a (Interaction (Sel ip c CRight) a CEnd)
+           c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s token c t) a CEnd))
+           c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a CEnd)
            c3 = Interaction (Com c (Ref credentials) ip credentials) a (CCond ip (BExpr $ Lit $ BoolVal True) c1 c2)
      in CProgram (CDefSet [], c3)
 authc = let CProgram (_, c) = auth in c
@@ -406,35 +406,47 @@ data Service = Service
   } deriving Show
 
 serviceDefault :: Service
-serviceDefault = Service { sPid = undefined, sBehaviour = undefined,
-                           sPort = undefined, sOutputs = S.empty,
-                           sOps = S.empty }
+serviceDefault = Service
+  { sPid = undefined
+  , sBehaviour = undefined
+  , sPort = undefined
+  , sOutputs = S.empty
+  , sOps = S.empty
+  }
 
 makeOp :: String -> Pid -> Ann -> String
 makeOp prefix (Pid pid) (Ann "") = prefix ++ pid
 makeOp _ _ (Ann ann) = ann
 
+makeCom :: Pid -> Ann -> String
+makeCom pid ann = makeOp "com" pid ann
+
+makeSel :: Label -> Pid -> Ann -> String
+makeSel l pid ann = makeOp (formatLabel l) pid ann
+
 addOp :: Service -> (String -> JolieOp) -> String -> Service
 addOp s ctor op = s { sOps = S.insert (ctor op) $ sOps s }
 
 serviceUnion :: Service -> Service -> Service
-serviceUnion s1 s2 = s1 { sOutputs = S.union (sOutputs s1) (sOutputs s2),
-                          sOps = S.union (sOps s1) (sOps s2) }
+serviceUnion s1 s2 = s1
+  { sOutputs = S.union (sOutputs s1) (sOutputs s2)
+  , sOps = S.union (sOps s1) (sOps s2)
+  }
 
 mkService :: JolieDefSet -> Int -> (Pid, JolieBehaviour) -> Service
 mkService (BDefSet defs) port (pid, b) = rec S.empty (serviceDefault { sPid = pid, sPort = port, sBehaviour = b }) b
   where
     rec _ s BEnd = s
     rec seen s (Send dst _ ann b) = rec seen (s { sOutputs = S.insert dst $ sOutputs s }) b
-    rec seen s (Recv src _ ann b) = rec seen (addOp s JolieCom $ makeOp "com" src ann) b
+    rec seen s (Recv src _ ann b) = rec seen (addOp s JolieCom $ makeCom src ann) b
     rec seen s (Choose dst _ ann b) = rec seen (s { sOutputs = S.insert dst $ sOutputs s }) b
-    rec seen s (Offer src left right) = serviceUnion (branch seen s src left) (branch seen s src right)
+    rec seen s (Offer src left right) = serviceUnion (branch seen s src CLeft left) (branch seen s src CRight right)
     rec seen s (BCond _ b1 b2) = serviceUnion (rec seen s b1) (rec seen s b2)
     rec seen s (BCall v) = if S.member v seen then s else rec (S.insert v seen) s b
       where Just b = L.lookup v defs
 
-    branch _ s _ Nothing = s
-    branch seen s src (Just (ann, b)) = rec seen (addOp s JolieSel $ makeOp "sel" src ann) b
+    branch _ s _ _ Nothing = s
+    branch seen s src l (Just (ann, b)) = rec seen (addOp s JolieSel $ makeSel l src ann) b
 
 collectServices :: JolieProgram -> M.Map Pid Service
 collectServices p@(BProgram (defs, Network n)) = foldr f M.empty $ zip [8080..] n
@@ -485,29 +497,16 @@ compileBehaviour s = "main {\n" ++ (indent 4 $ rec 0 $ sBehaviour s) ++ "\n}"
   where
     rec _ BEnd = ""
     rec d (Send (Pid dst) ex ann b) =
-      (replicate d ' ' ++ (makeOp "com" (sPid s) ann) ++ "@" ++ dst ++
+      (replicate d ' ' ++ (makeCom (sPid s) ann) ++ "@" ++ dst ++
        "( " ++ format ex ++ " );\n" ++ rec d b)
     rec d (Recv src (Var v) ann b) =
-      (replicate d ' ' ++ (makeOp "com" src ann) ++ "( " ++ v ++ " );\n" ++
+      (replicate d ' ' ++ (makeCom src ann) ++ "( " ++ v ++ " );\n" ++
        rec d b)
     rec d (Choose (Pid dst) l ann b) =
-      (replicate d ' ' ++ (makeOp "sel" (sPid s) ann) ++ "@" ++ dst ++
-       "( \"" ++ formatLabel l ++ "\" );\n" ++ rec d b)
-    rec d (Offer src left right) = let op = fromMaybe (makeOp "sel" src (Ann "")) (branchAnn left right) in
-      (replicate d ' ' ++ op ++ "( label );\n" ++
-       replicate d ' ' ++ "if ( label == \"left\" ) {\n" ++
-       (case left of
-         Just (ann, b) -> case b of
-           BEnd -> replicate (d + 4) ' ' ++ "// empty\n"
-           b -> rec (d + 4) b
-         Nothing -> replicate (d + 4) ' ' ++ "// empty\n") ++
-       replicate d ' ' ++ "} else {\n" ++
-       (case right of
-         Just (ann, b) -> case b of
-           BEnd -> replicate (d + 4) ' ' ++ "// empty\n"
-           b -> rec (d + 4) b
-         Nothing -> replicate (d + 4) ' ' ++ "// empty\n") ++
-       replicate d ' ' ++ "}\n")
+      (replicate d ' ' ++ (makeSel l (sPid s) ann) ++ "@" ++ dst ++
+       "();\n" ++ rec d b)
+    rec d (Offer src left right) =
+      (L.intercalate "\n" $ catMaybes [branch d src CLeft left, branch d src CRight right]) ++ "\n"
     rec d (BCond ex b1 b2) =
       (replicate d ' ' ++ "if ( " ++ format ex ++ " ) {\n" ++
        rec (d + 4) b1 ++
@@ -516,6 +515,12 @@ compileBehaviour s = "main {\n" ++ (indent 4 $ rec 0 $ sBehaviour s) ++ "\n}"
        ++ "}")
     rec d (BCall (RecVar v)) =
       replicate d ' ' ++ v ++ ";\n"
+
+    branch :: Int -> Pid -> Label -> Maybe (Ann, JolieBehaviour) -> Maybe String
+    branch _ _ _ Nothing = Nothing
+    branch d pid l (Just (ann, b)) = Just $ (replicate d ' ' ++ "[ " ++
+                                             (makeSel l pid ann) ++ "() ] {\n" ++
+                                             rec (d + 4) b ++ "}")
 
 compileBody :: M.Map Pid Service -> Service -> String
 compileBody smap s = let Pid pid = sPid s in
