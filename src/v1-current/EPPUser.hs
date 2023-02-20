@@ -1,11 +1,9 @@
 module EPPUser where
 
--- TODO: Parsing.
-
--- TODO: Simulation. How exactly does evaluation work? How exactly can we use
--- the "state function" and who even provides it?
-
+import Data.Maybe (fromJust, fromMaybe, catMaybes, listToMaybe)
 import qualified Data.List as L
+import qualified Data.Map as M
+import qualified Data.Set as S
 import qualified GHC.Base
 
 import qualified EPP as E
@@ -84,42 +82,42 @@ beval e (BExpr ex) = case eval e ex of
 
 -- Choreographies
 
-newtype Pid = Pid String deriving (Show, Eq)
-newtype RecVar = RecVar String deriving (Show, Eq)
+newtype Pid = Pid String deriving (Show, Eq, Ord)
+newtype RecVar = RecVar String deriving (Show, Eq, Ord)
 data Label = CLeft | CRight deriving (Show, Eq)
 newtype Ann = Ann String deriving (Show, Eq)
 
-data Eta
-  = Com Pid Expr Pid Var
+data Eta e
+  = Com Pid e Pid Var
   | Sel Pid Pid Label
   deriving Show
 
-data Choreography
+data Choreography e b
   = CEnd
-  | Interaction Eta Ann Choreography
-  | CCond Pid BExpr Choreography Choreography
+  | Interaction (Eta e) Ann (Choreography e b)
+  | CCond Pid b (Choreography e b) (Choreography e b)
   | CCall RecVar
-  | RtCall RecVar [Pid] Choreography
+  | RtCall RecVar [Pid] (Choreography e b)
   deriving Show
 
-newtype CDefSet = CDefSet [(RecVar, ([Pid], Choreography))] deriving Show
-newtype CProgram = CProgram (CDefSet, Choreography) deriving Show
+newtype CDefSet e b = CDefSet [(RecVar, ([Pid], Choreography e b))] deriving Show
+newtype CProgram e b = CProgram (CDefSet e b, Choreography e b) deriving Show
 
 -- Processes
 
-data Behaviour
+data Behaviour e b
   = BEnd
-  | Send Pid Expr Ann Behaviour
-  | Recv Pid Var Ann Behaviour
-  | Choose Pid Label Ann Behaviour
-  | Offer Pid (Maybe (Ann, Behaviour)) (Maybe (Ann, Behaviour))
-  | BCond BExpr Behaviour Behaviour
+  | Send Pid e Ann (Behaviour e b)
+  | Recv Pid Var Ann (Behaviour e b)
+  | Choose Pid Label Ann (Behaviour e b)
+  | Offer Pid (Maybe (Ann, (Behaviour e b))) (Maybe (Ann, (Behaviour e b)))
+  | BCond b (Behaviour e b) (Behaviour e b)
   | BCall RecVar
   deriving Show
 
-newtype BDefSet = BDefSet [(RecVar, Behaviour)] deriving Show
-newtype Network = Network [(Pid, Behaviour)] deriving Show
-newtype BProgram = BProgram (BDefSet, Network) deriving Show
+newtype BDefSet e b = BDefSet [(RecVar, Behaviour e b)] deriving Show
+newtype Network e b = Network [(Pid, Behaviour e b)] deriving Show
+newtype BProgram e b = BProgram (BDefSet e b, Network e b) deriving Show
 
 -- Encode
 
@@ -129,7 +127,7 @@ encodeList :: [a] -> E.List a
 encodeList [] = E.Nil
 encodeList (x:xs) = E.Cons x (encodeList xs)
 
-encodeChoreography :: Choreography -> E.Choreography
+encodeChoreography :: Choreography e b -> E.Choreography
 encodeChoreography CEnd = E.End
 encodeChoreography (Interaction (Com src ex dst v) ann c) =
   E.Interaction (E.Com (cast src) (cast ex) (cast dst) (cast v)) (cast ann) (encodeChoreography c)
@@ -141,24 +139,26 @@ encodeChoreography (CCall v) = E.Call (cast v)
 encodeChoreography (RtCall v pids c) =
   E.RT_Call (cast v) (encodeList $ map cast pids) (encodeChoreography c)
 
-collectPids :: Choreography -> [Pid]
-collectPids CEnd = []
-collectPids (Interaction (Com src _ dst _) _ c) = [src, dst] ++ collectPids c
-collectPids (Interaction (Sel src dst _) _ c) = [src, dst] ++ collectPids c
-collectPids (CCond pid _ c1 c2) = [pid] ++ collectPids c1 ++ collectPids c2
-collectPids (CCall _) = []
-collectPids (RtCall _ pids c) = pids ++ collectPids c
+collectPids :: CProgram e b -> S.Set Pid
+collectPids (CProgram (CDefSet defs, c)) = S.unions $ map rec $ [c] ++ (map (snd . snd) defs)
+  where
+    rec CEnd = S.empty
+    rec (Interaction (Com src _ dst _) _ c) = S.fromList [src, dst] `S.union` rec c
+    rec (Interaction (Sel src dst _) _ c) = S.fromList [src, dst] `S.union` rec c
+    rec (CCond pid _ c1 c2) = S.singleton pid `S.union` rec c1 `S.union` rec c2
+    rec (CCall _) = S.empty
+    rec (RtCall _ pids c) = S.fromList pids `S.union` rec c
 
-encodeDefs :: CDefSet -> E.DefSet
+encodeDefs :: CDefSet e b -> E.DefSet
 encodeDefs (CDefSet s) = \v -> case L.lookup (cast v) s of
   Just (pids, c) -> E.Pair (encodeList $ map cast pids) (encodeChoreography c)
   Nothing -> error "Definition doesn't exist"
 
-encodeProgram :: CProgram -> (E.Program, [RecVar], [Pid])
-encodeProgram (CProgram (s, c)) =
+encodeProgram :: CProgram e b -> (E.Program, [RecVar], [Pid])
+encodeProgram p@(CProgram (s, c)) =
   (E.Pair (encodeDefs s) (encodeChoreography c),
    let CDefSet s' = s in L.nub $ map fst s',
-   L.nub $ collectPids c)
+   S.toList $ collectPids p)
 
 -- Decode
 
@@ -169,7 +169,7 @@ decodeOption E.None = Nothing
 decodeProd :: E.Prod a b -> (a, b)
 decodeProd (E.Pair x1 x2) = (x1, x2)
 
-decodeBehaviour :: E.Behaviour -> Behaviour
+decodeBehaviour :: E.Behaviour -> Behaviour e b
 decodeBehaviour (E.End0) = BEnd
 decodeBehaviour (E.Send dst ex ann b) =
   Send (cast dst) (cast ex) (cast ann) (decodeBehaviour b)
@@ -186,20 +186,20 @@ decodeBehaviour (E.Cond0 ex b1 b2) =
   BCond (cast ex) (decodeBehaviour b1) (decodeBehaviour b2)
 decodeBehaviour (E.Call0 v) = BCall (cast v)
 
-decodeNetwork :: [Pid] -> E.Network -> Network
+decodeNetwork :: [Pid] -> E.Network -> Network e b
 decodeNetwork pids n = Network $
   map (\pid -> (pid, decodeBehaviour $ n $ cast pid)) pids
 
-decodeDefs :: [RecVar] -> E.DefSetB -> BDefSet
+decodeDefs :: [RecVar] -> E.DefSetB -> BDefSet e b
 decodeDefs vs s = BDefSet $ map (\v -> (v, decodeBehaviour $ s $ cast v)) vs
 
-decodeProgram :: [RecVar] -> [Pid] -> E.Program0 -> BProgram
+decodeProgram :: [RecVar] -> [Pid] -> E.Program0 -> BProgram e b
 decodeProgram vs pids (E.Pair s n) =
   BProgram (decodeDefs vs s, decodeNetwork pids n)
 
 -- Projection
 
-epp :: E.Signature -> CProgram -> BProgram
+epp :: E.Signature -> CProgram e b -> BProgram e b
 epp sig p = decodeProgram vs pids $ E.epp sig $ p'
   where (p', vs, pids) = encodeProgram p
 
@@ -252,6 +252,9 @@ instance Format Expr where
   format (Apply f x) = "(" ++ format f ++ ") (" ++ format x ++ ")"
   format (Foreign _ x y) = "#<F> (" ++ format x ++ ") (" ++ format y ++ ")"
 
+instance Format BExpr where
+  format (BExpr ex) = format ex
+
 formatLabel :: Label -> String
 formatLabel CLeft = "left"
 formatLabel CRight = "right"
@@ -260,17 +263,17 @@ formatAnn :: Ann -> String
 formatAnn (Ann "") = ""
 formatAnn (Ann ann) = " {" ++ ann ++ "}"
 
-formatChoreography :: Int -> Choreography -> String
+formatChoreography :: (Format e, Format b) => Int -> Choreography e b -> String
 formatChoreography d CEnd = ""
 formatChoreography d (Interaction (Com (Pid src) ex (Pid dst) (Var v)) ann c) =
-  (replicate d ' ' ++ src ++ "." ++ format ex ++ " -> " ++ dst ++ "." ++ v ++
+  (replicate d ' ' ++ src ++ ".(" ++ format ex ++ ") -> " ++ dst ++ "." ++ v ++
    formatAnn ann ++ ";\n" ++ formatChoreography d c)
 formatChoreography d (Interaction (Sel (Pid src) (Pid dst) l) ann c) =
   (replicate d ' ' ++ src ++ " -> " ++ dst ++
    "[" ++ formatLabel l ++ "]" ++ formatAnn ann ++ ";\n" ++
    formatChoreography d c)
-formatChoreography d (CCond (Pid p) (BExpr ex) c1 c2) =
-  (replicate d ' ' ++ "if " ++ p ++ "." ++ format ex ++ " then\n" ++
+formatChoreography d (CCond (Pid p) ex c1 c2) =
+  (replicate d ' ' ++ "if " ++ p ++ ".(" ++ format ex ++ ") then\n" ++
    formatChoreography (d + 2) c1 ++
    replicate d ' ' ++ "else\n" ++
    formatChoreography (d + 2) c2)
@@ -280,13 +283,13 @@ formatChoreography d (RtCall (RecVar v) pids c) =
     (replicate d ' ' ++ v ++ "(" ++ L.intercalate ", " ps ++ ");\n" ++
      formatChoreography d c)
 
-instance Format Choreography where
+instance (Format e, Format b) => Format (Choreography e b) where
   format = formatChoreography 0
 
-formatBehaviour :: Int -> Behaviour -> String
+formatBehaviour :: (Format e, Format b) => Int -> (Behaviour e b) -> String
 formatBehaviour _ BEnd = ""
 formatBehaviour d (Send (Pid dst) ex ann b) =
-  (replicate d ' ' ++ dst ++ "!" ++ format ex ++
+  (replicate d ' ' ++ dst ++ "!(" ++ format ex ++ ")" ++
    formatAnn ann ++ ";\n" ++ formatBehaviour d b)
 formatBehaviour d (Recv (Pid src) (Var v) ann b) =
   (replicate d ' ' ++ src ++ "?" ++ v ++
@@ -296,62 +299,256 @@ formatBehaviour d (Choose (Pid dst) l ann b) =
    formatAnn ann ++ ";\n" ++ formatBehaviour d b)
 formatBehaviour d (Offer (Pid src) left right) =
   (replicate d ' ' ++ src ++ "&{\n" ++
-   "  left" ++ (case left of
+   replicate (d + 2) ' ' ++
+   "left" ++ (case left of
                  Just (ann, b) -> case b of
                    BEnd -> ": ∅;\n"
-                   b -> formatAnn ann ++ ": " ++ formatBehaviour d b
+                   b -> formatAnn ann ++ ":\n" ++ formatBehaviour (d + 4) b
                  Nothing -> ": ∅;\n") ++
-   "  right" ++ (case right of
+   replicate (d + 2) ' ' ++ "\n" ++ replicate (d + 2) ' ' ++
+   "right" ++ (case right of
                   Just (ann, b) -> case b of
                     BEnd -> ": ∅;\n"
-                    b -> formatAnn ann ++ ": " ++ formatBehaviour d b
+                    b -> formatAnn ann ++ ":\n" ++ formatBehaviour (d + 4) b
                   Nothing -> ": ∅;\n") ++
-   "}\n")
-formatBehaviour d (BCond (BExpr ex) b1 b2) =
-  (replicate d ' ' ++ "if " ++ format ex ++ " then\n" ++
+   replicate d ' ' ++ "}\n")
+formatBehaviour d (BCond ex b1 b2) =
+  (replicate d ' ' ++ "if (" ++ format ex ++ ") then\n" ++
    formatBehaviour (d + 2) b1 ++
    replicate d ' ' ++ "else\n" ++
    formatBehaviour (d + 2) b2)
 formatBehaviour d (BCall (RecVar v)) =
   replicate d ' ' ++ v ++ ";\n"
 
-instance Format Behaviour where
+instance (Format e, Format b) => Format (Behaviour e b) where
   format = formatBehaviour 0
 
--- Test
+instance (Format e, Format b) => Format (Network e b) where
+  format (Network n) = L.intercalate "\n" $ map (\(Pid pid, b) -> pid ++ ":\n" ++ formatBehaviour 2 b) n
+
+-- Lambda Example
 
 plus :: Val -> Val -> Val
 plus (IntVal x) (IntVal y) = IntVal $ x + y
 plus _ _ = error "Cannot add non-integer values"
 
-test = (Apply
-        (Apply
-        (Lambda (Var "x")
-         (Lambda (Var "y")
-          (Foreign plus (Ref (Var "x")) (Ref (Var "y")))))
-        (Lit (IntVal 5)))
-       (Lit (IntVal 10)))
+lambda = (Apply
+          (Apply
+           (Lambda (Var "x")
+            (Lambda (Var "y")
+             (Foreign plus (Ref (Var "x")) (Ref (Var "y")))))
+           (Lit (IntVal 5)))
+          (Lit (IntVal 10)))
 
-test2 = let ip = Pid "ip"
-            s = Pid "s"
-            c = Pid "c"
-            a = Ann "ann"
-            credentials = Ref (Var "credentials")
-            token = Ref (Var "token")
-            x = Var "x"
-            t = Var "t"
-            c1 = Interaction (Sel ip s CLeft) a (Interaction (Sel ip c CLeft) a (Interaction (Com s token c t) a CEnd))
-            c2 = Interaction (Sel ip s CRight) a (Interaction (Sel ip c CRight) a CEnd)
-            c3 = Interaction (Com c credentials ip x) a (CCond ip (BExpr $ Lit $ BoolVal True) c1 c2)
+-- EPP Example
+
+{-
+  client.getCredentials() -> ip.credentials;
+
+  if checkCredentials ip.credentials then
+    ip -> client[left];
+    ip -> server[left];
+    server.token -> client.token;
+    client.write("authenticated: " + token);
+  else
+    ip -> client[right];
+    ip -> server[right];
+    client.write("unauthenticated");
+-}
+
+auth = let ip = Pid "Ip"
+           s = Pid "Server"
+           c = Pid "Client"
+           a = Ann ""
+           credentials = Var "credentials"
+           token = Ref (Var "token")
+           t = Var "t"
+           c1 = Interaction (Sel ip s CLeft) a (Interaction (Sel ip c CLeft) a (Interaction (Com s token c t) a CEnd))
+           c2 = Interaction (Sel ip s CRight) a (Interaction (Sel ip c CRight) a CEnd)
+           c3 = Interaction (Com c (Ref credentials) ip credentials) a (CCond ip (BExpr $ Lit $ BoolVal True) c1 c2)
      in CProgram (CDefSet [], c3)
+authc = let CProgram (_, c) = auth in c
+authb = epp sig auth
+authn = let BProgram (_, n) = authb in n
 
-test3 = let BProgram (_, Network n) = epp sig test2 in n
+-- Jolie
 
-test4 = let CProgram (_, c) = test2 in c
+data JolieExpr = JolieExpr String deriving Show
+data JolieBExpr = JolieBExpr JolieExpr deriving Show
 
--- TODO Jolie
+type JolieBehaviour = Behaviour JolieExpr JolieBExpr
+type JolieDefSet = BDefSet JolieExpr JolieBExpr
+type JolieProgram = BProgram JolieExpr JolieBExpr
 
-newtype Service = Service String
+instance Format JolieExpr where
+  format (JolieExpr e) = e
 
-compile :: Network -> [Service]
-compile = undefined
+instance Format JolieBExpr where
+  format (JolieBExpr e) = format e
+
+header :: String
+header = "type Msg: any { ? }\n" ++ "type Label: string {}"
+
+indent :: Int -> String -> String
+indent d = L.intercalate "\n" . map (\l -> replicate d ' ' ++ l) . lines
+
+data JolieOp
+  = JolieCom String
+  | JolieSel String
+  deriving (Show, Eq, Ord)
+
+data Service = Service
+  { sPid :: Pid
+  , sPort :: Int
+  , sBehaviour :: JolieBehaviour
+  , sOutputs :: S.Set Pid
+  , sOps :: S.Set JolieOp
+  } deriving Show
+
+serviceDefault :: Service
+serviceDefault = Service { sPid = undefined, sBehaviour = undefined,
+                           sPort = undefined, sOutputs = S.empty,
+                           sOps = S.empty }
+
+makeOp :: String -> Pid -> Ann -> String
+makeOp prefix (Pid pid) (Ann "") = prefix ++ pid
+makeOp _ _ (Ann ann) = ann
+
+addOp :: Service -> (String -> JolieOp) -> String -> Service
+addOp s ctor op = s { sOps = S.insert (ctor op) $ sOps s }
+
+serviceUnion :: Service -> Service -> Service
+serviceUnion s1 s2 = s1 { sOutputs = S.union (sOutputs s1) (sOutputs s2),
+                          sOps = S.union (sOps s1) (sOps s2) }
+
+mkService :: JolieDefSet -> Int -> (Pid, JolieBehaviour) -> Service
+mkService (BDefSet defs) port (pid, b) = rec S.empty (serviceDefault { sPid = pid, sPort = port, sBehaviour = b }) b
+  where
+    rec _ s BEnd = s
+    rec seen s (Send dst _ ann b) = rec seen (s { sOutputs = S.insert dst $ sOutputs s }) b
+    rec seen s (Recv src _ ann b) = rec seen (addOp s JolieCom $ makeOp "com" src ann) b
+    rec seen s (Choose dst _ ann b) = rec seen (s { sOutputs = S.insert dst $ sOutputs s }) b
+    rec seen s (Offer src left right) = serviceUnion (branch seen s src left) (branch seen s src right)
+    rec seen s (BCond _ b1 b2) = serviceUnion (rec seen s b1) (rec seen s b2)
+    rec seen s (BCall v) = if S.member v seen then s else rec (S.insert v seen) s b
+      where Just b = L.lookup v defs
+
+    branch _ s _ Nothing = s
+    branch seen s src (Just (ann, b)) = rec seen (addOp s JolieSel $ makeOp "sel" src ann) b
+
+collectServices :: JolieProgram -> M.Map Pid Service
+collectServices p@(BProgram (defs, Network n)) = foldr f M.empty $ zip [8080..] n
+  where
+    f (port, proc@(pid, _)) m = M.insert pid (mkService defs port proc) m
+
+compileInterface :: Service -> String
+compileInterface s = ("interface " ++ pid ++ "Api {\n" ++
+                      replicate 4 ' ' ++ "OneWay:\n" ++
+                      L.intercalate ",\n" (map compileOp $ S.toList $ sOps s) ++
+                      "\n}")
+  where
+    Pid pid = sPid s
+    compileOp o = replicate 8 ' ' ++ (case o of
+      JolieCom name -> name ++ "( Msg )"
+      JolieSel name -> name ++ "( Label )")
+
+compileLocation :: Service -> String
+compileLocation s = let Pid pid = sPid s in
+  ("location: \"socket://localhost:" ++ (show $ sPort s) ++ "\"\n" ++
+   "protocol: http { format = \"json\" }\n" ++
+   "interfaces: " ++ pid ++ "Api")
+
+compileInputPort :: Service -> String
+compileInputPort s = "inputPort Input {\n" ++ (indent 4 $ compileLocation s) ++ "\n}"
+
+compileOutputPort :: Service -> String
+compileOutputPort s = let Pid pid = sPid s in
+  "outputPort " ++ pid ++ " {\n" ++ (indent 4 $ compileLocation s) ++ "\n}"
+
+compileOutputPorts :: M.Map Pid Service -> Service -> String
+compileOutputPorts smap s = L.intercalate "\n\n" $ map compileOutputPort outputs
+  where
+    outputs = map (\pid -> fromJust $ M.lookup pid smap) $ S.toList $ sOutputs s
+
+compilePorts :: M.Map Pid Service -> Service -> String
+compilePorts smap s = compileInputPort s ++ "\n\n" ++ compileOutputPorts smap s
+
+branchAnn :: Maybe (Ann, Behaviour e b) -> Maybe (Ann, Behaviour e b) -> Maybe String
+branchAnn left right = listToMaybe $ catMaybes $ map f $ [left, right]
+  where
+    f (Just (Ann "", _)) = Nothing
+    f (Just (Ann a, _)) = Just a
+    f Nothing = Nothing
+
+compileBehaviour :: Service -> String
+compileBehaviour s = "main {\n" ++ (indent 4 $ rec 0 $ sBehaviour s) ++ "\n}"
+  where
+    rec _ BEnd = ""
+    rec d (Send (Pid dst) ex ann b) =
+      (replicate d ' ' ++ (makeOp "com" (sPid s) ann) ++ "@" ++ dst ++
+       "( " ++ format ex ++ " );\n" ++ rec d b)
+    rec d (Recv src (Var v) ann b) =
+      (replicate d ' ' ++ (makeOp "com" src ann) ++ "( " ++ v ++ " );\n" ++
+       rec d b)
+    rec d (Choose (Pid dst) l ann b) =
+      (replicate d ' ' ++ (makeOp "sel" (sPid s) ann) ++ "@" ++ dst ++
+       "( \"" ++ formatLabel l ++ "\" );\n" ++ rec d b)
+    rec d (Offer src left right) = let op = fromMaybe (makeOp "sel" src (Ann "")) (branchAnn left right) in
+      (replicate d ' ' ++ op ++ "( label );\n" ++
+       replicate d ' ' ++ "if ( label == \"left\" ) {\n" ++
+       (case left of
+         Just (ann, b) -> case b of
+           BEnd -> replicate (d + 4) ' ' ++ "// empty\n"
+           b -> rec (d + 4) b
+         Nothing -> replicate (d + 4) ' ' ++ "// empty\n") ++
+       replicate d ' ' ++ "} else {\n" ++
+       (case right of
+         Just (ann, b) -> case b of
+           BEnd -> replicate (d + 4) ' ' ++ "// empty\n"
+           b -> rec (d + 4) b
+         Nothing -> replicate (d + 4) ' ' ++ "// empty\n") ++
+       replicate d ' ' ++ "}\n")
+    rec d (BCond ex b1 b2) =
+      (replicate d ' ' ++ "if ( " ++ format ex ++ " ) {\n" ++
+       rec (d + 4) b1 ++
+       replicate d ' ' ++ "} else {\n" ++
+       rec (d + 4) b2
+       ++ "}")
+    rec d (BCall (RecVar v)) =
+      replicate d ' ' ++ v ++ ";\n"
+
+compileBody :: M.Map Pid Service -> Service -> String
+compileBody smap s = let Pid pid = sPid s in
+  ("service " ++ pid ++ " {\n" ++
+   L.intercalate "\n\n" [indent 4 $ compileInputPort s,
+                         indent 4 $ compileOutputPorts smap s,
+                         indent 4 $ compileBehaviour s] ++
+   "\n}")
+
+compileJolie :: JolieProgram -> String
+compileJolie p@(BProgram (_, Network n)) =
+  L.intercalate "\n\n" $ [header] ++ interfaces ++ bodies
+  where
+    smap = collectServices p
+    services = M.elems smap
+    interfaces = map compileInterface services
+    bodies = map (compileBody smap) services
+
+-- Jolie Test
+
+auth' = let ip = Pid "Ip"
+            s = Pid "Server"
+            c = Pid "Client"
+            a = Ann ""
+            credentials = JolieExpr "credentials"
+            token = JolieExpr "makeToken()"
+            x = Var "credentials"
+            t = Var "t"
+            cond = JolieBExpr $ JolieExpr "check( credentials )"
+            c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s token c t) a CEnd))
+            c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a CEnd)
+            c3 = Interaction (Com c credentials ip x) a (CCond ip cond c1 c2)
+        in CProgram (CDefSet [], c3)
+authc' = let CProgram (_, c) = auth' in c
+authb' = epp sig auth'
+authn' = let BProgram (_, n) = authb' in n
