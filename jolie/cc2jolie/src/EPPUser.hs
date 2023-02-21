@@ -1,10 +1,9 @@
 module EPPUser where
 
-import Data.Maybe (fromJust, fromMaybe, catMaybes, listToMaybe)
+import Data.Maybe (catMaybes, listToMaybe)
 import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.Set as S
-import qualified GHC.Base
 
 import qualified EPP as E
 
@@ -138,6 +137,7 @@ newtype BProgram e b = BProgram (BDefSet e b, Network e b) deriving Show
 
 -- Encode
 
+cast :: a -> b
 cast = E.unsafeCoerce
 
 encodeProd :: (a, b) -> E.Prod a b
@@ -160,7 +160,7 @@ encodeChoreography (RtCall v pids c) =
   E.RT_Call (cast v) (encodeList $ map cast pids) (encodeChoreography c)
 
 collectPids :: CDefSet e b -> Choreography e b -> [Pid]
-collectPids (CDefSet defs) c = S.toList $ collect S.empty c
+collectPids (CDefSet defs) c' = S.toList $ collect S.empty c'
   where
     collect _ CEnd = S.empty
     collect seen (Interaction (Com src _ dst _) _ c) =
@@ -169,12 +169,12 @@ collectPids (CDefSet defs) c = S.toList $ collect S.empty c
       S.fromList [src, dst] `S.union` collect seen c
     collect seen (CCond pid _ c1 c2) =
       S.singleton pid `S.union` collect seen c1 `S.union` collect seen c2
-    collect seen (CCall v'@(RecVar v))
-      | S.member v' seen = S.empty
-      | otherwise = case L.lookup v' defs of
-        Just c -> collect (S.insert v' seen) c
-        Nothing -> error $ "Definition doesn't exist: " ++ show v'
-    collect seen (RtCall _ pids c) = error "Runtime term encountered"
+    collect seen (CCall v)
+      | S.member v seen = S.empty
+      | otherwise = case L.lookup v defs of
+        Just c -> collect (S.insert v seen) c
+        Nothing -> error $ "Definition doesn't exist: " ++ show v
+    collect _ (RtCall _ _ _) = error "Runtime term encountered"
 
 encodeDefs :: CDefSet e b -> E.DefSet
 encodeDefs s@(CDefSet defs) = \v -> let d = cast v :: RecVar in
@@ -183,9 +183,9 @@ encodeDefs s@(CDefSet defs) = \v -> let d = cast v :: RecVar in
     Nothing -> error $ "Definition doesn't exist: " ++ show d
 
 encodeProgram :: CProgram e b -> (E.Program, [(RecVar, Pid)], [Pid])
-encodeProgram p@(CProgram (s@(CDefSet defs), c)) =
+encodeProgram (CProgram (s@(CDefSet defs), c)) =
   (E.Pair (encodeDefs s) (encodeChoreography c),
-   [(v, pid) | pid <- collectPids s c, (v, c) <- defs],
+   [(v, pid) | (v, c') <- defs, pid <- collectPids s c'],
    collectPids s c)
 
 -- Decode
@@ -220,7 +220,7 @@ decodeNetwork pids n =
 
 decodeDefs :: [(RecVar, Pid)] -> E.DefSetB -> BDefSet e b
 decodeDefs vs s =
-  BDefSet $ [(p, decodeBehaviour $ s $ cast $ encodeProd p) | p@(v, pid) <- vs]
+  BDefSet $ [(v, decodeBehaviour $ s $ cast $ encodeProd v) | v <- vs]
 
 decodeProgram :: [(RecVar, Pid)] -> [Pid] -> E.Program0 -> BProgram e b
 decodeProgram vs pids (E.Pair s n) =
@@ -336,14 +336,14 @@ instance (PPrint e, PPrint b) => PPrint (Behaviour e b) where
     (src ++ "&{\n" ++
      (indent 2 $
        ("left" ++ (case left of
-                    Just (ann, b) -> case b of
+                    Just (ann, b') -> case b' of
                       BEnd -> ": ∅;\n"
-                      b -> format ann ++ ":\n" ++ (indent 2 $ format b)
+                      b'' -> format ann ++ ":\n" ++ (indent 2 $ format b'')
                     Nothing -> ": ∅;\n") ++
         "right" ++ (case right of
-                     Just (ann, b) -> case b of
+                     Just (ann, b') -> case b' of
                        BEnd -> ": ∅;\n"
-                       b -> format ann ++ ":\n" ++ (indent 2 $ format b)
+                       b'' -> format ann ++ ":\n" ++ (indent 2 $ format b'')
                      Nothing -> ": ∅;\n"))) ++
       "}\n")
   format (BCond ex b1 b2) =
@@ -367,6 +367,7 @@ plus :: Val -> Val -> Val
 plus (IntVal x) (IntVal y) = IntVal $ x + y
 plus _ _ = error "Cannot add non-integer values"
 
+lambda :: Expr
 lambda = (Apply
           (Apply
            (Lambda (Var "x")
@@ -391,6 +392,7 @@ lambda = (Apply
     client.write("unauthenticated");
 -}
 
+auth :: CProgram Expr BExpr
 auth = let ip = Pid "Ip"
            s = Pid "Server"
            c = Pid "Client"
@@ -402,8 +404,14 @@ auth = let ip = Pid "Ip"
            c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a CEnd)
            c3 = Interaction (Com c (Ref credentials) ip credentials) a (CCond ip (BExpr $ Lit $ BoolVal True) c1 c2)
      in CProgram (CDefSet [], c3)
+
+authc :: Choreography Expr BExpr
 authc = let CProgram (_, c) = auth in c
+
+authb :: BProgram Expr BExpr
 authb = epp auth
+
+authn :: Network Expr BExpr
 authn = let BProgram (_, n) = authb in n
 
 -- Jolie
@@ -420,9 +428,6 @@ instance PPrint JolieExpr where
 
 instance PPrint JolieBExpr where
   format (JolieBExpr e) = format e
-
-header :: String
-header = "type Msg: any { ? }\n" ++ "type Label: string {}"
 
 data JolieOp
   = JolieCom String
@@ -469,21 +474,24 @@ mkService :: JolieDefSet -> Int -> (Pid, JolieBehaviour) -> Service
 mkService (BDefSet defs) port (pid, b) = mk S.empty (serviceDefault { sPid = pid, sPort = port, sBehaviour = b }) b
   where
     mk _ s BEnd = s
-    mk seen s (Send dst _ ann b) = mk seen (s { sOutputs = S.insert dst $ sOutputs s }) b
-    mk seen s (Recv src _ ann b) = mk seen (addOp s JolieCom $ makeCom src ann) b
-    mk seen s (Choose dst _ ann b) = mk seen (s { sOutputs = S.insert dst $ sOutputs s }) b
+    mk seen s (Send dst _ _ b') = mk seen (s { sOutputs = S.insert dst $ sOutputs s }) b'
+    mk seen s (Recv src _ ann b') = mk seen (addOp s JolieCom $ makeCom src ann) b'
+    mk seen s (Choose dst _ _ b') = mk seen (s { sOutputs = S.insert dst $ sOutputs s }) b'
     mk seen s (Offer src left right) = serviceUnion (branch seen s src CLeft left) (branch seen s src CRight right)
     mk seen s (BCond _ b1 b2) = serviceUnion (mk seen s b1) (mk seen s b2)
     mk seen s (BCall v)
       | S.member v seen = s
-      | otherwise = mk (S.insert v seen) s b
-      where Just b = L.lookup v defs
+      | otherwise = mk (S.insert v seen) s b'
+      where
+        b' = case L.lookup v defs of
+          Just b'' -> b''
+          Nothing -> error $ "Definition doesn't exist: " ++ show v
 
     branch _ s _ _ Nothing = s
-    branch seen s src l (Just (ann, b)) = mk seen (addOp s JolieSel $ makeSel l src ann) b
+    branch seen s src l (Just (ann, b')) = mk seen (addOp s JolieSel $ makeSel l src ann) b'
 
 collectServices :: JolieProgram -> M.Map Pid Service
-collectServices p@(BProgram (defs, Network n)) = foldr f M.empty $ zip [8080..] n
+collectServices (BProgram (defs, Network n)) = foldr f M.empty $ zip [8080..] n
   where
     f (port, proc@(pid, _)) m = M.insert pid (mkService defs port proc) m
 
@@ -529,28 +537,28 @@ compileBehaviour :: (PPrint e, PPrint b) => Pid -> Behaviour e b -> String
 compileBehaviour pid b = compile b
   where
     compile BEnd = ""
-    compile (Send (Pid dst) ex ann b) =
+    compile (Send (Pid dst) ex ann b') =
       (makeCom pid ann) ++ "@" ++ dst ++
-      "( " ++ format ex ++ " )\n" ++ compile b
-    compile (Recv src (Var v) ann b) =
-      (makeCom src ann) ++ "( " ++ v ++ " )\n" ++ compile b
-    compile (Choose (Pid dst) l ann b) =
-      (makeSel l pid ann) ++ "@" ++ dst ++ "()\n" ++ compile b
+      "( " ++ format ex ++ " )\n" ++ compile b'
+    compile (Recv src (Var v) ann b') =
+      (makeCom src ann) ++ "( " ++ v ++ " )\n" ++ compile b'
+    compile (Choose (Pid dst) l ann b') =
+      (makeSel l pid ann) ++ "@" ++ dst ++ "()\n" ++ compile b'
     compile (Offer src left right) =
       (slap $ catMaybes [branch src CLeft left, branch src CRight right]) ++
       "\n"
     compile (BCond ex b1 b2) =
       "if ( " ++ format ex ++ " ) {\n" ++ (indent 4 $ compile b1) ++
       "} else {\n" ++ (indent 4 $ compile b2) ++ "}\n"
-    compile (BCall (RecVar v, Pid pid)) = v ++ "_" ++ pid ++ "\n"
+    compile (BCall (RecVar v, Pid pid')) = v ++ "_" ++ pid' ++ "\n"
 
     branch _ _ Nothing = Nothing
-    branch src l (Just (ann, b))
+    branch src l (Just (ann, b'))
       | null c = Nothing
       | otherwise = Just $ ("[ " ++ (makeSel l src ann) ++ "() ] {\n" ++
                             (indent 4 c) ++ "}")
       where
-        c = compileBehaviour pid b
+        c = compileBehaviour pid b'
 
 compileDefinition :: (PPrint e, PPrint b) => RecVar -> Pid -> Behaviour e b -> String
 compileDefinition (RecVar v) pid'@(Pid pid) b =
