@@ -521,7 +521,9 @@ compileOutputPort s = let Pid pid = sPid s in
 
 compileOutputPorts :: M.Map Pid Service -> Service -> String
 compileOutputPorts smap s = join "\n\n" $ map compileOutputPort outputs
-  where outputs = [fromJust $ M.lookup pid smap | pid <- S.toList $ sOutputs s]
+  where
+    -- NOTE: A service might not be found in case it was specified as external.
+    outputs = catMaybes [M.lookup pid smap | pid <- S.toList $ sOutputs s]
 
 compilePorts :: M.Map Pid Service -> Service -> String
 compilePorts smap s = compileInputPort s ++ "\n\n" ++ compileOutputPorts smap s
