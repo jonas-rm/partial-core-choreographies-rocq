@@ -8,9 +8,31 @@ import qualified GHC.Base
 
 import qualified EPP as E
 
--- Expressions
+-- Util
+
+indent :: Int -> String -> String
+indent d str =
+  (L.intercalate "\n" [replicate d ' ' ++ l | l <- lines str] ++
+   if length str /= 0 && last str == '\n' then "\n" else "")
+
+join :: String -> [String] -> String
+join = L.intercalate
+
+slap :: [String] -> String
+slap = join "\n"
+
+slop :: [String] -> String
+slop = join "\n" . L.delete ""
+
+-- Fixed Types
 
 newtype Var = Var String deriving (Show, Eq)
+newtype Pid = Pid String deriving (Show, Eq, Ord)
+newtype RecVar = RecVar String deriving (Show, Eq, Ord)
+data Label = CLeft | CRight deriving (Show, Eq)
+newtype Ann = Ann String deriving (Show, Eq)
+
+-- Lambda Calculus
 
 newtype Env = Env [(Var, Val)] deriving Show
 
@@ -23,7 +45,7 @@ bind (Env e) v x = Env $ (v, x):e
 ref :: Env -> Var -> Val
 ref (Env e) v = case L.lookup v e of
   Just x -> x
-  Nothing -> error "Variable doesn't exist"
+  Nothing -> error $ "Variable doesn't exist: " ++ show v
 
 data Val
   = BoolVal Bool
@@ -68,24 +90,19 @@ eval :: Env -> Expr -> Val
 eval _ (Lit x) = x
 eval e (Ref v) = ref e v
 eval e (Lambda v b) = FunVal e v b
-eval e (Apply f x) = case eval e f of
+eval e (Apply f x) = let r = eval e f in case r of
   FunVal e' v b -> eval (bind e' v $ eval e x) b
-  _ -> error "Cannot apply a non-function"
+  _ -> error $ "Cannot apply a non-function: " ++ show r
 eval e (Foreign f x y) = f (eval e x) (eval e y)
 
-newtype BExpr = BExpr Expr deriving Show
+newtype BExpr = BExpr Expr deriving (Show, Eq)
 
 beval :: Env -> BExpr -> Bool
-beval e (BExpr ex) = case eval e ex of
+beval e (BExpr ex) = let r = eval e ex in case r of
   BoolVal b -> b
-  _ -> error "Expression did not evaluate to a boolean"
+  _ -> error $ "Expression did not evaluate to a boolean: " ++ show r
 
 -- Choreographies
-
-newtype Pid = Pid String deriving (Show, Eq, Ord)
-newtype RecVar = RecVar String deriving (Show, Eq, Ord)
-data Label = CLeft | CRight deriving (Show, Eq)
-newtype Ann = Ann String deriving (Show, Eq)
 
 data Eta e
   = Com Pid e Pid Var
@@ -142,30 +159,34 @@ encodeChoreography (CCall v) = E.Call (cast v)
 encodeChoreography (RtCall v pids c) =
   E.RT_Call (cast v) (encodeList $ map cast pids) (encodeChoreography c)
 
-collectPids :: CDefSet e b -> Choreography e b -> S.Set Pid
-collectPids (CDefSet defs) c = rec S.empty c
+collectPids :: CDefSet e b -> Choreography e b -> [Pid]
+collectPids (CDefSet defs) c = S.toList $ collect S.empty c
   where
-    rec _ CEnd = S.empty
-    rec seen (Interaction (Com src _ dst _) _ c) = S.fromList [src, dst] `S.union` rec seen c
-    rec seen (Interaction (Sel src dst _) _ c) = S.fromList [src, dst] `S.union` rec seen c
-    rec seen (CCond pid _ c1 c2) = S.singleton pid `S.union` rec seen c1 `S.union` rec seen c2
-    rec seen (CCall v'@(RecVar v))
+    collect _ CEnd = S.empty
+    collect seen (Interaction (Com src _ dst _) _ c) =
+      S.fromList [src, dst] `S.union` collect seen c
+    collect seen (Interaction (Sel src dst _) _ c) =
+      S.fromList [src, dst] `S.union` collect seen c
+    collect seen (CCond pid _ c1 c2) =
+      S.singleton pid `S.union` collect seen c1 `S.union` collect seen c2
+    collect seen (CCall v'@(RecVar v))
       | S.member v' seen = S.empty
       | otherwise = case L.lookup v' defs of
-        Just c -> rec (S.insert v' seen) c
+        Just c -> collect (S.insert v' seen) c
         Nothing -> error $ "Definition doesn't exist: " ++ show v'
-    rec seen (RtCall _ pids c) = error "Runtime term encountered"
+    collect seen (RtCall _ pids c) = error "Runtime term encountered"
 
 encodeDefs :: CDefSet e b -> E.DefSet
-encodeDefs s@(CDefSet defs) = \v -> let d = cast v :: RecVar in case L.lookup d defs of
-  Just c -> E.Pair (encodeList $ map cast $ S.toList $ collectPids s c) (encodeChoreography c)
-  Nothing -> error $ "Definition doesn't exist: " ++ show d
+encodeDefs s@(CDefSet defs) = \v -> let d = cast v :: RecVar in
+  case L.lookup d defs of
+    Just c -> E.Pair (encodeList $ map cast $ collectPids s c) (encodeChoreography c)
+    Nothing -> error $ "Definition doesn't exist: " ++ show d
 
 encodeProgram :: CProgram e b -> (E.Program, [(RecVar, Pid)], [Pid])
 encodeProgram p@(CProgram (s@(CDefSet defs), c)) =
   (E.Pair (encodeDefs s) (encodeChoreography c),
-   [(v, pid) | pid <- S.toList $ collectPids s c, (v, c) <- defs],
-   S.toList $ collectPids s c)
+   [(v, pid) | pid <- collectPids s c, (v, c) <- defs],
+   collectPids s c)
 
 -- Decode
 
@@ -250,91 +271,97 @@ epp p = decodeProgram vs pids $ E.epp sig $ p'
 
 -- Pretty-printing
 
-class Format a where
+class PPrint a where
   format :: a -> String
 
-instance Format Expr where
+  pprint :: a -> IO ()
+  pprint = putStrLn . format
+
+instance PPrint Expr where
   format (Lit x) = show x
   format (Ref (Var v)) = v
   format (Lambda (Var v) b) = "\\" ++ v ++ " -> " ++ format b
   format (Apply f x) = "(" ++ format f ++ ") (" ++ format x ++ ")"
   format (Foreign _ x y) = "#<F> (" ++ format x ++ ") (" ++ format y ++ ")"
 
-instance Format BExpr where
+instance PPrint BExpr where
   format (BExpr ex) = format ex
 
-formatLabel :: Label -> String
-formatLabel CLeft = "left"
-formatLabel CRight = "right"
+instance PPrint Label where
+  format CLeft = "left"
+  format CRight = "right"
 
-formatAnn :: Ann -> String
-formatAnn (Ann "") = ""
-formatAnn (Ann ann) = " {" ++ ann ++ "}"
+instance PPrint Ann where
+  format (Ann "") = ""
+  format (Ann ann) = " {" ++ ann ++ "}"
 
-formatChoreography :: (Format e, Format b) => Int -> Choreography e b -> String
-formatChoreography d CEnd = ""
-formatChoreography d (Interaction (Com (Pid src) ex (Pid dst) (Var v)) ann c) =
-  (replicate d ' ' ++ src ++ ".(" ++ format ex ++ ") -> " ++ dst ++ "." ++ v ++
-   formatAnn ann ++ ";\n" ++ formatChoreography d c)
-formatChoreography d (Interaction (Sel (Pid src) (Pid dst) l) ann c) =
-  (replicate d ' ' ++ src ++ " -> " ++ dst ++
-   "[" ++ formatLabel l ++ "]" ++ formatAnn ann ++ ";\n" ++
-   formatChoreography d c)
-formatChoreography d (CCond (Pid p) ex c1 c2) =
-  (replicate d ' ' ++ "if " ++ p ++ ".(" ++ format ex ++ ") then\n" ++
-   formatChoreography (d + 2) c1 ++
-   replicate d ' ' ++ "else\n" ++
-   formatChoreography (d + 2) c2)
-formatChoreography d (CCall (RecVar v)) = v ++ ";\n"
-formatChoreography d (RtCall (RecVar v) pids c) =
-  let ps = map (\(Pid p) -> p) pids in
-    (replicate d ' ' ++ v ++ "(" ++ L.intercalate ", " ps ++ ");\n" ++
-     formatChoreography d c)
+instance (PPrint e, PPrint b) => PPrint (Choreography e b) where
+  format CEnd = ""
+  format (Interaction (Com (Pid src) ex (Pid dst) (Var v)) ann c) =
+    (src ++ ".(" ++ format ex ++ ") -> " ++ dst ++ "." ++ v ++
+     format ann ++ ";\n" ++ format c)
+  format (Interaction (Sel (Pid src) (Pid dst) l) ann c) =
+    (src ++ " -> " ++ dst ++ "[" ++ format l ++ "]" ++
+     format ann ++ ";\n" ++ format c)
+  format (CCond (Pid p) ex c1 c2) =
+    ("if " ++ p ++ ".(" ++ format ex ++ ") then\n" ++ (indent 2 $ format c1) ++
+     "else\n" ++ (indent 2 $ format c2))
+  format (CCall (RecVar v)) = v ++ ";\n"
+  format (RtCall (RecVar v) pids c) =
+    let ps = [p | Pid p <- pids] in
+      v ++ "(" ++ join ", " ps ++ ");\n" ++ format c
 
-instance (Format e, Format b) => Format (Choreography e b) where
-  format = formatChoreography 0
+section :: PPrint a => String -> a -> String
+section header x = header ++ ":\n" ++ (indent 2 $ format x)
 
-formatBehaviour :: (Format e, Format b) => Int -> (Behaviour e b) -> String
-formatBehaviour _ BEnd = ""
-formatBehaviour d (Send (Pid dst) ex ann b) =
-  (replicate d ' ' ++ dst ++ "!(" ++ format ex ++ ")" ++
-   formatAnn ann ++ ";\n" ++ formatBehaviour d b)
-formatBehaviour d (Recv (Pid src) (Var v) ann b) =
-  (replicate d ' ' ++ src ++ "?" ++ v ++
-   formatAnn ann ++ ";\n" ++ formatBehaviour d b)
-formatBehaviour d (Choose (Pid dst) l ann b) =
-  (replicate d ' ' ++ dst ++ "⊕" ++ formatLabel l ++
-   formatAnn ann ++ ";\n" ++ formatBehaviour d b)
-formatBehaviour d (Offer (Pid src) left right) =
-  (replicate d ' ' ++ src ++ "&{\n" ++
-   replicate (d + 2) ' ' ++
-   "left" ++ (case left of
-                 Just (ann, b) -> case b of
-                   BEnd -> ": ∅;\n"
-                   b -> formatAnn ann ++ ":\n" ++ formatBehaviour (d + 4) b
-                 Nothing -> ": ∅;\n") ++
-   replicate (d + 2) ' ' ++ "\n" ++ replicate (d + 2) ' ' ++
-   "right" ++ (case right of
-                  Just (ann, b) -> case b of
-                    BEnd -> ": ∅;\n"
-                    b -> formatAnn ann ++ ":\n" ++ formatBehaviour (d + 4) b
-                  Nothing -> ": ∅;\n") ++
-   replicate d ' ' ++ "}\n")
-formatBehaviour d (BCond ex b1 b2) =
-  (replicate d ' ' ++ "if (" ++ format ex ++ ") then\n" ++
-   formatBehaviour (d + 2) b1 ++
-   replicate d ' ' ++ "else\n" ++
-   formatBehaviour (d + 2) b2)
-formatBehaviour d (BCall (RecVar v, Pid pid)) =
-  replicate d ' ' ++ v ++ "_" ++ pid ++ ";\n"
+instance (PPrint e, PPrint b) => PPrint (CDefSet e b) where
+  format (CDefSet defs) = slap [section v c | (RecVar v, c) <- defs]
 
-instance (Format e, Format b) => Format (Behaviour e b) where
-  format = formatBehaviour 0
+instance (PPrint e, PPrint b) => PPrint (CProgram e b) where
+  format (CProgram (CDefSet defs, c)) =
+    format $ CDefSet $ defs ++ [(RecVar "main", c)]
 
-instance (Format e, Format b) => Format (Network e b) where
-  format (Network n) = L.intercalate "\n" $ [pid ++ ":\n" ++ formatBehaviour 2 b | (Pid pid, b) <- n]
+instance (PPrint e, PPrint b) => PPrint (Behaviour e b) where
+  format BEnd = ""
+  format (Send (Pid dst) ex ann b) =
+    (dst ++ "!(" ++ format ex ++ ")" ++
+     format ann ++ ";\n" ++ format b)
+  format (Recv (Pid src) (Var v) ann b) =
+    (src ++ "?" ++ v ++
+     format ann ++ ";\n" ++ format b)
+  format (Choose (Pid dst) l ann b) =
+    (dst ++ "⊕" ++ format l ++
+     format ann ++ ";\n" ++ format b)
+  format (Offer (Pid src) left right) =
+    (src ++ "&{\n" ++
+     (indent 2 $
+       ("left" ++ (case left of
+                    Just (ann, b) -> case b of
+                      BEnd -> ": ∅;\n"
+                      b -> format ann ++ ":\n" ++ (indent 2 $ format b)
+                    Nothing -> ": ∅;\n") ++
+        "right" ++ (case right of
+                     Just (ann, b) -> case b of
+                       BEnd -> ": ∅;\n"
+                       b -> format ann ++ ":\n" ++ (indent 2 $ format b)
+                     Nothing -> ": ∅;\n"))) ++
+      "}\n")
+  format (BCond ex b1 b2) =
+    ("if (" ++ format ex ++ ") then\n" ++ (indent 2 $ format b1) ++
+     "else\n" ++ (indent 2 $ format b2))
+  format (BCall (RecVar v, Pid pid)) = v ++ "_" ++ pid ++ ";\n"
 
--- Lambda Example
+instance (PPrint e, PPrint b) => PPrint (BDefSet e b) where
+  format (BDefSet defs) =
+    slap [section (v ++ "_" ++ pid) c | ((RecVar v, Pid pid), c) <- defs]
+
+instance (PPrint e, PPrint b) => PPrint (Network e b) where
+  format (Network n) = slap [section pid b | (Pid pid, b) <- n]
+
+instance (PPrint e, PPrint b) => PPrint (BProgram e b) where
+  format (BProgram (defs, n)) = slop [format defs, format n]
+
+-- Lambda Calculus Example
 
 plus :: Val -> Val -> Val
 plus (IntVal x) (IntVal y) = IntVal $ x + y
@@ -388,17 +415,14 @@ type JolieBehaviour = Behaviour JolieExpr JolieBExpr
 type JolieDefSet = BDefSet JolieExpr JolieBExpr
 type JolieProgram = BProgram JolieExpr JolieBExpr
 
-instance Format JolieExpr where
+instance PPrint JolieExpr where
   format (JolieExpr e) = e
 
-instance Format JolieBExpr where
+instance PPrint JolieBExpr where
   format (JolieBExpr e) = format e
 
 header :: String
 header = "type Msg: any { ? }\n" ++ "type Label: string {}"
-
-indent :: Int -> String -> String
-indent d = L.intercalate "\n" . map (\l -> replicate d ' ' ++ l) . lines
 
 data JolieOp
   = JolieCom String
@@ -430,7 +454,7 @@ makeCom :: Pid -> Ann -> String
 makeCom pid ann = makeOp "com" pid ann
 
 makeSel :: Label -> Pid -> Ann -> String
-makeSel l pid ann = makeOp (formatLabel l) pid ann
+makeSel l pid ann = makeOp (format l) pid ann
 
 addOp :: Service -> (String -> JolieOp) -> String -> Service
 addOp s ctor op = s { sOps = S.insert (ctor op) $ sOps s }
@@ -442,21 +466,21 @@ serviceUnion s1 s2 = s1
   }
 
 mkService :: JolieDefSet -> Int -> (Pid, JolieBehaviour) -> Service
-mkService (BDefSet defs) port (pid, b) = rec S.empty (serviceDefault { sPid = pid, sPort = port, sBehaviour = b }) b
+mkService (BDefSet defs) port (pid, b) = mk S.empty (serviceDefault { sPid = pid, sPort = port, sBehaviour = b }) b
   where
-    rec _ s BEnd = s
-    rec seen s (Send dst _ ann b) = rec seen (s { sOutputs = S.insert dst $ sOutputs s }) b
-    rec seen s (Recv src _ ann b) = rec seen (addOp s JolieCom $ makeCom src ann) b
-    rec seen s (Choose dst _ ann b) = rec seen (s { sOutputs = S.insert dst $ sOutputs s }) b
-    rec seen s (Offer src left right) = serviceUnion (branch seen s src CLeft left) (branch seen s src CRight right)
-    rec seen s (BCond _ b1 b2) = serviceUnion (rec seen s b1) (rec seen s b2)
-    rec seen s (BCall v)
+    mk _ s BEnd = s
+    mk seen s (Send dst _ ann b) = mk seen (s { sOutputs = S.insert dst $ sOutputs s }) b
+    mk seen s (Recv src _ ann b) = mk seen (addOp s JolieCom $ makeCom src ann) b
+    mk seen s (Choose dst _ ann b) = mk seen (s { sOutputs = S.insert dst $ sOutputs s }) b
+    mk seen s (Offer src left right) = serviceUnion (branch seen s src CLeft left) (branch seen s src CRight right)
+    mk seen s (BCond _ b1 b2) = serviceUnion (mk seen s b1) (mk seen s b2)
+    mk seen s (BCall v)
       | S.member v seen = s
-      | otherwise = rec (S.insert v seen) s b
+      | otherwise = mk (S.insert v seen) s b
       where Just b = L.lookup v defs
 
     branch _ s _ _ Nothing = s
-    branch seen s src l (Just (ann, b)) = rec seen (addOp s JolieSel $ makeSel l src ann) b
+    branch seen s src l (Just (ann, b)) = mk seen (addOp s JolieSel $ makeSel l src ann) b
 
 collectServices :: JolieProgram -> M.Map Pid Service
 collectServices p@(BProgram (defs, Network n)) = foldr f M.empty $ zip [8080..] n
@@ -464,15 +488,16 @@ collectServices p@(BProgram (defs, Network n)) = foldr f M.empty $ zip [8080..] 
     f (port, proc@(pid, _)) m = M.insert pid (mkService defs port proc) m
 
 compileInterface :: Service -> String
-compileInterface s = ("interface " ++ pid ++ "Api {\n" ++
-                      replicate 4 ' ' ++ "OneWay:\n" ++
-                      L.intercalate ",\n" (map compileOp $ S.toList $ sOps s) ++
-                      "\n}")
+compileInterface s =
+  ("interface " ++ pid ++ "Api {\n" ++
+    (indent 4 $ "OneWay:\n" ++
+      (indent 4 $ L.intercalate ",\n" (map compileOp $ S.toList $ sOps s))) ++
+    "\n}")
   where
     Pid pid = sPid s
-    compileOp o = replicate 8 ' ' ++ (case o of
+    compileOp o = case o of
       JolieCom name -> name ++ "( Msg )"
-      JolieSel name -> name ++ "( Label )")
+      JolieSel name -> name ++ "( Label )"
 
 compileLocation :: Service -> String
 compileLocation s = let Pid pid = sPid s in
@@ -502,34 +527,28 @@ branchAnn left right = listToMaybe $ catMaybes $ map f $ [left, right]
     f Nothing = Nothing
 
 compileBehaviour :: Service -> String
-compileBehaviour s = "main {\n" ++ (indent 4 $ rec 0 $ sBehaviour s) ++ "\n}"
+compileBehaviour s = "main {\n" ++ (indent 4 $ compile $ sBehaviour s) ++ "\n}"
   where
-    rec _ BEnd = ""
-    rec d (Send (Pid dst) ex ann b) =
-      (replicate d ' ' ++ (makeCom (sPid s) ann) ++ "@" ++ dst ++
-       "( " ++ format ex ++ " );\n" ++ rec d b)
-    rec d (Recv src (Var v) ann b) =
-      (replicate d ' ' ++ (makeCom src ann) ++ "( " ++ v ++ " );\n" ++
-       rec d b)
-    rec d (Choose (Pid dst) l ann b) =
-      (replicate d ' ' ++ (makeSel l (sPid s) ann) ++ "@" ++ dst ++
-       "();\n" ++ rec d b)
-    rec d (Offer src left right) =
-      (L.intercalate "\n" $ catMaybes [branch d src CLeft left, branch d src CRight right]) ++ "\n"
-    rec d (BCond ex b1 b2) =
-      (replicate d ' ' ++ "if ( " ++ format ex ++ " ) {\n" ++
-       rec (d + 4) b1 ++
-       replicate d ' ' ++ "} else {\n" ++
-       rec (d + 4) b2
-       ++ "}")
-    rec d (BCall (RecVar v, Pid pid)) =
-      replicate d ' ' ++ v ++ "_" ++ pid ++ ";\n"
+    compile BEnd = ""
+    compile (Send (Pid dst) ex ann b) =
+      (makeCom (sPid s) ann) ++ "@" ++ dst ++
+       "( " ++ format ex ++ " );\n" ++ compile b
+    compile (Recv src (Var v) ann b) =
+      (makeCom src ann) ++ "( " ++ v ++ " );\n" ++ compile b
+    compile (Choose (Pid dst) l ann b) =
+      (makeSel l (sPid s) ann) ++ "@" ++ dst ++ "();\n" ++ compile b
+    compile (Offer src left right) =
+      ((slap $ catMaybes [branch src CLeft left, branch src CRight right])
+       ++ "\n")
+    compile (BCond ex b1 b2) =
+      ("if ( " ++ format ex ++ " ) {\n" ++ (indent 4 $ compile b1) ++
+       "} else {\n" ++ (indent 4 $ compile b2) ++ "}")
+    compile (BCall (RecVar v, Pid pid)) = v ++ "_" ++ pid ++ ";\n"
 
-    branch :: Int -> Pid -> Label -> Maybe (Ann, JolieBehaviour) -> Maybe String
-    branch _ _ _ Nothing = Nothing
-    branch d pid l (Just (ann, b)) = Just $ (replicate d ' ' ++ "[ " ++
-                                             (makeSel l pid ann) ++ "() ] {\n" ++
-                                             rec (d + 4) b ++ "}")
+    branch _ _ Nothing = Nothing
+    branch pid l (Just (ann, b)) =
+      Just $ ("[ " ++ (makeSel l pid ann) ++ "() ] {\n" ++
+              (indent 4 $ compile b) ++ "}")
 
 compileBody :: M.Map Pid Service -> Service -> String
 compileBody smap s = let Pid pid = sPid s in
@@ -583,7 +602,7 @@ recvar = let ip = Pid "Ip"
              c3 = Interaction (Com c credsRef ip creds) a (CCond ip cond c1 c2)
              x = RecVar "X"
              c4 = CCall x
-         in CProgram (CDefSet [(x, c3), (RecVar "Y", c3)], c4)
+         in CProgram (CDefSet [(x, c3)], c4)
 recvarc = let CProgram (_, c) = recvar in c
 recvarb = epp recvar
 recvarn = let BProgram (_, n) = recvarb in n
