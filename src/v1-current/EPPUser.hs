@@ -526,46 +526,58 @@ branchAnn left right = listToMaybe $ catMaybes $ map f $ [left, right]
     f (Just (Ann a, _)) = Just a
     f Nothing = Nothing
 
-compileBehaviour :: Service -> String
-compileBehaviour s = "main {\n" ++ (indent 4 $ compile $ sBehaviour s) ++ "\n}"
+compileBehaviour :: (PPrint e, PPrint b) => Pid -> Behaviour e b -> String
+compileBehaviour pid b = compile b
   where
     compile BEnd = ""
     compile (Send (Pid dst) ex ann b) =
-      (makeCom (sPid s) ann) ++ "@" ++ dst ++
+      (makeCom pid ann) ++ "@" ++ dst ++
        "( " ++ format ex ++ " );\n" ++ compile b
     compile (Recv src (Var v) ann b) =
       (makeCom src ann) ++ "( " ++ v ++ " );\n" ++ compile b
     compile (Choose (Pid dst) l ann b) =
-      (makeSel l (sPid s) ann) ++ "@" ++ dst ++ "();\n" ++ compile b
+      (makeSel l pid ann) ++ "@" ++ dst ++ "();\n" ++ compile b
     compile (Offer src left right) =
       ((slap $ catMaybes [branch src CLeft left, branch src CRight right])
        ++ "\n")
     compile (BCond ex b1 b2) =
       ("if ( " ++ format ex ++ " ) {\n" ++ (indent 4 $ compile b1) ++
-       "} else {\n" ++ (indent 4 $ compile b2) ++ "}")
-    compile (BCall (RecVar v, Pid pid)) = v ++ "_" ++ pid ++ ";\n"
+       "} else {\n" ++ (indent 4 $ compile b2) ++ "}\n")
+    compile (BCall (RecVar v, Pid pid)) = v ++ "_" ++ pid ++ "();\n"
 
     branch _ _ Nothing = Nothing
     branch pid l (Just (ann, b)) =
       Just $ ("[ " ++ (makeSel l pid ann) ++ "() ] {\n" ++
               (indent 4 $ compile b) ++ "}")
 
-compileBody :: M.Map Pid Service -> Service -> String
-compileBody smap s = let Pid pid = sPid s in
+compileDefinition :: (PPrint e, PPrint b) => RecVar -> Pid -> Behaviour e b -> String
+compileDefinition (RecVar v) pid'@(Pid pid) b =
+  ("define " ++ v ++ "_" ++ pid ++ " {\n" ++
+   (indent 4 $ compileBehaviour pid' b) ++ "}")
+
+compileDefinitions :: (PPrint e, PPrint b) => BDefSet b e -> Service -> String
+compileDefinitions (BDefSet defs) s = slap [compileDefinition v pid b | ((v, pid), b) <- defs, pid == sPid s]
+
+compileMain :: (PPrint e, PPrint b) => Pid -> Behaviour e b -> String
+compileMain pid b = "main {\n" ++ (indent 4 $ compileBehaviour pid b) ++ "\n}"
+
+compileService :: (PPrint e, PPrint b) => M.Map Pid Service -> BDefSet b e -> Service -> String
+compileService smap defs s = let Pid pid = sPid s in
   ("service " ++ pid ++ " {\n" ++
    L.intercalate "\n\n" [indent 4 $ compileInputPort s,
                          indent 4 $ compileOutputPorts smap s,
-                         indent 4 $ compileBehaviour s] ++
+                         indent 4 $ compileDefinitions defs s,
+                         indent 4 $ compileMain (sPid s) (sBehaviour s)] ++
    "\n}")
 
 compileJolie :: JolieProgram -> String
-compileJolie p@(BProgram (_, Network n)) =
+compileJolie p@(BProgram (defs, Network n)) =
   L.intercalate "\n\n" $ [header] ++ interfaces ++ bodies
   where
     smap = collectServices p
     services = M.elems smap
     interfaces = map compileInterface services
-    bodies = map (compileBody smap) services
+    bodies = map (compileService smap defs) services
 
 -- Jolie Test
 
