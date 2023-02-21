@@ -21,8 +21,8 @@ join = L.intercalate
 slap :: [String] -> String
 slap = join "\n"
 
-slop :: [String] -> String
-slop = join "\n" . L.delete ""
+slop :: String -> [String] -> String
+slop sep = join sep . L.delete ""
 
 -- Fixed Types
 
@@ -301,7 +301,7 @@ instance (PPrint e, PPrint b) => PPrint (Choreography e b) where
     (src ++ ".(" ++ format ex ++ ") -> " ++ dst ++ "." ++ v ++
      format ann ++ ";\n" ++ format c)
   format (Interaction (Sel (Pid src) (Pid dst) l) ann c) =
-    (src ++ " -> " ++ dst ++ "[" ++ format l ++ "]" ++
+    (src ++ " -> " ++ dst ++ " [" ++ format l ++ "]" ++
      format ann ++ ";\n" ++ format c)
   format (CCond (Pid p) ex c1 c2) =
     ("if " ++ p ++ ".(" ++ format ex ++ ") then\n" ++ (indent 2 $ format c1) ++
@@ -359,7 +359,7 @@ instance (PPrint e, PPrint b) => PPrint (Network e b) where
   format (Network n) = slap [section pid b | (Pid pid, b) <- n]
 
 instance (PPrint e, PPrint b) => PPrint (BProgram e b) where
-  format (BProgram (defs, n)) = slop [format defs, format n]
+  format (BProgram (defs, n)) = slop "\n" [format defs, format n]
 
 -- Lambda Calculus Example
 
@@ -489,15 +489,14 @@ collectServices p@(BProgram (defs, Network n)) = foldr f M.empty $ zip [8080..] 
 
 compileInterface :: Service -> String
 compileInterface s =
-  ("interface " ++ pid ++ "Api {\n" ++
-    (indent 4 $ "OneWay:\n" ++
-      (indent 4 $ L.intercalate ",\n" (map compileOp $ S.toList $ sOps s))) ++
+  ("interface " ++ pid ++ "Api {\n" ++ "OneWay:\n" ++
+    (indent 4 $ join ",\n" (map compileOp $ S.toList $ sOps s)) ++
     "\n}")
   where
     Pid pid = sPid s
     compileOp o = case o of
       JolieCom name -> name ++ "( Msg )"
-      JolieSel name -> name ++ "( Label )"
+      JolieSel name -> name
 
 compileLocation :: Service -> String
 compileLocation s = let Pid pid = sPid s in
@@ -513,7 +512,7 @@ compileOutputPort s = let Pid pid = sPid s in
   "outputPort " ++ pid ++ " {\n" ++ (indent 4 $ compileLocation s) ++ "\n}"
 
 compileOutputPorts :: M.Map Pid Service -> Service -> String
-compileOutputPorts smap s = L.intercalate "\n\n" $ map compileOutputPort outputs
+compileOutputPorts smap s = join "\n\n" $ map compileOutputPort outputs
   where outputs = [fromJust $ M.lookup pid smap | pid <- S.toList $ sOutputs s]
 
 compilePorts :: M.Map Pid Service -> Service -> String
@@ -532,23 +531,26 @@ compileBehaviour pid b = compile b
     compile BEnd = ""
     compile (Send (Pid dst) ex ann b) =
       (makeCom pid ann) ++ "@" ++ dst ++
-       "( " ++ format ex ++ " );\n" ++ compile b
+      "( " ++ format ex ++ " )\n" ++ compile b
     compile (Recv src (Var v) ann b) =
-      (makeCom src ann) ++ "( " ++ v ++ " );\n" ++ compile b
+      (makeCom src ann) ++ "( " ++ v ++ " )\n" ++ compile b
     compile (Choose (Pid dst) l ann b) =
-      (makeSel l pid ann) ++ "@" ++ dst ++ "();\n" ++ compile b
+      (makeSel l pid ann) ++ "@" ++ dst ++ "()\n" ++ compile b
     compile (Offer src left right) =
-      ((slap $ catMaybes [branch src CLeft left, branch src CRight right])
-       ++ "\n")
+      (slap $ catMaybes [branch src CLeft left, branch src CRight right]) ++
+      "\n"
     compile (BCond ex b1 b2) =
-      ("if ( " ++ format ex ++ " ) {\n" ++ (indent 4 $ compile b1) ++
-       "} else {\n" ++ (indent 4 $ compile b2) ++ "}\n")
-    compile (BCall (RecVar v, Pid pid)) = v ++ "_" ++ pid ++ "();\n"
+      "if ( " ++ format ex ++ " ) {\n" ++ (indent 4 $ compile b1) ++
+      "} else {\n" ++ (indent 4 $ compile b2) ++ "}\n"
+    compile (BCall (RecVar v, Pid pid)) = v ++ "_" ++ pid ++ "\n"
 
     branch _ _ Nothing = Nothing
-    branch pid l (Just (ann, b)) =
-      Just $ ("[ " ++ (makeSel l pid ann) ++ "() ] {\n" ++
-              (indent 4 $ compile b) ++ "}")
+    branch src l (Just (ann, b))
+      | null c = Nothing
+      | otherwise = Just $ ("[ " ++ (makeSel l src ann) ++ "() ] {\n" ++
+                            (indent 4 c) ++ "}")
+      where
+        c = compileBehaviour pid b
 
 compileDefinition :: (PPrint e, PPrint b) => RecVar -> Pid -> Behaviour e b -> String
 compileDefinition (RecVar v) pid'@(Pid pid) b =
@@ -559,25 +561,25 @@ compileDefinitions :: (PPrint e, PPrint b) => BDefSet b e -> Service -> String
 compileDefinitions (BDefSet defs) s = slap [compileDefinition v pid b | ((v, pid), b) <- defs, pid == sPid s]
 
 compileMain :: (PPrint e, PPrint b) => Pid -> Behaviour e b -> String
-compileMain pid b = "main {\n" ++ (indent 4 $ compileBehaviour pid b) ++ "\n}"
+compileMain pid b = "main {\n" ++ (indent 4 $ compileBehaviour pid b) ++ "}"
 
 compileService :: (PPrint e, PPrint b) => M.Map Pid Service -> BDefSet b e -> Service -> String
 compileService smap defs s = let Pid pid = sPid s in
   ("service " ++ pid ++ " {\n" ++
-   L.intercalate "\n\n" [indent 4 $ compileInputPort s,
-                         indent 4 $ compileOutputPorts smap s,
-                         indent 4 $ compileDefinitions defs s,
-                         indent 4 $ compileMain (sPid s) (sBehaviour s)] ++
+   slop "\n\n" [indent 4 $ compileInputPort s,
+                indent 4 $ compileOutputPorts smap s,
+                indent 4 $ compileDefinitions defs s,
+                indent 4 $ compileMain (sPid s) (sBehaviour s)] ++
    "\n}")
 
 compileJolie :: JolieProgram -> String
 compileJolie p@(BProgram (defs, Network n)) =
-  L.intercalate "\n\n" $ [header] ++ interfaces ++ bodies
+  slop "\n\n" $ [header] ++ interfaces ++ services'
   where
     smap = collectServices p
     services = M.elems smap
     interfaces = map compileInterface services
-    bodies = map (compileService smap defs) services
+    services' = map (compileService smap defs) services
 
 -- Jolie Test
 
@@ -586,10 +588,10 @@ auth' = let ip = Pid "Ip"
             c = Pid "Client"
             a = Ann ""
             credsRef = JolieExpr "credentials"
-            makeToken = JolieExpr "makeToken()"
+            makeToken = JolieExpr "makeToken@Util()"
             creds = Var "credentials"
             token = Var "token"
-            cond = JolieBExpr $ JolieExpr "check( credentials )"
+            cond = JolieBExpr $ JolieExpr "check@Util( credentials )"
             c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s makeToken c token) a CEnd))
             c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a CEnd)
             c3 = Interaction (Com c credsRef ip creds) a (CCond ip cond c1 c2)
@@ -605,12 +607,12 @@ recvar = let ip = Pid "Ip"
              c = Pid "Client"
              a = Ann ""
              credsRef = JolieExpr "credentials"
-             makeToken = JolieExpr "makeToken()"
+             makeToken = JolieExpr "makeToken@Util()"
              creds = Var "credentials"
              token = Var "token"
-             cond = JolieBExpr $ JolieExpr "check( credentials )"
-             c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s makeToken c token) a CEnd))
-             c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a CEnd)
+             cond = JolieBExpr $ JolieExpr "check@Util( credentials )"
+             c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s makeToken c token) a c4))
+             c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a c4)
              c3 = Interaction (Com c credsRef ip creds) a (CCond ip cond c1 c2)
              x = RecVar "X"
              c4 = CCall x
