@@ -6,10 +6,11 @@
 
 \usepackage[T1]{fontenc}
 \usepackage{graphicx}
+\usepackage{todonotes}
 
 \begin{document}
 
-\title{Certified Compilation of Choreographies to Jolie\thanks{TODO: Thanks.}}
+\title{\texttt{cc2jolie}: Certified Projection of Choreographies to Jolie}
 
 % If the paper title is too long for the running head, you can set
 % an abbreviated paper title here
@@ -34,10 +35,26 @@
 
 \begin{abstract}
   % TODO: The abstract should briefly summarize the contents of the paper in 150--250 words.
-  \keywords{First keyword \and Second keyword \and Another keyword.}
+
+  \emph{Choreographic programming} is an emerging programming paradigm whose goal is to help programmers write correct distributed programs, such as security protocol implementations and distributed systems \todo{Too general?}.
+  Traditionally, the programmer is tasked with writing the implementation of each \emph{endpoint (role)} separately, having to take great care in matching all of the necessary send--receive communications.
+  Such an approach has been demonstrated to be cumbersome and error-prone \cite{LLLG16}, which is why choreographic programming instead seeks to solve the problem from a global viewpoint.
+  A \emph{choreography} is a specification of the overall behaviour of a distributed system, from which implementations of all of the involved endpoints can be generated automatically through a process known as \emph{endpoint projection (EPP)}.
+  Because it's impossible to write unmatched communications, choreographies give us the benefit of deadlock freedom by design.
+  Of course, this approach is only as correct as the choreographic compiler used, which is why there has been interest in formally verifying the correctness of such compilers.
+  For the first time we build a choreographic compiler to Jolie, using a formally verified EPP procedure that has been extracted from the Coq formalization of CC. \todo{Coq formalization of?}
+
+  \keywords{TODO: First keyword \and Second keyword \and Another keyword.}
 \end{abstract}
 
 \section{Introduction}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics{pipeline.drawio.pdf}
+  \caption{The pipeline of our CC compiler.}
+  \label{fig:pipeline}
+\end{figure}
 
 Test \cite{MGZ14}.
 
