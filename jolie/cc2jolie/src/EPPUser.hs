@@ -1,6 +1,12 @@
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
+
 module EPPUser where
 
-import Data.Maybe (catMaybes, listToMaybe)
+import Control.DeepSeq (NFData)
+import Control.Spoon (spoon)
+import Data.Maybe (fromJust, catMaybes, listToMaybe)
+import GHC.Generics (Generic)
+
 import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -25,15 +31,15 @@ slop sep = join sep . L.delete ""
 
 -- Fixed Types
 
-newtype Var = Var String deriving (Show, Eq)
-newtype Pid = Pid String deriving (Show, Eq, Ord)
-newtype RecVar = RecVar String deriving (Show, Eq, Ord)
-data Label = CLeft | CRight deriving (Show, Eq)
-newtype Ann = Ann String deriving (Show, Eq)
+newtype Var = Var String deriving (Show, Eq, Generic, NFData)
+newtype Pid = Pid String deriving (Show, Eq, Ord, Generic, NFData)
+newtype RecVar = RecVar String deriving (Show, Eq, Ord, Generic, NFData)
+data Label = CLeft | CRight deriving (Show, Eq, Generic, NFData)
+newtype Ann = Ann String deriving (Show, Eq, Generic, NFData)
 
 -- Lambda Calculus
 
-newtype Env = Env [(Var, Val)] deriving Show
+newtype Env = Env [(Var, Val)] deriving (Show, Generic, NFData)
 
 empty :: Env
 empty = Env []
@@ -51,6 +57,7 @@ data Val
   | IntVal Int
   | StringVal String
   | FunVal Env Var Expr
+  deriving (Generic, NFData)
 
 instance Show Val where
   show (BoolVal x) = show x
@@ -70,6 +77,7 @@ data Expr
   | Lambda Var Expr
   | Apply Expr Expr
   | Foreign (Val -> Val -> Val) Expr Expr
+  deriving (Generic, NFData)
 
 instance Show Expr where
   show (Lit x) = "Lit (" ++ show x ++ ")"
@@ -94,7 +102,7 @@ eval e (Apply f x) = let r = eval e f in case r of
   _ -> error $ "Cannot apply a non-function: " ++ show r
 eval e (Foreign f x y) = f (eval e x) (eval e y)
 
-newtype BExpr = BExpr Expr deriving (Show, Eq)
+newtype BExpr = BExpr Expr deriving (Show, Eq, Generic, NFData)
 
 beval :: Env -> BExpr -> Bool
 beval e (BExpr ex) = let r = eval e ex in case r of
@@ -106,7 +114,7 @@ beval e (BExpr ex) = let r = eval e ex in case r of
 data Eta e
   = Com Pid e Pid Var
   | Sel Pid Pid Label
-  deriving Show
+  deriving (Show, Generic, NFData)
 
 data Choreography e b
   = CEnd
@@ -114,10 +122,10 @@ data Choreography e b
   | CCond Pid b (Choreography e b) (Choreography e b)
   | CCall RecVar
   | RtCall RecVar [Pid] (Choreography e b)
-  deriving Show
+  deriving (Show, Generic, NFData)
 
-newtype CDefSet e b = CDefSet [(RecVar, Choreography e b)] deriving Show
-newtype CProgram e b = CProgram (CDefSet e b, Choreography e b) deriving Show
+newtype CDefSet e b = CDefSet [(RecVar, Choreography e b)] deriving (Show, Generic, NFData)
+newtype CProgram e b = CProgram (CDefSet e b, Choreography e b) deriving (Show, Generic, NFData)
 
 -- Processes
 
@@ -129,11 +137,11 @@ data Behaviour e b
   | Offer Pid (Maybe (Ann, (Behaviour e b))) (Maybe (Ann, (Behaviour e b)))
   | BCond b (Behaviour e b) (Behaviour e b)
   | BCall (RecVar, Pid)
-  deriving Show
+  deriving (Show, Generic, NFData)
 
-newtype BDefSet e b = BDefSet [((RecVar, Pid), Behaviour e b)] deriving Show
-newtype Network e b = Network [(Pid, Behaviour e b)] deriving Show
-newtype BProgram e b = BProgram (BDefSet e b, Network e b) deriving Show
+newtype BDefSet e b = BDefSet [((RecVar, Pid), Behaviour e b)] deriving (Show, Generic, NFData)
+newtype Network e b = Network [(Pid, Behaviour e b)] deriving (Show, Generic, NFData)
+newtype BProgram e b = BProgram (BDefSet e b, Network e b) deriving (Show, Generic, NFData)
 
 -- Encode
 
@@ -265,8 +273,8 @@ sig = E.Build_Signature (cast pid) (cast var) undefined undefined undefined (cas
 
 -- Projection
 
-epp :: CProgram e b -> BProgram e b
-epp p = decodeProgram vs pids $ E.epp sig $ p'
+epp :: (NFData e, NFData b) => CProgram e b -> Maybe (BProgram e b)
+epp p = spoon $ decodeProgram vs pids $ E.epp sig $ p'
   where (p', vs, pids) = encodeProgram p
 
 -- Pretty-printing
@@ -409,15 +417,15 @@ authc :: Choreography Expr BExpr
 authc = let CProgram (_, c) = auth in c
 
 authb :: BProgram Expr BExpr
-authb = epp auth
+authb = fromJust $ epp auth
 
 authn :: Network Expr BExpr
 authn = let BProgram (_, n) = authb in n
 
 -- Jolie
 
-data JolieExpr = JolieExpr String deriving Show
-data JolieBExpr = JolieBExpr JolieExpr deriving Show
+data JolieExpr = JolieExpr String deriving (Show, Generic, NFData)
+data JolieBExpr = JolieBExpr JolieExpr deriving (Show, Generic, NFData)
 
 type JolieBehaviour = Behaviour JolieExpr JolieBExpr
 type JolieDefSet = BDefSet JolieExpr JolieBExpr
@@ -576,57 +584,103 @@ compileMain pid b = "main {\n" ++ (indent 4 $ compileBehaviour pid b) ++ "}"
 compileService :: (PPrint e, PPrint b) => M.Map Pid Service -> BDefSet b e -> Service -> String
 compileService smap defs s = let Pid pid = sPid s in
   ("service " ++ pid ++ " {\n" ++
-   slop "\n\n" [indent 4 $ compileInputPort s,
+   slop "\n\n" [indent 4 $ "embed Util as Util",
+                indent 4 $ compileInputPort s,
                 indent 4 $ compileOutputPorts smap s,
                 indent 4 $ compileDefinitions defs s,
                 indent 4 $ compileMain (sPid s) (sBehaviour s)] ++
    "\n}")
 
-compileJolie :: JolieProgram -> String
-compileJolie p@(BProgram (defs, Network n)) =
-  slop "\n\n" $ [header] ++ interfaces ++ services'
+jolieHeader :: String
+jolieHeader =
+  "from .util import Util\n\n" ++
+  "type Msg: any { ? }\n" ++
+  "type Label: string {}"
+
+compileJolie :: String -> JolieProgram -> String
+compileJolie preface p@(BProgram (defs, _)) =
+  slop "\n\n" $ [jolieHeader, preface] ++ interfaces ++ services'
   where
     smap = collectServices p
     services = M.elems smap
     interfaces = map compileInterface services
     services' = map (compileService smap defs) services
 
+compileJolie' :: String -> [Pid] -> CProgram JolieExpr JolieBExpr -> Maybe String
+compileJolie' preface external p = spoon $ compileJolie preface p''
+  where
+    (p', vs, pids) = encodeProgram p
+    (BProgram (BDefSet defs, Network n)) = decodeProgram vs pids $ E.epp sig $ p'
+    -- NOTE: External processes are effectively bystanders that don't
+    -- participate in the choreography other than by being sent messages. This
+    -- means we don't send them any labels, which will in the general case make
+    -- the choreography unprojectable. Since the code of an external process is
+    -- provided elsewhere anyway, we remove them from the projected program.
+    --
+    -- The extracted EPP code is such that is raises an exception in the case of
+    -- an unprojectable choreography. However, laziness allows us to identify
+    -- fragments related to external processes (via Pids provided by the user)
+    -- and remove them from the program, before they've had a chance to be
+    -- computed and potentially throw an error.
+    p'' = BProgram (BDefSet $ [d | d@((_, pid), _) <- defs, not $ elem pid external],
+                    Network $ [d | d@(pid, _) <- n, not $ elem pid external])
+
 -- Jolie Test
 
-auth' = let ip = Pid "Ip"
+jolie :: CProgram JolieExpr JolieBExpr
+jolie = let ip = Pid "Ip"
             s = Pid "Server"
             c = Pid "Client"
-            a = Ann ""
-            credsRef = JolieExpr "credentials"
-            makeToken = JolieExpr "makeToken@Util()"
+            util = Pid "Util"
             creds = Var "credentials"
             token = Var "token"
+            tmp = Var "tmp"
+            a = Ann ""
+            creds' = JolieExpr "credentials"
+            makeToken = JolieExpr "makeToken@Util()"
+            token' = JolieExpr "token"
             cond = JolieBExpr $ JolieExpr "check@Util( credentials )"
-            c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s makeToken c token) a CEnd))
+            c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s makeToken c token) a (Interaction (Com c token' util tmp) (Ann "println") CEnd)))
             c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a CEnd)
-            c3 = Interaction (Com c credsRef ip creds) a (CCond ip cond c1 c2)
+            c3 = Interaction (Com c creds' ip creds) a (CCond ip cond c1 c2)
         in CProgram (CDefSet [], c3)
-authc' = let CProgram (_, c) = auth' in c
-authb' = epp auth'
-authn' = let BProgram (_, n) = authb' in n
+
+joliec :: Choreography JolieExpr JolieBExpr
+joliec = let CProgram (_, c) = jolie in c
+
+jolieb :: BProgram JolieExpr JolieBExpr
+jolieb = fromJust $ epp jolie
+
+jolien :: Network JolieExpr JolieBExpr
+jolien = let BProgram (_, n) = jolieb in n
 
 -- Jolie RecVar Test
 
-recvar = let ip = Pid "Ip"
-             s = Pid "Server"
-             c = Pid "Client"
-             a = Ann ""
-             credsRef = JolieExpr "credentials"
-             makeToken = JolieExpr "makeToken@Util()"
-             creds = Var "credentials"
-             token = Var "token"
-             cond = JolieBExpr $ JolieExpr "check@Util( credentials )"
-             c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s makeToken c token) a c4))
-             c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a c4)
-             c3 = Interaction (Com c credsRef ip creds) a (CCond ip cond c1 c2)
-             x = RecVar "X"
-             c4 = CCall x
+jolierec :: CProgram JolieExpr JolieBExpr
+jolierec = let ip = Pid "Ip"
+               s = Pid "Server"
+               c = Pid "Client"
+               util = Pid "Util"
+               creds = Var "credentials"
+               token = Var "token"
+               tmp = Var "tmp"
+               a = Ann ""
+               creds' = JolieExpr "credentials"
+               makeToken = JolieExpr "makeToken@Util()"
+               token' = JolieExpr "token"
+               cond = JolieBExpr $ JolieExpr "check@Util( credentials )"
+               c1 = Interaction (Sel ip s CLeft) (Ann "ann1") (Interaction (Sel ip c CLeft) a (Interaction (Com s makeToken c token) a (Interaction (Com c token' util tmp) (Ann "println") c4)))
+               c2 = Interaction (Sel ip s CRight) (Ann "ann2") (Interaction (Sel ip c CRight) a c4)
+               c3 = Interaction (Com c creds' ip creds) a (CCond ip cond c1 c2)
+               x = RecVar "X"
+               c4 = CCall x
          in CProgram (CDefSet [(x, c3)], c4)
-recvarc = let CProgram (_, c) = recvar in c
-recvarb = epp recvar
-recvarn = let BProgram (_, n) = recvarb in n
+
+jolierecc :: Choreography JolieExpr JolieBExpr
+jolierecc = let CProgram (_, c) = jolierec in c
+
+jolierecb :: BProgram JolieExpr JolieBExpr
+jolierecb = fromJust $ epp jolierec
+
+jolierecn :: Network JolieExpr JolieBExpr
+jolierecn = let BProgram (_, n) = jolierecb in n

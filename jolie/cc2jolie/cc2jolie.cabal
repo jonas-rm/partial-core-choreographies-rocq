@@ -28,6 +28,8 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
+    , deepseq
+    , spoon
   default-language: Haskell2010
 
 executable cc2jolie-exe
@@ -41,6 +43,8 @@ executable cc2jolie-exe
       base >=4.7 && <5
     , cc2jolie
     , containers
+    , deepseq
+    , spoon
   default-language: Haskell2010
 
 test-suite cc2jolie-test
@@ -55,4 +59,6 @@ test-suite cc2jolie-test
       base >=4.7 && <5
     , cc2jolie
     , containers
+    , deepseq
+    , spoon
   default-language: Haskell2010

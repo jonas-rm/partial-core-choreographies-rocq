@@ -20,6 +20,8 @@ description:         Please see the README
 dependencies:
 - base >= 4.7 && < 5
 - containers
+- deepseq
+- spoon
 
 ghc-options:
 - -Wall
