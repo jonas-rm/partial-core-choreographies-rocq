@@ -10,7 +10,7 @@
 
 \begin{document}
 
-\title{\texttt{cc2jolie}: Certified Projection of Choreographies to Jolie}
+\title{\texttt{cc2jolie}: Certified Compilation of Choreographies to Jolie}
 
 % If the paper title is too long for the running head, you can set
 % an abbreviated paper title here
@@ -36,18 +36,32 @@
 \begin{abstract}
   % TODO: The abstract should briefly summarize the contents of the paper in 150--250 words.
 
-  \emph{Choreographic programming} is an emerging programming paradigm whose goal is to help programmers write correct distributed programs, such as security protocol implementations and distributed systems \todo{Too general?}.
-  Traditionally, the programmer is tasked with writing the implementation of each \emph{endpoint (role)} separately, having to take great care in matching all of the necessary send--receive communications.
-  Such an approach has been demonstrated to be cumbersome and error-prone \cite{LLLG16}, which is why choreographic programming instead seeks to solve the problem from a global viewpoint.
-  A \emph{choreography} is a specification of the overall behaviour of a distributed system, from which implementations of all of the involved endpoints can be generated automatically through a process known as \emph{endpoint projection (EPP)}.
-  Because it's impossible to write unmatched communications, choreographies give us the benefit of deadlock freedom by design.
-  Of course, this approach is only as correct as the choreographic compiler used, which is why there has been interest in formally verifying the correctness of such compilers.
-  For the first time we build a choreographic compiler to Jolie, using a formally verified EPP procedure that has been extracted from the Coq formalization of CC. \todo{Coq formalization of?}
+  Programming communicating processes is challenging, because it requires writing separate programs that perform compatible send and receive actions at the right time during execution.
+  Leaving this task to the programmer can easily lead to bugs.
+  \emph{Choreographic programming} is an emerging paradigm that seeks to address this challenge, by equipping developers with high-level abstractions for codifying the desired structures of communications among processes from a global viewpoint.
+  Given a choreographic program (called \emph{choreography}), implementations of the involved processes can be automatically compiled by a process known as \emph{endpoint projection (EPP)}.
+
+  While choreographic programming removes the possibility of manual mistakes in the implementation of communications with local send and receive actions, the correctness of a choreographic programming framework crucially hinges on the correctness of its compiler.
+  Since choreography compilation is technically involved, previous efforts developed mechanisations of theories of choreographic programming and proved them correct in theorem provers.
+  In this paper, we build on one of these formalisations to construct a toolchain that produces executable code from a choreography.
 
   \keywords{TODO: First keyword \and Second keyword \and Another keyword.}
 \end{abstract}
 
 \section{Introduction}
+
+% Choreographic programming languages allow developers to program the desired overall behaviour of communicating processes from a global viewpoint, using high-level abstractions for programming message exchanges and their composition in larger protocols (or \emph{choreographies}).
+% A correct implementation that is guaranteed
+
+% \emph{Choreographic programming} is a paradigm
+
+% \emph{Choreographic programming} is an emerging paradigm whose goal is to help programmers write correct distributed programs, such as security protocol implementations and distributed systems \todo{Too general?}.
+% Traditionally, the programmer is tasked with writing the implementation of each \emph{endpoint (role)} separately, having to take great care in matching all of the necessary send--receive communications.
+% Such an approach has been demonstrated to be cumbersome and error-prone \cite{LLLG16}, which is why choreographic programming instead seeks to solve the problem from a global viewpoint.
+% A \emph{choreography} is a specification of the overall behaviour of a distributed system, from which implementations of all of the involved endpoints can be generated automatically through a process known as \emph{endpoint projection (EPP)}.
+% Because it's impossible to write unmatched communications, choreographies give us the benefit of deadlock freedom by design.
+% Of course, this approach is only as correct as the choreographic compiler used, which is why there has been interest in formally verifying the correctness of such compilers.
+% For the first time we build a choreographic compiler to Jolie, using a formally verified EPP procedure that has been extracted from the Coq formalization of CC. \todo{Coq formalization of?}
 
 \begin{figure}[h]
   \centering
