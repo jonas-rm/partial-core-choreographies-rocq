@@ -1,8 +1,11 @@
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
+
 module Examples where
 
 import Data.Maybe (fromJust)
 
-import Builder (com, left, right, cond, call, prog, pids, vars, recvars, ann)
+import Builder ( com, left, right, cond
+               , call, prog, pids, vars, recvars, ann )
 import EPPUser
 import Jolie
 import Lambda
@@ -35,7 +38,7 @@ lambda = (Apply
 auth :: CProgram Expr BExpr
 auth = prog
   ( []
-  , [ com c creds' ip creds
+  , [ com c credentials' ip credentials
     , cond ip check
       ( [ ann "ann1" $ left ip s
         , left ip c
@@ -46,9 +49,9 @@ auth = prog
         , call x ] ) ] )
   where
     [ip, s, c] = pids ["Ip", "Server", "Client"]
-    [creds, token] = vars ["credentials", "token"]
+    [credentials, token] = vars ["credentials", "token"]
     [x] = recvars ["X"]
-    [creds', token'] = [Ref creds, Ref token]
+    [credentials', token'] = [Ref credentials, Ref token]
     [check] = [BExpr $ Lit $ BoolVal True]
 
 authc :: Choreography Expr BExpr
@@ -65,22 +68,19 @@ authn = let BProgram (_, n) = authb in n
 jolie :: CProgram JolieExpr JolieBExpr
 jolie = prog
   ( []
-  , [ com c creds' ip creds
-    , cond ip check
+  , [ com c "credentials" ip credentials
+    , cond ip "check@Util( credentials )"
       ( [ ann "ann1" $ left ip s
         , ann "ann2" $ left ip c
-        , com s makeToken c token
+        , com s "makeToken@Util()" c token
         , call x ]
       , [ right ip s
         , right ip c
         , call x ] ) ] )
   where
     [ip, s, c] = pids ["Ip", "Server", "Client"]
-    [creds, token] = vars ["credentials", "token"]
+    [credentials, token] = vars ["credentials", "token"]
     [x] = recvars ["X"]
-    [creds'] = exprs ["credentials"]
-    [check] = bexprs ["check@Util( credentials )"]
-    [makeToken] = exprs ["makeToken@Util()"]
 
 joliec :: Choreography JolieExpr JolieBExpr
 joliec = let CProgram (_, c) = jolie in c
@@ -95,11 +95,11 @@ jolien = let BProgram (_, n) = jolieb in n
 
 jolierec :: CProgram JolieExpr JolieBExpr
 jolierec = prog
-  ( [ (x, [ com c creds' ip creds
-          , cond ip check
+  ( [ (x, [ com c "credentials" ip credentials
+          , cond ip "check@Util( credentials )"
             ( [ ann "ann1" $ left ip s
               , ann "ann2" $ left ip c
-              , com s makeToken c token
+              , com s "makeToken@Util()" c token
               , call x ]
             , [ right ip s
               , right ip c
@@ -107,11 +107,8 @@ jolierec = prog
   , [ call x ] )
   where
     [ip, s, c] = pids ["Ip", "Server", "Client"]
-    [creds, token] = vars ["credentials", "token"]
+    [credentials, token] = vars ["credentials", "token"]
     [x] = recvars ["X"]
-    [creds'] = exprs ["credentials"]
-    [check] = bexprs ["check@Util( credentials )"]
-    [makeToken] = exprs ["makeToken@Util()"]
 
 jolierecc :: Choreography JolieExpr JolieBExpr
 jolierecc = let CProgram (_, c) = jolierec in c

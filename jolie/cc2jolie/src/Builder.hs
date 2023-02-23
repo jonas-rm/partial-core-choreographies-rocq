@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module Builder where
 
 import EPPUser (Var(..), Pid(..), RecVar(..), Label(..), Ann(..), Eta(..))
@@ -10,8 +12,11 @@ data Instruction e b
   | CCond Pid b [Instruction e b] [Instruction e b]
   | CCall RecVar
 
-com :: Pid -> e -> Pid -> Var -> Instruction e b
-com src ex dst v = Interaction (Com src ex dst v) (Ann "")
+class Exprify a b where
+  exprify :: a -> b
+
+com :: Exprify a e => Pid -> a -> Pid -> Var -> Instruction e b
+com src ex dst v = Interaction (Com src (exprify ex) dst v) (Ann "")
 
 left :: Pid -> Pid -> Instruction e b
 left src dst = Interaction (Sel src dst CLeft) (Ann "")
@@ -23,8 +28,8 @@ ann :: String -> Instruction e b -> Instruction e b
 ann str (Interaction e _) = Interaction e (Ann str)
 ann _ _ = error "Cannot annotate anything other than an interaction"
 
-cond :: Pid -> b -> ([Instruction e b], [Instruction e b]) -> Instruction e b
-cond pid ex (c1, c2) = CCond pid ex c1 c2
+cond :: Exprify a b => Pid -> a -> ([Instruction e b], [Instruction e b]) -> Instruction e b
+cond pid ex (c1, c2) = CCond pid (exprify ex) c1 c2
 
 call :: RecVar -> Instruction e b
 call = CCall

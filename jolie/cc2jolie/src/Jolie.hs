@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 
 module Jolie where
 
@@ -11,6 +12,7 @@ import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.Set as S
 
+import Builder (Exprify, exprify)
 import EPPUser
 
 import qualified EPP as E
@@ -22,11 +24,23 @@ type JolieBehaviour = Behaviour JolieExpr JolieBExpr
 type JolieDefSet = BDefSet JolieExpr JolieBExpr
 type JolieProgram = BProgram JolieExpr JolieBExpr
 
+-- Pretty-printing
+
 instance PPrint JolieExpr where
   format (JolieExpr e) = e
 
 instance PPrint JolieBExpr where
   format (JolieBExpr e) = format e
+
+-- Builder
+
+instance Exprify [Char] JolieExpr where
+  exprify = JolieExpr
+
+instance Exprify [Char] JolieBExpr where
+  exprify = JolieBExpr . exprify
+
+-- Compilation
 
 data JolieOp
   = JolieCom String
