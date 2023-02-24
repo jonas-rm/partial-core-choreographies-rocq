@@ -34,18 +34,15 @@
 \maketitle
 
 \begin{abstract}
-  % TODO: The abstract should briefly summarize the contents of the paper in 150--250 words.
-
   Programming communicating processes is challenging, because it requires writing separate programs that perform compatible send and receive actions at the right time during execution.
   Leaving this task to the programmer can easily lead to bugs.
   \emph{Choreographic programming} is an emerging paradigm that seeks to address this challenge, by equipping developers with high-level abstractions for codifying the desired structures of communications among processes from a global viewpoint.
   Given a choreographic program (called \emph{choreography}), implementations of the involved processes can be automatically compiled by a process known as \emph{endpoint projection (EPP)}.
-
   While choreographic programming removes the possibility of manual mistakes in the implementation of communications with local send and receive actions, the correctness of a choreographic programming framework crucially hinges on the correctness of its compiler.
   Since choreography compilation is technically involved, previous efforts developed mechanisations of theories of choreographic programming and proved them correct in theorem provers.
   In this paper, we build on one of these formalisations to construct a toolchain that produces executable code from a choreography.
 
-  \keywords{TODO: First keyword \and Second keyword \and Another keyword.}
+  \keywords{Choreographic programming \and Certified compilation \and Jolie \and Formal verification}
 \end{abstract}
 
 \section{Introduction}
