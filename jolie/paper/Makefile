@@ -17,9 +17,9 @@ main.pdf: main.tex pdf
 
 .PHONY: clean
 clean:
-	$(LATEXMK) -c &>/dev/null
+	$(LATEXMK) -C &>/dev/null
 
 .PHONY: distclean
 distclean:
-	$(LATEXMK) -c &>/dev/null
+	$(LATEXMK) -C &>/dev/null
 	$(RM) $(DIAGRAMS_SVGS) $(DIAGRAMS_PDFS)
