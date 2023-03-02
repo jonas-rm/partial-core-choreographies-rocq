@@ -51,31 +51,6 @@ eq_rec_r :: a1 -> a2 -> a1 -> a2
 eq_rec_r =
   eq_rec
 
-data Unit =
-   Tt
-
-unit_rect :: a1 -> Unit -> a1
-unit_rect f _ =
-  f
-
-unit_rec :: a1 -> Unit -> a1
-unit_rec =
-  unit_rect
-
-data Bool =
-   True
- | False
-
-bool_rect :: a1 -> a1 -> Bool -> a1
-bool_rect f f0 b =
-  case b of {
-   True -> f;
-   False -> f0}
-
-bool_rec :: a1 -> a1 -> Bool -> a1
-bool_rec =
-  bool_rect
-
 data Nat =
    O
  | S Nat
@@ -85,10 +60,6 @@ nat_rect f f0 n =
   case n of {
    O -> f;
    S n0 -> f0 n0 (nat_rect f f0 n0)}
-
-nat_rec :: a1 -> (Nat -> a1 -> a1) -> Nat -> a1
-nat_rec =
-  nat_rect
 
 data Option a =
    Some a
@@ -161,25 +132,6 @@ add n m =
    O -> m;
    S p -> S (add p m)}
 
-bool_dec :: Bool -> Bool -> Sumbool
-bool_dec b1 b2 =
-  bool_rec (\x -> case x of {
-                   True -> Left;
-                   False -> Right}) (\x ->
-    case x of {
-     True -> Right;
-     False -> Left}) b1 b2
-
-eqb :: Nat -> Nat -> Bool
-eqb n m =
-  case n of {
-   O -> case m of {
-         O -> True;
-         S _ -> False};
-   S n' -> case m of {
-            O -> False;
-            S m' -> eqb n' m'}}
-
 max :: Nat -> Nat -> Nat
 max n m =
   case n of {
@@ -187,15 +139,6 @@ max n m =
    S n' -> case m of {
             O -> n;
             S m' -> S (max n' m')}}
-
-eq_dec :: Nat -> Nat -> Sumbool
-eq_dec n =
-  nat_rec (\m -> case m of {
-                  O -> Left;
-                  S _ -> Right}) (\_ iHn m ->
-    case m of {
-     O -> Right;
-     S m0 -> iHn m0}) n
 
 in_dec :: (a1 -> a1 -> Sumbool) -> a1 -> (List a1) -> Sumbool
 in_dec h a l =
@@ -227,17 +170,9 @@ type DecType =
   
 type T = Any
 
-eq_dec0 :: DecType -> T -> T -> Sumbool
-eq_dec0 d =
+eq_dec :: DecType -> T -> T -> Sumbool
+eq_dec d =
   d
-
-unit_dec :: Unit -> Unit -> Sumbool
-unit_dec x =
-  unit_rec (\_ -> Left) x
-
-unit0 :: DecType
-unit0 =
-  unsafeCoerce unit_dec
 
 dP_eq_dec :: DecType -> DecType -> (Prod T T) -> (Prod T T) -> Sumbool
 dP_eq_dec a b p1 p2 =
@@ -245,9 +180,9 @@ dP_eq_dec a b p1 p2 =
    Pair x p ->
     case p2 of {
      Pair y q ->
-      case eq_dec0 b p q of {
+      case eq_dec b p q of {
        Left ->
-        case eq_dec0 a x y of {
+        case eq_dec a x y of {
          Left -> eq_rec_r y (eq_rec_r q Left p) x;
          Right -> Right};
        Right -> Right}}}
@@ -255,10 +190,6 @@ dP_eq_dec a b p1 p2 =
 decProd :: DecType -> DecType -> DecType
 decProd a b =
   unsafeCoerce dP_eq_dec a b
-
-bool :: DecType
-bool =
-  unsafeCoerce bool_dec
 
 data Label =
    Left0
@@ -362,14 +293,14 @@ choreography_rect :: Signature -> (Eta -> T -> Choreography -> a1 -> a1) ->
                      (T -> T -> Choreography -> a1 -> Choreography -> a1 ->
                      a1) -> (T -> a1) -> (T -> (List T) -> Choreography -> a1
                      -> a1) -> a1 -> Choreography -> a1
-choreography_rect sig0 f f0 f1 f2 f3 c =
+choreography_rect sig f f0 f1 f2 f3 c =
   case c of {
-   Interaction e t c0 -> f e t c0 (choreography_rect sig0 f f0 f1 f2 f3 c0);
+   Interaction e t c0 -> f e t c0 (choreography_rect sig f f0 f1 f2 f3 c0);
    Cond t t0 c0 c1 ->
-    f0 t t0 c0 (choreography_rect sig0 f f0 f1 f2 f3 c0) c1
-      (choreography_rect sig0 f f0 f1 f2 f3 c1);
+    f0 t t0 c0 (choreography_rect sig f f0 f1 f2 f3 c0) c1
+      (choreography_rect sig f f0 f1 f2 f3 c1);
    Call t -> f1 t;
-   RT_Call t l c0 -> f2 t l c0 (choreography_rect sig0 f f0 f1 f2 f3 c0);
+   RT_Call t l c0 -> f2 t l c0 (choreography_rect sig f f0 f1 f2 f3 c0);
    End -> f3}
 
 type DefSet = T -> Prod (List T) Choreography
@@ -385,8 +316,8 @@ main _ =
   snd
 
 vars :: Signature -> Program -> T -> List T
-vars sig0 p x =
-  fst (procedures sig0 p x)
+vars sig p x =
+  fst (procedures sig p x)
 
 eta_pn :: Signature -> Eta -> List T
 eta_pn _ e =
@@ -395,91 +326,21 @@ eta_pn _ e =
    Sel p q _ -> Cons p (Cons q Nil)}
 
 cCC_pn :: Signature -> Choreography -> (T -> List T) -> List T
-cCC_pn sig0 c pids =
+cCC_pn sig c pids =
   case c of {
    Interaction eta _ c' ->
-    set_union (eq_dec0 (pid sig0)) (eta_pn sig0 eta) (cCC_pn sig0 c' pids);
+    set_union (eq_dec (pid sig)) (eta_pn sig eta) (cCC_pn sig c' pids);
    Cond p _ c1 c2 ->
-    set_union (eq_dec0 (pid sig0))
-      (set_union (eq_dec0 (pid sig0)) (Cons p Nil) (cCC_pn sig0 c1 pids))
-      (cCC_pn sig0 c2 pids);
+    set_union (eq_dec (pid sig))
+      (set_union (eq_dec (pid sig)) (Cons p Nil) (cCC_pn sig c1 pids))
+      (cCC_pn sig c2 pids);
    Call x -> pids x;
-   RT_Call _ l c' -> set_union (eq_dec0 (pid sig0)) l (cCC_pn sig0 c' pids);
+   RT_Call _ l c' -> set_union (eq_dec (pid sig)) l (cCC_pn sig c' pids);
    End -> Nil}
 
 cCP_pn :: Signature -> Program -> List T
-cCP_pn sig0 p =
-  cCC_pn sig0 (main sig0 p) (vars sig0 p)
-
-data Expr =
-   This
- | Zero
- | Succ_this
-
-expr_rect :: a1 -> a1 -> a1 -> Expr -> a1
-expr_rect f f0 f1 e =
-  case e of {
-   This -> f;
-   Zero -> f0;
-   Succ_this -> f1}
-
-expr_rec :: a1 -> a1 -> a1 -> Expr -> a1
-expr_rec =
-  expr_rect
-
-expr_eq_dec :: Expr -> Expr -> Sumbool
-expr_eq_dec e e' =
-  expr_rec (\x -> case x of {
-                   This -> Left;
-                   _ -> Right}) (\x -> case x of {
-                                        Zero -> Left;
-                                        _ -> Right}) (\x ->
-    case x of {
-     Succ_this -> Left;
-     _ -> Right}) e e'
-
-bExpr_rect :: a1 -> a1
-bExpr_rect f =
-  f
-
-bExpr_rec :: a1 -> a1
-bExpr_rec =
-  bExpr_rect
-
-bExpr_eq_dec :: Sumbool
-bExpr_eq_dec =
-  bExpr_rec (\_ -> Left) __
-
-cC_Expressions :: DecType
-cC_Expressions =
-  unsafeCoerce expr_eq_dec
-
-bool_Expressions :: DecType
-bool_Expressions =
-  unsafeCoerce (\_ _ -> bExpr_eq_dec)
-
-cC_Nat :: DecType
-cC_Nat =
-  unsafeCoerce eq_dec
-
-eval :: Expr -> (Bool -> Nat) -> Nat
-eval e f =
-  case e of {
-   This -> f True;
-   Zero -> O;
-   Succ_this -> S (f True)}
-
-cC_Eval :: Eval
-cC_Eval =
-  unsafeCoerce eval
-
-beval :: (Bool -> Nat) -> Bool
-beval f =
-  eqb (f True) (f False)
-
-cC_BEval :: Eval
-cC_BEval =
-  unsafeCoerce (\_ -> beval)
+cCP_pn sig p =
+  cCC_pn sig (main sig p) (vars sig p)
 
 data Behaviour =
    End0
@@ -491,23 +352,23 @@ data Behaviour =
  | Call0 T
 
 depth :: Signature -> Behaviour -> Nat
-depth sig0 b =
+depth sig b =
   case b of {
-   Send _ _ _ b' -> add (S O) (depth sig0 b');
-   Recv _ _ _ b' -> add (S O) (depth sig0 b');
-   Sel0 _ _ _ b' -> add (S O) (depth sig0 b');
+   Send _ _ _ b' -> add (S O) (depth sig b');
+   Recv _ _ _ b' -> add (S O) (depth sig b');
+   Sel0 _ _ _ b' -> add (S O) (depth sig b');
    Branching _ mB mB' ->
     add
       (add (S O)
         (case mB of {
           Some p0 -> case p0 of {
-                      Pair _ b0 -> depth sig0 b0};
+                      Pair _ b0 -> depth sig b0};
           None -> O}))
       (case mB' of {
         Some p0 -> case p0 of {
-                    Pair _ b0 -> depth sig0 b0};
+                    Pair _ b0 -> depth sig b0};
         None -> O});
-   Cond0 _ b1 b2 -> add (S O) (max (depth sig0 b1) (depth sig0 b2));
+   Cond0 _ b1 b2 -> add (S O) (max (depth sig b1) (depth sig b2));
    _ -> S O}
 
 behaviour_rec' :: Signature -> a1 -> (T -> T -> T -> Behaviour -> a1 -> a1)
@@ -517,8 +378,8 @@ behaviour_rec' :: Signature -> a1 -> (T -> T -> T -> Behaviour -> a1 -> a1)
                   -> (T -> T -> Behaviour -> T -> Behaviour -> a1 -> a1 ->
                   a1) -> (T -> Behaviour -> Behaviour -> a1 -> a1 -> a1) ->
                   (T -> a1) -> Behaviour -> a1
-behaviour_rec' sig0 x x0 x1 x2 x3 x4 x5 x6 x7 x8 b =
-  let {d = depth sig0 b} in
+behaviour_rec' sig x x0 x1 x2 x3 x4 x5 x6 x7 x8 b =
+  let {d = depth sig b} in
   nat_rect (\b0 _ ->
     case b0 of {
      End0 -> x;
@@ -550,19 +411,19 @@ type DefSetB = T -> Behaviour
 type Program0 = Prod DefSetB Network
 
 merge_dec :: Signature -> Behaviour -> Behaviour -> Sumor Behaviour
-merge_dec sig0 b1 =
-  behaviour_rec' sig0 (\b2 ->
-    behaviour_rec' sig0 (Inleft End0) (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
+merge_dec sig b1 =
+  behaviour_rec' sig (\b2 ->
+    behaviour_rec' sig (Inleft End0) (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
       Inright) (\_ _ _ _ _ -> Inright) (\_ -> Inright) (\_ _ _ _ -> Inright)
       (\_ _ _ _ -> Inright) (\_ _ _ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
       Inright) (\_ -> Inright) b2) (\p e a _ iHB1 b2 ->
-    behaviour_rec' sig0 Inright (\p0 e0 a0 b3 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+    behaviour_rec' sig Inright (\p0 e0 a0 b3 _ ->
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p
-          (case eq_dec0 (expr sig0) e e0 of {
+          (case eq_dec (expr sig) e e0 of {
             Left ->
-             case eq_dec0 (ann sig0) a a0 of {
+             case eq_dec (ann sig) a a0 of {
               Left ->
                let {s = iHB1 b3} in
                sumor_rect (\a1 -> Inleft (Send p e a a1)) (\_ -> Inright) s;
@@ -572,13 +433,13 @@ merge_dec sig0 b1 =
       (\_ -> Inright) (\_ _ _ _ -> Inright) (\_ _ _ _ -> Inright)
       (\_ _ _ _ _ _ _ -> Inright) (\_ _ _ _ _ -> Inright) (\_ -> Inright) b2)
     (\p v a _ iHB1 b2 ->
-    behaviour_rec' sig0 Inright (\_ _ _ _ _ -> Inright) (\p0 v0 a0 b3 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+    behaviour_rec' sig Inright (\_ _ _ _ _ -> Inright) (\p0 v0 a0 b3 _ ->
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p
-          (case eq_dec0 (var sig0) v v0 of {
+          (case eq_dec (var sig) v v0 of {
             Left ->
-             case eq_dec0 (ann sig0) a a0 of {
+             case eq_dec (ann sig) a a0 of {
               Left ->
                let {s = iHB1 b3} in
                sumor_rect (\a1 -> Inleft (Recv p v a a1)) (\_ -> Inright) s;
@@ -587,14 +448,14 @@ merge_dec sig0 b1 =
        Right -> Inright}) (\_ _ _ _ _ -> Inright) (\_ -> Inright)
       (\_ _ _ _ -> Inright) (\_ _ _ _ -> Inright) (\_ _ _ _ _ _ _ -> Inright)
       (\_ _ _ _ _ -> Inright) (\_ -> Inright) b2) (\p l a _ iHB1 b2 ->
-    behaviour_rec' sig0 Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
+    behaviour_rec' sig Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
       Inright) (\p0 l0 a0 b3 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p
-          (case eq_dec0 label l l0 of {
+          (case eq_dec label l l0 of {
             Left ->
-             case eq_dec0 (ann sig0) a a0 of {
+             case eq_dec (ann sig) a a0 of {
               Left ->
                let {s = iHB1 b3} in
                sumor_rect (\a1 -> Inleft (Sel0 p l a a1)) (\_ -> Inright) s;
@@ -603,32 +464,32 @@ merge_dec sig0 b1 =
        Right -> Inright}) (\_ -> Inright) (\_ _ _ _ -> Inright) (\_ _ _ _ ->
       Inright) (\_ _ _ _ _ _ _ -> Inright) (\_ _ _ _ _ -> Inright) (\_ ->
       Inright) b2) (\p b2 ->
-    behaviour_rec' sig0 Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
+    behaviour_rec' sig Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
       Inright) (\_ _ _ _ _ -> Inright) (\p0 ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left -> eq_rect p (Inleft (Branching p None None)) p0;
        Right -> Inright}) (\p0 a b3 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left -> eq_rect p (Inleft (Branching p (Some (Pair a b3)) None)) p0;
        Right -> Inright}) (\p0 a b3 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left -> eq_rect p (Inleft (Branching p None (Some (Pair a b3)))) p0;
        Right -> Inright}) (\p0 a b2_1 a' b2_2 _ _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p (Inleft (Branching p (Some (Pair a b2_1)) (Some (Pair a'
           b2_2)))) p0;
        Right -> Inright}) (\_ _ _ _ _ -> Inright) (\_ -> Inright) b2)
     (\p a b2 iHB1 b3 ->
-    behaviour_rec' sig0 Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
+    behaviour_rec' sig Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
       Inright) (\_ _ _ _ _ -> Inright) (\p0 ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left -> eq_rect p (Inleft (Branching p (Some (Pair a b2)) None)) p0;
        Right -> Inright}) (\p0 a0 b4 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p
-          (case eq_dec0 (ann sig0) a a0 of {
+          (case eq_dec (ann sig) a a0 of {
             Left ->
              eq_rect a
                (let {s = iHB1 b4} in
@@ -636,15 +497,15 @@ merge_dec sig0 b1 =
                   None)) (\_ -> Inright) s) a0;
             Right -> Inright}) p0;
        Right -> Inright}) (\p0 a0 b4 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p (Inleft (Branching p (Some (Pair a b2)) (Some (Pair a0
           b4)))) p0;
        Right -> Inright}) (\p0 a0 b2_1 a' b2_2 _ _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p
-          (case eq_dec0 (ann sig0) a a0 of {
+          (case eq_dec (ann sig) a a0 of {
             Left ->
              eq_rect a
                (let {s = iHB1 b2_1} in
@@ -653,20 +514,20 @@ merge_dec sig0 b1 =
             Right -> Inright}) p0;
        Right -> Inright}) (\_ _ _ _ _ -> Inright) (\_ -> Inright) b3)
     (\p a b2 iHB1 b3 ->
-    behaviour_rec' sig0 Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
+    behaviour_rec' sig Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
       Inright) (\_ _ _ _ _ -> Inright) (\p0 ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left -> eq_rect p (Inleft (Branching p None (Some (Pair a b2)))) p0;
        Right -> Inright}) (\p0 a0 b4 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p (Inleft (Branching p (Some (Pair a0 b4)) (Some (Pair a
           b2)))) p0;
        Right -> Inright}) (\p0 a0 b4 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p
-          (case eq_dec0 (ann sig0) a a0 of {
+          (case eq_dec (ann sig) a a0 of {
             Left ->
              eq_rect a
                (let {s = iHB1 b4} in
@@ -674,10 +535,10 @@ merge_dec sig0 b1 =
                   a1)))) (\_ -> Inright) s) a0;
             Right -> Inright}) p0;
        Right -> Inright}) (\p0 a0 b2_1 a' b2_2 _ _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p
-          (case eq_dec0 (ann sig0) a a' of {
+          (case eq_dec (ann sig) a a' of {
             Left ->
              eq_rect a
                (let {s = iHB1 b2_2} in
@@ -686,17 +547,17 @@ merge_dec sig0 b1 =
             Right -> Inright}) p0;
        Right -> Inright}) (\_ _ _ _ _ -> Inright) (\_ -> Inright) b3)
     (\p a b1_1 a' b1_2 iHB1_1 iHB1_2 b2 ->
-    behaviour_rec' sig0 Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
+    behaviour_rec' sig Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
       Inright) (\_ _ _ _ _ -> Inright) (\p0 ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p (Inleft (Branching p (Some (Pair a b1_1)) (Some (Pair a'
           b1_2)))) p0;
        Right -> Inright}) (\p0 a0 b3 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p
-          (case eq_dec0 (ann sig0) a a0 of {
+          (case eq_dec (ann sig) a a0 of {
             Left ->
              eq_rect a
                (let {s = iHB1_1 b3} in
@@ -704,10 +565,10 @@ merge_dec sig0 b1 =
                   (Some (Pair a' b1_2)))) (\_ -> Inright) s) a0;
             Right -> Inright}) p0;
        Right -> Inright}) (\p0 a0 b3 _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p
-          (case eq_dec0 (ann sig0) a' a0 of {
+          (case eq_dec (ann sig) a' a0 of {
             Left ->
              eq_rect a'
                (let {s = iHB1_2 b3} in
@@ -715,13 +576,13 @@ merge_dec sig0 b1 =
                   (Some (Pair a' a1)))) (\_ -> Inright) s) a0;
             Right -> Inright}) p0;
        Right -> Inright}) (\p0 a0 b2_1 a'0 b2_2 _ _ ->
-      case eq_dec0 (pid sig0) p p0 of {
+      case eq_dec (pid sig) p p0 of {
        Left ->
         eq_rect p
-          (case eq_dec0 (ann sig0) a a0 of {
+          (case eq_dec (ann sig) a a0 of {
             Left ->
              eq_rect a
-               (case eq_dec0 (ann sig0) a' a'0 of {
+               (case eq_dec (ann sig) a' a'0 of {
                  Left ->
                   eq_rect a'
                     (let {s = iHB1_1 b2_1} in
@@ -734,10 +595,10 @@ merge_dec sig0 b1 =
             Right -> Inright}) p0;
        Right -> Inright}) (\_ _ _ _ _ -> Inright) (\_ -> Inright) b2)
     (\b _ _ iHB1_1 iHB1_2 b2 ->
-    behaviour_rec' sig0 Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
+    behaviour_rec' sig Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
       Inright) (\_ _ _ _ _ -> Inright) (\_ -> Inright) (\_ _ _ _ -> Inright)
       (\_ _ _ _ -> Inright) (\_ _ _ _ _ _ _ -> Inright) (\b0 b2_1 b2_2 _ _ ->
-      case eq_dec0 (bexpr sig0) b b0 of {
+      case eq_dec (bexpr sig) b b0 of {
        Left ->
         eq_rect b
           (let {s = iHB1_1 b2_1} in
@@ -746,37 +607,37 @@ merge_dec sig0 b1 =
              sumor_rect (\a0 -> Inleft (Cond0 b a a0)) (\_ -> Inright) s0)
              (\_ -> Inright) s) b0;
        Right -> Inright}) (\_ -> Inright) b2) (\x b2 ->
-    behaviour_rec' sig0 Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
+    behaviour_rec' sig Inright (\_ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
       Inright) (\_ _ _ _ _ -> Inright) (\_ -> Inright) (\_ _ _ _ -> Inright)
       (\_ _ _ _ -> Inright) (\_ _ _ _ _ _ _ -> Inright) (\_ _ _ _ _ ->
       Inright) (\x0 ->
-      case eq_dec0 (recvar sig0) x x0 of {
+      case eq_dec (recvar sig) x x0 of {
        Left -> Inleft (Call0 x);
        Right -> Inright}) b2) b1
 
 sig' :: Signature -> Signature
-sig' sig0 =
-  Build_Signature (pid sig0) (var sig0) (value sig0) (expr sig0) (bexpr sig0)
-    (decProd (recvar sig0) (pid sig0)) (ann sig0) (ev sig0) (bev sig0)
+sig' sig =
+  Build_Signature (pid sig) (var sig) (value sig) (expr sig) (bexpr sig)
+    (decProd (recvar sig) (pid sig)) (ann sig) (ev sig) (bev sig)
 
 bproj_dec :: Signature -> DefSet -> Choreography -> T -> Sumor Behaviour
-bproj_dec sig0 d c =
-  choreography_rect sig0 (\e t _ iHC ->
-    eta_rect sig0 (\t0 t1 t2 t3 p ->
+bproj_dec sig d c =
+  choreography_rect sig (\e t _ iHC ->
+    eta_rect sig (\t0 t1 t2 t3 p ->
       let {s = iHC p} in
       sumor_rect (\a ->
-        case eq_dec0 (pid sig0) p t0 of {
+        case eq_dec (pid sig) p t0 of {
          Left -> eq_rect p (Inleft (Send t2 t1 t a)) t0;
          Right ->
-          case eq_dec0 (pid sig0) p t2 of {
+          case eq_dec (pid sig) p t2 of {
            Left -> eq_rect p (Inleft (Recv t0 t3 t a)) t2;
            Right -> Inleft a}}) (\_ -> Inright) s) (\t0 t1 t2 p ->
       let {s = iHC p} in
       sumor_rect (\a ->
-        case eq_dec0 (pid sig0) p t0 of {
+        case eq_dec (pid sig) p t0 of {
          Left -> eq_rect p (Inleft (Sel0 t1 t2 t a)) t0;
          Right ->
-          case eq_dec0 (pid sig0) p t1 of {
+          case eq_dec (pid sig) p t1 of {
            Left ->
             eq_rect p
               (label_rect (Inleft (Branching t0 (Some (Pair t a)) None))
@@ -788,46 +649,37 @@ bproj_dec sig0 d c =
     sumor_rect (\a ->
       let {s0 = iHC2 p} in
       sumor_rect (\a0 ->
-        case eq_dec0 (pid sig0) p t of {
+        case eq_dec (pid sig) p t of {
          Left -> eq_rect p (Inleft (Cond0 t0 a a0)) t;
          Right ->
-          let {s1 = merge_dec (sig' sig0) a a0} in
+          let {s1 = merge_dec (sig' sig) a a0} in
           sumor_rect (\a1 -> Inleft a1) (\_ -> Inright) s1}) (\_ -> Inright)
         s0) (\_ -> Inright) s) (\t p ->
     sumbool_rect (\_ -> Inleft (Call0 (unsafeCoerce (Pair t p)))) (\_ ->
-      Inleft End0) (in_dec (eq_dec0 (pid sig0)) p (fst (d t))))
+      Inleft End0) (in_dec (eq_dec (pid sig)) p (fst (d t))))
     (\t l _ iHC p ->
     sumbool_rect (\_ -> Inleft (Call0 (unsafeCoerce (Pair t p))))
       (let {s = iHC p} in sumor_rect (\a _ -> Inleft a) (\_ _ -> Inright) s)
-      (in_dec (eq_dec0 (pid sig0)) p l)) (\_ -> Inleft End0) c
+      (in_dec (eq_dec (pid sig)) p l)) (\_ -> Inleft End0) c
 
 epp_C :: Signature -> DefSet -> (List T) -> Choreography -> Network
-epp_C sig0 d ps c p =
+epp_C sig d ps c p =
   sumbool_rect (\_ ->
-    let {s = bproj_dec sig0 d c p} in
+    let {s = bproj_dec sig d c p} in
     sumor_rect (\a -> a) (\_ -> false_rect) s) (\_ -> End0)
-    (in_dec (eq_dec0 (pid sig0)) p ps)
+    (in_dec (eq_dec (pid sig)) p ps)
 
 epp_D :: Signature -> DefSet -> DefSetB
-epp_D sig0 d x =
+epp_D sig d x =
   case unsafeCoerce x of {
    Pair r p ->
     sumbool_rect
-      (let {s = bproj_dec sig0 d (snd (d r)) p} in
+      (let {s = bproj_dec sig d (snd (d r)) p} in
        sumor_rect (\a _ -> a) (\_ _ -> false_rect) s) (\_ -> End0)
-      (in_dec (eq_dec0 (pid sig0)) p (fst (d r)))}
+      (in_dec (eq_dec (pid sig)) p (fst (d r)))}
 
 epp :: Signature -> Program -> Program0
-epp sig0 p =
-  and_rect (\_ _ -> Pair (epp_D sig0 (procedures sig0 p))
-    (epp_C sig0 (procedures sig0 p) (cCP_pn sig0 p) (main sig0 p)))
-
-sig :: Signature
-sig =
-  Build_Signature cC_Nat bool cC_Nat cC_Expressions bool_Expressions cC_Nat
-    unit0 cC_Eval cC_BEval
-
-epp' :: Program -> Program0
-epp' p =
-  epp sig p
+epp sig p =
+  and_rect (\_ _ -> Pair (epp_D sig (procedures sig p))
+    (epp_C sig (procedures sig p) (cCP_pn sig p) (main sig p)))
 
