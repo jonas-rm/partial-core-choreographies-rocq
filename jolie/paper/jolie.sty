@@ -123,7 +123,7 @@
 	          colback=sbase3,
 	          detach title,
 	          finish={\node[anchor=north east, font=\footnotesize\itshape,
-	          text=sbase3,fill=#4] at (frame.north east) {#3 Code};},
+	          text=sbase3,fill=#4] at (frame.north east) {#3};},
 	          title={},
 	          listing only,
 	          listing options={language=#2,numbers=none,style=solarized-light,##3},
@@ -133,10 +133,3 @@
   \expandafter\def\csname end\n listing\endcsname{\endtcblisting\noindent}
   \expandafter\def\csname\n\endcsname{\lstinline[language=#2,style=solarized-light]}
 }
-
-% listings and inlining
-\newlang{jolie}{Jolie}{syellow}
-\def\jo{\lstinline[language=jolie,style=solarized-thin]}
-
-% Syntax
-
