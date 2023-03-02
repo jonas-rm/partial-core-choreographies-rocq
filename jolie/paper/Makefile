@@ -10,7 +10,7 @@ all: main.pdf
 pdf: $(DIAGRAMS_PDFS)
 
 main.pdf: main.tex pdf
-	$(LATEXMK) -bibtex -pdf -time $<
+	$(LATEXMK) -bibtex -pdf -time -interaction=nonstopmode $<
 
 %.drawio.pdf: %.drawio
 	$(DRAWIO) -x -f pdf --crop -o $@ $^
