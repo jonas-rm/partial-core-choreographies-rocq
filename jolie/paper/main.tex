@@ -38,6 +38,7 @@
 
 \newlang{coq}{Coq}{syellow}
 \newlang{haskell}{Haskell}{sgreen}
+\newcommand{\haskellcode}{\lstinline[language=Haskell,style=solarized-light]}
 \newlang{jolie}{Jolie}{smagenta}
 
 \begin{document}
@@ -110,14 +111,35 @@ Pirouette \todo{cite} is a language for typed higher-order functional choreograp
 \section{Architecture and Implementation}
 \label{sec:arch}
 
-We take a two-phased approach in the design of our compiler shown in \Cref{fig:arch}.
+\paragraph*{Architecture.}
+
+We implemented \texttt{cc2jolie} in Haskell and took a two-phased approach in the design of its compilation pipeline, shown in \Cref{fig:arch}.
+
+The first phase is the \textit{projection}: it takes as input a choreographic program given as a CC term and projects it to a collection of SP terms representing the necessary behaviours of the endpoints.
+We use SP as an intermediate representation (IR) of processes.
+This part of the compiler uses the formally verified projection procedure that has been automatically extracted from the Coq formalization into Haskell code.
+Making use of the extracted code is relatively straightforward, although a few considerations are necessary given that Coq is a dependently-typed language, while all of the languages it can extract to are not.
+
+The second phase of our compiler is the \textit{code generation} which compiles the generated process IR to an executable language.
+In this work we focus on generating Jolie code.
+However, because of our modular two-phase approach, additional backends could be implemented without having to touch the rest of the compiler.
+This phase of the compiler is not formally verified, but it's correctness is much easier to establish than the correctness of projection itself since the code generation proceeds homeomorphically \todo{``proceeds homeomorphically'', is this right?} on the structure of the process IR.
 
 \begin{figure}[h]
   \centering
   \includegraphics{arch.drawio.pdf}
-  \caption{The architecture of \texttt{cc2jolie}.}
+  \caption{The architecture of \texttt{cc2jolie}'s compilation pipeline.}
   \label{fig:arch}
 \end{figure}
+
+The Coq formalization we use is parametric over the types used to represent process names, variables and terms of the underlying expression language.
+Because this is done by using the dependently-typed features of Coq and manipulating types as normal values, certain ``artefacts'' appear in the code extracted from Coq into Haskell.
+In particular, instead of using Haskell's type system and parametric polymorphism, the extracted code makes use of GHC's \todo{cite?} \haskellcode{Any} type and the \haskellcode{unsafeCoerce} function to perform casts between the provided concrete types and \haskellcode{Any} which the extracted code works on.
+While a little clunky to work with, this is not an issue since the only requirement the formalization imposes on the type parameters is that their equality be decidable.
+Practically, this means that we just have to be able to provide a function that can determine whether two values of such a type are equal.
+Other than that the extracted code treats all of the type parameters as completely opaque.
+For this purpose we wrote a thin wrapper over the extracted code that provides a much more pleasant and idiomatic API to work with, hiding the necessary casts and using Haskell's parametric polymorphism.
+Again, this part is not formally verified, but just as before, the wrapper follows the structure of the CC and SP terms so checking it for correctness manually is easy.
 
 \todo{Be precise about what's formalized and what isn't.}
 \todo{Explain why the uncertified part is not a problem.}
@@ -179,6 +201,7 @@ service Client {
 \section{Discussion and Conclusion}
 \label{sec:disc}
 
+\todo{Compare to Kalas: technology-agnostic process IR with flexible annotations.}
 \todo{Future work: normal surface syntax instead of raw CC terms.}
 
 \subsubsection{Acknowledgements}
