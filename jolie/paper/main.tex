@@ -11,6 +11,30 @@
 \usepackage{listings}
 \usepackage{jolie}
 \usepackage{lstcoq}
+\usepackage{cleveref}
+
+% \lstdefinestyle{haskell}{
+%   frame=none,
+%   xleftmargin=2pt,
+%   stepnumber=1,
+%   numbers=left,
+%   numbersep=5pt,
+%   numberstyle=\ttfamily\tiny\color[gray]{0.3},
+%   belowcaptionskip=\bigskipamount,
+%   captionpos=b,
+%   escapeinside={*'}{'*},
+%   language=haskell,
+%   tabsize=2,
+%   emphstyle={\bf},
+%   commentstyle=\it,
+%   stringstyle=\mdseries\rmfamily,
+%   showspaces=false,
+%   keywordstyle=\bfseries\rmfamily,
+%   columns=flexible,
+%   basicstyle=\small\sffamily,
+%   showstringspaces=false,
+%   morecomment=[l]\%,
+% }
 
 \newlang{coq}{Coq}{syellow}
 \newlang{haskell}{Haskell}{sgreen}
@@ -55,31 +79,111 @@
 
 \section{Introduction}
 
-% Choreographic programming languages allow developers to program the desired overall behaviour of communicating processes from a global viewpoint, using high-level abstractions for programming message exchanges and their composition in larger protocols (or \emph{choreographies}).
-% A correct implementation that is guaranteed
+\emph{Choreographic programming} is a paradigm whose goal is to help programmers write correct distributed programs by using high-level abstractions to specify interactions between communicating processes.
+Traditionally, the programmer is tasked with writing the implementation of each \emph{process (endpoint)} separately, having to take great care in matching all of the necessary send--receive communications.
+Such an approach has been demonstrated to be cumbersome and error-prone \cite{LLLG16}, which is why choreographic programming instead seeks to solve the problem from a global viewpoint.
+A \emph{choreography} is a specification of the overall behaviour of a distributed system, from which implementations of all of the involved endpoints can be generated automatically through a process known as \emph{endpoint projection (EPP)}.
+Because a choreography makes all of the communications syntatically manifest, the programmer retains the control over the precise interactions in the choreography.
+Furthermore, since it is syntactically impossible to write unmatched communications, we also get the benefit of deadlock-freedom by design.
+This saves time and lets the programmer focus on the bigger picture of the protocol being developed.
 
-% \emph{Choreographic programming} is a paradigm
+The described approach is only as correct as the choreographic compiler however, and it has been discovered before that some of the manual proofs of a choreographic compiler's EPP's correctness were not correct and needed fixes.
+In order to avoid such problems in the future and have a correctness guarantee, there has been interest in formally verifying the correctness of choreography compilation using theorem provers.
+\todo{cite}
 
-% \emph{Choreographic programming} is an emerging paradigm whose goal is to help programmers write correct distributed programs, such as security protocol implementations and distributed systems \todo{Too general?}.
-% Traditionally, the programmer is tasked with writing the implementation of each \emph{endpoint (role)} separately, having to take great care in matching all of the necessary send--receive communications.
-% Such an approach has been demonstrated to be cumbersome and error-prone \cite{LLLG16}, which is why choreographic programming instead seeks to solve the problem from a global viewpoint.
-% A \emph{choreography} is a specification of the overall behaviour of a distributed system, from which implementations of all of the involved endpoints can be generated automatically through a process known as \emph{endpoint projection (EPP)}.
-% Because it's impossible to write unmatched communications, choreographies give us the benefit of deadlock freedom by design.
-% Of course, this approach is only as correct as the choreographic compiler used, which is why there has been interest in formally verifying the correctness of such compilers.
-% For the first time we build a choreographic compiler to Jolie, using a formally verified EPP procedure that has been extracted from the Coq formalization of CC. \todo{Coq formalization of?}
+In this work, basing our approach on a previous effort of formalizing the compilation of \textit{Core Choreographies (CC)} to \textit{Stateful Processes (SP)} in the Coq theorem prover, we develop \texttt{cc2jolie}, a compiler producing executable Jolie \cite{MGZ14} code.
+Specifically, we use Coq to \textit{extract} a formally verified implementation of the EPP and use it as the core of our compiler.
+With the critical part of the compiler taken care of automatically, we can focus just on mapping the necessary process semantics to our executable language.
+We use Jolie as our final compilation target, producing for each process a Jolie service that implements its part of the overall choreographic behaviour and can be run independently.
+
+\paragraph*{Structure and Related Work.}
+
+\Cref{sec:arch} gives an overview of our compiler's architecture and describes its implementation.
+\Cref{sec:jolie} explains how we map the process language to Jolie in order to generate executable Jolie code consisting of multiple independent services.
+Finally, we discuss our approach and conclude in \Cref{sec:disc}.
+
+There have been other similar works in certified compilation of choreographies.
+Kalas \todo{cite} is a choreographic programming language that is end-to-end certified using the Hol4 proof assistant and compiles the choreography to CakeML, a formally verified subset of the ML language.
+Unlike Kalas, we take a technology-agnostic approach that allows us to plug multiple different backends into our compiler's pipeline \todo{Move this to architecture or the discussion?}.
+Pirouette \todo{cite} is a language for typed higher-order functional choreographic programming and comes with a formalization in Coq, but it hasn't yet been used to produce a certified implementation of a choreographic compiler.
+
+\section{Architecture and Implementation}
+\label{sec:arch}
+
+We take a two-phased approach in the design of our compiler shown in \Cref{fig:arch}.
 
 \begin{figure}[h]
   \centering
   \includegraphics{arch.drawio.pdf}
-  \caption{The architecture of our CC compiler.}
+  \caption{The architecture of \texttt{cc2jolie}.}
   \label{fig:arch}
 \end{figure}
 
-Test \cite{MGZ14}.
+\todo{Be precise about what's formalized and what isn't.}
+\todo{Explain why the uncertified part is not a problem.}
+\todo{Compare to Kalas: techn-agnostic process IR with flexible annotations.}
+
+\begin{coqlisting}
+Require Export Implementation.
+Require Export EPP.
+Require Extraction.
+
+Extraction Language Haskell.
+Extraction "EPP" epp.
+\end{coqlisting}
+
+\begin{haskelllisting}
+  epp :: Signature -> Program -> Program0
+  epp sig p =
+  and_rect (\_ _ -> Pair (epp_D sig (procedures sig p))
+  (epp_C sig (procedures sig p) (cCP_pn sig p) (main sig p)))
+\end{haskelllisting}
+
+\section{Compiling Choreographies to Jolie}
+\label{sec:jolie}
+
+\begin{jolielisting}
+service Client {
+  embed Util as Util
+
+  inputPort Input {
+    location: "socket://localhost:8080"
+    protocol: http { format = "json" }
+    interfaces: ClientApi
+  }
+
+  outputPort Ip {
+    location: "socket://localhost:8081"
+    protocol: http { format = "json" }
+    interfaces: IpApi
+  }
+
+  define X_Client {
+    comClient@Ip( credentials )
+    [ leftIp() ] {
+      comServer( token )
+      println@Util( token )
+      X_Client
+    }
+    [ rightIp() ] {
+      X_Client
+    }
+  }
+
+  main {
+    X_Client
+  }
+}
+\end{jolielisting}
+
+\section{Discussion and Conclusion}
+\label{sec:disc}
+
+\todo{Future work: normal surface syntax instead of raw CC terms.}
 
 \subsubsection{Acknowledgements}
 
-Please place your acknowledgments at the end of the paper, preceded by an unnumbered run-in heading (i.e. 3rd-level heading).
+Please place your acknowledgments at the end of the paper, preceded by an unnumbered run-in heading (i.e. 3rd-level heading). \todo{Acknowledgements?}
 
 % ---- Bibliography ----
 %
