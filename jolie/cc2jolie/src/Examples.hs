@@ -42,17 +42,14 @@ auth = prog
     , cond ip check
       ( [ ann "ann1" $ left ip s
         , left ip c
-        , com s token' c token
-        , call x ]
+        , com s token' c token ]
       , [ ann "ann2" $ right ip s
-        , right ip c
-        , call x ] ) ] )
+        , right ip c ] ) ] )
   where
     [ip, s, c] = pids ["Ip", "Server", "Client"]
     [credentials, token] = vars ["credentials", "token"]
-    [x] = recvars ["X"]
     [credentials', token'] = [Ref credentials, Ref token]
-    [check] = [BExpr $ Lit $ BoolVal True]
+    [check] = [BExpr $ credentials']
 
 authc :: Choreography Expr BExpr
 authc = let CProgram (_, c) = auth in c
@@ -72,15 +69,12 @@ jolie = prog
     , cond ip "check@Util( credentials )"
       ( [ ann "ann1" $ left ip s
         , ann "ann2" $ left ip c
-        , com s "makeToken@Util()" c token
-        , call x ]
+        , com s "makeToken@Util()" c token ]
       , [ right ip s
-        , right ip c
-        , call x ] ) ] )
+        , right ip c ] ) ] )
   where
     [ip, s, c] = pids ["Ip", "Server", "Client"]
     [credentials, token] = vars ["credentials", "token"]
-    [x] = recvars ["X"]
 
 joliec :: Choreography JolieExpr JolieBExpr
 joliec = let CProgram (_, c) = jolie in c
