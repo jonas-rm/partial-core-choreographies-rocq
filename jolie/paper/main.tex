@@ -197,7 +197,7 @@ data Behaviour e b
   | Send Pid e Ann (Behaviour e b)
   | Recv Pid Var Ann (Behaviour e b)
   | Choose Pid Label Ann (Behaviour e b)
-  | Offer Pid (Maybe (Ann, (Behaviour e b))) (Maybe (Ann, (Behaviour e b)))
+  | Offer Pid (Maybe (Ann, Behaviour e b)) (Maybe (Ann, Behaviour e b))
   | BCond b (Behaviour e b) (Behaviour e b)
   | BCall (RecVar, Pid)
 
