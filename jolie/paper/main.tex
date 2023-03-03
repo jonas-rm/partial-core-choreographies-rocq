@@ -38,7 +38,7 @@
 
 \newlang{coq}{Coq}{syellow}
 \newlang{haskell}{Haskell}{sgreen}
-\newcommand{\haskellcode}{\lstinline[language=Haskell,style=solarized-light]}
+\newcommand{\hc}{\lstinline[language=Haskell,style=solarized-light]}
 \newlang{jolie}{Jolie}{smagenta}
 
 \begin{document}
@@ -132,33 +132,52 @@ This phase of the compiler is not formally verified, but it's correctness is muc
   \label{fig:arch}
 \end{figure}
 
-The Coq formalization we use is parametric over the types used to represent process names, variables and terms of the underlying expression language.
+\paragraph*{Implementation.}
+
+The Coq formalization we use is parametric over the types used to represent process identifiers, variables, terms of the underlying expression language, terms, etc.
 Because this is done by using the dependently-typed features of Coq and manipulating types as normal values, certain ``artefacts'' appear in the code extracted from Coq into Haskell.
-In particular, instead of using Haskell's type system and parametric polymorphism, the extracted code makes use of GHC's \todo{cite?} \haskellcode{Any} type and the \haskellcode{unsafeCoerce} function to perform casts between the provided concrete types and \haskellcode{Any} which the extracted code works on.
+In particular, instead of using Haskell's type system and parametric polymorphism, the extracted code makes use of GHC's \todo{cite maybe} \hc{Any} type and the \hc{unsafeCoerce} function to perform casts between the provided concrete types and \hc{Any} which the extracted code works on.
 While a little clunky to work with, this is not an issue since the only requirement the formalization imposes on the type parameters is that their equality be decidable.
 Practically, this means that we just have to be able to provide a function that can determine whether two values of such a type are equal.
 Other than that the extracted code treats all of the type parameters as completely opaque.
 For this purpose we wrote a thin wrapper over the extracted code that provides a much more pleasant and idiomatic API to work with, hiding the necessary casts and using Haskell's parametric polymorphism.
 Again, this part is not formally verified, but just as before, the wrapper follows the structure of the CC and SP terms so checking it for correctness manually is easy.
 
-\todo{Be precise about what's formalized and what isn't.}
-\todo{Explain why the uncertified part is not a problem.}
-\todo{Compare to Kalas: techn-agnostic process IR with flexible annotations.}
-
-\begin{coqlisting}
-Require Export Implementation.
-Require Export EPP.
-Require Extraction.
-
-Extraction Language Haskell.
-Extraction "EPP" epp.
-\end{coqlisting}
+Our reusable projection phase has the following Haskell interface.
+We fix the types of process identifiers (\hc{Pid}), variable names (\hc{Var}, \hc{RecVar}), selection labels (\hc{Label}) and annotations (\hc{Ann}) for simplicity's sake.
+Annotations serve a special purpose and will be explained shortly.
+All of the mentioned types are just wrappers around \hc{String}s and only serve the purpose of being an identifier that can be compared for equality.
+The parametricity that is re-exposed to the user are the types used to represent terms of the expression and boolean expression languages.
 
 \begin{haskelllisting}
-  epp :: Signature -> Program -> Program0
-  epp sig p =
-  and_rect (\_ _ -> Pair (epp_D sig (procedures sig p))
-  (epp_C sig (procedures sig p) (cCP_pn sig p) (main sig p)))
+data Eta e
+  = Com Pid e Pid Var
+  | Sel Pid Pid Label
+
+data Choreography e b
+  = CEnd
+  | Interaction (Eta e) Ann (Choreography e b)
+  | CCond Pid b (Choreography e b) (Choreography e b)
+  | CCall RecVar
+  | RtCall RecVar [Pid] (Choreography e b)
+
+newtype CDefSet e b = CDefSet [(RecVar, Choreography e b)]
+newtype CProgram e b = CProgram (CDefSet e b, Choreography e b)
+
+data Behaviour e b
+  = BEnd
+  | Send Pid e Ann (Behaviour e b)
+  | Recv Pid Var Ann (Behaviour e b)
+  | Choose Pid Label Ann (Behaviour e b)
+  | Offer Pid (Maybe (Ann, (Behaviour e b))) (Maybe (Ann, (Behaviour e b)))
+  | BCond b (Behaviour e b) (Behaviour e b)
+  | BCall (RecVar, Pid)
+
+newtype BDefSet e b = BDefSet [((RecVar, Pid), Behaviour e b)]
+newtype Network e b = Network [(Pid, Behaviour e b)]
+newtype BProgram e b = BProgram (BDefSet e b, Network e b)
+
+epp :: CProgram e b -> Maybe (BProgram e b)
 \end{haskelllisting}
 
 \section{Compiling Choreographies to Jolie}
