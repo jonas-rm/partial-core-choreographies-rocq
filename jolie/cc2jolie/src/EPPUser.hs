@@ -2,6 +2,11 @@
 
 module EPPUser where
 
+-- TODO: Check annotation uniqueness, but not for external processes.
+-- TODO: Pretty-printing library.
+-- TODO: Parser.
+-- TODO: Well-formedness condition.
+
 import Control.DeepSeq (NFData)
 import Control.Spoon (spoon)
 import GHC.Generics (Generic)
