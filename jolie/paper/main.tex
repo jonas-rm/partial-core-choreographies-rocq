@@ -106,7 +106,7 @@ Finally, we discuss our approach and conclude in \Cref{sec:disc}.
 There have been other similar works in certified compilation of choreographies.
 Kalas \todo{cite} is a choreographic programming language that is end-to-end certified using the Hol4 proof assistant and compiles the choreography to CakeML, a formally verified subset of the ML language.
 Unlike Kalas, we take a technology-agnostic approach that allows us to plug multiple different backends into our compiler's pipeline \todo{Move this to architecture or the discussion?}.
-Pirouette \todo{cite} is a language for typed higher-order functional choreographic programming and comes with a formalization in Coq, but it hasn't yet been used to produce a certified implementation of a choreographic compiler.
+Pirouette \todo{cite} is a language for typed higher-order functional choreographic programming and comes with a formalization in Coq, but it has not yet been used to produce a certified implementation of a choreographic compiler.
 
 \section{Architecture and Implementation}
 \label{sec:arch}
@@ -120,10 +120,10 @@ We use SP as an intermediate representation (IR) of processes.
 This part of the compiler uses the formally verified projection procedure that has been automatically extracted from the Coq formalization into Haskell code.
 Making use of the extracted code is relatively straightforward, although a few considerations are necessary given that Coq is a dependently-typed language, while all of the languages it can extract to are not.
 
-The second phase of our compiler is the \textit{code generation} which compiles the generated process IR to an executable language.
-In this work we focus on generating Jolie code.
+The second phase of our compiler is the \textit{code generation}: compiling the generated process IR to an executable language.
+In this work we focus primarily on generating Jolie code.
 However, because of our modular two-phase approach, additional backends could be implemented without having to touch the rest of the compiler.
-This phase of the compiler is not formally verified, but it's correctness is much easier to establish than the correctness of projection itself since the code generation proceeds homeomorphically \todo{``proceeds homeomorphically'', is this right?} on the structure of the process IR.
+This phase of the compiler is not formally verified, but its correctness is much easier to establish than the correctness of projection itself since the code generation proceeds homeomorphically \todo{``proceeds homeomorphically'', is this right} on the structure of the process IR.
 
 \begin{figure}[h]
   \centering
