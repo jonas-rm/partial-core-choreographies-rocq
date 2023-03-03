@@ -188,7 +188,6 @@ data Choreography e b
   | Interaction (Eta e) Ann (Choreography e b)
   | CCond Pid b (Choreography e b) (Choreography e b)
   | CCall RecVar
-  | RtCall RecVar [Pid] (Choreography e b)
 
 newtype CDefSet e b = CDefSet [(RecVar, Choreography e b)]
 newtype CProgram e b = CProgram (CDefSet e b, Choreography e b)

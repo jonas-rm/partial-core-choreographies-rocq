@@ -50,7 +50,6 @@ data Choreography e b
   | Interaction (Eta e) Ann (Choreography e b)
   | CCond Pid b (Choreography e b) (Choreography e b)
   | CCall RecVar
-  | RtCall RecVar [Pid] (Choreography e b)
   deriving (Show, Generic, NFData)
 
 newtype CDefSet e b = CDefSet [(RecVar, Choreography e b)] deriving (Show, Generic, NFData)
@@ -93,8 +92,6 @@ encodeChoreography (Interaction (Sel src dst l) ann c) =
 encodeChoreography (CCond pid ex c1 c2) =
   E.Cond (cast pid) (cast ex) (encodeChoreography c1) (encodeChoreography c2)
 encodeChoreography (CCall v) = E.Call (cast v)
-encodeChoreography (RtCall v pids c) =
-  E.RT_Call (cast v) (encodeList $ map cast pids) (encodeChoreography c)
 
 collectPids :: CDefSet e b -> Choreography e b -> [Pid]
 collectPids (CDefSet defs) c' = S.toList $ collect S.empty c'
@@ -111,7 +108,6 @@ collectPids (CDefSet defs) c' = S.toList $ collect S.empty c'
       | otherwise = case L.lookup v defs of
         Just c -> collect (S.insert v seen) c
         Nothing -> error $ "Definition doesn't exist: " ++ show v
-    collect _ (RtCall _ _ _) = error "Runtime term encountered"
 
 encodeDefs :: CDefSet e b -> E.DefSet
 encodeDefs s@(CDefSet defs) = \v -> let d = cast v :: RecVar in
@@ -234,9 +230,6 @@ instance (PPrint e, PPrint b) => PPrint (Choreography e b) where
     ("if " ++ p ++ ".(" ++ format ex ++ ") then\n" ++ (indent 2 $ format c1) ++
      "else\n" ++ (indent 2 $ format c2))
   format (CCall (RecVar v)) = v ++ ";\n"
-  format (RtCall (RecVar v) pids c) =
-    let ps = [p | Pid p <- pids] in
-      v ++ "(" ++ join ", " ps ++ ");\n" ++ format c
 
 section :: PPrint a => String -> a -> String
 section header x = header ++ ":\n" ++ (indent 2 $ format x)
