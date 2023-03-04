@@ -335,6 +335,13 @@ service Server {
   \eoe
 \end{example}
 
+\section{Conclusion}
+
+We implemented a toolchain for compiling choreographies to executable code in Jolie.
+The complex step, computing the endpoint projection, is handled by certified code extracted from the Coq formalisation in~\cite{CMP21b}.
+This certified code is then combined with uncertified wrappers whose correctness is easy to check by hand.
+We illustrated the toolchain with a protocol for distributed authentication.
+
 % \begin{figure}[h]
 %   \centering
 % %   \begin{haskelllisting}[]
