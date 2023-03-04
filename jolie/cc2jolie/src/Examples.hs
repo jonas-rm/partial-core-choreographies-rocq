@@ -38,13 +38,13 @@ lambda = (Apply
 auth :: CProgram Expr BExpr
 auth = prog
   ( []
-  , [ com c credentials' ip credentials
+  , [ ann "authenticate" $ com c credentials' ip credentials
     , cond ip check
-      ( [ ann "ann1" $ left ip s
-        , left ip c
-        , com s token' c token ]
-      , [ ann "ann2" $ right ip s
-        , right ip c ] ) ] )
+      ( [ ann "autOk" $ left ip s
+        , ann "authOk" $ left ip c
+        , ann "acceptToken" $ com s token' c token ]
+      , [ ann "authFail" $ right ip s
+        , ann "authFail" $ right ip c ] ) ] )
   where
     [ip, s, c] = pids ["Ip", "Server", "Client"]
     [credentials, token] = vars ["credentials", "token"]
@@ -65,13 +65,13 @@ authn = let BProgram (_, n) = authb in n
 jolie :: CProgram JolieExpr JolieBExpr
 jolie = prog
   ( []
-  , [ com c "credentials" ip credentials
+  , [ ann "authenticate" $ com c "credentials" ip credentials
     , cond ip "check@Util( credentials )"
-      ( [ ann "ann1" $ left ip s
-        , ann "ann2" $ left ip c
-        , com s "makeToken@Util()" c token ]
-      , [ right ip s
-        , right ip c ] ) ] )
+      ( [ ann "authOk" $ left ip s
+        , ann "authOk" $ left ip c
+        , ann "acceptToken" $ com s "makeToken@Util()" c token ]
+      , [ ann "authFail" $ right ip s
+        , ann "authFail" $ right ip c ] ) ] )
   where
     [ip, s, c] = pids ["Ip", "Server", "Client"]
     [credentials, token] = vars ["credentials", "token"]
@@ -85,18 +85,21 @@ jolieb = fromJust $ epp jolie
 jolien :: Network JolieExpr JolieBExpr
 jolien = let BProgram (_, n) = jolieb in n
 
+joliej :: String
+joliej = compileJolie "" jolieb
+
 -- Jolie DistAuth RecVar Example
 
 jolierec :: CProgram JolieExpr JolieBExpr
 jolierec = prog
-  ( [ (x, [ com c "credentials" ip credentials
+  ( [ (x, [ ann "authenticate" $ com c "credentials" ip credentials
           , cond ip "check@Util( credentials )"
-            ( [ ann "ann1" $ left ip s
-              , ann "ann2" $ left ip c
-              , com s "makeToken@Util()" c token
+            ( [ ann "authOk" $ left ip s
+              , ann "authOk" $ left ip c
+              , ann "acceptToken" $ com s "makeToken@Util()" c token
               , call x ]
-            , [ right ip s
-              , right ip c
+            , [ ann "authFail" $ right ip s
+              , ann "authFail" $ right ip c
               , call x ] ) ] ) ]
   , [ call x ] )
   where
@@ -112,3 +115,6 @@ jolierecb = fromJust $ epp jolierec
 
 jolierecn :: Network JolieExpr JolieBExpr
 jolierecn = let BProgram (_, n) = jolierecb in n
+
+jolierecj :: String
+jolierecj = compileJolie "" jolierecb
