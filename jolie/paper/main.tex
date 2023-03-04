@@ -116,16 +116,13 @@ More technically, \toolname{}'s architecture consists of two compilation phases 
 The first phase (projection) uses EPP to translate a choreography into an abstract representation of process programs given in SP, which we use as an intermediate representation (IR).
 This phase is certified: it is implemented by Haskell code that we extracted from the Coq formalisation of EPP in~\cite{CMP21b}.
 The second phase (code generation) takes care of translating the abstract send and receive actions in the IR into code in an executable programming language.
+\todo{Not only send and receive actions, since we also have conditionals?}
 In our current implementation for Jolie, this phase is not formally verified.
 Nonetheless, it is a homeomorphic transformation that follows the term structure of the IR in a straightforward mechanical fashion.
 
 Our development thus allows for coding and executing choreographies given in a well-understood language (CC)~\cite{CM20,CMP21,CMP21b,M23}.
 Also, it confirms the informal claim made in~\cite{CMP22} that the formalisation of CC was made with flexibility in mind for this kind of applications.
 In particular, our application to Jolie did not require any modification to the formalisation, but just an appropriate instantiation of its parameters and a simple interfacing of its extracted data types with the other components of our compilation pipeline in Haskell.
-
-% we use Coq to \textit{extract} a formally verified implementation of the EPP and use it as the core of our compiler.
-% With the critical part of the compiler taken care of automatically, we can focus just on mapping the necessary process semantics to our executable language.
-% We use Jolie as our final compilation target, producing for each process a Jolie service that implements its part of the overall choreographic behaviour and can be run independently.
 
 \paragraph*{Structure.}
 
@@ -143,44 +140,45 @@ By contrast, we take a technology-agnostic approach that allows for reusing our 
 Pirouette~\cite{HG22} is a functional choreographic programming language formalised in Coq, which similarly to~\cite{CMP21} can be instantiated with different languages for local computation.
 However, it has not yet been used to implement a choreographic compiler that targets executable code.
 
-\section{Architecture and Implementation}
+\section{Choreographies in \toolname{}}
 \label{sec:arch}
 
-\paragraph*{Architecture.}
+\paragraph*{Representation.}
 
-We implemented \toolname{} in Haskell and took a two-phased approach in the design of its compilation pipeline, shown in \Cref{fig:arch}.
+We represent choreographies and processes (terms of CC and SP) with Haskell data types that have been automatically extracted from the Coq formalisation.
+However, a few considerations are necessary given that Coq is a dependently-typed language, while all of the languages it can extract to are not.
+As mentioned before, the formalisation is parametric over the types used to represent process identifiers, (recursion) variables, terms of the local computation language, etc.
+Because this is done using the dependently-typed features of Coq, certain ``artefacts'' appear in the code extracted from Coq into Haskell.
 
-The first phase is the \textit{projection}: it takes as input a choreographic program given as a CC term and projects it to a collection of SP terms representing the necessary behaviours of the endpoints.
-We use SP as an intermediate representation (IR) of processes.
-This part of the compiler uses the formally verified projection procedure that has been automatically extracted from the Coq formalization into Haskell code.
-Making use of the extracted code is relatively straightforward, although a few considerations are necessary given that Coq is a dependently-typed language, while all of the languages it can extract to are not.
+Particularly, instead of using Haskell's type system and parametric polymorphism, the extracted code uses Haskell's \hc{Any} type to achieve genericity.
+The \hc{unsafeCoerce} function has to be used when interfacing with the extracted code in order to coerce them to and from \hc{Any}.
+To deal with the verbosity we provide a more ergonomic interface with a thin \textit{wrapper} (\cref{fig:arch}) around the extracted code.
+The wrapper hides the necessary coercions and models the terms using Haskell's parametric polymorphism.
+Again, this part is not formally verified, but as before, the wrapper follows the term structure of CC and SP so checking it for correctness manually is not a problem.
+\todo{Use something other than ``wrapper''?}
 
-The second phase of our compiler is the \textit{code generation}: compiling the generated process IR to an executable language.
-In this work we focus primarily on generating Jolie code.
-However, because of our modular two-phase approach, additional backends could be implemented without having to touch the rest of the compiler.
-This phase of the compiler is not formally verified, but its correctness is much easier to establish than the correctness of projection itself since the code generation proceeds homeomorphically \todo{``proceeds homeomorphically'', is this right} on the structure of the process IR.
-
-\paragraph*{Implementation.}
-
-The Coq formalization we use is parametric over the types used to represent process identifiers, variables, terms of the underlying expression language, terms, etc.
-Because this is done by using the dependently-typed features of Coq and manipulating types as normal values, certain ``artefacts'' appear in the code extracted from Coq into Haskell.
-In particular, instead of using Haskell's type system and parametric polymorphism, the extracted code makes use of GHC's \todo{cite maybe} \hc{Any} type and the \hc{unsafeCoerce} function to perform casts between the provided concrete types and \hc{Any} which the extracted code works on.
-While a little clunky to work with, this is not an issue since the only requirement the formalization imposes on the type parameters is that their equality be decidable.
-Practically, this means that we just have to be able to provide a function that can determine whether two values of such a type are equal.
-Other than that the extracted code treats all of the type parameters as completely opaque.
-For this purpose we wrote a thin wrapper over the extracted code that provides a much more pleasant and idiomatic API to work with, hiding the necessary casts and using Haskell's parametric polymorphism.
-Again, this part is not formally verified, but just as before, the wrapper follows the structure of the CC and SP terms so checking it for correctness manually is easy.
-
-Our reusable projection phase has the following Haskell interface.
+Our final interface is shown in \cref{fig:repr}.
 We fix the types of process identifiers (\hc{Pid}), variable names (\hc{Var}, \hc{RecVar}), selection labels (\hc{Label}) and annotations (\hc{Ann}) for simplicity's sake.
-Annotations serve a special purpose and will be explained shortly.
-All of the mentioned types are just wrappers around \hc{String}s and only serve the purpose of being an identifier that can be compared for equality.
-The parametricity that is re-exposed to the user are the types used to represent terms of the expression and boolean expression languages.
+The \hc{Label} type is a binary sum type with \hc{CLeft} and \hc{CRight} as its constructors, while others are just wrappers around \hc{String}s and are used as identifiers.
 
-\begin{haskelllisting}
-data Eta e
-  = Com Pid e Pid Var
-  | Sel Pid Pid Label
+A choreography is represented with the type \hc{Choreography e b} which is parametric on the terms of the local computation and boolean expression languages (\hc{e} and \hc{b}).
+Processes can perform point-to-point interactions (\hc{Interaction}), whether plain communications (\hc{Com}) that transfer values of expressions to remote variables, or selections (\hc{Sel}) that transfer labels.
+Choreographies can also include conditionals (\hc{CCond}) based on boolean expressions and invoke recursive procedures (\hc{CCall}).
+\hc{CProgram} models the overall choreographic program which carries the definitions of any recursive procedures (\hc{CDefSet}) in addition to the main choreography.
+\todo{Mention the elision of runtime terms?}
+
+A process' projected behaviour is expressed with the type \hc{Behaviour e b}, again parametric on the local languages.
+\hc{Send} and \hc{Recv} correspond to the respective communication actions, while \hc{BCond} and \hc{BCall} are as in CC.
+The remaining terms \hc{Choose} and \hc{Offer} are used to implement selections, where one process can \textit{choose} which of the \textit{offered} behaviours another process should execute.
+Processes are named by identifiers and grouped into a \hc{Network}, which is then paired with the projections of recursive procedures for each process (\hc{BDefSet}) to form a \hc{BProgram}.
+
+Finally, \hc{epp} performs the projection of a \hc{CProgram} to a \hc{BProgram} using the extracted EPP as its foundation.
+We use the \hc{Maybe} type to handle the case when a choreography is not projectable.
+
+\begin{figure}[h]
+  \centering
+  \begin{haskelllisting}
+data Eta e = Com Pid e Pid Var | Sel Pid Pid Label
 
 data Choreography e b
   = CEnd
@@ -205,6 +203,29 @@ newtype Network e b = Network [(Pid, Behaviour e b)]
 newtype BProgram e b = BProgram (BDefSet e b, Network e b)
 
 epp :: CProgram e b -> Maybe (BProgram e b)
+  \end{haskelllisting}
+  \caption{Representation of choreographies and processes in \toolname{}.}
+  \label{fig:repr}
+\end{figure}
+
+\paragraph*{Distributed authentication.}
+
+\begin{haskelllisting}
+auth :: CProgram Expr BExpr
+auth = prog
+  ( []
+  , [ com c credentials' ip x
+    , cond ip check
+      ( [ ann "authOk" $ left ip s
+        , ann "authOk" $ $left ip c
+        , com s token' c token ]
+      , [ ann "ann2" $ right ip s
+        , right ip c ] ) ] )
+  where
+    [ip, s, c] = pids ["Ip", "Server", "Client"]
+    [credentials, x, token] = vars ["credentials", "x", "token"]
+    [credentials', token'] = [Ref credentials, Ref token]
+    [check] = [BExpr $ Lit $ BoolVal True]
 \end{haskelllisting}
 
 \section{Compiling Choreographies to Jolie}
