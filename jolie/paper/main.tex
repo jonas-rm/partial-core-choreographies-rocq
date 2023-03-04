@@ -13,6 +13,7 @@
 \usepackage{lstcoq}
 \usepackage{hyperref}
 \usepackage{cleveref}
+\usepackage{placeins}
 
 % \lstdefinestyle{haskell}{
 %   frame=none,
@@ -41,9 +42,11 @@
 \newlang{haskell}{Haskell}{sgreen}
 \newcommand{\hc}{\lstinline[language=Haskell,style=solarized-light]}
 \newlang{jolie}{Jolie}{smagenta}
+\newcommand{\jc}{\lstinline[language=Jolie,style=solarized-light]}
 
+\newcommand{\dollar}{\mbox{\textdollar}}
+\newcommand{\proc}[1]{\texttt{#1}}
 \newcommand{\toolname}{\texttt{hacc}}
-\raggedbottom
 
 \begin{document}
 
@@ -101,7 +104,7 @@ Defining and implementing EPP is technically involved~\cite{SY19}, which motivat
 Among these, the formalisation of the choreographic programming language \emph{Core Choreographies (CC)} and its EPP to the process calculus of \emph{Stateful Processes (SP)} was designed with broad applicability in mind~\cite{CMP22}.
 Specifically, its design allows for annotating communications with arbitrary metadata and is parametric on the languages used to express local computation, data, process identifiers, etc.
 
-In this work, for the first time, we reap the benefits of~\cite{CMP22} to develop \toolname{} (pronounced `hack'): a tool for compiling choreographies in CC to executable code.
+In this work, for the first time, we reap the benefits of~\cite{CMP22} to develop \toolname{} (pronounced ``hack''): a tool for compiling choreographies in CC to executable code.
 As target language for this executable code, we use the service-oriented programming language Jolie~\cite{MGZ14}.
 Additionally, \toolname{} is designed with future extensibility in mind, so that new target languages can be added.
 
@@ -127,7 +130,7 @@ In particular, our application to Jolie did not require any modification to the 
 \paragraph*{Structure.}
 
 \Cref{sec:arch} gives an overview of our compiler's architecture and describes its implementation.
-\Cref{sec:jolie} explains how we map the process language to Jolie in order to generate executable Jolie code consisting of multiple independent services.
+\Cref{sec:comp} explains how we map the process language to Jolie in order to generate executable Jolie code consisting of multiple independent services.
 
 \paragraph*{Related work.}
 
@@ -157,12 +160,12 @@ The wrapper hides the necessary coercions and models the terms using Haskell's p
 Again, this part is not formally verified, but as before, the wrapper follows the term structure of CC and SP so checking it for correctness manually is not a problem.
 \todo{Use something other than ``wrapper''?}
 
-Our final interface is shown in \cref{fig:repr}.
+Our final interface is shown in \cref{fig:iface}.
 We fix the types of process identifiers (\hc{Pid}), variable names (\hc{Var}, \hc{RecVar}), selection labels (\hc{Label}) and annotations (\hc{Ann}) for simplicity's sake.
 The \hc{Label} type is a binary sum type with \hc{CLeft} and \hc{CRight} as its constructors, while others are just wrappers around \hc{String}s and are used as identifiers.
 
 A choreography is represented with the type \hc{Choreography e b} which is parametric on the terms of the local computation and boolean expression languages (\hc{e} and \hc{b}).
-Processes can perform point-to-point interactions (\hc{Interaction}), whether plain communications (\hc{Com}) that transfer values of expressions to remote variables, or selections (\hc{Sel}) that transfer labels.
+Processes can perform point-to-point interactions (\hc{Interaction})---whether plain communications (\hc{Com}) that transfer values of expressions to remote variables, or selections (\hc{Sel}) that transfer labels.
 Choreographies can also include conditionals (\hc{CCond}) based on boolean expressions and invoke recursive procedures (\hc{CCall}).
 \hc{CProgram} models the overall choreographic program which carries the definitions of any recursive procedures (\hc{CDefSet}) in addition to the main choreography.
 \todo{Mention the elision of runtime terms?}
@@ -174,11 +177,14 @@ Processes are named by identifiers and grouped into a \hc{Network}, which is the
 
 Finally, \hc{epp} performs the projection of a \hc{CProgram} to a \hc{BProgram} using the extracted EPP as its foundation.
 We use the \hc{Maybe} type to handle the case when a choreography is not projectable.
+\todo{Move processes and \hc{epp} to section 3?}
 
 \begin{figure}[h]
   \centering
   \begin{haskelllisting}
-data Eta e = Com Pid e Pid Var | Sel Pid Pid Label
+data Eta e
+  = Com Pid e Pid Var
+  | Sel Pid Pid Label
 
 data Choreography e b
   = CEnd
@@ -205,65 +211,201 @@ newtype BProgram e b = BProgram (BDefSet e b, Network e b)
 epp :: CProgram e b -> Maybe (BProgram e b)
   \end{haskelllisting}
   \caption{Representation of choreographies and processes in \toolname{}.}
-  \label{fig:repr}
+  \label{fig:iface}
 \end{figure}
 
 \paragraph*{Distributed authentication.}
 
-\begin{haskelllisting}
-auth :: CProgram Expr BExpr
-auth = prog
-  ( []
-  , [ com c credentials' ip x
-    , cond ip check
-      ( [ ann "authOk" $ left ip s
-        , ann "authOk" $ $left ip c
-        , com s token' c token ]
-      , [ ann "ann2" $ right ip s
-        , right ip c ] ) ] )
+\Cref{fig:ex-chor} shows the \todo{``the''---I assume this is a well-known example by now} distributed authentication choreography encoded as a \hc{CProgram}.
+
+Instead of working with our data types directly we define a convenient set of combinators for building choreographies.
+The \hc{prog} combinator creates a \hc{CProgram} given a pair of recursive procedure definitions and the main choreography.
+A choreography is given as a list of instructions---communications, selections, conditionals and calls---all built using the corresponding combinators---\hc{com}, \hc{sel}, \hc{cond} and \hc{call}---which the builder strings together to produce a CC term in our representation.
+\hc{ann} can be used to annotate any of the communication or selection instructions.
+We do not make use of recursive procedures in order to keep the examples short, but they are straightforward to use and amount to ``named choreographies''.
+
+The choreography is conceptually simple: \proc{Client} wishes to authenticate with \proc{Ip} (identity provider) in order to receive a token from \proc{Server}.
+In the beginning, \proc{Client} sends its credentials to \proc{Ip}.
+After checking the credentials for validity, \proc{Ip} decides which branch of the conditional to take and communicates its decision to \proc{Server}.
+\proc{Server} receives the decision and, if the authentication was successful, sends a token to \proc{Client}.
+
+Two things are of note.
+First, we annotate all of the interactions with strings that carry the names of the operation that is being performed.
+This will be useful later during code generation and allows the user to have some control over the produced executable code and its interface.
+Second, we model the terms of the local computation and boolean expression languages as plain strings for simplicity.
+The strings will be interpolated as-is into the generated executable code.
+
+\begin{figure}[h]
+  \centering
+%   \begin{haskelllisting}[]
+% CProgram
+%   (CDefSet [],
+%    Interaction (Com (Pid "Client") "credentials" (Pid "Ip") (Var "credentials")) (Ann "authenticate")
+%      (CCond (Pid "Ip") "check(credentials)"
+%        (Interaction (Sel (Pid "Ip") (Pid "Server") CLeft) (Ann "authOk")
+%          (Interaction (Sel (Pid "Ip") (Pid "Client") CLeft) (Ann "authOk")
+%            (Interaction (Com (Pid "Server") "makeToken" (Pid "Client") (Var "token")) (Ann "acceptToken")
+%              CEnd)))
+%        (Interaction (Sel (Pid "Ip") (Pid "Server") CRight) (Ann "authFail")
+%          (Interaction (Sel (Pid "Ip") (Pid "Client") CRight) (Ann "authFail") CEnd))))
+%   \end{haskelllisting}
+  \begin{haskelllisting}[]
+auth :: CProgram String String
+auth = prog ([],
+  [ann "authenticate" $\dollar$ com c "credentials" ip credentials,
+   cond ip "check(credentials)"
+     ([ann "authOk" $\dollar$ left ip s,
+       ann "authOk" $\dollar$ left ip c,
+       ann "acceptToken" $\dollar$ com s "makeToken" c token],
+      [ann "authFail" $\dollar$ right ip s,
+       ann "authFail" $\dollar$ right ip c])])
   where
     [ip, s, c] = pids ["Ip", "Server", "Client"]
-    [credentials, x, token] = vars ["credentials", "x", "token"]
-    [credentials', token'] = [Ref credentials, Ref token]
-    [check] = [BExpr $ Lit $ BoolVal True]
-\end{haskelllisting}
+    [credentials, token] = vars ["credentials", "token"]
+  \end{haskelllisting}
+%   \begin{haskelllisting}[]
+% auth :: CProgram String String
+% auth = prog
+%   ([]
+%   , [ ann "authenticate" $\dollar$ com c "credentials" ip credentials
+%     , cond ip "check(credentials)"
+%       ( [ ann "authOk" $\dollar$ left ip s
+%         , ann "authOk" $\dollar$ left ip c
+%         , ann "acceptToken" $\dollar$ com s "makeToken" c token ]
+%       , [ ann "authFail" $\dollar$ right ip s
+%         , ann "authFail" $\dollar$ right ip c ] ) ] )
+%   where
+%     [ip, s, c] = pids ["Ip", "Server", "Client"]
+%     [credentials, token] = vars ["credentials", "token"]
+%   \end{haskelllisting}
+  \caption{The distributed authentication choreography in CC.}
+  \label{fig:ex-chor}
+\end{figure}
 
-\section{Compiling Choreographies to Jolie}
-\label{sec:jolie}
+\section{Compilation to Jolie}
+\label{sec:comp}
 
-\begin{jolielisting}
+\paragraph*{Projection.}
+
+Projecting the distributed authentication choreography from \cref{fig:ex-chor} gives us the process IR seen in \cref{fig:ex-comp}.
+We show only the behaviour for \proc{Client} to save on space.
+Note how the annotations from the choreography have been preserved and propagated to the projection.
+
+\paragraph*{Code generation.}
+
+The process IR can now be compiled down to executable code.
+We use the service-oriented language Jolie to generate a \jc{service} for each process.
+
+% Annotations serve a special purpose and will be explained in \cref{sec:comp}.
+% we use Coq to \textit{extract} a formally verified implementation of the EPP and use it as the core of our compiler.
+% With the critical part of the compiler taken care of automatically, we can focus just on mapping the necessary process semantics to our executable language.
+% We use Jolie as our final compilation target, producing for each process a Jolie service that implements its part of the overall choreographic behaviour and can be run independently.
+
+% \begin{figure}[h]
+%   \centering
+% %   \begin{haskelllisting}[]
+% % BProgram
+% %  (BDefSet [],
+% %   Network [
+% %     ...,
+% %     (Pid "Client",
+% %      Send (Pid "Ip") "credentials" (Ann "authenticate")
+% %        (Offer (Pid "Ip")
+% %          (Just (Ann "authOk",
+% %                 Recv (Pid "Server") (Var "token") (Ann "acceptToken") BEnd))
+% %          (Just (Ann "authFail", BEnd))))])
+% %   \end{haskelllisting}
+% %   \begin{haskelllisting}[]
+% % BProgram
+% %  (BDefSet [],
+% %   Network [
+% %     (Pid "Ip",
+% %      Recv (Pid "Client") (Var "credentials") (Ann "authenticate")
+% %        (BCond "check(credentials)"
+% %          (Choose (Pid "Server") CLeft (Ann "authOk")
+% %            (Choose (Pid "Client") CLeft (Ann "authOk") BEnd))
+% %          (Choose (Pid "Server") CRight (Ann "authFail")
+% %            (Choose (Pid "Client") CRight (Ann "authFail") BEnd)))),
+% %     (Pid "Server",
+% %      Offer (Pid "Ip")
+% %        (Just (Ann "authOk",
+% %               Send (Pid "Client") "makeToken" (Ann "acceptToken") BEnd))
+% %        (Just (Ann "authFail", BEnd))),
+% %     (Pid "Client",
+% %      Send (Pid "Ip") "credentials" (Ann "authenticate")
+% %        (Offer (Pid "Ip")
+% %          (Just (Ann "authOk",
+% %                 Recv (Pid "Server") (Var "token") (Ann "acceptToken") BEnd))
+% %          (Just (Ann "authFail", BEnd))))])
+% %   \end{haskelllisting}
+% %   \begin{haskelllisting}[]
+% % BProgram
+% %  ( BDefSet []
+% %  , Network
+% %    [ ( Pid "Ip"
+% %      , Recv (Pid "Client") (Var "credentials") (Ann "authenticate")
+% %          (BCond "check(credentials)"
+% %            (Choose (Pid "Server") CLeft (Ann "authOk")
+% %              (Choose (Pid "Client") CLeft (Ann "authOk") BEnd))
+% %            (Choose (Pid "Server") CRight (Ann "authFail")
+% %              (Choose (Pid "Client") CRight (Ann "authFail") BEnd))))
+% %    , ( Pid "Server"
+% %      , Offer (Pid "Ip")
+% %          (Just ( Ann "authOk"
+% %                , Send (Pid "Client") "makeToken" (Ann "acceptToken")
+% %                  BEnd))
+% %          (Just ( Ann "authFail"
+% %                , BEnd ) ) )
+% %    , ( Pid "Client"
+% %      , Send (Pid "Ip") "credentials" (Ann "authenticate")
+% %         ( Offer (Pid "Ip")
+% %           ( Just ( Ann "authOk"
+% %                  , Recv (Pid "Server") (Var "token") (Ann "acceptToken") BEnd))
+% %           ( Just ( Ann "authFail"
+% %                  , BEnd ) ) ) ) ] )
+% %   \end{haskelllisting}
+%   \caption{The projection of the choreography for \proc{Client} in SP.}
+%   \label{fig:ex-comp}
+% \end{figure}
+
+\begin{figure}[h]
+  \centering
+  \begin{haskelllisting}[]
+BProgram (BDefSet [], Network [...,
+  (Pid "Client",
+   Send (Pid "Ip") "credentials" (Ann "authenticate")
+     (Offer (Pid "Ip")
+       (Just (Ann "authOk",
+              Recv (Pid "Server") (Var "token") (Ann "acceptToken") BEnd))
+       (Just (Ann "authFail", BEnd))))])
+  \end{haskelllisting}
+  \begin{jolielisting}
 service Client {
-  embed Util as Util
-
-  inputPort Input {
-    location: "socket://localhost:8080"
-    protocol: http { format = "json" }
-    interfaces: ClientApi
-  }
-
-  outputPort Ip {
-    location: "socket://localhost:8081"
-    protocol: http { format = "json" }
-    interfaces: IpApi
-  }
-
-  define X_Client {
-    comClient@Ip( credentials )
-    [ leftIp() ] {
-      comServer( token )
-      println@Util( token )
-      X_Client
-    }
-    [ rightIp() ] {
-      X_Client
-    }
-  }
-
   main {
-    X_Client
-  }
-}
-\end{jolielisting}
+    authenticate@Ip( credentials )
+    [ authOk() ] {
+      acceptToken( token ) } } }
+
+service Ip {
+  main {
+    authenticate( credentials )
+    if ( check@Util( credentials ) ) {
+      authOk@Server()
+      authOk@Client()
+    } else {
+      authFail@Server()
+      authFail@Client() } } }
+
+service Server {
+  main {
+    [ authOk() ] {
+      acceptToken@Client( makeToken@Util() ) } } }
+  \end{jolielisting}
+  \caption{The results of projection and code generation.}
+  \label{fig:ex-comp}
+\end{figure}
+
+\FloatBarrier
 
 % \section{Discussion and Conclusion}
 % \label{sec:disc}
