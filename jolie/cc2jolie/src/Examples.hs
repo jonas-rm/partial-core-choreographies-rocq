@@ -35,8 +35,33 @@ lambda = (Apply
 
 -- DistAuth Example
 
-auth :: CProgram Expr BExpr
+auth :: CProgram String String
 auth = prog
+  ( []
+  , [ ann "authenticate" $ com c "credentials" ip credentials
+    , cond ip "check(credentials)"
+      ( [ ann "authOk" $ left ip s
+        , ann "authOk" $ left ip c
+        , ann "acceptToken" $ com s "makeToken" c token ]
+      , [ ann "authFail" $ right ip s
+        , ann "authFail" $ right ip c ] ) ] )
+  where
+    [ip, s, c] = pids ["Ip", "Server", "Client"]
+    [credentials, token] = vars ["credentials", "token"]
+
+authc :: Choreography String String
+authc = let CProgram (_, c) = auth in c
+
+authb :: BProgram String String
+authb = fromJust $ epp auth
+
+authn :: Network String String
+authn = let BProgram (_, n) = authb in n
+
+-- Lambda DistAuth Example
+
+auth' :: CProgram Expr BExpr
+auth' = prog
   ( []
   , [ ann "authenticate" $ com c credentials' ip credentials
     , cond ip check
@@ -51,14 +76,14 @@ auth = prog
     [credentials', token'] = [Ref credentials, Ref token]
     [check] = [BExpr $ credentials']
 
-authc :: Choreography Expr BExpr
-authc = let CProgram (_, c) = auth in c
+authc' :: Choreography Expr BExpr
+authc' = let CProgram (_, c) = auth' in c
 
-authb :: BProgram Expr BExpr
-authb = fromJust $ epp auth
+authb' :: BProgram Expr BExpr
+authb' = fromJust $ epp auth'
 
-authn :: Network Expr BExpr
-authn = let BProgram (_, n) = authb in n
+authn' :: Network Expr BExpr
+authn' = let BProgram (_, n) = authb' in n
 
 -- Jolie DistAuth Example
 

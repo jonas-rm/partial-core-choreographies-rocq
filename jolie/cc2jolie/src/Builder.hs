@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Builder where
@@ -14,6 +15,9 @@ data Instruction e b
 
 class Exprify a b where
   exprify :: a -> b
+
+instance Exprify a a where
+  exprify = id
 
 com :: Exprify a e => Pid -> a -> Pid -> Var -> Instruction e b
 com src ex dst v = Interaction (Com src (exprify ex) dst v) (Ann "")

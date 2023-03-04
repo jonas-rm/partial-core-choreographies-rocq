@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 
 module EPPUser where
@@ -209,6 +211,9 @@ class PPrint a where
 
   pprint :: a -> IO ()
   pprint = putStrLn . format
+
+instance PPrint String where
+  format = id
 
 instance PPrint Label where
   format CLeft = "left"

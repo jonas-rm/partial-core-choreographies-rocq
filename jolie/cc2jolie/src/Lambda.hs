@@ -8,7 +8,6 @@ import GHC.Generics (Generic)
 
 import qualified Data.List as L
 
-import Builder (Exprify, exprify)
 import EPPUser
 
 newtype Env = Env [(Var, Val)] deriving (Show, Generic, NFData)
@@ -92,11 +91,3 @@ instance PPrint Expr where
 
 instance PPrint BExpr where
   format (BExpr ex) = format ex
-
--- Builder
-
-instance Exprify Expr Expr where
-  exprify = id
-
-instance Exprify BExpr BExpr where
-  exprify = id
