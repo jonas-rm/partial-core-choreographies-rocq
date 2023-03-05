@@ -300,7 +300,7 @@ BProgram (BDefSet [], Network [...,
               Recv (Pid "Server") (Var "token") (Ann "acceptToken") BEnd))
        (Just (Ann "authFail", BEnd))))])
     \end{haskelllisting}
-    \caption{The projection of the distributed authentication choreography.}
+    \caption{The projection of the choreography in \Cref{ex:auth-chor}.}
     \label{fig:ex-proj}
   \end{figure}
   \eoe
@@ -330,7 +330,7 @@ service Client {
   }
 }
     \end{jolielisting}
-  \caption{The executable Jolie code generated for the choreography.}
+  \caption{The executable Jolie code generated for the choreography in \Cref{ex:auth-chor}.}
   \label{fig:ex-comp}
   \end{figure}
   \eoe
