@@ -189,7 +189,7 @@ Conditionals (\hc{CCond}) are based on Boolean expressions, and \hc{CCall} invok
 
 Instead of working with our data types directly we define a convenient set of combinators for building choreographies.
 We provide a \hc{prog} combinator that returns a \hc{CProgram} given a pair of recursive procedure definitions and the main choreography.
-A choreography is given as a list of instructions (communications, selections of \hc{CLeft} or \hc{CRight}, conditionals and calls), all built using the corresponding combinators (\hc{com}, \hc{left}, \hc{right}, \hc{cond} and \hc{call}, respectively), which the builder strings together to produce a CC term in our representation.
+A choreography is given as a list of instructions (communications, selections of \hc{CLeft} or \hc{CRight}, conditionals and calls), all built using the corresponding combinators (\hc{com}, \hc{left}, \hc{right}, \hc{cond} and \hc{call}, respectively), which are strung together to produce a CC term in our representation.
 
 When compiling to Jolie, the programmer can configure the generated code by annotating interactions using the \hc{ann} combinator.
 These annotations will be used to override the default names of the Jolie operations that implement them.
@@ -239,7 +239,7 @@ auth = prog ([],
 \end{figure}
 
 \begin{example}[Distributed authentication]
-  \label{ex:auth}
+  \label{ex:auth-chor}
   \Cref{fig:ex-chor} shows the distributed authentication choreography from \cite{CMP21b} encoded as a \hc{CProgram}.
 
   Here, \proc{Client} wishes to authenticate with \proc{Ip} (identity provider) in order to receive a token from \proc{Server}.
@@ -277,13 +277,15 @@ epp :: CProgram e b -> Maybe (BProgram e b)
 \end{figure}
 \hc{Send} and \hc{Recv} correspond to the respective communication actions, while \hc{BCond} and \hc{BCall} are as in CC.
 The remaining terms \hc{Choose} and \hc{Offer} are used to implement selections, where one process can \textit{choose} which of the \textit{offered} behaviours another process should execute.
+Note that a process does not have to offer behaviours for both labels.
 
 Processes are named by identifiers and grouped into a \hc{Network}, which is then paired with the projections of recursive procedures for each process (\hc{BDefSet}) to form a \hc{BProgram}.
 Finally, \hc{epp} performs the projection of a \hc{CProgram} to a \hc{BProgram} using the extracted EPP as its foundation.
 We use the \hc{Maybe} type to handle the case when a choreography is not projectable.
 
 \begin{example}
-  Projecting the distributed authentication choreography from \Cref{ex:auth} gives us the process IR seen in \Cref{fig:ex-proj}.
+  \label{ex:auth-proj}
+  Projecting the distributed authentication choreography from \Cref{ex:auth-chor} gives us the process IR seen in \Cref{fig:ex-proj}.
   For conciseness, we only show the representative case of \proc{Client}.
   Note how the annotations from the choreography have been preserved and propagated to the projection.
 %
@@ -305,29 +307,28 @@ BProgram (BDefSet [], Network [...,
 \end{example}
 
 \begin{example}
-  This process can now be compiled down to executable code (\Cref{fig:ex-comp}).
-  We use the service-oriented language Jolie to generate a \jc{service} for each process.
+  The process IR from \Cref{ex:auth-proj} can now be compiled down to executable code (\Cref{fig:ex-comp}).
+  For each process, the backend generates a corresponding \jc{service} block in Jolie.
+  We omit the necessary deployment configuration and show only the behaviour, whose structure follows that of the process IR.
+
+  In this example, the annotations were used to specify the operation names exposed by the services (\jc{authOk} and \jc{acceptToken} for \proc{Client}, \jc{authenticate} for \proc{Ip}, etc.).
+  In general, they can specify arbitrary metadata that allows the programmer to control and guide the backend's code generation.
 %
   \begin{figure}
     \centering
     \begin{jolielisting}
 service Client {
-  main { authenticate@Ip( credentials )
-         [ authOk() ] {
-           acceptToken( token ) } } }
-
-service Ip {
-  main { authenticate( credentials )
-         if ( check@Util( credentials ) ) {
-           authOk@Server()
-           authOk@Client()
-         } else {
-           authFail@Server()
-           authFail@Client() } } }
-
-service Server {
-  main { [ authOk() ] {
-           acceptToken@Client( makeToken@Util() ) } } }
+  ...
+  main {
+    authenticate@Ip( credentials )
+    [ authOk() ] {
+      acceptToken( token )
+    }
+    [ authFail() ] {
+      nullProcess
+    }
+  }
+}
     \end{jolielisting}
   \caption{The executable Jolie code generated for the choreography.}
   \label{fig:ex-comp}
