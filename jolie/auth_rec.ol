@@ -5,20 +5,20 @@ type Label: string {}
 
 interface ClientApi {
 OneWay:
-    comServer( Msg ),
-    leftIp,
-    rightIp
+    acceptToken( Msg ),
+    authFail,
+    authOk
 }
 
 interface IpApi {
 OneWay:
-    comClient( Msg )
+    authenticate( Msg )
 }
 
 interface ServerApi {
 OneWay:
-    ann1,
-    ann2
+    authFail,
+    authOk
 }
 
 service Client {
@@ -37,13 +37,12 @@ service Client {
     }
 
     define X_Client {
-        comClient@Ip( credentials )
-        [ leftIp() ] {
-            comServer( token )
-            println@Util( token )
+        authenticate@Ip( credentials )
+        [ authOk() ] {
+            acceptToken( token )
             X_Client
         }
-        [ rightIp() ] {
+        [ authFail() ] {
             X_Client
         }
     }
@@ -75,14 +74,14 @@ service Ip {
     }
 
     define X_Ip {
-        comClient( credentials )
+        authenticate( credentials )
         if ( check@Util( credentials ) ) {
-            ann1@Server()
-            leftIp@Client()
+            authOk@Server()
+            authOk@Client()
             X_Ip
         } else {
-            ann2@Server()
-            rightIp@Client()
+            authFail@Server()
+            authFail@Client()
             X_Ip
         }
     }
@@ -108,11 +107,11 @@ service Server {
     }
 
     define X_Server {
-        [ ann1() ] {
-            comServer@Client( makeToken@Util() )
+        [ authOk() ] {
+            acceptToken@Client( makeToken@Util() )
             X_Server
         }
-        [ ann2() ] {
+        [ authFail() ] {
             X_Server
         }
     }
