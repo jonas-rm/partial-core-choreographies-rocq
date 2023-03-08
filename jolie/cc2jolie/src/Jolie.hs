@@ -168,12 +168,12 @@ compileBehaviour pid b = compile b
     compile (BCall (RecVar v, Pid pid')) = v ++ "_" ++ pid' ++ "\n"
 
     branch _ _ Nothing = Nothing
-    branch src l (Just (ann, b'))
-      | null c = Nothing
-      | otherwise = Just $ ("[ " ++ (makeSel l src ann) ++ "() ] {\n" ++
-                            (indent 4 c) ++ "}")
+    branch src l (Just (ann, b')) = Just $
+      ("[ " ++ (makeSel l src ann) ++ "() ] {\n" ++ (indent 4 r) ++ "}")
       where
-        c = compileBehaviour pid b'
+        r = case b' of
+          BEnd -> "nullProcess\n"
+          b'' -> compileBehaviour pid b''
 
 compileDefinition :: (PPrint e, PPrint b) => RecVar -> Pid -> Behaviour e b -> String
 compileDefinition (RecVar v) pid'@(Pid pid) b =

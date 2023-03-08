@@ -11,6 +11,7 @@ module EPPUser where
 
 import Control.DeepSeq (NFData)
 import Control.Spoon (spoon)
+import Data.Maybe (catMaybes)
 import GHC.Generics (Generic)
 
 import qualified Data.List as L
@@ -258,19 +259,16 @@ instance (PPrint e, PPrint b) => PPrint (Behaviour e b) where
     (dst ++ "⊕" ++ format l ++
      format ann ++ ";\n" ++ format b)
   format (Offer (Pid src) left right) =
-    (src ++ "&{\n" ++
-     (indent 2 $
-       ("left" ++ (case left of
-                    Just (ann, b') -> case b' of
-                      BEnd -> ": ∅;\n"
-                      b'' -> format ann ++ ":\n" ++ (indent 2 $ format b'')
-                    Nothing -> ": ∅;\n") ++
-        "right" ++ (case right of
-                     Just (ann, b') -> case b' of
-                       BEnd -> ": ∅;\n"
-                       b'' -> format ann ++ ":\n" ++ (indent 2 $ format b'')
-                     Nothing -> ": ∅;\n"))) ++
-      "}\n")
+    src ++ "&{\n" ++
+    (indent 2 $ slap $ catMaybes [branch CLeft left, branch CRight right]) ++
+    "}\n"
+    where
+      branch _ Nothing = Nothing
+      branch l (Just (ann, b')) = Just $ format l ++ format ann ++ ":" ++ r
+        where
+          r = case b' of
+            BEnd -> " ∅;\n"
+            b'' -> "\n" ++ (indent 2 $ format b'')
   format (BCond ex b1 b2) =
     ("if (" ++ format ex ++ ") then\n" ++ (indent 2 $ format b1) ++
      "else\n" ++ (indent 2 $ format b2))
