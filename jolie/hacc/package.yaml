@@ -1,4 +1,4 @@
-name:                cc2jolie
+name:                hacc
 version:             0.1.0.0
 license:             BSD3
 author:              "Lovro Lugović"
@@ -38,7 +38,7 @@ library:
   source-dirs: src
 
 executables:
-  cc2jolie-exe:
+  hacc-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -46,10 +46,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - cc2jolie
+    - hacc
 
 tests:
-  cc2jolie-test:
+  hacc-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -57,4 +57,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - cc2jolie
+    - hacc
