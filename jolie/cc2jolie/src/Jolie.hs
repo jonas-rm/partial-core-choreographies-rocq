@@ -84,13 +84,18 @@ serviceUnion s1 s2 = s1
   }
 
 mkService :: JolieDefSet -> Int -> (Pid, JolieBehaviour) -> Service
-mkService (BDefSet defs) port (pid, b) = mk S.empty (serviceDefault { sPid = pid, sPort = port, sBehaviour = b }) b
+mkService (BDefSet defs) port (pid, b)
+  = mk S.empty (serviceDefault { sPid = pid, sPort = port, sBehaviour = b }) b
   where
     mk _ s BEnd = s
-    mk seen s (Send dst _ _ b') = mk seen (s { sOutputs = S.insert dst $ sOutputs s }) b'
-    mk seen s (Recv src _ ann b') = mk seen (addOp s JolieCom $ makeCom src ann) b'
-    mk seen s (Choose dst _ _ b') = mk seen (s { sOutputs = S.insert dst $ sOutputs s }) b'
-    mk seen s (Offer src left right) = serviceUnion (branch seen s src CLeft left) (branch seen s src CRight right)
+    mk seen s (Send dst _ _ b') =
+      mk seen (s { sOutputs = S.insert dst $ sOutputs s }) b'
+    mk seen s (Recv src _ ann b') =
+      mk seen (addOp s JolieCom $ makeCom src ann) b'
+    mk seen s (Choose dst _ _ b') =
+      mk seen (s { sOutputs = S.insert dst $ sOutputs s }) b'
+    mk seen s (Offer src left right) =
+      serviceUnion (branch seen s src CLeft left) (branch seen s src CRight right)
     mk seen s (BCond _ b1 b2) = serviceUnion (mk seen s b1) (mk seen s b2)
     mk seen s (BCall v)
       | S.member v seen = s
@@ -101,7 +106,8 @@ mkService (BDefSet defs) port (pid, b) = mk S.empty (serviceDefault { sPid = pid
           Nothing -> error $ "Definition doesn't exist: " ++ show v
 
     branch _ s _ _ Nothing = s
-    branch seen s src l (Just (ann, b')) = mk seen (addOp s JolieSel $ makeSel l src ann) b'
+    branch seen s src l (Just (ann, b')) =
+      mk seen (addOp s JolieSel $ makeSel l src ann) b'
 
 collectServices :: JolieProgram -> M.Map Pid Service
 collectServices (BProgram (defs, Network n)) = foldr f M.empty $ zip [8080..] n
@@ -126,7 +132,8 @@ compileLocation s = let Pid pid = sPid s in
    "interfaces: " ++ pid ++ "Api")
 
 compileInputPort :: Service -> String
-compileInputPort s = "inputPort Input {\n" ++ (indent 4 $ compileLocation s) ++ "\n}"
+compileInputPort s =
+  "inputPort Input {\n" ++ (indent 4 $ compileLocation s) ++ "\n}"
 
 compileOutputPort :: Service -> String
 compileOutputPort s = let Pid pid = sPid s in
@@ -181,7 +188,8 @@ compileDefinition (RecVar v) pid'@(Pid pid) b =
    (indent 4 $ compileBehaviour pid' b) ++ "}")
 
 compileDefinitions :: (PPrint e, PPrint b) => BDefSet b e -> Service -> String
-compileDefinitions (BDefSet defs) s = slap [compileDefinition v pid b | ((v, pid), b) <- defs, pid == sPid s]
+compileDefinitions (BDefSet defs) s =
+  slap [compileDefinition v pid b | ((v, pid), b) <- defs, pid == sPid s]
 
 compileMain :: (PPrint e, PPrint b) => Pid -> Behaviour e b -> String
 compileMain pid b = "main {\n" ++ (indent 4 $ compileBehaviour pid b) ++ "}"

@@ -250,14 +250,11 @@ instance (PPrint e, PPrint b) => PPrint (CProgram e b) where
 instance (PPrint e, PPrint b) => PPrint (Behaviour e b) where
   format BEnd = ""
   format (Send (Pid dst) ex ann b) =
-    (dst ++ "!(" ++ format ex ++ ")" ++
-     format ann ++ ";\n" ++ format b)
+    dst ++ "!(" ++ format ex ++ ")" ++ format ann ++ ";\n" ++ format b
   format (Recv (Pid src) (Var v) ann b) =
-    (src ++ "?" ++ v ++
-     format ann ++ ";\n" ++ format b)
+    src ++ "?" ++ v ++ format ann ++ ";\n" ++ format b
   format (Choose (Pid dst) l ann b) =
-    (dst ++ "⊕" ++ format l ++
-     format ann ++ ";\n" ++ format b)
+    dst ++ "⊕" ++ format l ++ format ann ++ ";\n" ++ format b
   format (Offer (Pid src) left right) =
     src ++ "&{\n" ++
     (indent 2 $ slap $ catMaybes [branch CLeft left, branch CRight right]) ++
