@@ -28,13 +28,15 @@ data Val
   | IntVal Int
   | StringVal String
   | FunVal Env Var Expr
+  | ForeignFunVal (Val -> Val)
   deriving (Generic, NFData)
 
 instance Show Val where
   show (BoolVal x) = show x
   show (IntVal x) = show x
   show (StringVal x) = show x
-  show _ = "#<FunVal>"
+  show (FunVal _ _ _) = "#<FunVal>"
+  show (ForeignFunVal _) = "#<ForeignFunVal>"
 
 instance Eq Val where
   (==) (BoolVal x1) (BoolVal x2) = x1 == x2
@@ -46,16 +48,16 @@ data Expr
   = Lit Val
   | Ref Var
   | Lambda Var Expr
+  | ForeignLambda (Val -> Val)
   | Apply Expr Expr
-  | Foreign (Val -> Val -> Val) Expr Expr
   deriving (Generic, NFData)
 
 instance Show Expr where
   show (Lit x) = "Lit (" ++ show x ++ ")"
   show (Ref v) = "Ref (" ++ show v ++ ")"
   show (Lambda v b) = "Lambda (" ++ show v ++ ") (" ++ show b ++ ")"
+  show (ForeignLambda _) = "ForeignLambda"
   show (Apply f x) = "Apply (" ++ show f ++ ") (" ++ show x ++ ")"
-  show (Foreign _ x y) = "Foreign #<F> (" ++ show x ++ ") (" ++ show y ++ ")"
 
 instance Eq Expr where
   (==) (Lit x1) (Lit x2) = x1 == x2
@@ -68,10 +70,11 @@ eval :: Env -> Expr -> Val
 eval _ (Lit x) = x
 eval e (Ref v) = ref e v
 eval e (Lambda v b) = FunVal e v b
+eval _ (ForeignLambda f) = ForeignFunVal f
 eval e (Apply f x) = let r = eval e f in case r of
   FunVal e' v b -> eval (bind e' v $ eval e x) b
+  ForeignFunVal f' -> f' (eval e x)
   _ -> error $ "Cannot apply a non-function: " ++ show r
-eval e (Foreign f x y) = f (eval e x) (eval e y)
 
 newtype BExpr = BExpr Expr deriving (Show, Eq, Generic, NFData)
 
@@ -86,8 +89,8 @@ instance PPrint Expr where
   format (Lit x) = show x
   format (Ref (Var v)) = v
   format (Lambda (Var v) b) = "\\" ++ v ++ " -> " ++ format b
+  format (ForeignLambda _) = "ForeignLambda"
   format (Apply f x) = "(" ++ format f ++ ") (" ++ format x ++ ")"
-  format (Foreign _ x y) = "#<F> (" ++ format x ++ ") (" ++ format y ++ ")"
 
 instance PPrint BExpr where
   format (BExpr ex) = format ex

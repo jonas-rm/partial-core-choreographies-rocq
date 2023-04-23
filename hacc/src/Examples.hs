@@ -10,28 +10,15 @@ import EPPUser
 import Jolie
 import Lambda
 
--- Util
-
-exprs :: [String] -> [JolieExpr]
-exprs = map JolieExpr
-
-bexprs :: [String] -> [JolieBExpr]
-bexprs = map $ JolieBExpr . JolieExpr
-
 -- Lambda Calculus Example
 
-plus :: Val -> Val -> Val
-plus (IntVal x) (IntVal y) = IntVal $ x + y
-plus _ _ = error "Cannot add non-integer values"
+plus :: Val -> Val
+plus x = ForeignFunVal $ \y -> case (x, y) of
+                                 (IntVal x', IntVal y') -> IntVal $ x' + y'
+                                 _ -> error "Cannot add non-integer values"
 
 lambda :: Expr
-lambda = (Apply
-          (Apply
-           (Lambda (Var "x")
-            (Lambda (Var "y")
-             (Foreign plus (Ref (Var "x")) (Ref (Var "y")))))
-           (Lit (IntVal 5)))
-          (Lit (IntVal 10)))
+lambda = (Apply (Apply (ForeignLambda plus) (Lit (IntVal 5))) (Lit (IntVal 10)))
 
 -- DistAuth Example
 
