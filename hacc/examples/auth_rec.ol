@@ -75,7 +75,7 @@ service Ip {
 
     define X_Ip {
         authenticate( credentials )
-        if ( check@Util( credentials ) ) {
+        if( check@Util( credentials ) ) {
             authOk@Server()
             authOk@Client()
             X_Ip

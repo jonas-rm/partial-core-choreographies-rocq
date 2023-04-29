@@ -70,7 +70,7 @@ service Ip {
 
     main {
         authenticate( credentials )
-        if ( check@Util( credentials ) ) {
+        if( check@Util( credentials ) ) {
             authOk@Server()
             authOk@Client()
         } else {

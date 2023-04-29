@@ -170,7 +170,7 @@ compileBehaviour pid b = compile b
       (slap $ catMaybes [branch src CLeft left, branch src CRight right]) ++
       "\n"
     compile (BCond ex b1 b2) =
-      "if ( " ++ format ex ++ " ) {\n" ++ (indent 4 $ compile b1) ++
+      "if( " ++ format ex ++ " ) {\n" ++ (indent 4 $ compile b1) ++
       "} else {\n" ++ (indent 4 $ compile b2) ++ "}\n"
     compile (BCall (RecVar v, Pid pid')) = v ++ "_" ++ pid' ++ "\n"
 
