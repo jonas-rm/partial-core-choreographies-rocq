@@ -1,5 +1,5 @@
 {
-	"image": "coqorg/coq",
+	"image": "coqorg/coq:8.15.2",
 	"customizations": {
 		"vscode": {
 			"extensions": ["maximedenes.vscoq"]
