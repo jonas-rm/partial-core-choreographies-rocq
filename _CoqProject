@@ -1,0 +1,2 @@
+# _CoqProject
+-R theories PCC _build/default/src

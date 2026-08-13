@@ -1,3 +1,5 @@
+(*
+
 (** MOVE ME *)
 
 (* WTF is this? *)
@@ -296,6 +298,7 @@ eapply MCC_To_deterministic_1; eauto.
 apply reduce_sound; auto.
 eapply reduce_compatible; eauto.
 Qed.
-*)
 
 End ComputableReduction.
+
+*)
