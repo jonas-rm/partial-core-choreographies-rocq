@@ -9,17 +9,17 @@ Section SPBase.
 
 Variable Sig : Signature.
 
-Notation Pid := (pid Sig).
-Notation Var := (var Sig).
-Notation Value := (value Sig).
-Notation Expr := (expr Sig).
-Notation BExpr := (bexpr Sig).
-Notation RecVar := (recvar Sig).
-Notation Ann := (ann Sig).
-Notation Ev := (ev Sig).
-Notation BEv := (bev Sig).
+Abbreviation Pid := (pid Sig).
+Abbreviation Var := (var Sig).
+Abbreviation Value := (value Sig).
+Abbreviation Expr := (expr Sig).
+Abbreviation BExpr := (bexpr Sig).
+Abbreviation RecVar := (recvar Sig).
+Abbreviation Ann := (ann Sig).
+Abbreviation Ev := (ev Sig).
+Abbreviation BEv := (bev Sig).
 
-Notation Store := (State Pid Var Value).
+Abbreviation Store := (State Pid Var Value).
 
 (** * Syntax of processes *)
 
@@ -348,47 +348,47 @@ Lemma Send_neq_cont : forall p e a B, p ! e @! a; B <> B.
 Proof.
 intros; intro.
 assert (depth (p!e@!a;B) = depth B). rewrite H; auto.
-simpl in H0. apply lt_irrefl with (depth B).
+simpl in H0. apply Nat.nle_succ_diag_l with (depth B).
 rewrite <- H0 at 2. auto.
 Qed.
 
 Lemma Recv_neq_cont : forall p x a B, p ? x @? a; B <> B.
 Proof.
 intros; intro.
-apply lt_irrefl with (depth B). rewrite <- H at 2. auto.
+apply Nat.nle_succ_diag_l with (depth B). rewrite <- H at 2. auto.
 Qed.
 
 Lemma Sel_neq_cont : forall p l a B, p (+) l @+ a; B <> B.
 Proof.
 intros; intro.
-apply lt_irrefl with (depth B). rewrite <- H at 2; auto.
+apply Nat.nle_succ_diag_l with (depth B). rewrite <- H at 2; auto.
 Qed.
 
 Lemma Branching_l_neq_cont : forall p a Bl Br, Branching p (Some (a,Bl)) Br <> Bl.
 Proof.
 intros; intro.
-apply lt_irrefl with (depth Bl). rewrite <- H at 2; simpl.
+apply Nat.nle_succ_diag_l with (depth Bl). rewrite <- H at 2; simpl.
 auto with arith.
 Qed.
 
 Lemma Branching_r_neq_cont : forall p a Bl Br, Branching p Bl (Some (a,Br)) <> Br.
 Proof.
 intros; intro.
-apply lt_irrefl with (depth Br). rewrite <- H at 2; simpl.
+apply Nat.nle_succ_diag_l with (depth Br). rewrite <- H at 2; simpl.
 auto with arith.
 Qed.
 
 Lemma Then_neq_cont : forall b B1 B2, If b Then B1 Else B2 <> B1.
 Proof.
 intros; intro.
-apply lt_irrefl with (depth B1). rewrite <- H at 2.
+apply Nat.nle_succ_diag_l with (depth B1). rewrite <- H at 2.
 apply le_n_S, Nat.le_max_l.
 Qed.
 
 Lemma Else_neq_cont : forall b B1 B2, If b Then B1 Else B2 <> B2.
 Proof.
 intros; intro.
-apply lt_irrefl with (depth B2). rewrite <- H at 2.
+apply Nat.nle_succ_diag_l with (depth B2). rewrite <- H at 2.
 apply le_n_S, Nat.le_max_r.
 Qed.
 

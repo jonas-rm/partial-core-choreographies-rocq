@@ -33,6 +33,8 @@ nia.cache
 nlia.cache
 nra.cache
 
+_build/*
+
 ### LaTeX ###
 ## Core latex/pdflatex auxiliary files:
 *.aux

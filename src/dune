@@ -1,1 +1,11 @@
-(coq.theory (name PCC))
+(rocq.theory
+ (name PCC)
+ (flags
+   -w -warn-library-file-stdlib-vector
+   -w -level-tolerance
+   -w -closed-notation-not-level-0
+   -w -postfix-notation-not-level-1
+   -w -register-all
+   -w -notation-incompatible-prefix
+ )
+ (theories Stdlib))

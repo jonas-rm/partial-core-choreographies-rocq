@@ -1,6 +1,5 @@
 (lang dune 3.23)
-(using coq 0.8)
+(using rocq 0.13)
 
 (name partial-core-choreographies)
 
-(warnings (deprecated_coq_lang disabled))

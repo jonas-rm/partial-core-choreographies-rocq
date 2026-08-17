@@ -1,8 +1,11 @@
-Require Export Bool.
-Require Export List.
-Require Export ListSet.
-Require Export Sorting.Permutation.
-Require Export Arith.
+From Stdlib Require Export Bool.
+From Stdlib Require Export List.
+From Stdlib Require Export ListSet.
+From Stdlib Require Export Sorting.Permutation.
+From Stdlib Require Export PeanoNat.
+From Stdlib Require Export Lia.
+
+Print LoadPath.
 
 Ltac destroy H := repeat (elim H; intro; clear H; intro H).
 
@@ -41,24 +44,24 @@ Section Natural_Numbers.
 Lemma minus_S : forall m n, n - S m = pred (n - m).
 Proof.
 induction m, n; simpl; auto.
-intros; rewrite minus_n_O; auto.
+intros; rewrite Nat.sub_0_r; auto.
 Qed.
 
 Lemma minus_is_S : forall m n, m < n -> exists k, n - m = S k.
 Proof.
 induction n; intros.
 + inversion H.
-+ exists (n-m); rewrite minus_Sn_m; auto with arith.
++ exists (n-m); rewrite Nat.sub_succ_l; lia.
 Qed.
 
 Lemma not_lt_minus_0 n m : ~ m < n -> n - m = 0.
 Proof.
 induction n; intros; auto.
 assert (S n <= m).
-+ apply not_gt; auto.
-+ elim (le_lt_eq_dec _ _ H0); intro.
-  - apply not_le_minus_0; auto with arith.
-  - rewrite b; auto with arith.
++ apply Nat.le_ngt; auto.
++ elim (Compare_dec.le_lt_eq_dec _ _ H0); intro.
+  - apply Nat.sub_0_le ; apply H0.
+  - rewrite b; lia.
 Qed.
 
 Lemma max_lt_l : forall k m n, max m n < k -> m < k.
@@ -91,19 +94,17 @@ Qed.
 
 Lemma O_plus_O' : forall {n m}, n+m = 0 -> m = 0.
 Proof.
-intros n m; rewrite plus_comm; apply O_plus_O.
+intros n m; rewrite Nat.add_comm; apply O_plus_O.
 Qed.
 
 Lemma lt_neq : forall m n, m < n -> m <> n.
 Proof.
-intros. elim (eq_nat_dec m n); auto.
-intro. rewrite a in H; elim (lt_irrefl _ H).
+intros. elim (Nat.eq_dec m n) ; lia.
 Qed.
 
 Lemma gt_neq : forall m n, m > n -> m <> n.
 Proof.
-intros. elim (eq_nat_dec m n); auto.
-intro. rewrite a in H; elim (lt_irrefl _ H).
+intros. elim (Nat.eq_dec m n); lia.
 Qed.
 
 Lemma Some_or_None : forall (n:option nat), {n = None} + {exists m, n = Some m}.
@@ -148,6 +149,7 @@ Lemma list_max_le : forall l n,
   list_max l <= n <-> Forall (fun k => k <= n) l.
 Proof.
 induction l; simpl; intros n; split; intros H; intuition.
+- apply Nat.le_0_l.
 - apply Nat.max_lub_iff in H.
   now constructor; [ | apply IHl ].
 - inversion_clear H as [ | ? ? Hle HF ].
@@ -182,8 +184,8 @@ Lemma lt_list_max : forall l n x, In x l ->
   n < x -> n < list_max l.
 Proof.
 induction l; simpl; intros; inversion_clear H.
-- rewrite H1. apply lt_le_trans with x; auto. apply Nat.le_max_l.
-- apply lt_le_trans with (list_max l); eauto. apply Nat.le_max_r.
+- rewrite H1. apply Nat.lt_le_trans with x; auto. apply Nat.le_max_l.
+- apply Nat.lt_le_trans with (list_max l); eauto. apply Nat.le_max_r.
 Qed.
 
 (** ** A result about permutations *)
@@ -571,9 +573,9 @@ Lemma set_size_neq_2 : forall x y (X:set T), x<>y ->
   In x X -> In y X -> set_size X <> 2 -> set_size (set_remove' x X) > 1.
 Proof.
 intros.
-apply lt_S_n.
+apply Nat.succ_lt_mono.
 rewrite <- set_size_remove'; auto.
-elim (nat_total_order _ _ H2); auto.
+apply Nat.lt_gt_cases in H2; elim H2 ; auto.
 clear H2; intro.
 exfalso.
 rewrite (set_size_remove' X x) in H2; auto.
@@ -604,7 +606,7 @@ Qed.
 
 End Lists.
 
-Require Import Vector.
+From Stdlib Require Import Vector.
 
 Import VectorNotations.
 
@@ -994,7 +996,7 @@ Lemma in_vec_k_to_n : forall n k m, In m (vec_k_to_n n k) -> k <= m /\ m < k + n
 Proof.
 induction n; simpl; intros. inversion H.
 elim (In_elim H); intros.
-+ rewrite H0; split; auto with arith. rewrite <- plus_Snm_nSm; auto with arith.
++ rewrite H0; split; auto with arith. rewrite <- Nat.add_succ_comm; lia.
 + elim (IHn _ _ H0); intros; split; eauto with arith.
 Qed.
 

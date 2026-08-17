@@ -6,19 +6,19 @@ Section Amendment.
 
 Variable Sig : Signature.
 
-Notation Pid := (pid Sig).
-Notation Var := (var Sig).
-Notation Value := (value Sig).
-Notation Expr := (expr Sig).
-Notation BExpr := (bexpr Sig).
-Notation RecVar := (recvar Sig).
-Notation Ann := (ann Sig).
-Notation Ev := (ev Sig).
-Notation BEv := (bev Sig).
+Abbreviation Pid := (pid Sig).
+Abbreviation Var := (var Sig).
+Abbreviation Value := (value Sig).
+Abbreviation Expr := (expr Sig).
+Abbreviation BExpr := (bexpr Sig).
+Abbreviation RecVar := (recvar Sig).
+Abbreviation Ann := (ann Sig).
+Abbreviation Ev := (ev Sig).
+Abbreviation BEv := (bev Sig).
 
-Notation Sig' := (Sig' Sig).
+Abbreviation Sig' := (Sig' Sig).
 
-Notation Forget := (@forget Pid Value Var RecVar).
+Abbreviation Forget := (@forget Pid Value Var RecVar).
 
 Local Ltac eq_elim t t' H := case (eq_dec t t'); intro H;
   [ rewrite <- H in *; clear t' H | idtac].

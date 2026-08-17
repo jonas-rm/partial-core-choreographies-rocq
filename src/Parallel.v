@@ -1,4 +1,7 @@
-Require Export Implementation.
+From PCC Require Export Implementation.
+
+From Stdlib Require Import Vector.
+Import VectorNotations.
 
 Section ParallelImplementation.
 
@@ -78,7 +81,7 @@ induction d.
   - apply (Pack1 X (Send ps[@Fin.of_nat_lt l] this q @ eps;; @Call IS (S X))).
 
   (* Composition *)
-  - simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
+  - simpl in Hd; generalize (proj2 (Nat.succ_lt_mono _ _) Hd); clear Hd; intro Hd'.
     pose (max_lt_l _ _ _ Hd') as Hdf.
     pose (max_lt_r _ _ _ Hd') as Hdfs.
     assert (forall i, depth fs[@i] < d).
@@ -93,7 +96,7 @@ induction d.
 
   (* Recursion *)
   - rename f1 into f; rename f2 into g.
-    simpl in Hd; generalize (lt_S_n _ _ Hd); clear Hd; intro Hd'.
+    simpl in Hd; generalize (proj2 (Nat.succ_lt_mono _ _) Hd); clear Hd; intro Hd'.
     pose (max_lt_l _ _ _ Hd') as Hf.
     pose (max_lt_r _ _ _ Hd') as Hg.
     pose (Par_Implementation_aux _ f _ Hf (tl ps) init (init+3) X) as Pf.
@@ -109,7 +112,7 @@ induction d.
       else Pg Y).
 
   (* Minimization *)
-  - simpl in Hd; apply lt_S_n in Hd; rename Hd into Hf.
+  - simpl in Hd; apply (proj2 (Nat.succ_lt_mono _ _)) in Hd; rename Hd into Hf.
     pose (Par_Implementation_aux _ f _ Hf (shiftin (S init) ps) init (init+3) (X + 1)) as Pf.
     apply (fun Y =>
       if (Y =? X) then
@@ -124,7 +127,7 @@ Defined.
 Definition Par_Implementation {m} (f:PRFunction m) (ps:t Pid m) (q:Pid)
   : Program IS :=
   (fun X => (all_pids ((max q (vmax ps)) + Pi f),
-             Par_Implementation_aux f _ (lt_n_Sn (depth f))
+             Par_Implementation_aux f _ (Nat.lt_succ_diag_r (depth f))
                                     ps q (S (max q (vmax ps))) 0 X),
   @Call IS 0).
 

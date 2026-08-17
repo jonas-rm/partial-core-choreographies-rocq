@@ -1,6 +1,11 @@
-Require Export Amendment.
-Require Export EPPTheorem.
-Require Export Implementation.
+From PCC Require Export Amendment.
+From PCC Require Export EPPTheorem.
+From PCC Require Export Implementation.
+
+
+From Stdlib Require Import Vector.
+Import VectorNotations.
+
 
 (** * Turing completeness *)
 

@@ -10,17 +10,17 @@ Local Ltac sup := rewrite set_union_iff; auto.
 
 Variable Sig : Signature.
 
-Notation Pid := (pid Sig).
-Notation Var := (var Sig).
-Notation Value := (value Sig).
-Notation Expr := (expr Sig).
-Notation BExpr := (bexpr Sig).
-Notation RecVar := (recvar Sig).
-Notation Ann := (ann Sig).
-Notation Ev := (ev Sig).
-Notation BEv := (bev Sig).
-Notation PR := (DecProd RecVar Pid).
-Notation Sig' := (Sig' Sig).
+Abbreviation Pid := (pid Sig).
+Abbreviation Var := (var Sig).
+Abbreviation Value := (value Sig).
+Abbreviation Expr := (expr Sig).
+Abbreviation BExpr := (bexpr Sig).
+Abbreviation RecVar := (recvar Sig).
+Abbreviation Ann := (ann Sig).
+Abbreviation Ev := (ev Sig).
+Abbreviation BEv := (bev Sig).
+Abbreviation PR := (DecProd RecVar Pid).
+Abbreviation Sig' := (Sig' Sig).
 
 Open Scope CC.
 
@@ -299,7 +299,7 @@ induction P as (D,C), P' as (D',C').
 generalize (CCP_ToStar_Defs_stable _ D D' C C' tl s s' HTo); intro.
 rewrite <- H in HTo; rewrite <- H; clear D' H.
 simpl.
-revert dependent C'. revert dependent C. revert s s'. induction tl.
+generalize dependent C'. generalize dependent C. revert s s'. induction tl.
 + intros. inversion HTo.
   exists (epp _ HP), nil; repeat split.
   apply (SPT_Base Sig'). auto.
@@ -405,7 +405,7 @@ induction C; intros. induction e.
       clear H H6 H10 H4. intro. exfalso. contr_aux HC.
     }
     destroy H0.
-    revert dependent HC. rewrite <- H0. clear v' H0; intros.
+    generalize dependent HC. rewrite <- H0. clear v' H0; intros.
     rename H1 into Hqps.
     exists C; repeat split.
     1: apply (@C_Com Sig); auto.
@@ -1565,7 +1565,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
   assert (In p ps) as Hpps.
   1: { revert H1. unfold epp_C. elim In_dec; simpl; auto. discriminate. }
   elim ((@eq_dec Pid) p p'); intro Hpp'.
-  - revert dependent HC. revert Hsp.
+  - generalize dependent HC. revert Hsp.
     rewrite <- Hpp'; clear p' Hpp'; intros.
     assert (b = b0).
     1: rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2) in H1; inversion H1; auto.
@@ -1650,7 +1650,7 @@ induction C; intros. induction e. 1,2,3,5: inversion H. (* double cases *)
   assert (In p ps) as Hpps.
   1: { revert H1. unfold epp_C. elim In_dec; simpl; auto. discriminate. }
   elim ((@eq_dec Pid) p p'); intro Hpp'.
-  - revert dependent HC. revert Hsp.
+  - generalize dependent HC. revert Hsp.
     rewrite <- Hpp'; clear p' Hpp'; intros.
     assert (b = b0).
     1: rewrite epp_C_Cond_p with (HC1:=HC1) (HC2:=HC2) in H1; inversion H1; auto.
@@ -2008,7 +2008,7 @@ induction C; intros. induction e.
     intros H H'. exfalso. contr_aux HC.
   }
   destroy H0. rename H1 into Hpps, H4 into HX.
-  revert dependent HC. rewrite H0.
+  generalize dependent HC. rewrite H0.
   rewrite H0 in *; clear r H0; intros.
   assert (0 < [#] (fst (D X))).
   1: {
@@ -2063,7 +2063,7 @@ induction C; intros. induction e.
   assert (projectable_C D C ps) as HCp.
   1: apply str_proj_C'. intros; apply Hsp.
   elim (eq_dec r X); intro Hr. (* case 2 pending *)
-  revert dependent HC. rewrite Hr.
+  generalize dependent HC. rewrite Hr.
   rewrite Hr in *; clear r Hr; intros.
   assert (0 < [#] l).
   1: {
@@ -2090,7 +2090,7 @@ induction C; intros. induction e.
   - exists (RT_Call X (l [\] p) C).
     split.
     apply C_Call_Enter; auto.
-    1: { elim (nat_total_order _ _ H0); auto.
+    1: { apply Nat.lt_gt_cases in H0 ; elim H0 ; auto.
          intro. inversion H1. apply set_size_0 in H6.
          rewrite H6 in Hpl; inversion Hpl. inversion H6.
     }
@@ -2542,21 +2542,24 @@ induction P1 as (D,N1), P2 as (D2,N2).
 rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H2);
 rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H2) in H2; clear D2.
 induction P as (D',C).
-revert dependent C. revert s s' N1 N2 H2. induction tl; intros.
+generalize dependent C. revert s s' N1 N2 H2. induction tl; intros.
 + inversion H2. rewrite <- H3.
   exists (epp _ HP); repeat split; auto. apply (SPT_Base Sig'); auto.
 + inversion H2. clear c3 H6 l H3 t H c1 H4 H2. rename a into t.
   induction c2 as ((D2,N3),s'').
-  rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H5) in H7, H5. clear D2.
+  assert (Hyp:=SPP_To_Defs_stable _ _ _ _ _ _ _ _ H5);
+  rewrite <- Hyp in H7, H5. clear Hyp D2.
   apply SPP_To_MBN_epp with (HP:=HP) in H5; auto.
   destroy H5. induction x as (D3,N3'). simpl in *.
   generalize H as H6'; intro.
   rewrite (SP_eta _ (epp _ HP)) in H6'.
-  rewrite <- (SPP_To_Defs_stable _ _ _ _ _ _ _ _ H6') in H5, H, H6'. clear D3.
+  assert (Hyp:=SPP_To_Defs_stable _ _ _ _ _ _ _ _ H6');
+  rewrite <- Hyp in H5, H, H6'. clear Hyp D3.
   rewrite <- SP_eta in H6'.
   apply EPP_Sound in H; auto. destroy H. rename x0 into t'.
   induction x as (D'3,C'').
-  rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H3) in H, H3. clear D'3.
+  assert (Hyp:=CCP_To_Defs_stable _ _ _ _ _ _ _ _ H3);
+  rewrite <- Hyp in H, H3. clear Hyp D'3.
   assert (projectable_P (D',C'')).
   1: eapply CCP_To_projectable_P; eauto.
   specialize (H H4). simpl in H.
@@ -2566,8 +2569,9 @@ revert dependent C. revert s s' N1 N2 H2. induction tl; intros.
   apply IHtl with (HP:=H4) in H7; auto. clear IHtl.
   destroy H7. rename x into P2'. induction P2' as (D2',N2').
   rewrite (SP_eta _ (epp _ H4)) in H8.
-  rewrite <- (SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H8) in H7, H9, H8.
-  clear D2'. rewrite <- SP_eta in H8. simpl in *.
+  assert (Hyp:=SPP_ToStar_Defs_stable _ _ _ _ _ _ _ _ H8);
+  rewrite <- Hyp in H7, H9, H8.
+  clear Hyp D2'. rewrite <- SP_eta in H8. simpl in *.
   apply SPP_ToStar_MBN with (P1':=(Procs (epp _ HP),N3')) in H8; auto.
   destroy H8. rename x into P2'. simpl in *.
   exists P2'; repeat split; auto.
@@ -2578,8 +2582,6 @@ revert dependent C. revert s s' N1 N2 H2. induction tl; intros.
     apply MBN_refl'.
     change N2 with (Net (D,N2)).
     eapply SPP_ToStar_deterministic_1; eauto.
-    simpl; intro.
-    rewrite H7. induction X. repeat rewrite epp_D_char with (HD:=HD); auto.
   - simpl; intro. rewrite H7, <- H8.
     induction X. repeat rewrite epp_D_char with (HD:=HD); auto.
   - simpl; intro. induction X; repeat rewrite epp_D_char with (HD:=HD); auto.
@@ -2595,7 +2597,7 @@ Lemma EPP_Sound' : forall (P:CC.Program Sig) (HP:projectable_P P),
 Proof.
 intros. rename H into Hstr, H0 into H.
 induction P as (D,C), P' as (D',N).
-revert dependent N. revert dependent C. revert D' s s'.
+generalize dependent N. generalize dependent C. revert D' s s'.
 induction tl; intros; inversion H.
 + eexists; exists nil. repeat split. apply (CCT_Base Sig); auto.
   intro. apply MBN_refl'.
@@ -2614,7 +2616,8 @@ induction tl; intros; inversion H.
   assert (projectable_P P1).
   1: eapply CCP_To_projectable_P; eauto.
   induction P1 as (D1, C1).
-  rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ _ H1) in H, H2, H1. clear D1.
+  assert (Hyp:=CCP_To_Defs_stable _ _ _ _ _ _ _ _ H1);
+  rewrite <- Hyp in H, H2, H1. clear Hyp D1.
   specialize (H H2).
   assert (Program_WF (D,C1)).
   1: eapply CCP_To_Program_WF; eauto. apply Hstr.

@@ -1,5 +1,5 @@
-Require Export Basic.
-Require Export Common.
+From PCC Require Export Basic.
+From PCC Require Export Common.
 
 (** * The general type of Core Choreographies
   This type is parameterized over sets of process identifiers,
@@ -28,19 +28,19 @@ Section CCBase.
 
 Variable Sig : Signature.
 
-Notation Pid := (pid Sig).
-Notation Var := (var Sig).
-Notation Value := (value Sig).
-Notation Expr := (expr Sig).
-Notation BExpr := (bexpr Sig).
-Notation RecVar := (recvar Sig).
-Notation Ann := (ann Sig).
-Notation Ev := (ev Sig).
-Notation BEv := (bev Sig).
+Abbreviation Pid := (pid Sig).
+Abbreviation Var := (var Sig).
+Abbreviation Value := (value Sig).
+Abbreviation Expr := (expr Sig).
+Abbreviation BExpr := (bexpr Sig).
+Abbreviation RecVar := (recvar Sig).
+Abbreviation Ann := (ann Sig).
+Abbreviation Ev := (ev Sig).
+Abbreviation BEv := (bev Sig).
 
-Notation PSt := (LState Value Var).
-Notation Store := (State Pid Var Value).
-Notation Forget := (@forget Pid Value Var RecVar).
+Abbreviation PSt := (LState Value Var).
+Abbreviation Store := (State Pid Var Value).
+Abbreviation Forget := (@forget Pid Value Var RecVar).
 
 (** ** Syntax of Core Choreographies. *)
 
@@ -49,6 +49,7 @@ Section Syntax.
 (** Communication actions. *)
 
 Inductive Eta : Type :=
+(* TODO: Add partial terms *)
  | Com : Pid -> Expr -> Pid -> Var -> Eta
  | Sel : Pid -> Pid -> Label -> Eta
 .
@@ -279,7 +280,7 @@ intros.
 destroy H; repeat split; auto.
 elim (In_dec (@eq_dec Pid) p ps); intro.
 + rewrite (set_size_remove' (@eq_dec Pid) ps p) in H0; auto.
-  apply lt_S_n in H0.
+  apply Nat.succ_lt_mono in H0.
   intro; rewrite H3 in H0; inversion H0.
 + rewrite set_remove'_not_In; auto.
 Qed.
@@ -927,7 +928,7 @@ intros.
 generalize (Program_WF_Vars_incl _ H); clear H; intro.
 revert H1. inversion H0. unfold Vars; simpl.
 rewrite <- H1 in H. clear P H0 H1 P' H5.
-revert dependent C'.
+generalize dependent C'.
 clear s'0 H6 tl H2 s0 H3.
 unfold CCP_pn.
 induction C; intros; revert H1; inversion H4.
@@ -1020,7 +1021,7 @@ induction H4.
   intro.
   rewrite (set_size_remove' (@eq_dec _)) with (t::l) p in H1; auto.
   - rewrite H5 in H1.
-    elim (lt_irrefl _ H1).
+    elim (Nat.nle_succ_diag_l _ H1).
   - revert H5; simpl. elim eq_dec; auto.
     intros. inversion H5.
 + elim (Program_WF_Proc _ H X); intros.
@@ -1030,7 +1031,7 @@ induction H4.
   inversion_clear H6; split; auto.
   rewrite (set_size_remove' (@eq_dec _)) with ps p in H1; auto.
   intro. rewrite H6 in H1.
-  elim (lt_irrefl _ H1).
+  elim (Nat.nle_succ_diag_l _ H1).
 + destroy HC. repeat split; auto.
 Qed.
 
@@ -1355,7 +1356,8 @@ Lemma CCP_To_used_procedures : forall P s l P' s' Xs, used_procedures P Xs ->
 Proof.
 intros.
 induction P as (D,C); induction P' as (D',C').
-rewrite (CCP_To_Defs_stable _ _ _ _ _ _ _ H0) in H, H0; clear D.
+assert (Hyp:= CCP_To_Defs_stable _ _ _ _ _ _ _ H0).
+rewrite Hyp in H, H0 ; clear Hyp D.
 inversion_clear H. split; auto.
 simpl in H1; simpl.
 inversion H0. clear H0 s'0 H8 C'0 H7 l H3 s0 H5 C0 H4 D H.
@@ -1455,8 +1457,8 @@ induction C; intros; inversion H; inversion H0;
 - rewrite (IHC1 _ _ _ _ _ _ H10 H21); rewrite (IHC2 _ _ _ _ _ _ H11 H22); auto.
 (* Call *)
 - auto.
-- rewrite H3 in H11; elim (lt_irrefl _ H11).
-- rewrite H11 in H3; elim (lt_irrefl _ H3).
+- rewrite H3 in H11; elim (Nat.nle_succ_diag_l _ H11).
+- rewrite H11 in H3; elim (Nat.nle_succ_diag_l _ H3).
 - rewrite <- H6 in H14; inversion H14; auto.
 - rewrite (IHC _ _ _ _ _ _ H9 H18); auto.
 (* RT_Call *)
@@ -1467,10 +1469,10 @@ induction C; intros; inversion H; inversion H0;
 - rewrite <- H6 in H18. apply (disjoint_ps_rl_In _ _ _ _ _ _ _ H10) in H18.
   elim H18; auto.
 - rewrite <- H6 in H16; inversion H16; auto.
-- rewrite H19 in H9; elim (lt_irrefl _ H9).
+- rewrite H19 in H9; elim (Nat.nle_succ_diag_l _ H9).
 - rewrite <- H6 in H18. apply (disjoint_ps_rl_In _ _ _ _ _ _ _ H10) in H18.
   elim H18; auto.
-- rewrite H9 in H19; elim (lt_irrefl _ H19).
+- rewrite H9 in H19; elim (Nat.nle_succ_diag_l _ H19).
 Qed.
 
 Lemma CCC_To_deterministic_2 : forall C C1 C2 tl s s1 s2,
@@ -1621,7 +1623,7 @@ Proof.
 intros; intro.
 generalize (subterm_size _ _ H); intro.
 rewrite H0 in H1.
-apply (lt_irrefl _ H1).
+apply (Nat.nle_succ_diag_l _ H1).
 Qed.
 
 Lemma CCC_To_Call_reduction_4 : forall C p ps X s1 s2 tl,
@@ -1674,8 +1676,8 @@ induction C; intros; inversion H; inversion H0; auto.
   eauto.
 (* Call *)
 + rewrite (set_size_1 _ _ H11 _ _ H12 H4); auto.
-+ rewrite H3 in H11; elim (lt_irrefl _ H11).
-+ rewrite H11 in H3; elim (lt_irrefl _ H3).
++ rewrite H3 in H11; elim (Nat.nle_succ_diag_l _ H11).
++ rewrite H11 in H3; elim (Nat.nle_succ_diag_l _ H3).
 + rewrite <- H7 in H15; inversion H15.
   rewrite (set_remove'_cross _ _ _ _ H12 H18); auto.
 + rewrite <- H6 in H15; inversion H15.
@@ -1689,10 +1691,10 @@ induction C; intros; inversion H; inversion H0; auto.
   symmetry; apply (CCC_To_Call_reduction_3 _ _ _ _ _ _ _ H10 H0).
 + rewrite <- H7 in H17; inversion H17.
   rewrite (set_remove'_cross _ _ _ _ H20 H22); auto.
-+ rewrite <- H19 in H9; elim (lt_irrefl _ H9).
++ rewrite <- H19 in H9; elim (Nat.nle_succ_diag_l _ H9).
 + rewrite H7, <- H16 in H19.
   symmetry; apply (CCC_To_Call_reduction_4 _ _ _ _ _ _ _ H10 H19).
-+ rewrite <- H9 in H19; elim (lt_irrefl _ H19).
++ rewrite <- H9 in H19; elim (Nat.nle_succ_diag_l _ H19).
 + rewrite (set_size_1 _ _ H19 _ _ H10 H20); auto.
 Qed.
 
@@ -1934,8 +1936,8 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
   - exfalso.
     rewrite <- H4, <- H12 in Htl.
     rewrite (set_size_1 _ _ H9 p p0) in Htl; auto.
-  - exfalso. rewrite H1 in H9; apply (lt_irrefl _ H9).
-  - exfalso. rewrite H9 in H1; apply (lt_irrefl _ H1).
+  - exfalso. rewrite H1 in H9; apply (Nat.nle_succ_diag_l _ H9).
+  - exfalso. rewrite H9 in H1; apply (Nat.nle_succ_diag_l _ H1).
   - case (eq_dec p p0); intro Hpp0.
     1: { exfalso. rewrite <- H12, <- H4, Hpp0 in Htl; auto. }
     clear HC' HC'' Htl s'1 H14 C'' H13 tl'' H12 s1 H11 X0 H7.
@@ -1956,8 +1958,8 @@ induction C; intros s tl' tl'' C' C'' s' s'' HC' HC'' Htl; intros.
         [eapply set_size_neq_2; eauto | apply set_remove'_3; auto]).
 + (* RT_Call *)
   inversion HC'; inversion HC''; auto.
-  6: { exfalso. rewrite H17 in H7. apply (lt_irrefl _ H7). }
-  7: { exfalso. rewrite H7 in H17. apply (lt_irrefl _ H17). }
+  6: { exfalso. rewrite H17 in H7. apply (Nat.nle_succ_diag_l _ H7). }
+  7: { exfalso. rewrite H7 in H17. apply (Nat.nle_succ_diag_l _ H17). }
   7: { exfalso. rewrite <- H14, <- H4, (set_size_1 _ _ H17 p p0) in Htl; auto. }
   - elim (IHC _ _ _ _  _ _ _ H7 H16); auto; intros.
     inversion_clear H17; inversion_clear H18.
@@ -2069,7 +2071,7 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
   inversion H; clear H.
   clear t l H1 H2 c1 c3 H3 H5.
   induction c2, a0 as [D' C'].
-  rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4) in H6, H4.
+  assert (Hyp:=CCP_To_Defs_stable _ _ _ _ _ _ _ H4); rewrite <- Hyp in H6, H4.
   elim (diamond_2 _ _ _ _ _ H0 H4); simpl; intros.
   - inversion_clear a0. inversion H.
     rewrite <- H3 in H, H4, H6; rewrite <- H3; clear H3.
@@ -2082,7 +2084,7 @@ revert C s tl2 C1 s1 C2 s2 H H0; induction tl1.
       apply CCP_ToStar_eq with b s1; auto. ESEs. ESEr.
   - inversion_clear b0.
     induction x, a0 as [D'' C'']; inversion_clear H.
-    rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H2) in H1, H2.
+    assert (Tmp:=CCP_To_Defs_stable _ _ _ _ _ _ _ H2); rewrite <- Tmp in H1, H2.
     elim (IHtl1 _ _ _ _ _ _ _ H6 H2); intro.
     * destroy H.
       rename x into tl', x0 into s'.
@@ -2129,7 +2131,8 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
   inversion H0; clear H0.
   clear t l H1 H2 c1 c3 H3 H5.
   induction c2, a0 as [D0 C0].
-  rewrite <- (CCP_To_Defs_stable _ _ _ _ _ _ _ H4) in H6, H4.
+  assert (Hyp:=CCP_To_Defs_stable _ _ _ _ _ _ _ H4); rewrite <- Hyp in H6, H4;
+  clear Hyp.
   elim (diamond_3a _ _ _ _ _ _ _ _ H H4); intros.
   - destroy H0.
     assert (length tl1 = length (a::x)) as H0'.
@@ -2138,7 +2141,8 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
     elim (IHtl2 _ _ _ _ _ _ _ H1 H6); intros.
     destroy H3.
     induction x.
-    rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H5) in H7, H5.
+    assert (Hyp:=CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H5);
+    rewrite <- Hyp in H7, H5 ; clear Hyp.
     rename b0 into C', x0 into tl1', x1 into tl2', x2 into s1', x3 into s2'.
     case_eq tl1'; intros.
     * rewrite H11 in *. inversion H5.
@@ -2158,11 +2162,13 @@ revert C s tl1 C1 s1 C2 s2 H H0; induction tl2.
       rewrite H0', H10; auto with arith.
       rewrite H3. auto with arith.
   - induction H0 as ((D',C'),(s',(H1,H0))).
-    rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0) in H1, H0.
+    assert (Hyp:=CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H0);
+    rewrite <- Hyp in H1, H0 ; clear Hyp.
     elim (IHtl2 _ _ _ _ _ _ _ H0 H6); intros.
     destroy H2.
     induction x as [D'' C''].
-    rewrite <- (CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H3) in H5, H3.
+    assert (Hyp:=CCP_ToStar_Defs_stable _ _ _ _ _ _ _ H3);
+    rewrite <- Hyp in H5, H3; clear Hyp.
     rename x0 into tl1'', x1 into tl2'', x2 into s1'', x3 into s2''.
     exists (D,C''), (a::tl1''), tl2'', s1'', s2'', x4; repeat split; auto.
     apply CCT_Step with (D,C',s'); auto.
@@ -2183,9 +2189,9 @@ exists x, x0, x1, x2, x3.
 repeat split; auto.
 rewrite H6, H1.
 repeat rewrite <- plus_assoc.
-rewrite plus_comm, (plus_comm (length x0)).
+rewrite Nat.add_comm, (Nat.add_comm (length x0)).
 repeat rewrite <- plus_assoc.
-auto with arith.
+lia.
 Qed.
 
 Lemma diamond_4b : forall P s tl1 tl2 P1 s1 P2 s2,
@@ -2229,7 +2235,7 @@ elim (CCP_ToStar_End _ _ _ _ _ H4 H1); intros.
 exists tl', s'; repeat split; auto.
 rewrite H6 in H4. inversion H4; auto.
 ESEt s''. ESEs.
-rewrite H6, plus_0_r in H2; auto.
+rewrite H6, Nat.add_0_r in H2; auto.
 Qed.
 
 Lemma diamond_5 : forall P s tl1 tl2 P1 s1 P2 s2,

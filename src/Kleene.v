@@ -1,6 +1,7 @@
-Require Export Basic.
-Require Export Vector.
-Export VectorNotations.
+From PCC Require Export Basic.
+
+From Stdlib Require Import Vector.
+Import VectorNotations.
 
 (** * Definitions
     Our class of partial recursive functions, together with their semantics. *)
@@ -160,15 +161,15 @@ induction steps; intros.
   case_eq (f (shiftin (Some init) ns)).
   destruct n; intros.
   - inversion H0; repeat split.
-    * rewrite plus_comm; simpl; auto with arith.
+    * rewrite Nat.add_comm; simpl; auto with arith.
     * rewrite <- H2; auto.
-    * intros; elim (lt_irrefl m).
-      inversion_clear H1; apply le_lt_trans with n; auto.
+    * intros; elim (Nat.nle_succ_diag_l m).
+      inversion_clear H1; apply Nat.le_lt_trans with n; auto.
   - elim (IHsteps _ _ _ _ _ H0); intros; split.
-    * rewrite plus_comm; simpl; rewrite plus_comm; auto with arith.
+    * rewrite Nat.add_comm; simpl; rewrite Nat.add_comm; auto with arith.
     * inversion_clear H2; split; auto.
       intros; inversion_clear H2.
-      elim (le_lt_eq_dec _ _ H5); intro.
+      elim (Compare_dec.le_lt_eq_dec _ _ H5); intro.
       ++ apply H4; auto with arith.
       ++ exists n; rewrite <- b; auto.
   - intros; inversion H0.
@@ -202,8 +203,8 @@ Lemma find_zero_from_min : forall steps {k} f (ns:t (option nat) k) init m,
   forall n, f (shiftin (Some n) ns) = Some 0 -> n < init \/ m <= n.
 Proof.
 intros.
-elim (le_lt_dec m n); auto; intro.
-elim (le_lt_dec init n); auto; intro.
+elim (Compare_dec.le_lt_dec m n); auto; intro.
+elim (Compare_dec.le_lt_dec init n); auto; intro.
 generalize (find_zero_from_middle _ _ _ _ _ H); intros.
 elim (H1 n); auto; intros.
 rewrite H2 in H0; inversion H0.
@@ -222,8 +223,8 @@ Proof.
 induction steps; intros.
 + right; simpl; intros.
   inversion_clear H0.
-  elim (lt_irrefl n).
-  apply lt_le_trans with init; auto.
+  elim (Nat.lt_irrefl n).
+  apply Nat.lt_le_trans with init; auto.
   replace init with (init + 0); auto.
 + revert H; simpl.
   case_eq (f (shiftin (Some init) ns)); intros.
@@ -235,21 +236,20 @@ induction steps; intros.
     inversion_clear H0; inversion_clear H1; inversion_clear H2.
     exists x; repeat split; auto with arith.
     * replace (init + S steps) with (S init + steps); auto with arith.
-      rewrite (plus_comm init (S steps)); simpl; auto with arith.
     * intros; inversion_clear H2.
       inversion H5; [exists n; rewrite <- H2 | apply H4]; repeat split; auto with arith.
       rewrite H7; auto.
   - right; intros.
     inversion_clear H0.
     replace (init + S (steps)) with (S (steps + init)) in H2.
-    2: rewrite (plus_comm init (S steps)); simpl; auto with arith.
+    2: rewrite (Nat.add_comm init (S steps)); simpl; auto with arith.
     inversion H1.
     * exists n; rewrite <- H0; auto.
     * apply b; split; auto with arith.
-      rewrite H3; rewrite plus_comm in H2; simpl; auto with arith.
+      rewrite H3; rewrite Nat.add_comm in H2; simpl; auto with arith.
   - left; exists init; repeat split; auto with arith.
-    * rewrite (plus_comm init (S steps)); simpl; auto with arith.
-    * intros; elim (lt_irrefl init); apply le_lt_trans with k0; inversion_clear H1; auto.
+    * rewrite (Nat.add_comm init (S steps)); simpl; auto with arith.
+    * intros; elim (Nat.lt_irrefl init); apply Nat.le_lt_trans with k0; inversion_clear H1; auto.
 Qed.
 
 (** Monotonicity. *)
@@ -295,7 +295,7 @@ Lemma Successor_correct : forall n steps, eval Successor steps [n] = Some (S n).
 Proof.
 intros; unfold eval; simpl.
 replace (n+1) with (S n); auto.
-rewrite plus_comm; auto.
+rewrite Nat.add_comm; auto.
 Qed.
 
 Lemma Projection_correct : forall m k (Hkm: k<m) n steps,
@@ -451,7 +451,7 @@ intros; induction m.
   rewrite Recursion_correct_step with (x:=m) (y:=m+n); auto.
   unfold eval; simpl.
   replace (m+n+1) with (S (m+n)); auto.
-  rewrite (plus_comm (m+n) 1); auto with arith.
+  rewrite (Nat.add_comm (m+n) 1); auto with arith.
 Qed.
 
 (** ** Multiplication. *)
@@ -535,7 +535,7 @@ Proof.
 intros; unfold PR_minus.
 rewrite Composition_correct with (ms := [m; n]).
 * induction m.
-  + rewrite Recursion_correct_base; auto; rewrite <- minus_n_O; auto.
+  + rewrite Recursion_correct_base; auto; rewrite Nat.sub_0_r; auto.
   + rewrite Recursion_correct_step with (x := m) (y := n - m); simpl; auto.
     replace (n - S m) with (pred (n - m)).
     - rewrite Composition_correct with (ms := [n-m]).
@@ -573,7 +573,7 @@ Lemma gt_correct_1 : forall m n steps, n > m <-> eval PR_gt steps [n; m] = Some 
 Proof.
 split.
 + apply gt_correct_true.
-+ intro; elim (le_lt_dec n m); auto.
++ intro; elim (Compare_dec.le_lt_dec n m); auto.
   intro; rewrite gt_correct_false in H; auto.
   inversion H.
 Qed.
@@ -582,7 +582,7 @@ Lemma gt_correct_0 : forall m n steps, n <= m <-> eval PR_gt steps [n; m] = Some
 Proof.
 split.
 + apply gt_correct_false.
-+ intro; elim (le_lt_dec n m); auto.
++ intro; elim (Compare_dec.le_lt_dec n m); auto.
   intro; rewrite gt_correct_true in H; auto.
   inversion H.
 Qed.
@@ -614,7 +614,7 @@ Lemma le_correct_1 : forall m n steps, m <= n <-> eval PR_le steps [m; n] = Some
 Proof.
 split.
 + apply le_correct_true.
-+ intro; elim (le_lt_dec m n); auto.
++ intro; elim (Compare_dec.le_lt_dec m n); auto.
   intro; rewrite le_correct_false in H; auto.
   inversion H.
 Qed.
@@ -623,7 +623,7 @@ Lemma le_correct_0 : forall m n steps, n < m <-> eval PR_le steps [m; n] = Some 
 Proof.
 split.
 + apply le_correct_false.
-+ intro; elim (le_lt_dec m n); auto.
++ intro; elim (Compare_dec.le_lt_dec m n); auto.
   intro; rewrite le_correct_true in H; auto.
   inversion H.
 Qed.
@@ -646,7 +646,7 @@ Lemma equal_correct_false :
   forall m n steps, m <> n -> eval PR_equal steps [m; n] = Some 0.
 Proof.
 intros; unfold PR_equal.
-elim (not_eq _ _ H); intro.
+elim (Compare_dec.not_eq _ _ H); intro.
 - rewrite Composition_correct with (ms := [1; 0]).
   + rewrite mult_correct; auto with arith.
   + prove_composition_2.
@@ -688,7 +688,7 @@ Lemma diff_correct_true :
   forall m n steps, m <> n -> eval PR_diff steps [m; n] = Some 1.
 Proof.
 intros; unfold PR_diff.
-elim (not_eq _ _ H); intro.
+elim (Compare_dec.not_eq _ _ H); intro.
 - rewrite Composition_correct with (ms := [0; 1]).
   + rewrite add_correct; auto.
   + prove_composition_2.
@@ -747,10 +747,10 @@ Proof.
 intros; unfold PR_sub_aux.
 rewrite Composition_correct with (ms := [k+n; m]).
 - rewrite <- diff_correct_0.
-  rewrite plus_comm; split; auto.
+  rewrite Nat.add_comm; split; auto.
 - prove_composition_2.
   * rewrite Composition_correct with (ms := [n; k]).
-    + rewrite plus_comm; apply add_correct.
+    + rewrite Nat.add_comm; apply add_correct.
     + prove_composition_2.
 Qed.
 
@@ -764,7 +764,7 @@ simpl shiftin in H0.
 elim H0; clear H H0 steps; intros steps Hsteps; inversion_clear Hsteps.
 clear H0.
 rewrite sub_aux_correct in H.
-apply plus_minus; auto.
+rewrite H, Nat.add_simpl_l ; reflexivity.
 Qed.
 
 Lemma sub_correct_2 : forall m n steps k,
@@ -776,12 +776,12 @@ destruct steps.
 - intro; inversion H.
 - change ((find_zero_from (eval_opt PR_sub_aux steps) [Some m; Some n] 0 steps) = Some k -> n <= m).
   intro.
-  elim (le_lt_dec n m); intro; auto.
+  elim (Compare_dec.le_lt_dec n m); intro; auto.
   generalize (find_zero_from_value _ _ _ _ _ H); intros.
   clear H; change (eval PR_sub_aux steps [m; n; k] = Some 0) in H1.
   rewrite sub_aux_correct in H1.
-  rewrite not_le_minus_0 in H0; auto with arith.
-  rewrite H0 in H1; rewrite plus_comm in H1.
+  (* apply not_lt_minus_0 in b; auto with arith. *)
+  (* rewrite H0 in H1; rewrite Nat.add_comm in H1. *)
   rewrite H1; auto with arith.
 Qed.
 
@@ -960,7 +960,7 @@ induction f using PRFunction_induction.
   generalize (find_zero_from_value _ _ _ _ _ H3); clear H3; intros Hfn0 Hfn_lt.
   generalize (find_zero_from_middle _ _ _ _ _ H2);
   generalize (find_zero_from_value _ _ _ _ _ H2); clear H2; intros Hfn'0 Hfn'_lt.
-  elim (lt_eq_lt_dec m m'); intro.
+  elim (Compare_dec.lt_eq_lt_dec m m'); intro.
   * inversion_clear a; auto.
     elim (Hfn'_lt m); intros.
     generalize (IHf _ _ _ _ _ Hfn0 H0); intro exf; inversion exf.
@@ -1030,7 +1030,7 @@ induction f using PRFunction_induction; auto.
     generalize (find_zero_from_value _ _ _ _ _ H1); clear H1; intros fn_m fn_lt.
     generalize (find_zero_from_middle _ _ _ _ _ H);
     generalize (find_zero_from_value _ _ _ _ _ H); clear H; intros fn'_m' fn'_lt.
-    elim (lt_eq_lt_dec m m'); intro.
+    elim (Compare_dec.lt_eq_lt_dec m m'); intro.
     ++ inversion_clear a; auto.
        elim (fn'_lt m); intros.
        2: split; auto with arith.
@@ -1045,7 +1045,7 @@ induction f using PRFunction_induction; auto.
     elim (find_zero_from_None _ _ _ _ H); clear H; simpl; intros.
     ** elim a; clear a; intros x a; elim a; clear a; intros Hx a.
        elim a; clear a; intros fn'_None fn'_lt.
-       elim (lt_eq_lt_dec m x); intro.
+       elim (Compare_dec.lt_eq_lt_dec m x); intro.
        inversion_clear a.
        ++ elim (fn'_lt m); intros.
           2: split; auto with arith.
@@ -1064,7 +1064,7 @@ induction f using PRFunction_induction; auto.
           assert (None = Some (S x0)). 2: inversion H1.
           rewrite <- H0, <- fn'_None; auto.
     ** elim (b m); intros.
-       2: split; auto with arith; apply lt_le_trans with n; auto.
+       2: split; auto with arith; apply Nat.lt_le_trans with n; auto.
        generalize (eval_opt_inj _ _ _ _ _ _ _ fn_m H); intro exf; inversion exf.
 Qed.
 
@@ -1188,15 +1188,15 @@ exists (y + (S (S (max sh s')))).
 unfold Kleene.eval; simpl.
 rewrite <- plus_n_Sm.
 rewrite find_zero_from_compute.
-+ rewrite <- plus_n_Sm, plus_0_r. simpl.
++ rewrite <- plus_n_Sm, Nat.add_0_r. simpl.
   rewrite <- map_shiftin.
   replace (eval_opt h (S (y + max sh s')) (map Some (shiftin y ns))) with (Some 0); auto.
   symmetry. apply eval_opt_mon with sh; auto.
-  red. apply le_S. transitivity (max sh s'); auto with arith. apply Nat.le_max_l.
+  red. apply le_S. transitivity (max sh s'); auto with arith.
 + simpl; intros. rewrite <- map_shiftin.
   elim (Hs' x); auto; intros.
   exists x0. apply eval_opt_mon with s'; auto.
-  red. transitivity (max sh s'); auto with arith. apply Nat.le_max_r.
+  red. transitivity (max sh s') ; lia.
 Qed.
 
 (** Inversion results about convergence using each constructor. *)
@@ -1453,7 +1453,7 @@ intros; exfalso.
 assert (converges (Minimization h) ns n). exists steps; auto.
 elim (converges_Minimization _ _ _ H2); intros.
 generalize (converges_Minimization_mon _ _ _ H2); intros.
-elim (lt_eq_lt_dec x n); intros. inversion_clear a.
+elim (Compare_dec.lt_eq_lt_dec x n); intros. inversion_clear a.
 + elim (H4 _ H5); intros. inversion_clear H6.
   rewrite H0 in H7; inversion H7.
 + rewrite <- H5, H0 in H3; inversion H3.

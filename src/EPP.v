@@ -17,19 +17,19 @@ Local Ltac fail_with H := right; intro H; induction H as [B HB];
 
 Variable Sig : Signature.
 
-Notation Pid := (pid Sig).
-Notation Var := (var Sig).
-Notation Value := (value Sig).
-Notation Expr := (expr Sig).
-Notation BExpr := (bexpr Sig).
-Notation RecVar := (recvar Sig).
-Notation Ann := (ann Sig).
-Notation Ev := (ev Sig).
-Notation BEv := (bev Sig).
+Abbreviation Pid := (pid Sig).
+Abbreviation Var := (var Sig).
+Abbreviation Value := (value Sig).
+Abbreviation Expr := (expr Sig).
+Abbreviation BExpr := (bexpr Sig).
+Abbreviation RecVar := (recvar Sig).
+Abbreviation Ann := (ann Sig).
+Abbreviation Ev := (ev Sig).
+Abbreviation BEv := (bev Sig).
 
 (** The signature for the target calculus. *)
 
-Notation PR := (DecProd RecVar Pid).
+Abbreviation PR := (DecProd RecVar Pid).
 
 Definition Sig' := Build_Signature Pid Var Value Expr BExpr PR Ann Ev BEv.
 
@@ -79,7 +79,7 @@ Notation "[[ D , C | p ]] == B" := (bproj D C p B) (at level 20).
 Lemma bproj_unique : forall D C p B B',
   [[D,C | p ]] == B -> [[D,C | p]] == B' -> B = B'.
 Proof.
-intros. revert dependent B'.
+intros. generalize dependent B'.
 induction H; intros.
 - inversion_clear H0; auto.
 - inversion H0; auto. 2,3: tauto.

@@ -1,8 +1,9 @@
-Require Export List.
-Require Export ListSet.
-Require Export Permutation.
-Require Export Setoid.
-Require Export Basic.
+From Stdlib Require Export List.
+From Stdlib Require Export ListSet.
+From Stdlib Require Export Permutation.
+From Stdlib Require Export Setoid.
+
+From PCC Require Export Basic.
 
 (** * Decidable types
     Several structures need to be decidable.

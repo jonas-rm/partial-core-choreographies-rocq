@@ -98,7 +98,7 @@ Notation "B1 [V] B2 == B" := (merge B1 B2 B) (at level 20).
 Lemma merge_unique : forall B1 B2 B B',
   B1 [V] B2 == B -> B1 [V] B2 == B' -> B = B'.
 Proof.
-intros. revert dependent B'.
+intros. generalize dependent B'.
 induction H; intros.
 all: try (inversion H0; auto; fail).
 1,2,3: inversion H0; rewrite (IHmerge B4); auto.
@@ -270,7 +270,7 @@ Lemma MB_yields_merge : forall B1 B2 B1' B2' B,
   exists B', B1' [V] B2' == B' /\ B [>>] B'.
 Proof.
 intros.
-revert dependent B2'. revert dependent B1'.
+generalize dependent B2'. generalize dependent B1'.
 induction H1; intros; inversion_clear H; inversion_clear H0.
 (* simple cases *)
 1: exists (End _); split; constructor.
